@@ -99,6 +99,52 @@ function App() {
           <Route path="/" exact>
             <h1 className="text-center">Maintenance Tracker</h1>
             <div className="row">
+              <div className="col-md-3">
+                <div className="status-card blue">
+                  <div className="status-icon">
+                    <i className="fas fa-tasks"></i>
+                  </div>
+                  <div className="status-info">
+                    <h3>104</h3>
+                    <p>To Do</p>
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="status-card orange">
+                  <div className="status-icon">
+                    <i className="fas fa-spinner"></i>
+                  </div>
+                  <div className="status-info">
+                    <h3>1</h3>
+                    <p>In Progress</p>
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="status-card green">
+                  <div className="status-icon">
+                    <i className="fas fa-check"></i>
+                  </div>
+                  <div className="status-info">
+                    <h3>4</h3>
+                    <p>Done</p>
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="status-card red">
+                  <div className="status-icon">
+                    <i className="fas fa-exclamation-triangle"></i>
+                  </div>
+                  <div className="status-info">
+                    <h3>0</h3>
+                    <p>My Open Assignments</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="row">
               {machines.map(machine => (
                 <div key={machine.id} className="col-md-6 col-lg-4">
                   <div className="card">

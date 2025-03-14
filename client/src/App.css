@@ -159,3 +159,37 @@ button:hover {
 .card-body {
   background-color: #ecf0f1;
 }
+
+.status-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  color: #fff;
+}
+
+.status-card .status-icon {
+  font-size: 2rem;
+}
+
+.status-card .status-info {
+  text-align: right;
+}
+
+.status-card.blue {
+  background-color: #3498db;
+}
+
+.status-card.green {
+  background-color: #2ecc71;
+}
+
+.status-card.orange {
+  background-color: #e67e22;
+}
+
+.status-card.red {
+  background-color: #e74c3c;
+}
