@@ -14,6 +14,15 @@ class MaintenanceRecord(db.Model):
     description = db.Column(db.String(200), nullable=False)
     date = db.Column(db.String(10), nullable=False)
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'machine': self.machine,
+            'part': self.part,
+            'description': self.description,
+            'date': self.date
+        }
+
 @app.route('/maintenance', methods=['GET'])
 def get_maintenance_records():
     records = MaintenanceRecord.query.all()
