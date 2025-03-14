@@ -41,7 +41,7 @@ nav ul li a:hover {
 }
 
 .container {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 2rem auto;
   padding: 1rem;
   background-color: #fff;
@@ -144,11 +144,16 @@ button:hover {
 
 .card {
   margin-bottom: 1rem;
+  border: none;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .card-header {
   background-color: #3498db;
   color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .card-body {

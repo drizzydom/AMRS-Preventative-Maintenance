@@ -98,26 +98,28 @@ function App() {
         <Switch>
           <Route path="/" exact>
             <h1 className="text-center">Maintenance Tracker</h1>
-            <div>
+            <div className="row">
               {machines.map(machine => (
-                <div key={machine.id} className="card">
-                  <div className="card-header d-flex justify-content-between align-items-center">
-                    <h2 className="mb-0">{machine.name}</h2>
-                    <button className="toggle-button" onClick={() => toggleMachine(machine.id)}>
-                      {expandedMachines[machine.id] ? 'Collapse' : 'Expand'}
-                    </button>
-                  </div>
-                  {expandedMachines[machine.id] && (
-                    <div className="card-body">
-                      <ul>
-                        {machine.parts.map(part => (
-                          <li key={part.id} style={{ color: getColorForDate(part.nextMaintenanceDate) }}>
-                            {part.name} - Last Maintenance: {part.lastMaintenanceDate} - Next Maintenance: {part.nextMaintenanceDate}
-                          </li>
-                        ))}
-                      </ul>
+                <div key={machine.id} className="col-md-6 col-lg-4">
+                  <div className="card">
+                    <div className="card-header d-flex justify-content-between align-items-center">
+                      <h2 className="mb-0">{machine.name}</h2>
+                      <button className="toggle-button" onClick={() => toggleMachine(machine.id)}>
+                        {expandedMachines[machine.id] ? 'Collapse' : 'Expand'}
+                      </button>
                     </div>
-                  )}
+                    {expandedMachines[machine.id] && (
+                      <div className="card-body">
+                        <ul>
+                          {machine.parts.map(part => (
+                            <li key={part.id} style={{ color: getColorForDate(part.nextMaintenanceDate) }}>
+                              {part.name} - Last Maintenance: {part.lastMaintenanceDate} - Next Maintenance: {part.nextMaintenanceDate}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
