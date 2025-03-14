@@ -20,6 +20,9 @@ function Navbar() {
           <li className="nav-item">
             <Link className="nav-link" to="/view">View Records</Link>
           </li>
+          <li className="nav-item">
+            <Link className="nav-link" to="/admin">Admin Panel</Link>
+          </li>
         </ul>
       </div>
     </nav>

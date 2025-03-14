@@ -3,6 +3,7 @@ import axios from 'axios';
 import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
 import Navbar from './Navbar';
 import Login from './Login';
+import AdminPanel from './AdminPanel';
 import './App.css';
 
 function App() {
@@ -190,6 +191,9 @@ function App() {
                 </li>
               ))}
             </ul>
+          </Route>
+          <Route path="/admin">
+            <AdminPanel />
           </Route>
         </Switch>
       </div>
