@@ -92,6 +92,16 @@ class Permission(db.Model):
             'role_id': self.role_id
         }
 
+def check_permission(user_id, permission_name):
+    user = User.query.get(user_id)
+    if user is None:
+        return False
+    role = Role.query.get(user.role_id)
+    if role is None:
+        return False
+    permission = Permission.query.filter_by(role_id=role.id, name=permission_name).first()
+    return permission is not None
+
 @app.route('/maintenance', methods=['GET'])
 def get_maintenance_records():
     records = MaintenanceRecord.query.all()
@@ -99,6 +109,9 @@ def get_maintenance_records():
 
 @app.route('/maintenance', methods=['POST'])
 def add_maintenance_record():
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'create_maintenance_record'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     new_record = MaintenanceRecord(
         machine=data['machine'],
@@ -112,6 +125,9 @@ def add_maintenance_record():
 
 @app.route('/maintenance/<int:id>', methods=['PUT'])
 def update_maintenance_record(id):
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'edit_maintenance_record'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     record = MaintenanceRecord.query.get(id)
     if record is None:
@@ -125,6 +141,9 @@ def update_maintenance_record(id):
 
 @app.route('/maintenance/<int:id>', methods=['DELETE'])
 def delete_maintenance_record(id):
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'delete_maintenance_record'):
+        return jsonify({'error': 'Permission denied'}), 403
     record = MaintenanceRecord.query.get(id)
     if record is None:
         return jsonify({'error': 'Record not found'}), 404
@@ -139,6 +158,9 @@ def get_sites():
 
 @app.route('/sites', methods=['POST'])
 def add_site():
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'create_site'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     new_site = Site(name=data['name'])
     db.session.add(new_site)
@@ -152,6 +174,9 @@ def get_users():
 
 @app.route('/users', methods=['POST'])
 def add_user():
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'create_user'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     new_user = User(username=data['username'], password=data['password'], role_id=data['role_id'])
     db.session.add(new_user)
@@ -165,6 +190,9 @@ def get_machines():
 
 @app.route('/machines', methods=['POST'])
 def add_machine():
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'create_machine'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     new_machine = Machine(name=data['name'], site_id=data['site_id'])
     db.session.add(new_machine)
@@ -178,6 +206,9 @@ def get_parts():
 
 @app.route('/parts', methods=['POST'])
 def add_part():
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'create_part'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     new_part = Part(name=data['name'], machine_id=data['machine_id'])
     db.session.add(new_part)
@@ -191,6 +222,9 @@ def get_roles():
 
 @app.route('/roles', methods=['POST'])
 def add_role():
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'create_role'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     new_role = Role(name=data['name'])
     db.session.add(new_role)
@@ -204,6 +238,9 @@ def get_permissions():
 
 @app.route('/permissions', methods=['POST'])
 def add_permission():
+    user_id = request.headers.get('User-ID')
+    if not check_permission(user_id, 'create_permission'):
+        return jsonify({'error': 'Permission denied'}), 403
     data = request.get_json()
     new_permission = Permission(name=data['name'], role_id=data['role_id'])
     db.session.add(new_permission)
