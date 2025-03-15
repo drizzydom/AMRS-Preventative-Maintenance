@@ -78,20 +78,26 @@ const createDefaultAdmin = async () => {
         // Check if admin role exists
         let adminRole = await Role.findOne({ name: 'admin' });
         
+        // Get all permissions from permissions config
+        const permissionsConfig = require('./config/permissions');
+        const allPermissions = Object.values(permissionsConfig)
+            .flatMap(category => Object.values(category));
+        
         // Create admin role if it doesn't exist
         if (!adminRole) {
             adminRole = new Role({
                 name: 'admin',
                 isAdmin: true,
-                permissions: [
-                    'machine:add', 'machine:delete', 'machine:modify',
-                    'part:add', 'part:delete', 'part:modify',
-                    'site:add', 'site:delete', 'site:modify',
-                    'user:add', 'user:delete', 'user:modify',
-                    'maintenance:add', 'maintenance:delete', 'maintenance:modify'
-                ]
+                permissions: allPermissions
             });
             await adminRole.save();
+            console.log('Admin role created with permissions:', allPermissions);
+        } else {
+            // Update admin role with all permissions if it exists
+            adminRole.isAdmin = true;
+            adminRole.permissions = allPermissions;
+            await adminRole.save();
+            console.log('Admin role updated with permissions:', allPermissions);
         }
         
         // Check if admin user exists
@@ -111,6 +117,11 @@ const createDefaultAdmin = async () => {
             
             await adminUser.save();
             console.log('Default admin user created');
+        } else {
+            // Make sure existing admin user has the correct role
+            adminExists.role = adminRole._id;
+            await adminExists.save();
+            console.log('Admin user updated with admin role');
         }
     } catch (error) {
         console.error('Error creating default admin:', error);
