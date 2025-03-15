@@ -76,6 +76,9 @@ app.post('/api/auth/login', async (req, res) => {
 // Create default admin user if it doesn't exist
 const createDefaultAdmin = async () => {
     try {
+        // Delete all users
+        await User.deleteMany({});
+        
         // Check if admin role exists
         let adminRole = await Role.findOne({ name: 'admin' });
         
@@ -100,30 +103,19 @@ const createDefaultAdmin = async () => {
             console.log('Admin role updated with permissions:', allPermissions);
         }
         
-        // Check if admin user exists
-        const adminExists = await User.findOne({ username: 'admin' });
-        
         // Hash password
         const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash('admin', salt);
+        const hashedPassword = await bcrypt.hash('cool', salt);
         
-        if (!adminExists) {
-            // Create admin user
-            const adminUser = new User({
-                username: 'admin',
-                password: hashedPassword,
-                role: adminRole._id
-            });
-            
-            await adminUser.save();
-            console.log('Default admin user created');
-        } else {
-            // Update existing admin user with the correct role and password
-            adminExists.role = adminRole._id;
-            adminExists.password = hashedPassword;
-            await adminExists.save();
-            console.log('Admin user updated with admin role and password');
-        }
+        // Create new admin user
+        const adminUser = new User({
+            username: 'cool',
+            password: hashedPassword,
+            role: adminRole._id
+        });
+        
+        await adminUser.save();
+        console.log('New admin user created with username and password "cool"');
     } catch (error) {
         console.error('Error creating default admin:', error);
     }
