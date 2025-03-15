@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const routes = require('./routes/routes');
 const User = require('./models/user');
 const Role = require('./models/role');
+const permissionsConfig = require('./config/permissions');
 const app = express();
 
 // Secret key for JWT
@@ -79,7 +80,6 @@ const createDefaultAdmin = async () => {
         let adminRole = await Role.findOne({ name: 'admin' });
         
         // Get all permissions from permissions config
-        const permissionsConfig = require('./config/permissions');
         const allPermissions = Object.values(permissionsConfig)
             .flatMap(category => Object.values(category));
         

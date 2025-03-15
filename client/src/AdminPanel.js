@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useHistory } from 'react-router-dom';
 import './App.css';
 
 const PERMISSIONS = {
@@ -175,10 +174,12 @@ function AdminPanel() {
       </ul>
 
       <div className="tab-content">
-        {activeTab === 'sites' && hasPermission(PERMISSIONS.SITE.ADD) && (
+        {activeTab === 'sites' && (
           <div className="tab-pane active">
             <h3>Sites Management</h3>
-            {/* Sites management section */}
+            {hasPermission(PERMISSIONS.SITE.ADD) && (
+              <button className="btn btn-primary mb-3">Add Site</button>
+            )}
             {data.sites.map(site => (
               <div key={site._id} className="card mb-2">
                 <div className="card-body d-flex justify-content-between align-items-center">
@@ -197,8 +198,77 @@ function AdminPanel() {
           </div>
         )}
 
-        {/* Similar sections for machines, parts, and users */}
-        {/* ...existing code... */}
+        {activeTab === 'machines' && (
+          <div className="tab-pane active">
+            <h3>Machines Management</h3>
+            {hasPermission(PERMISSIONS.MACHINE.ADD) && (
+              <button className="btn btn-primary mb-3">Add Machine</button>
+            )}
+            {data.machines.map(machine => (
+              <div key={machine._id} className="card mb-2">
+                <div className="card-body d-flex justify-content-between align-items-center">
+                  <span>{machine.name}</span>
+                  <div>
+                    {hasPermission(PERMISSIONS.MACHINE.MODIFY) && (
+                      <button className="btn btn-sm btn-primary mr-2">Edit</button>
+                    )}
+                    {hasPermission(PERMISSIONS.MACHINE.DELETE) && (
+                      <button className="btn btn-sm btn-danger">Delete</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'parts' && (
+          <div className="tab-pane active">
+            <h3>Parts Management</h3>
+            {hasPermission(PERMISSIONS.PART.ADD) && (
+              <button className="btn btn-primary mb-3">Add Part</button>
+            )}
+            {data.parts.map(part => (
+              <div key={part._id} className="card mb-2">
+                <div className="card-body d-flex justify-content-between align-items-center">
+                  <span>{part.name}</span>
+                  <div>
+                    {hasPermission(PERMISSIONS.PART.MODIFY) && (
+                      <button className="btn btn-sm btn-primary mr-2">Edit</button>
+                    )}
+                    {hasPermission(PERMISSIONS.PART.DELETE) && (
+                      <button className="btn btn-sm btn-danger">Delete</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          <div className="tab-pane active">
+            <h3>Users Management</h3>
+            {hasPermission(PERMISSIONS.USER.ADD) && (
+              <button className="btn btn-primary mb-3">Add User</button>
+            )}
+            {data.users.map(user => (
+              <div key={user._id} className="card mb-2">
+                <div className="card-body d-flex justify-content-between align-items-center">
+                  <span>{user.username}</span>
+                  <div>
+                    {hasPermission(PERMISSIONS.USER.MODIFY) && (
+                      <button className="btn btn-sm btn-primary mr-2">Edit</button>
+                    )}
+                    {hasPermission(PERMISSIONS.USER.DELETE) && (
+                      <button className="btn btn-sm btn-danger">Delete</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
