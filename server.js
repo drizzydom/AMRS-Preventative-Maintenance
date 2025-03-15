@@ -103,11 +103,11 @@ const createDefaultAdmin = async () => {
         // Check if admin user exists
         const adminExists = await User.findOne({ username: 'admin' });
         
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash('admin', salt);
+        
         if (!adminExists) {
-            // Hash password
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash('admin', salt);
-            
             // Create admin user
             const adminUser = new User({
                 username: 'admin',
@@ -118,10 +118,11 @@ const createDefaultAdmin = async () => {
             await adminUser.save();
             console.log('Default admin user created');
         } else {
-            // Make sure existing admin user has the correct role
+            // Update existing admin user with the correct role and password
             adminExists.role = adminRole._id;
+            adminExists.password = hashedPassword;
             await adminExists.save();
-            console.log('Admin user updated with admin role');
+            console.log('Admin user updated with admin role and password');
         }
     } catch (error) {
         console.error('Error creating default admin:', error);
