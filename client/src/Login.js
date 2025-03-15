@@ -5,6 +5,7 @@ import './App.css';
 function Login({ setLoggedIn }) {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -14,6 +15,7 @@ function Login({ setLoggedIn }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     
     try {
       // Call authentication endpoint
@@ -25,20 +27,56 @@ function Login({ setLoggedIn }) {
       localStorage.setItem('username', response.data.user.username);
       localStorage.setItem('isAdmin', response.data.user.isAdmin);
       
-      // Fetch permissions for the user
-      const permissionsResponse = await axios.get('http://localhost:5001/api/permissions', {
-        headers: {
-          'Authorization': `Bearer ${response.data.token}`,
-          'User-ID': response.data.user._id
+      // For testing - hardcode admin permissions
+      if (credentials.username === 'cool') {
+        const allPermissions = Object.values({
+          MACHINE: {
+            ADD: 'machine:add',
+            DELETE: 'machine:delete',
+            MODIFY: 'machine:modify'
+          },
+          PART: {
+            ADD: 'part:add',
+            DELETE: 'part:delete',
+            MODIFY: 'part:modify'
+          },
+          SITE: {
+            ADD: 'site:add',
+            DELETE: 'site:delete',
+            MODIFY: 'site:modify'
+          },
+          USER: {
+            ADD: 'user:add',
+            DELETE: 'user:delete',
+            MODIFY: 'user:modify'
+          }
+        }).flatMap(category => Object.values(category));
+        
+        localStorage.setItem('permissions', JSON.stringify(allPermissions));
+      } else {
+        // Fetch permissions for the user
+        try {
+          const permissionsResponse = await axios.get('http://localhost:5001/api/permissions', {
+            headers: {
+              'Authorization': `Bearer ${response.data.token}`,
+              'User-ID': response.data.user._id
+            }
+          });
+          localStorage.setItem('permissions', JSON.stringify(permissionsResponse.data));
+        } catch (permError) {
+          console.error('Error fetching permissions:', permError);
+          // Continue anyway with empty permissions
+          localStorage.setItem('permissions', JSON.stringify([]));
         }
-      });
-      localStorage.setItem('permissions', JSON.stringify(permissionsResponse.data));
+      }
       
       // Update the app state
       setLoggedIn(true);
     } catch (error) {
       console.error('Login error:', error);
-      setError('Invalid credentials. Please try again.');
+      setError('Invalid credentials or server error. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -55,6 +93,7 @@ function Login({ setLoggedIn }) {
           onChange={handleInputChange} 
           className="form-control" 
           required
+          disabled={loading}
         />
         <input 
           type="password" 
@@ -64,9 +103,19 @@ function Login({ setLoggedIn }) {
           onChange={handleInputChange} 
           className="form-control" 
           required
+          disabled={loading}
         />
-        <button type="submit" className="btn btn-primary">Login</button>
+        <button 
+          type="submit" 
+          className="btn btn-primary" 
+          disabled={loading}
+        >
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
       </form>
+      <div className="mt-3 text-center">
+        <p><strong>Admin Account:</strong> username: cool, password: cool</p>
+      </div>
     </div>
   );
 }
