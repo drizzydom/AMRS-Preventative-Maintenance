@@ -25,55 +25,18 @@ function Login({ setLoggedIn }) {
       localStorage.setItem('username', response.data.user.username);
       localStorage.setItem('isAdmin', response.data.user.isAdmin);
       
+      // Fetch permissions for the user
+      const permissionsResponse = await axios.get('http://localhost:5001/api/permissions', {
+        headers: {
+          'Authorization': `Bearer ${response.data.token}`,
+          'User-ID': response.data.user._id
+        }
+      });
+      localStorage.setItem('permissions', JSON.stringify(permissionsResponse.data));
+      
       // Update the app state
       setLoggedIn(true);
     } catch (error) {
-      // For testing - hardcoded admin user with all permissions
-      if (credentials.username === 'admin' && credentials.password === 'admin') {
-        // Import permissions config
-        const permissions = {
-          MACHINE: {
-            ADD: 'machine:add',
-            DELETE: 'machine:delete',
-            MODIFY: 'machine:modify'
-          },
-          PART: {
-            ADD: 'part:add',
-            DELETE: 'part:delete',
-            MODIFY: 'part:modify'
-          },
-          SITE: {
-            ADD: 'site:add',
-            DELETE: 'site:delete',
-            MODIFY: 'site:modify'
-          },
-          USER: {
-            ADD: 'user:add',
-            DELETE: 'user:delete',
-            MODIFY: 'user:modify'
-          },
-          MAINTENANCE: {
-            ADD: 'maintenance:add',
-            DELETE: 'maintenance:delete',
-            MODIFY: 'maintenance:modify'
-          }
-        };
-
-        // Extract all permission values
-        const allPermissions = Object.values(permissions)
-          .flatMap(category => Object.values(category));
-        
-        // Store mock data for testing
-        localStorage.setItem('token', 'test-token');
-        localStorage.setItem('userId', 'admin-id');
-        localStorage.setItem('username', 'admin');
-        localStorage.setItem('isAdmin', 'true');
-        localStorage.setItem('permissions', JSON.stringify(allPermissions));
-        
-        setLoggedIn(true);
-        return;
-      }
-      
       console.error('Login error:', error);
       setError('Invalid credentials. Please try again.');
     }
