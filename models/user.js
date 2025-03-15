@@ -19,12 +19,14 @@ const UserSchema = new Schema({
 
 UserSchema.methods.hasPermission = async function(permission) {
     const role = await Role.findById(this.role);
+    if (!role) return false;
     return role.permissions.includes(permission);
 };
 
 UserSchema.methods.isAdmin = async function() {
     const role = await Role.findById(this.role);
-    return role.name === 'admin';
+    if (!role) return false;
+    return role.isAdmin === true || role.name === 'admin';
 };
 
 module.exports = mongoose.model('User', UserSchema);

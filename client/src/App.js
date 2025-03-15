@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
 import Navbar from './Navbar';
 import Login from './Login';
 import AdminPanel from './AdminPanel';
@@ -8,10 +8,20 @@ import './App.css';
 
 function App() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [maintenanceRecords, setMaintenanceRecords] = useState([]);
   const [newRecord, setNewRecord] = useState({ machine: '', part: '', description: '', date: '' });
   const [machines, setMachines] = useState([]);
   const [expandedMachines, setExpandedMachines] = useState({});
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const token = localStorage.getItem('token');
+    if (token) {
+      setLoggedIn(true);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (loggedIn) {
@@ -19,6 +29,35 @@ function App() {
       generateDummyData();
     }
   }, [loggedIn]);
+
+  // Add authentication header to axios requests
+  axios.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      const userId = localStorage.getItem('userId');
+      
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (userId) {
+        config.headers['User-ID'] = userId;
+      }
+      
+      return config;
+    },
+    (error) => {
+      return Promise.reject(error);
+    }
+  );
+
+  const handleLogout = () => {
+    // Clear auth data
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
+    localStorage.removeItem('isAdmin');
+    setLoggedIn(false);
+  };
 
   const fetchMaintenanceRecords = async () => {
     const response = await axios.get('http://localhost:5001/maintenance');
@@ -88,13 +127,17 @@ function App() {
     }));
   };
 
+  if (loading) {
+    return <div className="container text-center mt-5"><h2>Loading...</h2></div>;
+  }
+
   if (!loggedIn) {
     return <Login setLoggedIn={setLoggedIn} />;
   }
 
   return (
     <Router>
-      <Navbar />
+      <Navbar onLogout={handleLogout} />
       <div className="container">
         <Switch>
           <Route path="/" exact>

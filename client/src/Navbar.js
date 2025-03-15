@@ -2,7 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import './App.css';
 
-function Navbar() {
+function Navbar({ onLogout }) {
+  const username = localStorage.getItem('username');
+  const isAdmin = localStorage.getItem('isAdmin') === 'true';
+
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
       <Link className="navbar-brand" to="/">Maintenance Tracker</Link>
@@ -20,8 +23,20 @@ function Navbar() {
           <li className="nav-item">
             <Link className="nav-link" to="/view">View Records</Link>
           </li>
+          {isAdmin && (
+            <li className="nav-item">
+              <Link className="nav-link" to="/admin">Admin Panel</Link>
+            </li>
+          )}
+        </ul>
+        <ul className="navbar-nav">
           <li className="nav-item">
-            <Link className="nav-link" to="/admin">Admin Panel</Link>
+            <span className="nav-link text-light">Welcome, {username || 'User'}</span>
+          </li>
+          <li className="nav-item">
+            <button onClick={onLogout} className="btn btn-outline-light my-2 my-sm-0">
+              Logout
+            </button>
           </li>
         </ul>
       </div>
