@@ -1,16 +1,7 @@
-const permissions = require('../config/permissions');
 const Machine = require('../models/machine');
-const User = require('../models/user');
 
 exports.addMachine = async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
-        // Allow creation if user has permission or is admin
-        const hasPermission = await user.hasPermission(permissions.MACHINE.ADD) || await user.isAdmin();
-        if (!hasPermission) {
-            return res.status(403).send('Permission denied');
-        }
-        
         const { name, site_id } = req.body;
         const machine = new Machine({
             name,
@@ -27,13 +18,6 @@ exports.addMachine = async (req, res) => {
 
 exports.deleteMachine = async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
-        // Allow deletion if user has permission or is admin
-        const hasPermission = await user.hasPermission(permissions.MACHINE.DELETE) || await user.isAdmin();
-        if (!hasPermission) {
-            return res.status(403).send('Permission denied');
-        }
-        
         const machine = await Machine.findByIdAndDelete(req.params.id);
         if (!machine) {
             return res.status(404).send('Machine not found');
@@ -48,13 +32,6 @@ exports.deleteMachine = async (req, res) => {
 
 exports.modifyMachine = async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
-        // Allow modification if user has permission or is admin
-        const hasPermission = await user.hasPermission(permissions.MACHINE.MODIFY) || await user.isAdmin();
-        if (!hasPermission) {
-            return res.status(403).send('Permission denied');
-        }
-        
         const { name, site_id } = req.body;
         const machine = await Machine.findById(req.params.id);
         if (!machine) {
@@ -68,6 +45,29 @@ exports.modifyMachine = async (req, res) => {
         return res.status(200).json(machine);
     } catch (error) {
         console.error('Error modifying machine:', error);
+        return res.status(500).send('Server error');
+    }
+};
+
+exports.getAllMachines = async (req, res) => {
+    try {
+        const machines = await Machine.find().populate('site', 'name');
+        return res.status(200).json(machines);
+    } catch (error) {
+        console.error('Error getting machines:', error);
+        return res.status(500).send('Server error');
+    }
+};
+
+exports.getMachineById = async (req, res) => {
+    try {
+        const machine = await Machine.findById(req.params.id).populate('site', 'name');
+        if (!machine) {
+            return res.status(404).send('Machine not found');
+        }
+        return res.status(200).json(machine);
+    } catch (error) {
+        console.error('Error getting machine:', error);
         return res.status(500).send('Server error');
     }
 };
