@@ -193,3 +193,33 @@ button:hover {
 .status-card.red {
   background-color: #e74c3c;
 }
+
+/* Admin Panel Styles */
+.admin-panel .nav-tabs {
+  border-bottom: 2px solid #dee2e6;
+}
+
+.admin-panel .nav-link {
+  border: none;
+  color: #495057;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  margin-right: 0.5rem;
+}
+
+.admin-panel .nav-link.active {
+  color: #007bff;
+  border-bottom: 2px solid #007bff;
+}
+
+.admin-panel .card {
+  transition: all 0.3s ease;
+}
+
+.admin-panel .card:hover {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.admin-panel .btn-sm {
+  margin-left: 0.5rem;
+}
