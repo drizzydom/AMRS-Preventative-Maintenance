@@ -20,12 +20,8 @@ function Login({ setLoggedIn }) {
     try {
       console.log('Attempting login with:', credentials.username);
       
-      // Call authentication endpoint
-      const response = await axios.post('http://localhost:5001/api/auth/login', credentials, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // Use the simplified login endpoint
+      const response = await axios.post('http://localhost:5001/login', credentials);
       
       console.log('Login response:', response.data);
       
@@ -35,30 +31,14 @@ function Login({ setLoggedIn }) {
       localStorage.setItem('username', response.data.user.username);
       localStorage.setItem('isAdmin', response.data.user.isAdmin);
       
-      // For testing - hardcode admin permissions for any successful login
-      const allPermissions = Object.values({
-        MACHINE: {
-          ADD: 'machine:add',
-          DELETE: 'machine:delete',
-          MODIFY: 'machine:modify'
-        },
-        PART: {
-          ADD: 'part:add',
-          DELETE: 'part:delete',
-          MODIFY: 'part:modify'
-        },
-        SITE: {
-          ADD: 'site:add',
-          DELETE: 'site:delete',
-          MODIFY: 'site:modify'
-        },
-        USER: {
-          ADD: 'user:add',
-          DELETE: 'user:delete',
-          MODIFY: 'user:modify'
-        }
-      }).flatMap(category => Object.values(category));
-      
+      // Store admin permissions for this user
+      const allPermissions = [
+        'machine:add', 'machine:delete', 'machine:modify',
+        'part:add', 'part:delete', 'part:modify',
+        'site:add', 'site:delete', 'site:modify',
+        'user:add', 'user:delete', 'user:modify',
+        'maintenance:add', 'maintenance:delete', 'maintenance:modify'
+      ];
       localStorage.setItem('permissions', JSON.stringify(allPermissions));
       
       // Update the app state
@@ -105,7 +85,7 @@ function Login({ setLoggedIn }) {
         </button>
       </form>
       <div className="mt-3 text-center">
-        <p><strong>Admin Account:</strong> username: cool, password: cool</p>
+        <p><strong>Admin Account:</strong> username: admin123, password: pass123</p>
       </div>
     </div>
   );
