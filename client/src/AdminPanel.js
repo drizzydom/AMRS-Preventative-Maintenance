@@ -73,22 +73,57 @@ function AdminPanel() {
   const fetchAllData = async () => {
     try {
       const [sites, machines, parts, users, roles] = await Promise.all([
-        axios.get('/api/sites'),
-        axios.get('/api/machines'),
-        axios.get('/api/parts'),
-        axios.get('/api/users'),
-        axios.get('/api/roles')
+        axios.get('http://localhost:5001/api/sites', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'User-ID': localStorage.getItem('userId')
+          }
+        }),
+        axios.get('http://localhost:5001/api/machines', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'User-ID': localStorage.getItem('userId')
+          }
+        }),
+        axios.get('http://localhost:5001/api/parts', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'User-ID': localStorage.getItem('userId')
+          }
+        }),
+        axios.get('http://localhost:5001/api/users', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'User-ID': localStorage.getItem('userId')
+          }
+        }),
+        axios.get('http://localhost:5001/api/roles', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'User-ID': localStorage.getItem('userId')
+          }
+        })
       ]);
 
       setData({
-        sites: sites.data,
-        machines: machines.data,
-        parts: parts.data,
-        users: users.data,
-        roles: roles.data
+        sites: sites.data || [],
+        machines: machines.data || [],
+        parts: parts.data || [],
+        users: users.data || [],
+        roles: roles.data || []
       });
     } catch (err) {
-      throw new Error('Failed to fetch data');
+      console.error('Error fetching data:', err);
+      setError('Failed to fetch data. Please check your connection and permissions.');
+      
+      // Set empty arrays as fallback
+      setData({
+        sites: [],
+        machines: [],
+        parts: [],
+        users: [],
+        roles: []
+      });
     }
   };
 
