@@ -18,8 +18,16 @@ function Login({ setLoggedIn }) {
     setLoading(true);
     
     try {
+      console.log('Attempting login with:', credentials.username);
+      
       // Call authentication endpoint
-      const response = await axios.post('http://localhost:5001/api/auth/login', credentials);
+      const response = await axios.post('http://localhost:5001/api/auth/login', credentials, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Login response:', response.data);
       
       // Store the token and user info in localStorage
       localStorage.setItem('token', response.data.token);
@@ -27,48 +35,31 @@ function Login({ setLoggedIn }) {
       localStorage.setItem('username', response.data.user.username);
       localStorage.setItem('isAdmin', response.data.user.isAdmin);
       
-      // For testing - hardcode admin permissions
-      if (credentials.username === 'cool') {
-        const allPermissions = Object.values({
-          MACHINE: {
-            ADD: 'machine:add',
-            DELETE: 'machine:delete',
-            MODIFY: 'machine:modify'
-          },
-          PART: {
-            ADD: 'part:add',
-            DELETE: 'part:delete',
-            MODIFY: 'part:modify'
-          },
-          SITE: {
-            ADD: 'site:add',
-            DELETE: 'site:delete',
-            MODIFY: 'site:modify'
-          },
-          USER: {
-            ADD: 'user:add',
-            DELETE: 'user:delete',
-            MODIFY: 'user:modify'
-          }
-        }).flatMap(category => Object.values(category));
-        
-        localStorage.setItem('permissions', JSON.stringify(allPermissions));
-      } else {
-        // Fetch permissions for the user
-        try {
-          const permissionsResponse = await axios.get('http://localhost:5001/api/permissions', {
-            headers: {
-              'Authorization': `Bearer ${response.data.token}`,
-              'User-ID': response.data.user._id
-            }
-          });
-          localStorage.setItem('permissions', JSON.stringify(permissionsResponse.data));
-        } catch (permError) {
-          console.error('Error fetching permissions:', permError);
-          // Continue anyway with empty permissions
-          localStorage.setItem('permissions', JSON.stringify([]));
+      // For testing - hardcode admin permissions for any successful login
+      const allPermissions = Object.values({
+        MACHINE: {
+          ADD: 'machine:add',
+          DELETE: 'machine:delete',
+          MODIFY: 'machine:modify'
+        },
+        PART: {
+          ADD: 'part:add',
+          DELETE: 'part:delete',
+          MODIFY: 'part:modify'
+        },
+        SITE: {
+          ADD: 'site:add',
+          DELETE: 'site:delete',
+          MODIFY: 'site:modify'
+        },
+        USER: {
+          ADD: 'user:add',
+          DELETE: 'user:delete',
+          MODIFY: 'user:modify'
         }
-      }
+      }).flatMap(category => Object.values(category));
+      
+      localStorage.setItem('permissions', JSON.stringify(allPermissions));
       
       // Update the app state
       setLoggedIn(true);

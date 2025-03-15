@@ -12,17 +12,19 @@ const app = express();
 // Secret key for JWT
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-// CORS configuration - configure correctly to handle preflight requests
+// CORS configuration
 app.use(cors({
-    origin: 'http://localhost:3000', // React app URL
+    origin: '*', // Allow all origins for development
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'User-ID']
 }));
 
-app.use(express.json());
+// Handle preflight OPTIONS requests globally
+app.options('*', (req, res) => {
+    res.status(200).end();
+});
 
-// Handle OPTIONS requests explicitly
-app.options('*', cors());
+app.use(express.json());
 
 // Authentication middleware - This handles token validation
 app.use((req, res, next) => {
@@ -44,15 +46,17 @@ app.use((req, res, next) => {
     next();
 });
 
-// Auth routes
+// Define login route directly in server.js to avoid routing issues
 app.post('/api/auth/login', async (req, res) => {
     try {
+        console.log('Login attempt:', req.body.username);
         const { username, password } = req.body;
         
         // Find user by username
         const user = await User.findOne({ username }).populate('role');
         
         if (!user) {
+            console.log('User not found:', username);
             return res.status(401).json({ message: 'Invalid credentials' });
         }
         
@@ -60,20 +64,25 @@ app.post('/api/auth/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         
         if (!isMatch) {
+            console.log('Password mismatch for user:', username);
             return res.status(401).json({ message: 'Invalid credentials' });
         }
         
         // Create and sign JWT token
         const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1d' });
         
+        // Check if user is admin
+        const isAdmin = await user.isAdmin();
+        
         // Return user info without password and token
         const userResponse = {
             _id: user._id,
             username: user.username,
             role: user.role.name,
-            isAdmin: await user.isAdmin()
+            isAdmin: isAdmin
         };
         
+        console.log('Login successful for:', username);
         res.json({ token, user: userResponse });
     } catch (error) {
         console.error('Login error:', error);
@@ -131,43 +140,6 @@ const createDefaultAdmin = async () => {
     }
 };
 
-// Make auth endpoint accessible at root level as well for easier access
-app.post('/auth/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        
-        // Find user by username
-        const user = await User.findOne({ username }).populate('role');
-        
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-        
-        // Compare passwords
-        const isMatch = await bcrypt.compare(password, user.password);
-        
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-        
-        // Create and sign JWT token
-        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1d' });
-        
-        // Return user info without password and token
-        const userResponse = {
-            _id: user._id,
-            username: user.username,
-            role: user.role.name,
-            isAdmin: await user.isAdmin()
-        };
-        
-        res.json({ token, user: userResponse });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
 // API Routes
 app.use('/api', routes);
 
@@ -202,4 +174,5 @@ mongoose.connect(mongoURI, {
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`Login endpoint available at: http://localhost:${PORT}/api/auth/login`);
 });
