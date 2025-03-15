@@ -12,9 +12,17 @@ const app = express();
 // Secret key for JWT
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-// Middleware
-app.use(cors());
+// CORS configuration - configure correctly to handle preflight requests
+app.use(cors({
+    origin: 'http://localhost:3000', // React app URL
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'User-ID']
+}));
+
 app.use(express.json());
+
+// Handle OPTIONS requests explicitly
+app.options('*', cors());
 
 // Authentication middleware - This handles token validation
 app.use((req, res, next) => {
@@ -76,9 +84,6 @@ app.post('/api/auth/login', async (req, res) => {
 // Create default admin user if it doesn't exist
 const createDefaultAdmin = async () => {
     try {
-        // Delete all users
-        await User.deleteMany({});
-        
         // Check if admin role exists
         let adminRole = await Role.findOne({ name: 'admin' });
         
@@ -103,26 +108,73 @@ const createDefaultAdmin = async () => {
             console.log('Admin role updated with permissions:', allPermissions);
         }
         
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash('cool', salt);
+        // Check if the cool admin user exists
+        const adminExists = await User.findOne({ username: 'cool' });
         
-        // Create new admin user
-        const adminUser = new User({
-            username: 'cool',
-            password: hashedPassword,
-            role: adminRole._id
-        });
-        
-        await adminUser.save();
-        console.log('New admin user created with username and password "cool"');
+        if (!adminExists) {
+            // Hash password
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash('cool', salt);
+            
+            // Create new admin user
+            const adminUser = new User({
+                username: 'cool',
+                password: hashedPassword,
+                role: adminRole._id
+            });
+            
+            await adminUser.save();
+            console.log('New admin user created with username and password "cool"');
+        }
     } catch (error) {
         console.error('Error creating default admin:', error);
     }
 };
 
+// Make auth endpoint accessible at root level as well for easier access
+app.post('/auth/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        // Find user by username
+        const user = await User.findOne({ username }).populate('role');
+        
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+        
+        // Compare passwords
+        const isMatch = await bcrypt.compare(password, user.password);
+        
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+        
+        // Create and sign JWT token
+        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1d' });
+        
+        // Return user info without password and token
+        const userResponse = {
+            _id: user._id,
+            username: user.username,
+            role: user.role.name,
+            isAdmin: await user.isAdmin()
+        };
+        
+        res.json({ token, user: userResponse });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // API Routes
 app.use('/api', routes);
+
+// Debug route to check if server is responding
+app.get('/', (req, res) => {
+    res.json({ message: 'Server is running' });
+});
 
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
