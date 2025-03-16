@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Maintenance Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #333;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .nav-links a {
+            color: white;
+            margin-left: 15px;
+            text-decoration: none;
+        }
+        .container {
+            padding: 20px;
+        }
+        .site {
+            margin-bottom: 30px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+        .site h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .machines {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .machine {
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+        }
+        .machine h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .machine-model {
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .parts-list {
+            margin-top: 15px;
+        }
+        .part {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .part-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .part-name {
+            font-weight: bold;
+        }
+        .maintenance-info {
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+        .maintenance-due {
+            background-color: #fff3cd;
+        }
+        .maintenance-urgent {
+            background-color: #f8d7da;
+        }
+        .maintenance-good {
+            background-color: #d4edda;
+        }
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Maintenance Tracker</h1>
+        <div class="nav-links">
+            {% if is_admin %}
+            <a href="{{ url_for('admin') }}">Admin Panel</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                <div class="flash-message">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% for site in sites %}
+        <div class="site">
+            <h2>{{ site.name }} ({{ site.location }})</h2>
+            <div class="machines">
+                {% for machine in site.machines %}
+                <div class="machine">
+                    <h3>{{ machine.name }}</h3>
+                    <div class="machine-model">Model: {{ machine.model }}</div>
+                    
+                    <div class="parts-list">
+                        <h4>Parts:</h4>
+                        {% for part in machine.parts %}
+                        {% set days_until = (part.next_maintenance - now).days %}
+                        
+                        {% if days_until < 0 %}
+                            {% set status_class = "maintenance-urgent" %}
+                            {% set status_text = "OVERDUE" %}
+                        {% elif days_until <= 2 %}
+                            {% set status_class = "maintenance-due" %}
+                            {% set status_text = "Due Soon" %}
+                        {% else %}
+                            {% set status_class = "maintenance-good" %}
+                            {% set status_text = "OK" %}
+                        {% endif %}
+                        
+                        <div class="part {{ status_class }}">
+                            <div class="part-header">
+                                <span class="part-name">{{ part.name }}</span>
+                                <span>{{ status_text }}</span>
+                            </div>
+                            <div class="maintenance-info">
+                                <div>{{ part.description }}</div>
+                                <div>Maintenance Frequency: Every {{ part.maintenance_frequency }} days</div>
+                                <div>Last Maintenance: {{ part.last_maintenance.strftime('%Y-%m-%d') }}</div>
+                                <div>Next Maintenance: {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        // Add current date to parts template
+        document.addEventListener('DOMContentLoaded', function() {
+            window.now = new Date();
+        });
+    </script>
+</body>
+</html>
