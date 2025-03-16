@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime, timedelta
 import logging
+from functools import wraps
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -20,18 +21,60 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Utility function for permission checking
+def require_permission(permission):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not current_user.has_permission(permission):
+                flash(f'Access denied. You need {permission} permission.')
+                return redirect(url_for('dashboard'))
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
 # Define database models
+class Role(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    description = db.Column(db.String(200))
+    permissions = db.Column(db.String(500), default="view")
+    users = db.relationship('User', backref='role', lazy=True)
+    
+    def has_permission(self, permission):
+        return permission in self.permissions.split(',')
+    
+    def get_permissions_list(self):
+        return self.permissions.split(',')
+
+user_site = db.Table('user_site',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('site_id', db.Integer, db.ForeignKey('site.id'), primary_key=True)
+)
+
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id'))
+    sites = db.relationship('Site', secondary=user_site, lazy='subquery',
+                           backref=db.backref('users', lazy=True))
+    email = db.Column(db.String(100))
+    full_name = db.Column(db.String(100))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
         
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+    
+    def has_permission(self, permission):
+        if self.is_admin:
+            return True
+        if self.role:
+            return self.role.has_permission(permission)
+        return False
 
 class Site(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -101,15 +144,20 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    sites = Site.query.all()
-    machines = Machine.query.all()
-    # Pass current date to template for maintenance calculations
+    # Filter sites based on user access if not admin
+    if current_user.is_admin:
+        sites = Site.query.all()
+    else:
+        # Only show sites the user has been assigned to
+        sites = current_user.sites
+        
     now = datetime.utcnow()
     return render_template('dashboard.html', 
                           sites=sites, 
-                          machines=machines,
+                          machines=Machine.query.all(),
                           now=now,
-                          is_admin=current_user.is_admin)
+                          is_admin=current_user.is_admin,
+                          current_user=current_user)
 
 # Admin routes
 @app.route('/admin')
@@ -232,7 +280,7 @@ def delete_part(part_id):
 @app.route('/admin/parts/update-maintenance/<int:part_id>', methods=['POST'])
 @login_required
 def update_maintenance(part_id):
-    if not current_user.is_admin:
+    if not current_user.is_admin and not current_user.has_permission('edit'):
         flash('Access denied. Admin privileges required.')
         return redirect(url_for('dashboard'))
     
@@ -243,16 +291,140 @@ def update_maintenance(part_id):
     flash(f'Maintenance for "{part.name}" has been updated')
     return redirect(url_for('manage_parts'))
 
+# New routes for Role management
+@app.route('/admin/roles', methods=['GET', 'POST'])
+@login_required
+def manage_roles():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        
+        permissions = []
+        if request.form.get('perm_view'):
+            permissions.append('view')
+        if request.form.get('perm_create'):
+            permissions.append('create')
+        if request.form.get('perm_edit'):
+            permissions.append('edit')
+        if request.form.get('perm_delete'):
+            permissions.append('delete')
+        if request.form.get('perm_admin'):
+            permissions.append('admin')
+        
+        new_role = Role(
+            name=name, 
+            description=description,
+            permissions=','.join(permissions)
+        )
+        db.session.add(new_role)
+        db.session.commit()
+        flash(f'Role "{name}" added successfully')
+    
+    roles = Role.query.all()
+    return render_template('admin_roles.html', roles=roles)
+
+@app.route('/admin/roles/delete/<int:role_id>', methods=['POST'])
+@login_required
+def delete_role(role_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    role = Role.query.get_or_404(role_id)
+    if role.users:
+        flash(f'Cannot delete role "{role.name}" because it has assigned users')
+        return redirect(url_for('manage_roles'))
+        
+    db.session.delete(role)
+    db.session.commit()
+    flash(f'Role "{role.name}" deleted successfully')
+    return redirect(url_for('manage_roles'))
+
+# New routes for User management
+@app.route('/admin/users', methods=['GET', 'POST'])
+@login_required
+def manage_users():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        full_name = request.form.get('full_name')
+        email = request.form.get('email')
+        role_id = request.form.get('role_id')
+        is_admin = True if request.form.get('is_admin') else False
+        
+        if User.query.filter_by(username=username).first():
+            flash(f'Username "{username}" already exists')
+            roles = Role.query.all()
+            users = User.query.all()
+            sites = Site.query.all()
+            return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)
+        
+        new_user = User(
+            username=username,
+            full_name=full_name,
+            email=email,
+            role_id=role_id if role_id else None,
+            is_admin=is_admin
+        )
+        new_user.set_password(password)
+        
+        site_ids = request.form.getlist('site_ids')
+        for site_id in site_ids:
+            site = Site.query.get(site_id)
+            if site:
+                new_user.sites.append(site)
+        
+        db.session.add(new_user)
+        db.session.commit()
+        flash(f'User "{username}" added successfully')
+    
+    roles = Role.query.all()
+    users = User.query.all()
+    sites = Site.query.all()
+    return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)
+
+@app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    if user_id == current_user.id:
+        flash('Cannot delete your own user account')
+        return redirect(url_for('manage_users'))
+        
+    user = User.query.get_or_404(user_id)
+    db.session.delete(user)
+    db.session.commit()
+    flash(f'User "{user.username}" deleted successfully')
+    return redirect(url_for('manage_users'))
+
 # Setup database initialization
 @app.cli.command("init-db")
 def init_db():
     """Initialize the database with sample data."""
     db.create_all()
     
-    # Check if admin user exists, create if not
     admin = User.query.filter_by(username='admin').first()
     if not admin:
-        admin = User(username='admin', is_admin=True)
+        # Create roles first
+        admin_role = Role(name='Administrator', description='Full system access', permissions='view,create,edit,delete,admin')
+        manager_role = Role(name='Manager', description='Can manage sites and view all data', permissions='view,create,edit')
+        technician_role = Role(name='Technician', description='Can update maintenance records', permissions='view,edit')
+        db.session.add_all([admin_role, manager_role, technician_role])
+        db.session.commit()
+        
+        # Create admin user
+        admin = User(username='admin', full_name='Administrator', email='admin@example.com', is_admin=True, role_id=admin_role.id)
         admin.set_password('admin')
         db.session.add(admin)
         
@@ -272,27 +444,20 @@ def init_db():
         
         # Create test parts with varying maintenance frequencies
         parts = [
-            # Machine 1 parts
             Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id, 
                  maintenance_frequency=3, last_maintenance=datetime.utcnow()),
             Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,
                  maintenance_frequency=6, last_maintenance=datetime.utcnow()),
             Part(name='Tool Changer', description='Automatic tool changer', machine_id=machine1.id,
                  maintenance_frequency=2, last_maintenance=datetime.utcnow()),
-                 
-            # Machine 2 parts
             Part(name='Chuck', description='Workholding device', machine_id=machine2.id,
                  maintenance_frequency=4, last_maintenance=datetime.utcnow()),
             Part(name='Tailstock', description='Supports workpiece end', machine_id=machine2.id,
                  maintenance_frequency=5, last_maintenance=datetime.utcnow()),
-            
-            # Machine 3 parts
             Part(name='Drill Bit', description='Cutting tool', machine_id=machine3.id,
                  maintenance_frequency=1, last_maintenance=datetime.utcnow()),
             Part(name='Table', description='Work surface', machine_id=machine3.id,
                  maintenance_frequency=4, last_maintenance=datetime.utcnow()),
-                 
-            # Machine 4 parts
             Part(name='Servo Motor A', description='Axis 1 movement', machine_id=machine4.id,
                  maintenance_frequency=3, last_maintenance=datetime.utcnow()),
             Part(name='Servo Motor B', description='Axis 2 movement', machine_id=machine4.id,
@@ -317,76 +482,45 @@ def init_db():
     else:
         print("Database already contains data. Skipping initialization.")
 
-# Replace @app.before_first_request with this
+@app.cli.command("reset-db")
+def reset_db():
+    """Drop and recreate all database tables."""
+    db.drop_all()
+    db.create_all()
+    print("Database has been reset. Run 'flask init-db' to initialize with sample data.")
+
+# Create database tables if they don't exist
 with app.app_context():
-    try:
-        db.create_all()
-        # Check if we need to initialize sample data
-        if User.query.filter_by(username='admin').first() is None:
-            admin = User(username='admin', is_admin=True)
-            admin.set_password('admin')
-            db.session.add(admin)
+    # Check if User table exists but doesn't have the new columns
+    inspector = db.inspect(db.engine)
+    tables_exist = inspector.has_table("user")
+    
+    if tables_exist:
+        columns = [col['name'] for col in inspector.get_columns('user')]
+        needs_upgrade = 'role_id' not in columns or 'email' not in columns
+        
+        if needs_upgrade:
+            print("Existing database schema found that needs updating.")
+            print("Backing up and upgrading database...")
             
-            # Create test sites
-            site1 = Site(name='Main Factory', location='123 Industrial Ave')
-            site2 = Site(name='Assembly Plant', location='456 Production Blvd')
-            db.session.add_all([site1, site2])
-            db.session.commit()
-            
-            # Create test machines
-            machine1 = Machine(name='CNC Mill', model='XYZ-1000', site_id=site1.id)
-            machine2 = Machine(name='Lathe', model='LT-500', site_id=site1.id)
-            machine3 = Machine(name='Drill Press', model='DP-750', site_id=site2.id)
-            machine4 = Machine(name='Assembly Robot', model='AR-200', site_id=site2.id)
-            db.session.add_all([machine1, machine2, machine3, machine4])
-            db.session.commit()
-            
-            # Create test parts with varying maintenance frequencies
-            parts = [
-                # Machine 1 parts
-                Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id, 
-                    maintenance_frequency=3, last_maintenance=datetime.utcnow()),
-                Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,
-                    maintenance_frequency=6, last_maintenance=datetime.utcnow()),
-                Part(name='Tool Changer', description='Automatic tool changer', machine_id=machine1.id,
-                    maintenance_frequency=2, last_maintenance=datetime.utcnow()),
-                    
-                # Machine 2 parts
-                Part(name='Chuck', description='Workholding device', machine_id=machine2.id,
-                    maintenance_frequency=4, last_maintenance=datetime.utcnow()),
-                Part(name='Tailstock', description='Supports workpiece end', machine_id=machine2.id,
-                    maintenance_frequency=5, last_maintenance=datetime.utcnow()),
+            # Option 1: For simplicity, we'll recreate tables
+            backup_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            os.makedirs('backups', exist_ok=True)
+            try:
+                # Copy the existing database file to a backup
+                import shutil
+                shutil.copy2('instance/maintenance.db', f'backups/maintenance_{backup_time}.db')
+                print(f"Database backed up to 'backups/maintenance_{backup_time}.db'")
                 
-                # Machine 3 parts
-                Part(name='Drill Bit', description='Cutting tool', machine_id=machine3.id,
-                    maintenance_frequency=1, last_maintenance=datetime.utcnow()),
-                Part(name='Table', description='Work surface', machine_id=machine3.id,
-                    maintenance_frequency=4, last_maintenance=datetime.utcnow()),
-                    
-                # Machine 4 parts
-                Part(name='Servo Motor A', description='Axis 1 movement', machine_id=machine4.id,
-                    maintenance_frequency=3, last_maintenance=datetime.utcnow()),
-                Part(name='Servo Motor B', description='Axis 2 movement', machine_id=machine4.id,
-                    maintenance_frequency=3, last_maintenance=datetime.utcnow()),
-                Part(name='Servo Motor C', description='Axis 3 movement', machine_id=machine4.id,
-                    maintenance_frequency=3, last_maintenance=datetime.utcnow()),
-                Part(name='Gripper', description='End effector', machine_id=machine4.id,
-                    maintenance_frequency=2, last_maintenance=datetime.utcnow()),
-                Part(name='Controller', description='Robot brain', machine_id=machine4.id,
-                    maintenance_frequency=6, last_maintenance=datetime.utcnow()),
-                Part(name='Power Supply', description='Electrical power unit', machine_id=machine4.id,
-                    maintenance_frequency=5, last_maintenance=datetime.utcnow()),
-            ]
-            
-            # Update next_maintenance for all parts
-            for part in parts:
-                part.update_next_maintenance()
-                
-            db.session.add_all(parts)
-            db.session.commit()
-            print("Database initialized with test data.")
-    except Exception as e:
-        print(f"Error initializing database: {e}")
+                # Drop all tables and recreate them
+                db.drop_all()
+                print("Old schema dropped")
+            except Exception as e:
+                print(f"Error during backup: {e}")
+    
+    # Create all tables
+    db.create_all()
+    print("Database schema updated")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5050)

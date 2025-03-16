@@ -85,6 +85,12 @@
             color: #155724;
             border-radius: 4px;
         }
+        .admin-section {
+            margin-bottom: 30px;
+        }
+        .admin-section h2 {
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -109,23 +115,43 @@
             <h2>Administration Panel</h2>
             <p>Welcome to the administration panel. From here, you can manage all aspects of the maintenance tracking system.</p>
             
-            <div class="admin-grid">
-                <div class="admin-card">
-                    <h3>Sites</h3>
-                    <p>Manage locations and facilities</p>
-                    <a href="{{ url_for('manage_sites') }}">Manage Sites</a>
+            <div class="admin-section">
+                <h2>Equipment Management</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Sites</h3>
+                        <p>Manage locations and facilities</p>
+                        <a href="{{ url_for('manage_sites') }}">Manage Sites</a>
+                    </div>
+                    
+                    <div class="admin-card">
+                        <h3>Machines</h3>
+                        <p>Manage equipment and machinery</p>
+                        <a href="{{ url_for('manage_machines') }}">Manage Machines</a>
+                    </div>
+                    
+                    <div class="admin-card">
+                        <h3>Parts</h3>
+                        <p>Manage components and maintenance schedules</p>
+                        <a href="{{ url_for('manage_parts') }}">Manage Parts</a>
+                    </div>
                 </div>
-                
-                <div class="admin-card">
-                    <h3>Machines</h3>
-                    <p>Manage equipment and machinery</p>
-                    <a href="{{ url_for('manage_machines') }}">Manage Machines</a>
-                </div>
-                
-                <div class="admin-card">
-                    <h3>Parts</h3>
-                    <p>Manage components and maintenance schedules</p>
-                    <a href="{{ url_for('manage_parts') }}">Manage Parts</a>
+            </div>
+            
+            <div class="admin-section">
+                <h2>User Management</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Users</h3>
+                        <p>Manage user accounts and permissions</p>
+                        <a href="{{ url_for('manage_users') }}">Manage Users</a>
+                    </div>
+                    
+                    <div class="admin-card">
+                        <h3>Roles</h3>
+                        <p>Configure user roles and permissions</p>
+                        <a href="{{ url_for('manage_roles') }}">Manage Roles</a>
+                    </div>
                 </div>
             </div>
         </div>
