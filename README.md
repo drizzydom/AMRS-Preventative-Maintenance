@@ -92,5 +92,14 @@ python app.py
 
 - **Python version compatibility:** This application works best with Python 3.9-3.11
 - **SQLAlchemy errors:** If you see SQLAlchemy errors, they're likely due to Python version incompatibility
+- **Database schema errors:** If you see "no such column" errors after updating the code, reset the database:
+  ```
+  ./reset_db.sh
+  ```
+  Or manually:
+  ```
+  rm instance/maintenance.db
+  flask --app app init-db
+  ```
 - **Database errors:** If the database doesn't initialize properly, delete the `instance` folder and try again
 - **Virtual environment issues:** Make sure to activate the virtual environment before running any commands

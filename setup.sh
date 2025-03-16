@@ -49,6 +49,21 @@ echo "Installing dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
+# Make reset_db.sh executable
+if [ -f "reset_db.sh" ]; then
+    chmod +x reset_db.sh
+    echo "Made reset_db.sh executable"
+fi
+
+# Clean up any existing database
+if [ -f "instance/maintenance.db" ]; then
+    echo "Found existing database, creating backup..."
+    mkdir -p backups
+    cp instance/maintenance.db backups/maintenance_$(date +%Y%m%d_%H%M%S).db
+    rm instance/maintenance.db
+    echo "Old database removed"
+fi
+
 # Initialize database
 echo "Initializing database..."
 flask --app app init-db
@@ -59,3 +74,5 @@ echo "1. Activate the virtual environment: source venv/bin/activate"
 echo "2. Run the application: python app.py"
 echo "3. Open your browser to: http://localhost:5050"
 echo "4. Login with: admin / admin"
+echo ""
+echo "To reset the database anytime, run: ./reset_db.sh"
