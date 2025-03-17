@@ -33,6 +33,67 @@ def require_permission(permission):
         return wrapper
     return decorator
 
+# Define permission constants for better organization and consistency
+class Permissions:
+    # User management
+    USERS_VIEW = 'users.view'
+    USERS_CREATE = 'users.create'
+    USERS_EDIT = 'users.edit'
+    USERS_DELETE = 'users.delete'
+    
+    # Role management
+    ROLES_VIEW = 'roles.view'
+    ROLES_CREATE = 'roles.create'
+    ROLES_EDIT = 'roles.edit'
+    ROLES_DELETE = 'roles.delete'
+    
+    # Site management
+    SITES_VIEW = 'sites.view'
+    SITES_VIEW_ASSIGNED = 'sites.view.assigned'  # New permission for viewing only assigned sites
+    SITES_CREATE = 'sites.create'
+    SITES_EDIT = 'sites.edit'
+    SITES_DELETE = 'sites.delete'
+    
+    # Machine management
+    MACHINES_VIEW = 'machines.view'
+    MACHINES_CREATE = 'machines.create'
+    MACHINES_EDIT = 'machines.edit'
+    MACHINES_DELETE = 'machines.delete'
+    
+    # Part management
+    PARTS_VIEW = 'parts.view'
+    PARTS_CREATE = 'parts.create'
+    PARTS_EDIT = 'parts.edit'
+    PARTS_DELETE = 'parts.delete'
+    
+    # Maintenance management
+    MAINTENANCE_VIEW = 'maintenance.view'
+    MAINTENANCE_SCHEDULE = 'maintenance.schedule'
+    MAINTENANCE_RECORD = 'maintenance.record'
+    
+    # Administration
+    ADMIN_ACCESS = 'admin.access'
+    ADMIN_FULL = 'admin.full'
+    
+    @classmethod
+    def get_all_permissions(cls):
+        """Return all available permissions as dict mapping permission to description"""
+        permissions = {}
+        for attr in dir(cls):
+            if not attr.startswith('_') and not callable(getattr(cls, attr)) and attr != 'get_all_permissions':
+                value = getattr(cls, attr)
+                if isinstance(value, str):
+                    # Format the name for display
+                    category, action = value.split('.')[0:2]
+                    if len(value.split('.')) > 2:
+                        # Handle cases like 'sites.view.assigned'
+                        modifier = value.split('.')[2]
+                        display = f"{category.capitalize()} - {action.capitalize()} ({modifier})"
+                    else:
+                        display = f"{category.capitalize()} - {action.capitalize()}"
+                    permissions[value] = display
+        return permissions
+
 # Define database models
 class Role(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -73,7 +134,20 @@ class User(db.Model, UserMixin):
         if self.is_admin:
             return True
         if self.role:
-            return self.role.has_permission(permission)
+            # Direct permission check
+            if self.role.has_permission(permission):
+                return True
+                
+            # Check for full admin access to this category
+            if '.' in permission:
+                category = permission.split('.')[0]
+                if self.role.has_permission(f'{category}.full'):
+                    return True
+            
+            # Check for admin permission
+            if permission.startswith('admin.') and self.role.has_permission('admin.full'):
+                return True
+                
         return False
 
 class Site(db.Model):
@@ -144,11 +218,18 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # Filter sites based on user access if not admin
+    # Filter sites based on user access and permissions
     if current_user.is_admin:
+        # Admins see all sites
         sites = Site.query.all()
+    elif current_user.has_permission(Permissions.SITES_VIEW):
+        # Users with sites.view permission see all sites
+        sites = Site.query.all()
+    elif current_user.has_permission(Permissions.SITES_VIEW_ASSIGNED):
+        # Users with sites.view.assigned permission see only their assigned sites
+        sites = current_user.sites
     else:
-        # Only show sites the user has been assigned to
+        # Users with no site permissions see only their assigned sites
         sites = current_user.sites
         
     now = datetime.utcnow()
@@ -280,8 +361,8 @@ def delete_part(part_id):
 @app.route('/admin/parts/update-maintenance/<int:part_id>', methods=['POST'])
 @login_required
 def update_maintenance(part_id):
-    if not current_user.is_admin and not current_user.has_permission('edit'):
-        flash('Access denied. Admin privileges required.')
+    if not current_user.is_admin and not current_user.has_permission(Permissions.MAINTENANCE_RECORD):
+        flash('Access denied. You need permission to record maintenance.')
         return redirect(url_for('dashboard'))
     
     part = Part.query.get_or_404(part_id)
@@ -303,17 +384,8 @@ def manage_roles():
         name = request.form.get('name')
         description = request.form.get('description')
         
-        permissions = []
-        if request.form.get('perm_view'):
-            permissions.append('view')
-        if request.form.get('perm_create'):
-            permissions.append('create')
-        if request.form.get('perm_edit'):
-            permissions.append('edit')
-        if request.form.get('perm_delete'):
-            permissions.append('delete')
-        if request.form.get('perm_admin'):
-            permissions.append('admin')
+        # Get permissions from multi-select (checkbox group)
+        permissions = request.form.getlist('permissions')
         
         new_role = Role(
             name=name, 
@@ -325,8 +397,38 @@ def manage_roles():
         flash(f'Role "{name}" added successfully')
     
     roles = Role.query.all()
-    return render_template('admin_roles.html', roles=roles)
+    return render_template('admin_roles.html', roles=roles, all_permissions=Permissions.get_all_permissions())
 
+# Add a new route for editing a specific role
+@app.route('/admin/roles/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+def edit_role(role_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    role = Role.query.get_or_404(role_id)
+    
+    if request.method == 'POST':
+        # Update role details
+        role.name = request.form.get('name')
+        role.description = request.form.get('description')
+        
+        # Update permissions
+        permissions = request.form.getlist('permissions')
+        role.permissions = ','.join(permissions)
+        
+        db.session.commit()
+        flash(f'Role "{role.name}" updated successfully')
+        return redirect(url_for('manage_roles'))
+    
+    # For GET request, just render the edit form
+    role_permissions = role.get_permissions_list()
+    return render_template('admin_edit_role.html', role=role, 
+                           role_permissions=role_permissions,
+                           all_permissions=Permissions.get_all_permissions())
+
+# New route for deleting a specific role
 @app.route('/admin/roles/delete/<int:role_id>', methods=['POST'])
 @login_required
 def delete_role(role_id):
@@ -416,10 +518,73 @@ def init_db():
     
     admin = User.query.filter_by(username='admin').first()
     if not admin:
-        # Create roles first
-        admin_role = Role(name='Administrator', description='Full system access', permissions='view,create,edit,delete,admin')
-        manager_role = Role(name='Manager', description='Can manage sites and view all data', permissions='view,create,edit')
-        technician_role = Role(name='Technician', description='Can update maintenance records', permissions='view,edit')
+        # Create roles first with detailed permissions
+        admin_role = Role(
+            name='Administrator', 
+            description='Full system access',
+            permissions=','.join([
+                # Administrative permissions
+                Permissions.ADMIN_ACCESS, Permissions.ADMIN_FULL,
+                
+                # User management
+                Permissions.USERS_VIEW, Permissions.USERS_CREATE, 
+                Permissions.USERS_EDIT, Permissions.USERS_DELETE,
+                
+                # Role management
+                Permissions.ROLES_VIEW, Permissions.ROLES_CREATE, 
+                Permissions.ROLES_EDIT, Permissions.ROLES_DELETE,
+                
+                # Site management
+                Permissions.SITES_VIEW, Permissions.SITES_CREATE, 
+                Permissions.SITES_EDIT, Permissions.SITES_DELETE,
+                
+                # Machine management
+                Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, 
+                Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
+                
+                # Part management
+                Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, 
+                Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
+                
+                # Maintenance management
+                Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_SCHEDULE, 
+                Permissions.MAINTENANCE_RECORD
+            ])
+        )
+        
+        manager_role = Role(
+            name='Manager', 
+            description='Can manage sites and view all data',
+            permissions=','.join([
+                # Site management
+                Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT,
+                
+                # Machine management
+                Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT,
+                
+                # Part management
+                Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT,
+                
+                # Maintenance management
+                Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_SCHEDULE, Permissions.MAINTENANCE_RECORD,
+                
+                # User management (view only)
+                Permissions.USERS_VIEW
+            ])
+        )
+        
+        technician_role = Role(
+            name='Technician', 
+            description='Can update maintenance records for assigned sites',
+            permissions=','.join([
+                # View permissions - only assigned sites
+                Permissions.SITES_VIEW_ASSIGNED, 
+                Permissions.MACHINES_VIEW, Permissions.PARTS_VIEW,
+                
+                # Maintenance permissions
+                Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD
+            ])
+        )
         db.session.add_all([admin_role, manager_role, technician_role])
         db.session.commit()
         
