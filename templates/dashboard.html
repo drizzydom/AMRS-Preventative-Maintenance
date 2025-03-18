@@ -36,25 +36,50 @@
             border-radius: 5px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             padding: 15px;
+            display: none;
+        }
+        .site.active {
+            display: block;
         }
         .site h2 {
             margin-top: 0;
             border-bottom: 1px solid #eee;
             padding-bottom: 10px;
         }
-        .machines {
+        .machines-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 20px;
+            padding: 15px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
         }
         .machine {
             background-color: #f9f9f9;
             border-radius: 5px;
             padding: 15px;
             box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+            position: relative;
+            border-left: 4px solid #ccc;
+        }
+        .machine.overdue {
+            border-left-color: #dc3545;
+        }
+        .machine.due-soon {
+            border-left-color: #ffc107;
+        }
+        .machine.ok {
+            border-left-color: #28a745;
+        }
+        .machine-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
         }
         .machine h3 {
-            margin-top: 0;
+            margin: 0;
             color: #333;
         }
         .machine-model {
@@ -63,6 +88,19 @@
         }
         .parts-list {
             margin-top: 15px;
+            display: block;
+        }
+        .machine.collapsed .parts-list {
+            display: none;
+        }
+        .machine.collapsed .status-summary {
+            display: block;
+        }
+        .status-summary {
+            display: none;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
         }
         .part {
             padding: 10px;
@@ -112,6 +150,138 @@
         .maintenance-btn:hover {
             background-color: #0069d9;
         }
+        .toggle-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        .toggle-btn:hover {
+            background-color: #5a6268;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            color: white;
+            margin-left: 8px;
+        }
+        .status-urgent {
+            background-color: #dc3545;
+        }
+        .status-due {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .status-good {
+            background-color: #28a745;
+        }
+        
+        /* Site selector styles */
+        .site-selector {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .site-selector select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            background-color: #f9f9f9;
+        }
+        
+        /* Site controls */
+        .site-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        
+        .site-controls h2 {
+            margin: 0;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .global-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        
+        .global-btn:hover {
+            background-color: #5a6268;
+        }
+        
+        /* Status filter */
+        .status-filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .filter-btn {
+            padding: 8px 12px;
+            background-color: #f1f1f1;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .filter-btn.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        /* Site overview */
+        .site-overview {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 0.9em;
+        }
+        
+        .status-counts {
+            display: flex;
+            gap: 15px;
+            margin-top: 5px;
+        }
+        
+        .status-count {
+            font-weight: bold;
+        }
+        
+        .overdue-count {
+            color: #dc3545;
+        }
+        
+        .due-soon-count {
+            color: #ffc107;
+        }
+        
+        .ok-count {
+            color: #28a745;
+        }
     </style>
 </head>
 <body>
@@ -134,53 +304,203 @@
             {% endif %}
         {% endwith %}
         
+        <!-- Site selector dropdown -->
+        <div class="site-selector">
+            <label for="site-dropdown"><strong>Select Site:</strong></label>
+            <select id="site-dropdown" onchange="changeSite(this.value)">
+                <option value="all">All Sites</option>
+                {% for site in sites %}
+                <option value="{{ site.id }}">{{ site.name }} ({{ site.location }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        
         {% for site in sites %}
-        <div class="site">
-            <h2>{{ site.name }} ({{ site.location }})</h2>
-            <div class="machines">
-                {% for machine in site.machines %}
-                <div class="machine">
-                    <h3>{{ machine.name }}</h3>
-                    <div class="machine-model">Model: {{ machine.model }}</div>
-                    
-                    <div class="parts-list">
-                        <h4>Parts:</h4>
-                        {% for part in machine.parts %}
-                        {% set days_until = (part.next_maintenance - now).days %}
-                        
-                        {% if days_until < 0 %}
-                            {% set status_class = "maintenance-urgent" %}
-                            {% set status_text = "OVERDUE" %}
-                        {% elif days_until <= 2 %}
-                            {% set status_class = "maintenance-due" %}
-                            {% set status_text = "Due Soon" %}
-                        {% else %}
-                            {% set status_class = "maintenance-good" %}
-                            {% set status_text = "OK" %}
-                        {% endif %}
-                        
-                        <div class="part {{ status_class }}">
-                            <div class="part-header">
-                                <span class="part-name">{{ part.name }}</span>
-                                <span>{{ status_text }}</span>
-                            </div>
-                            <div class="maintenance-info">
-                                <div>{{ part.description }}</div>
-                                <div>Maintenance Frequency: Every {{ part.maintenance_frequency }} days</div>
-                                <div>Last Maintenance: {{ part.last_maintenance.strftime('%Y-%m-%d') }}</div>
-                                <div>Next Maintenance: {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
-                                {% if current_user.has_permission('edit') %}
-                                <div class="part-actions">
-                                    <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="POST">
-                                        <button type="submit" class="maintenance-btn">Record Maintenance</button>
-                                    </form>
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
+        <div class="site" id="site-{{ site.id }}">
+            <div class="site-controls">
+                <h2>{{ site.name }} ({{ site.location }})</h2>
+                <div class="control-buttons">
+                    <button class="global-btn" onclick="expandAllMachines({{ site.id }})">Expand All</button>
+                    <button class="global-btn" onclick="collapseAllMachines({{ site.id }})">Collapse All</button>
                 </div>
+            </div>
+            
+            <!-- Site overview with machine counts -->
+            <div class="site-overview">
+                {% set overdue_count = 0 %}
+                {% set due_soon_count = 0 %}
+                {% set ok_count = 0 %}
+                
+                {% for machine in site.machines %}
+                    {% set machine_has_overdue = false %}
+                    {% set machine_has_due_soon = false %}
+                    
+                    {% for part in machine.parts %}
+                        {% set days_until = (part.next_maintenance - now).days %}
+                        {% if days_until < 0 %}
+                            {% set machine_has_overdue = true %}
+                        {% elif days_until <= 14 and not machine_has_overdue %}
+                            {% set machine_has_due_soon = true %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if machine_has_overdue %}
+                        {% set overdue_count = overdue_count + 1 %}
+                    {% elif machine_has_due_soon %}
+                        {% set due_soon_count = due_soon_count + 1 %}
+                    {% else %}
+                        {% set ok_count = ok_count + 1 %}
+                    {% endif %}
+                {% endfor %}
+                
+                <strong>Site Status:</strong>
+                <div class="status-counts">
+                    <span class="status-count overdue-count">{{ overdue_count }} Overdue</span>
+                    <span class="status-count due-soon-count">{{ due_soon_count }} Due Soon</span>
+                    <span class="status-count ok-count">{{ ok_count }} OK</span>
+                </div>
+            </div>
+            
+            <!-- Status filter buttons -->
+            <div class="status-filters">
+                <button class="filter-btn active" onclick="filterMachines({{ site.id }}, 'all')">All Machines</button>
+                <button class="filter-btn" onclick="filterMachines({{ site.id }}, 'overdue')">Show Overdue</button>
+                <button class="filter-btn" onclick="filterMachines({{ site.id }}, 'due-soon')">Show Due Soon</button>
+                <button class="filter-btn" onclick="filterMachines({{ site.id }}, 'ok')">Show OK</button>
+            </div>
+            
+            <!-- Machines grid -->
+            <div class="machines-grid">
+                {% for machine in site.machines %}
+                    <!-- Determine machine status -->
+                    {% set machine_has_overdue = false %}
+                    {% set machine_has_due_soon = false %}
+                    
+                    {% for part in machine.parts %}
+                        {% set days_until = (part.next_maintenance - now).days %}
+                        {% if days_until < 0 %}
+                            {% set machine_has_overdue = true %}
+                        {% elif days_until <= 14 %}
+                            {% set machine_has_due_soon = true %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <!-- Set machine CSS class based on status -->
+                    {% if machine_has_overdue %}
+                        {% set machine_class = "overdue" %}
+                        {% set machine_status_text = "OVERDUE" %}
+                    {% elif machine_has_due_soon %}
+                        {% set machine_class = "due-soon" %}
+                        {% set machine_status_text = "DUE SOON" %}
+                    {% else %}
+                        {% set machine_class = "ok" %}
+                        {% set machine_status_text = "OK" %}
+                    {% endif %}
+                    
+                    <div class="machine {{ machine_class }}" id="machine-{{ machine.id }}" data-status="{{ machine_class }}">
+                        <div class="machine-header">
+                            <h3>
+                                {{ machine.name }}
+                                {% if machine_class == "overdue" %}
+                                    <span class="status-badge status-urgent">{{ machine_status_text }}</span>
+                                {% elif machine_class == "due-soon" %}
+                                    <span class="status-badge status-due">{{ machine_status_text }}</span>
+                                {% else %}
+                                    <span class="status-badge status-good">{{ machine_status_text }}</span>
+                                {% endif %}
+                            </h3>
+                            <button class="toggle-btn" onclick="toggleMachine({{ machine.id }})">Collapse</button>
+                        </div>
+                        <div class="machine-model">Model: {{ machine.model }}</div>
+                        
+                        <!-- Status summary (displayed when collapsed) -->
+                        <div class="status-summary">
+                            <!-- Fix: Use the same machine_class that's already been determined for the machine -->
+                            {% if machine_class == "overdue" %}
+                                <div style="background-color: #f8d7da; padding: 10px; border-radius: 4px;">
+                                    <strong>Maintenance Required:</strong>
+                                    <ul style="margin-top: 5px; margin-bottom: 5px;">
+                                        {% for part in machine.parts %}
+                                            {% set days_until = (part.next_maintenance - now).days %}
+                                            {% if days_until < 0 %}
+                                                <li>{{ part.name }} is <strong>{{ days_until|abs }} days overdue</strong></li>
+                                            {% endif %}
+                                        {% endfor %}
+                                        
+                                        {% for part in machine.parts %}
+                                            {% set days_until = (part.next_maintenance - now).days %}
+                                            {% if days_until >= 0 and days_until <= 14 %}
+                                                <li>{{ part.name }} is due in <strong>{{ days_until }} days</strong></li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% elif machine_class == "due-soon" %}
+                                <div style="background-color: #fff3cd; padding: 10px; border-radius: 4px;">
+                                    <strong>Maintenance Due Soon:</strong>
+                                    <ul style="margin-top: 5px; margin-bottom: 5px;">
+                                        {% for part in machine.parts %}
+                                            {% set days_until = (part.next_maintenance - now).days %}
+                                            {% if days_until >= 0 and days_until <= 14 %}
+                                                <li>{{ part.name }} is due in <strong>{{ days_until }} days</strong></li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% else %}
+                                <div style="background-color: #d4edda; padding: 10px; border-radius: 4px;">
+                                    <strong><span style="color:#28a745">✓</span> All systems operational</strong>
+                                    <div>No maintenance needed at this time</div>
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Parts list (displayed when expanded) -->
+                        <div class="parts-list">
+                            <h4>Parts:</h4>
+                            {% for part in machine.parts %}
+                                {% set days_until = (part.next_maintenance - now).days %}
+                                
+                                {% if days_until < 0 %}
+                                    {% set status_class = "maintenance-urgent" %}
+                                    {% set status_text = "OVERDUE" %}
+                                {% elif days_until <= 14 %}
+                                    {% set status_class = "maintenance-due" %}
+                                    {% set status_text = "Due Soon" %}
+                                {% else %}
+                                    {% set status_class = "maintenance-good" %}
+                                    {% set status_text = "OK" %}
+                                {% endif %}
+                                
+                                <div class="part {{ status_class }}">
+                                    <div class="part-header">
+                                        <span class="part-name">{{ part.name }}</span>
+                                        <span>{{ status_text }}</span>
+                                    </div>
+                                    <div class="maintenance-info">
+                                        <div>Maintenance Every: {{ part.maintenance_frequency }} days</div>
+                                        <div>Last: {{ part.last_maintenance.strftime('%Y-%m-%d') }}</div>
+                                        <div>Next: {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                                        {% if days_until < 0 %}
+                                            <div><strong style="color:#dc3545">OVERDUE by {{ days_until|abs }} days</strong></div>
+                                        {% elif days_until <= 14 %}
+                                            <div><strong style="color:#ffc107">Due in {{ days_until }} days</strong></div>
+                                        {% else %}
+                                            <div><strong style="color:#28a745">Due in {{ days_until }} days</strong></div>
+                                        {% endif %}
+                                        
+                                        {% if current_user.has_permission('maintenance.record') %}
+                                            <div class="part-actions">
+                                                <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="POST">
+                                                    <button type="submit" class="maintenance-btn">Record Maintenance</button>
+                                                </form>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
                 {% endfor %}
             </div>
         </div>
@@ -188,9 +508,128 @@
     </div>
 
     <script>
-        // Add current date to parts template
+        // Toggle machine expansion/collapse
+        function toggleMachine(machineId) {
+            const machineEl = document.getElementById(`machine-${machineId}`);
+            const toggleBtn = machineEl.querySelector('.toggle-btn');
+            
+            if (machineEl.classList.contains('collapsed')) {
+                // Expand
+                machineEl.classList.remove('collapsed');
+                toggleBtn.textContent = 'Collapse';
+            } else {
+                // Collapse
+                machineEl.classList.add('collapsed');
+                toggleBtn.textContent = 'Expand';
+            }
+        }
+        
+        // Collapse all machines in a site
+        function collapseAllMachines(siteId) {
+            const site = document.getElementById(`site-${siteId}`);
+            if (!site) return;
+            
+            const machines = site.querySelectorAll('.machine');
+            machines.forEach(machine => {
+                machine.classList.add('collapsed');
+                const toggleBtn = machine.querySelector('.toggle-btn');
+                toggleBtn.textContent = 'Expand';
+            });
+        }
+        
+        // Expand all machines in a site
+        function expandAllMachines(siteId) {
+            const site = document.getElementById(`site-${siteId}`);
+            if (!site) return;
+            
+            const machines = site.querySelectorAll('.machine');
+            machines.forEach(machine => {
+                machine.classList.remove('collapsed');
+                const toggleBtn = machine.querySelector('.toggle-btn');
+                toggleBtn.textContent = 'Collapse';
+            });
+        }
+        
+        // Filter machines by status
+        function filterMachines(siteId, status) {
+            const site = document.getElementById(`site-${siteId}`);
+            if (!site) return;
+            
+            // Update active filter button
+            const filterButtons = site.querySelectorAll('.filter-btn');
+            filterButtons.forEach(button => {
+                button.classList.remove('active');
+            });
+            const activeButton = site.querySelector(`.filter-btn[onclick*="${status}"]`);
+            if (activeButton) activeButton.classList.add('active');
+            
+            // Filter machines
+            const machines = site.querySelectorAll('.machine');
+            if (status === 'all') {
+                // Show all machines
+                machines.forEach(machine => {
+                    machine.style.display = 'block';
+                });
+            } else {
+                // Show only machines with the selected status
+                machines.forEach(machine => {
+                    if (machine.getAttribute('data-status') === status) {
+                        machine.style.display = 'block';
+                    } else {
+                        machine.style.display = 'none';
+                    }
+                });
+            }
+        }
+        
+        // Change site display
+        function changeSite(siteId) {
+            // Hide all sites
+            document.querySelectorAll('.site').forEach(site => {
+                site.classList.remove('active');
+            });
+            
+            if (siteId === 'all') {
+                // Show all sites
+                document.querySelectorAll('.site').forEach(site => {
+                    site.classList.add('active');
+                });
+            } else {
+                // Show only the selected site
+                const siteEl = document.getElementById(`site-${siteId}`);
+                if (siteEl) siteEl.classList.add('active');
+            }
+        }
+        
+        // Initialize the page on load
         document.addEventListener('DOMContentLoaded', function() {
-            window.now = new Date();
+            // Collapse all machines by default
+            document.querySelectorAll('.machine').forEach(machine => {
+                machine.classList.add('collapsed');
+                const toggleBtn = machine.querySelector('.toggle-btn');
+                toggleBtn.textContent = 'Expand';
+            });
+            
+            // Show the first site by default
+            const firstSite = document.querySelector('.site');
+            if (firstSite) firstSite.classList.add('active');
+            
+            // Check for site parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const siteParam = urlParams.get('site');
+            
+            if (siteParam) {
+                // Select the specified site
+                document.getElementById('site-dropdown').value = siteParam;
+                changeSite(siteParam);
+            } else {
+                // Default to first site
+                const firstSiteOption = document.querySelector('#site-dropdown option:nth-child(2)');
+                if (firstSiteOption) {
+                    document.getElementById('site-dropdown').value = firstSiteOption.value;
+                    changeSite(firstSiteOption.value);
+                }
+            }
         });
     </script>
 </body>
