@@ -4,3 +4,5 @@ Flask-Login==0.6.2
 Werkzeug==2.2.3
 SQLAlchemy==2.0.9
 Jinja2==3.1.2
+Flask-Mail==0.9.1
+python-dotenv==1.0.0
