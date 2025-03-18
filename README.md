@@ -103,3 +103,12 @@ python app.py
   ```
 - **Database errors:** If the database doesn't initialize properly, delete the `instance` folder and try again
 - **Virtual environment issues:** Make sure to activate the virtual environment before running any commands
+
+## Email Notifications
+
+The system can send automatic email notifications when maintenance is due or overdue.
+
+### Setting Up Email
+
+1. Configure your email server settings by setting environment variables:
+```

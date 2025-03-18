@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance Alert</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .header {
+            background-color: #0066cc;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            padding: 20px;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .overdue {
+            background-color: #ffebe6;
+            border-left: 4px solid #dc3545;
+        }
+        .due-soon {
+            background-color: #fff8e6;
+            border-left: 4px solid #ffc107;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .footer {
+            font-size: 0.8em;
+            color: #666;
+            padding: 10px 0;
+            border-top: 1px solid #eee;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Maintenance Alert</h2>
+        <p>{{ site.name }} ({{ site.location }})</p>
+    </div>
+    
+    <div class="content">
+        <p>This is an automated notification about maintenance items that require attention at {{ site.name }}.</p>
+        
+        {% if overdue_parts %}
+        <div class="section overdue">
+            <h3>⚠️ Overdue Maintenance Items</h3>
+            <p>The following items are past their scheduled maintenance date:</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Machine</th>
+                        <th>Part</th>
+                        <th>Days Overdue</th>
+                        <th>Due Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in overdue_parts %}
+                    <tr>
+                        <td>{{ item.machine }}</td>
+                        <td>{{ item.part }}</td>
+                        <td>{{ item.days }}</td>
+                        <td>{{ item.due_date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <p>Please schedule maintenance for these items as soon as possible.</p>
+        </div>
+        {% endif %}
+        
+        {% if due_soon_parts %}
+        <div class="section due-soon">
+            <h3>⚙️ Maintenance Due Soon</h3>
+            <p>The following items are due for maintenance within {{ threshold }} days:</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Machine</th>
+                        <th>Part</th>
+                        <th>Days Until Due</th>
+                        <th>Due Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in due_soon_parts %}
+                    <tr>
+                        <td>{{ item.machine }}</td>
+                        <td>{{ item.part }}</td>
+                        <td>{{ item.days }}</td>
+                        <td>{{ item.due_date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <p>Please plan maintenance for these items before their due dates.</p>
+        </div>
+        {% endif %}
+        
+        <p>You can view more details and record completed maintenance by logging into the <a href="#">Maintenance Tracker</a>.</p>
+    </div>
+    
+    <div class="footer">
+        <p>This is an automated message. Please do not reply to this email.</p>
+        <p>To manage notification settings, please log in to your account and update your site preferences.</p>
+    </div>
+</body>
+</html>

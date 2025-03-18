@@ -49,6 +49,17 @@ echo "Installing dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
+# Create .env file if it doesn't exist
+if [ ! -f ".env" ]; then
+    echo "Creating .env file from template..."
+    if [ -f ".env.example" ]; then
+        cp .env.example .env
+        echo "Created .env file from template. Please edit it with your settings."
+    else
+        echo "ERROR: .env.example file not found. Please create a .env file manually."
+    fi
+fi
+
 # Make reset_db.sh executable
 if [ -f "reset_db.sh" ]; then
     chmod +x reset_db.sh
