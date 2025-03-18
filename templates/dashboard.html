@@ -282,6 +282,23 @@
         .ok-count {
             color: #28a745;
         }
+
+        /* Fix collapsed view display */
+        .machine .status-summary {
+            display: none;  /* Hide by default */
+        }
+        
+        .machine .parts-list {
+            display: block;  /* Show by default */
+        }
+        
+        .machine.collapsed .status-summary {
+            display: block !important;  /* Force display when collapsed */
+        }
+        
+        .machine.collapsed .parts-list {
+            display: none !important;  /* Force hide when collapsed */
+        }
     </style>
 </head>
 <body>
@@ -415,7 +432,6 @@
                         
                         <!-- Status summary (displayed when collapsed) -->
                         <div class="status-summary">
-                            <!-- Fix: Use the same machine_class that's already been determined for the machine -->
                             {% if machine_class == "overdue" %}
                                 <div style="background-color: #f8d7da; padding: 10px; border-radius: 4px;">
                                     <strong>Maintenance Required:</strong>
@@ -423,14 +439,14 @@
                                         {% for part in machine.parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
                                             {% if days_until < 0 %}
-                                                <li>{{ part.name }} is <strong>{{ days_until|abs }} days overdue</strong></li>
+                                                <li>{{ part.name }}: <strong>{{ days_until|abs }} day{% if days_until|abs != 1 %}s{% endif %} overdue</strong></li>
                                             {% endif %}
                                         {% endfor %}
                                         
                                         {% for part in machine.parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
                                             {% if days_until >= 0 and days_until <= 14 %}
-                                                <li>{{ part.name }} is due in <strong>{{ days_until }} days</strong></li>
+                                                <li>{{ part.name }}: Due in <strong>{{ days_until }} day{% if days_until != 1 %}s{% endif %}</strong></li>
                                             {% endif %}
                                         {% endfor %}
                                     </ul>
@@ -442,7 +458,7 @@
                                         {% for part in machine.parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
                                             {% if days_until >= 0 and days_until <= 14 %}
-                                                <li>{{ part.name }} is due in <strong>{{ days_until }} days</strong></li>
+                                                <li>{{ part.name }}: Due in <strong>{{ days_until }} day{% if days_until != 1 %}s{% endif %}</strong></li>
                                             {% endif %}
                                         {% endfor %}
                                     </ul>
@@ -508,19 +524,25 @@
     </div>
 
     <script>
-        // Toggle machine expansion/collapse
+        // Toggle machine expansion/collapse - Updated for reliability
         function toggleMachine(machineId) {
             const machineEl = document.getElementById(`machine-${machineId}`);
             const toggleBtn = machineEl.querySelector('.toggle-btn');
+            const statusSummary = machineEl.querySelector('.status-summary');
+            const partsList = machineEl.querySelector('.parts-list');
             
             if (machineEl.classList.contains('collapsed')) {
                 // Expand
                 machineEl.classList.remove('collapsed');
                 toggleBtn.textContent = 'Collapse';
+                statusSummary.style.display = 'none';
+                partsList.style.display = 'block';
             } else {
                 // Collapse
                 machineEl.classList.add('collapsed');
                 toggleBtn.textContent = 'Expand';
+                statusSummary.style.display = 'block';
+                partsList.style.display = 'none';
             }
         }
         
@@ -608,6 +630,12 @@
                 machine.classList.add('collapsed');
                 const toggleBtn = machine.querySelector('.toggle-btn');
                 toggleBtn.textContent = 'Expand';
+                
+                // Ensure collapsed state is properly applied
+                const statusSummary = machine.querySelector('.status-summary');
+                const partsList = machine.querySelector('.parts-list');
+                if (statusSummary) statusSummary.style.display = 'block';
+                if (partsList) partsList.style.display = 'none';
             });
             
             // Show the first site by default
