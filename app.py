@@ -510,7 +510,8 @@ def delete_user(user_id):
     flash(f'User "{user.username}" deleted successfully')
     return redirect(url_for('manage_users'))
 
-# Setup database initialization
+# ...existing code...
+
 @app.cli.command("init-db")
 def init_db():
     """Initialize the database with sample data."""
@@ -607,34 +608,65 @@ def init_db():
         db.session.add_all([machine1, machine2, machine3, machine4])
         db.session.commit()
         
-        # Create test parts with varying maintenance frequencies
+        # Current date for reference
+        now = datetime.utcnow()
+        
+        # Create test parts with varying maintenance frequencies and past maintenance dates
         parts = [
+            # Overdue parts (past maintenance date)
             Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id, 
-                 maintenance_frequency=3, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=7, 
+                 last_maintenance=now - timedelta(days=10)),  # 3 days overdue
+                 
             Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,
-                 maintenance_frequency=6, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=14, 
+                 last_maintenance=now - timedelta(days=20)),  # 6 days overdue
+            
+            # Due soon parts (maintenance due within 14 days)
             Part(name='Tool Changer', description='Automatic tool changer', machine_id=machine1.id,
-                 maintenance_frequency=2, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=30, 
+                 last_maintenance=now - timedelta(days=20)),  # Due in 10 days
+                 
             Part(name='Chuck', description='Workholding device', machine_id=machine2.id,
-                 maintenance_frequency=4, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=21, 
+                 last_maintenance=now - timedelta(days=15)),  # Due in 6 days
+                 
             Part(name='Tailstock', description='Supports workpiece end', machine_id=machine2.id,
-                 maintenance_frequency=5, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=30, 
+                 last_maintenance=now - timedelta(days=22)),  # Due in 8 days
+            
+            # OK parts (maintenance due beyond 14 days)
             Part(name='Drill Bit', description='Cutting tool', machine_id=machine3.id,
-                 maintenance_frequency=1, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=45, 
+                 last_maintenance=now - timedelta(days=15)),  # Due in 30 days
+                 
             Part(name='Table', description='Work surface', machine_id=machine3.id,
-                 maintenance_frequency=4, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=60, 
+                 last_maintenance=now - timedelta(days=20)),  # Due in 40 days
+                 
             Part(name='Servo Motor A', description='Axis 1 movement', machine_id=machine4.id,
-                 maintenance_frequency=3, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=90, 
+                 last_maintenance=now - timedelta(days=30)),  # Due in 60 days
+                 
             Part(name='Servo Motor B', description='Axis 2 movement', machine_id=machine4.id,
-                 maintenance_frequency=3, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=90, 
+                 last_maintenance=now - timedelta(days=30)),  # Due in 60 days
+                 
             Part(name='Servo Motor C', description='Axis 3 movement', machine_id=machine4.id,
-                 maintenance_frequency=3, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=90, 
+                 last_maintenance=now - timedelta(days=30)),  # Due in 60 days
+                 
             Part(name='Gripper', description='End effector', machine_id=machine4.id,
-                 maintenance_frequency=2, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=120, 
+                 last_maintenance=now - timedelta(days=20)),  # Due in 100 days
+                 
             Part(name='Controller', description='Robot brain', machine_id=machine4.id,
-                 maintenance_frequency=6, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=180, 
+                 last_maintenance=now - timedelta(days=30)),  # Due in 150 days
+                 
             Part(name='Power Supply', description='Electrical power unit', machine_id=machine4.id,
-                 maintenance_frequency=5, last_maintenance=datetime.utcnow()),
+                 maintenance_frequency=365, 
+                 last_maintenance=now - timedelta(days=90)),  # Due in 275 days
         ]
         
         # Update next_maintenance for all parts
