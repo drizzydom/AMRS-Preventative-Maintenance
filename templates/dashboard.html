@@ -230,27 +230,6 @@
             background-color: #5a6268;
         }
         
-        /* Status filter */
-        .status-filters {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .filter-btn {
-            padding: 8px 12px;
-            background-color: #f1f1f1;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .filter-btn.active {
-            background-color: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
-        
         /* Site overview */
         .site-overview {
             margin-bottom: 20px;
@@ -283,21 +262,21 @@
             color: #28a745;
         }
 
-        /* Fix collapsed view display */
+        /* SIMPLIFIED: Use only one set of rules for collapsed/expanded views */
         .machine .status-summary {
-            display: none;  /* Hide by default */
+            display: none;
         }
         
         .machine .parts-list {
-            display: block;  /* Show by default */
+            display: none;
         }
         
         .machine.collapsed .status-summary {
-            display: block !important;  /* Force display when collapsed */
+            display: block;
         }
         
-        .machine.collapsed .parts-list {
-            display: none !important;  /* Force hide when collapsed */
+        .machine.expanded .parts-list {
+            display: block;
         }
     </style>
 </head>
@@ -344,69 +323,71 @@
             
             <!-- Site overview with machine counts -->
             <div class="site-overview">
-                {% set overdue_count = 0 %}
-                {% set due_soon_count = 0 %}
-                {% set ok_count = 0 %}
+                <!-- Replace with same part-based counting logic used for individual machines -->
+                {% set overdue_machines = [] %}
+                {% set due_soon_machines = [] %}
+                {% set ok_machines = [] %}
                 
                 {% for machine in site.machines %}
-                    {% set machine_has_overdue = false %}
-                    {% set machine_has_due_soon = false %}
+                    <!-- Use the same part classification as used in machine cards -->
+                    {% set machine_overdue_parts = [] %}
+                    {% set machine_due_soon_parts = [] %}
+                    {% set machine_ok_parts = [] %}
                     
                     {% for part in machine.parts %}
                         {% set days_until = (part.next_maintenance - now).days %}
                         {% if days_until < 0 %}
-                            {% set machine_has_overdue = true %}
-                        {% elif days_until <= 14 and not machine_has_overdue %}
-                            {% set machine_has_due_soon = true %}
+                            <span style="display:none">{{ machine_overdue_parts.append(part) }}</span>
+                        {% elif days_until <= 14 %}
+                            <span style="display:none">{{ machine_due_soon_parts.append(part) }}</span>
+                        {% else %}
+                            <span style="display:none">{{ machine_ok_parts.append(part) }}</span>
                         {% endif %}
                     {% endfor %}
                     
-                    {% if machine_has_overdue %}
-                        {% set overdue_count = overdue_count + 1 %}
-                    {% elif machine_has_due_soon %}
-                        {% set due_soon_count = due_soon_count + 1 %}
+                    <!-- Categorize machine using the same logic as machine cards -->
+                    {% if machine_overdue_parts|length > 0 %}
+                        <span style="display:none">{{ overdue_machines.append(machine.id) }}</span>
+                    {% elif machine_due_soon_parts|length > 0 %}
+                        <span style="display:none">{{ due_soon_machines.append(machine.id) }}</span>
                     {% else %}
-                        {% set ok_count = ok_count + 1 %}
+                        <span style="display:none">{{ ok_machines.append(machine.id) }}</span>
                     {% endif %}
                 {% endfor %}
                 
                 <strong>Site Status:</strong>
                 <div class="status-counts">
-                    <span class="status-count overdue-count">{{ overdue_count }} Overdue</span>
-                    <span class="status-count due-soon-count">{{ due_soon_count }} Due Soon</span>
-                    <span class="status-count ok-count">{{ ok_count }} OK</span>
+                    <span class="status-count overdue-count">{{ overdue_machines|length }} Overdue</span>
+                    <span class="status-count due-soon-count">{{ due_soon_machines|length }} Due Soon</span>
+                    <span class="status-count ok-count">{{ ok_machines|length }} OK</span>
                 </div>
-            </div>
-            
-            <!-- Status filter buttons -->
-            <div class="status-filters">
-                <button class="filter-btn active" onclick="filterMachines({{ site.id }}, 'all')">All Machines</button>
-                <button class="filter-btn" onclick="filterMachines({{ site.id }}, 'overdue')">Show Overdue</button>
-                <button class="filter-btn" onclick="filterMachines({{ site.id }}, 'due-soon')">Show Due Soon</button>
-                <button class="filter-btn" onclick="filterMachines({{ site.id }}, 'ok')">Show OK</button>
             </div>
             
             <!-- Machines grid -->
             <div class="machines-grid">
                 {% for machine in site.machines %}
-                    <!-- Determine machine status -->
-                    {% set machine_has_overdue = false %}
-                    {% set machine_has_due_soon = false %}
+                    <!-- Manually check each part's status independently of any previous calculations -->
+                    {% set overdue_parts = [] %}
+                    {% set due_soon_parts = [] %}
+                    {% set ok_parts = [] %}
                     
+                    <!-- Scan all parts and classify them -->
                     {% for part in machine.parts %}
                         {% set days_until = (part.next_maintenance - now).days %}
                         {% if days_until < 0 %}
-                            {% set machine_has_overdue = true %}
+                            <span style="display:none">{{ overdue_parts.append(part) }}</span>
                         {% elif days_until <= 14 %}
-                            {% set machine_has_due_soon = true %}
+                            <span style="display:none">{{ due_soon_parts.append(part) }}</span>
+                        {% else %}
+                            <span style="display:none">{{ ok_parts.append(part) }}</span>
                         {% endif %}
                     {% endfor %}
                     
-                    <!-- Set machine CSS class based on status -->
-                    {% if machine_has_overdue %}
+                    <!-- Determine machine status based on parts -->
+                    {% if overdue_parts|length > 0 %}
                         {% set machine_class = "overdue" %}
                         {% set machine_status_text = "OVERDUE" %}
-                    {% elif machine_has_due_soon %}
+                    {% elif due_soon_parts|length > 0 %}
                         {% set machine_class = "due-soon" %}
                         {% set machine_status_text = "DUE SOON" %}
                     {% else %}
@@ -414,66 +395,54 @@
                         {% set machine_status_text = "OK" %}
                     {% endif %}
                     
-                    <div class="machine {{ machine_class }}" id="machine-{{ machine.id }}" data-status="{{ machine_class }}">
+                    <!-- Add status info directly to machine for clarity -->
+                    <div class="machine {{ machine_class }} collapsed" id="machine-{{ machine.id }}" data-status="{{ machine_class }}" 
+                         data-overdue="{{ overdue_parts|length }}" data-duesoon="{{ due_soon_parts|length }}">
                         <div class="machine-header">
                             <h3>
-                                {{ machine.name }}
-                                {% if machine_class == "overdue" %}
-                                    <span class="status-badge status-urgent">{{ machine_status_text }}</span>
-                                {% elif machine_class == "due-soon" %}
-                                    <span class="status-badge status-due">{{ machine_status_text }}</span>
-                                {% else %}
-                                    <span class="status-badge status-good">{{ machine_status_text }}</span>
-                                {% endif %}
+                                {{ machine.name }} 
+                                <span class="status-badge {% if machine_class == 'overdue' %}status-urgent{% elif machine_class == 'due-soon' %}status-due{% else %}status-good{% endif %}">
+                                    {{ machine_status_text }}
+                                </span>
                             </h3>
-                            <button class="toggle-btn" onclick="toggleMachine({{ machine.id }})">Collapse</button>
+                            <button class="toggle-btn" onclick="toggleMachine({{ machine.id }})">Expand</button>
                         </div>
                         <div class="machine-model">Model: {{ machine.model }}</div>
                         
-                        <!-- Status summary (displayed when collapsed) -->
+                        <!-- SIMPLIFIED: Status summary with consistent status classes -->
                         <div class="status-summary">
-                            {% if machine_class == "overdue" %}
+                            {% if overdue_parts|length > 0 %}
                                 <div style="background-color: #f8d7da; padding: 10px; border-radius: 4px;">
-                                    <strong>Maintenance Required:</strong>
-                                    <ul style="margin-top: 5px; margin-bottom: 5px;">
-                                        {% for part in machine.parts %}
+                                    <strong>Maintenance Required</strong>
+                                    <p>{{ overdue_parts|length }} component(s) overdue for maintenance:</p>
+                                    <ul>
+                                        {% for part in overdue_parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
-                                            {% if days_until < 0 %}
-                                                <li>{{ part.name }}: <strong>{{ days_until|abs }} day{% if days_until|abs != 1 %}s{% endif %} overdue</strong></li>
-                                            {% endif %}
-                                        {% endfor %}
-                                        
-                                        {% for part in machine.parts %}
-                                            {% set days_until = (part.next_maintenance - now).days %}
-                                            {% if days_until >= 0 and days_until <= 14 %}
-                                                <li>{{ part.name }}: Due in <strong>{{ days_until }} day{% if days_until != 1 %}s{% endif %}</strong></li>
-                                            {% endif %}
+                                            <li>{{ part.name }}: <strong>{{ days_until|abs }} day{% if days_until|abs != 1 %}s{% endif %} overdue</strong></li>
                                         {% endfor %}
                                     </ul>
                                 </div>
-                            {% elif machine_class == "due-soon" %}
+                            {% elif due_soon_parts|length > 0 %}
                                 <div style="background-color: #fff3cd; padding: 10px; border-radius: 4px;">
-                                    <strong>Maintenance Due Soon:</strong>
-                                    <ul style="margin-top: 5px; margin-bottom: 5px;">
-                                        {% for part in machine.parts %}
+                                    <strong>Maintenance Due Soon</strong>
+                                    <p>{{ due_soon_parts|length }} component(s) need maintenance soon:</p>
+                                    <ul>
+                                        {% for part in due_soon_parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
-                                            {% if days_until >= 0 and days_until <= 14 %}
-                                                <li>{{ part.name }}: Due in <strong>{{ days_until }} day{% if days_until != 1 %}s{% endif %}</strong></li>
-                                            {% endif %}
+                                            <li>{{ part.name }}: Due in <strong>{{ days_until }} day{% if days_until != 1 %}s{% endif %}</strong></li>
                                         {% endfor %}
                                     </ul>
                                 </div>
                             {% else %}
                                 <div style="background-color: #d4edda; padding: 10px; border-radius: 4px;">
-                                    <strong><span style="color:#28a745">✓</span> All systems operational</strong>
-                                    <div>No maintenance needed at this time</div>
+                                    <strong><span style="color:#28a745">✓</span> All components operational</strong>
+                                    <p>No maintenance needed at this time.</p>
                                 </div>
                             {% endif %}
                         </div>
                         
                         <!-- Parts list (displayed when expanded) -->
                         <div class="parts-list">
-                            <h4>Parts:</h4>
                             {% for part in machine.parts %}
                                 {% set days_until = (part.next_maintenance - now).days %}
                                 
@@ -524,7 +493,7 @@
     </div>
 
     <script>
-        // Toggle machine expansion/collapse - Updated for reliability
+        // Toggle machine expansion/collapse - Updated with clear state management
         function toggleMachine(machineId) {
             const machineEl = document.getElementById(`machine-${machineId}`);
             const toggleBtn = machineEl.querySelector('.toggle-btn');
@@ -534,76 +503,73 @@
             if (machineEl.classList.contains('collapsed')) {
                 // Expand
                 machineEl.classList.remove('collapsed');
+                machineEl.classList.add('expanded');
                 toggleBtn.textContent = 'Collapse';
-                statusSummary.style.display = 'none';
-                partsList.style.display = 'block';
             } else {
                 // Collapse
+                machineEl.classList.remove('expanded');
                 machineEl.classList.add('collapsed');
                 toggleBtn.textContent = 'Expand';
+            }
+            
+            // Always explicitly update display properties
+            if (machineEl.classList.contains('collapsed')) {
                 statusSummary.style.display = 'block';
                 partsList.style.display = 'none';
+            } else {
+                statusSummary.style.display = 'none';
+                partsList.style.display = 'block';
             }
         }
         
-        // Collapse all machines in a site
+        // Fixed Collapse all machines in a site
         function collapseAllMachines(siteId) {
             const site = document.getElementById(`site-${siteId}`);
             if (!site) return;
             
             const machines = site.querySelectorAll('.machine');
             machines.forEach(machine => {
+                // Update class changes
                 machine.classList.add('collapsed');
+                machine.classList.remove('expanded');
+                
                 const toggleBtn = machine.querySelector('.toggle-btn');
+                const statusSummary = machine.querySelector('.status-summary');
+                const partsList = machine.querySelector('.parts-list');
+                
+                // Update button text
                 toggleBtn.textContent = 'Expand';
+                
+                // Explicitly set display properties
+                statusSummary.style.display = 'block';
+                partsList.style.display = 'none';
             });
         }
         
-        // Expand all machines in a site
+        // Fixed Expand all machines in a site
         function expandAllMachines(siteId) {
             const site = document.getElementById(`site-${siteId}`);
             if (!site) return;
             
             const machines = site.querySelectorAll('.machine');
             machines.forEach(machine => {
+                // Update class changes
                 machine.classList.remove('collapsed');
+                machine.classList.add('expanded');
+                
                 const toggleBtn = machine.querySelector('.toggle-btn');
+                const statusSummary = machine.querySelector('.status-summary');
+                const partsList = machine.querySelector('.parts-list');
+                
+                // Update button text
                 toggleBtn.textContent = 'Collapse';
+                
+                // Explicitly set display properties
+                statusSummary.style.display = 'none';
+                partsList.style.display = 'block';
             });
         }
-        
-        // Filter machines by status
-        function filterMachines(siteId, status) {
-            const site = document.getElementById(`site-${siteId}`);
-            if (!site) return;
-            
-            // Update active filter button
-            const filterButtons = site.querySelectorAll('.filter-btn');
-            filterButtons.forEach(button => {
-                button.classList.remove('active');
-            });
-            const activeButton = site.querySelector(`.filter-btn[onclick*="${status}"]`);
-            if (activeButton) activeButton.classList.add('active');
-            
-            // Filter machines
-            const machines = site.querySelectorAll('.machine');
-            if (status === 'all') {
-                // Show all machines
-                machines.forEach(machine => {
-                    machine.style.display = 'block';
-                });
-            } else {
-                // Show only machines with the selected status
-                machines.forEach(machine => {
-                    if (machine.getAttribute('data-status') === status) {
-                        machine.style.display = 'block';
-                    } else {
-                        machine.style.display = 'none';
-                    }
-                });
-            }
-        }
-        
+
         // Change site display
         function changeSite(siteId) {
             // Hide all sites
@@ -623,17 +589,21 @@
             }
         }
         
-        // Initialize the page on load
+        // Initialize the page on load with correct collapsed state
         document.addEventListener('DOMContentLoaded', function() {
-            // Collapse all machines by default
+            // Collapse all machines by default and ensure proper display
             document.querySelectorAll('.machine').forEach(machine => {
+                // Remove any conflicting classes
+                machine.classList.remove('expanded');
                 machine.classList.add('collapsed');
-                const toggleBtn = machine.querySelector('.toggle-btn');
-                toggleBtn.textContent = 'Expand';
                 
-                // Ensure collapsed state is properly applied
+                const toggleBtn = machine.querySelector('.toggle-btn');
                 const statusSummary = machine.querySelector('.status-summary');
                 const partsList = machine.querySelector('.parts-list');
+                
+                toggleBtn.textContent = 'Expand';
+                
+                // Explicitly set display properties
                 if (statusSummary) statusSummary.style.display = 'block';
                 if (partsList) partsList.style.display = 'none';
             });
