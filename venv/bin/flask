@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/Users/dominicmoriello/Documents/GitHub/Copilot Preventative Maintenance/venv/bin/python3.11" "$0" "$@"
+'''exec' "/Users/dominicmoriello/Documents/GitHub/AMRS Preventative Maintenance/venv/bin/python" "$0" "$@"
 ' '''
 # -*- coding: utf-8 -*-
 import re
