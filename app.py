@@ -35,14 +35,20 @@ def ensure_env_file():
 def ensure_email_templates():
     templates_dir = os.path.join(BASE_DIR, 'templates')
     email_dir = os.path.join(templates_dir, 'email')
+    
+    # Create templates directory if it doesn't exist
+    if not os.path.exists(templates_dir):
+        os.makedirs(templates_dir, exist_ok=True)
+        print(f"Created templates directory: {templates_dir}")
+    
+    # Create email directory if it doesn't exist
     if not os.path.exists(email_dir):
         os.makedirs(email_dir, exist_ok=True)
         print(f"Created email templates directory: {email_dir}")
         
         # Create example template files
         with open(os.path.join(email_dir, 'maintenance_alert.html'), 'w') as f:
-            f.write("""
-<!DOCTYPE html>
+            f.write("""<!DOCTYPE html>
 <html>
 <head>
     <title>Maintenance Alert</title>
@@ -92,12 +98,10 @@ def ensure_email_templates():
         </div>
     </div>
 </body>
-</html>
-            """)
+</html>""")
             
         with open(os.path.join(email_dir, 'test_email.html'), 'w') as f:
-            f.write("""
-<!DOCTYPE html>
+            f.write("""<!DOCTYPE html>
 <html>
 <head>
     <title>Test Email</title>
@@ -149,8 +153,7 @@ def ensure_email_templates():
         </div>
     </div>
 </body>
-</html>
-            """)
+</html>""")
         print("Created template email HTML files")
 
 # Initialize Flask app
@@ -418,7 +421,7 @@ def dashboard():
     now = datetime.utcnow()
     return render_template('dashboard.html', 
                           sites=sites, 
-                          machines=Machine.query.all(),
+                          machines=Machine.query.all(), 
                           now=now,
                           is_admin=current_user.is_admin,
                           current_user=current_user)
@@ -862,7 +865,7 @@ def init_db():
 
         # Current date for reference
         now = datetime.utcnow()
-
+        
         # Create test parts with varying maintenance frequencies and past maintenance dates
         parts = [
             # Overdue parts (past maintenance date)
@@ -983,12 +986,8 @@ def import_excel_cmd(file_path):
     """Import maintenance data from an Excel file.
     
     FILE_PATH is the path to the Excel file to import.
-    
-    The Excel file should contain the following sheets:
-    - Sites: with columns for name, location, contact_email, enable_notifications, notification_threshold
-    - Machines: with columns for name, model, site_name
-    - Parts: with columns for name, description, machine_name, site_name, maintenance_frequency, last_maintenance
     """
+    from import_excel import import_excel
     try:
         stats = import_excel(file_path)
         print("Import completed successfully!")
@@ -1020,7 +1019,6 @@ def test_email():
         sample_data = {}
         if include_samples:
             now = datetime.utcnow()
-            threshold = notification_threshold
             
             # Sample overdue parts
             sample_data['overdue_parts'] = [
@@ -1052,8 +1050,8 @@ def test_email():
                 {
                     'machine': 'CNC Mill',
                     'part': 'Coolant System',
-                    'days': threshold - 1,
-                    'due_date': (now + timedelta(days=threshold - 1)).strftime('%Y-%m-%d'),
+                    'days': notification_threshold - 1,
+                    'due_date': (now + timedelta(days=notification_threshold - 1)).strftime('%Y-%m-%d'),
                     'part_id': 4
                 }
             ]
@@ -1064,16 +1062,16 @@ def test_email():
                 'location': site_location
             }
             
-            sample_data['threshold'] = threshold
+            sample_data['threshold'] = notification_threshold
         
         try:
             msg = Message(
                 subject=subject,
                 recipients=[recipient],
                 html=render_template('email/test_email.html', 
-                                    message=message,
-                                    now=datetime.utcnow(),
-                                    **sample_data)
+                                     message=message,
+                                     now=datetime.utcnow(),
+                                     **sample_data)
             )
             mail.send(msg)
             flash(f'Test email sent to {recipient} successfully!')
