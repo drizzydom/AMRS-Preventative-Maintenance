@@ -31,8 +31,127 @@ def ensure_env_file():
         print(f"Created default .env file at {dotenv_path}")
         print("Please update with your actual email configuration")
 
-# Ensure .env file exists
-ensure_env_file()
+# Ensure email template directories exist
+def ensure_email_templates():
+    templates_dir = os.path.join(BASE_DIR, 'templates')
+    email_dir = os.path.join(templates_dir, 'email')
+    if not os.path.exists(email_dir):
+        os.makedirs(email_dir, exist_ok=True)
+        print(f"Created email templates directory: {email_dir}")
+        
+        # Create example template files
+        with open(os.path.join(email_dir, 'maintenance_alert.html'), 'w') as f:
+            f.write("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maintenance Alert</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        h1 { color: #2c3e50; }
+        h2 { color: #c0392b; }
+        .due-soon h2 { color: #d35400; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 5px; }
+        .footer { margin-top: 30px; font-size: 12px; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Maintenance Alert</h1>
+        
+        <p>You are receiving this email because our service has detected that the following machines at <strong>{{ site.name }}</strong> ({{ site.location }}) are due for maintenance soon.</p>
+        
+        {% if overdue_parts %}
+        <div class="overdue">
+            <h2>⚠️ Overdue Maintenance Items</h2>
+            <ul>
+                {% for part in overdue_parts %}
+                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        {% if due_soon_parts %}
+        <div class="due-soon">
+            <h2>🔔 Maintenance Due Soon ({{ threshold }} days)</h2>
+            <ul>
+                {% for part in due_soon_parts %}
+                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days ({{ part.due_date }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        <p>Please schedule maintenance as soon as possible.</p>
+        
+        <div class="footer">
+            <p>This is an automated notification from the Preventative Maintenance System.</p>
+        </div>
+    </div>
+</body>
+</html>
+            """)
+            
+        with open(os.path.join(email_dir, 'test_email.html'), 'w') as f:
+            f.write("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Email</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        h1 { color: #2c3e50; }
+        h2 { color: #2980b9; }
+        h3 { color: #c0392b; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 5px; }
+        .footer { margin-top: 30px; font-size: 12px; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Email from Maintenance System</h1>
+        <p>This is a test email sent at {{ now.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        
+        <p>{{ message }}</p>
+        
+        {% if site %}
+        <h2>Sample Site Information</h2>
+        <p>You are receiving this email because our service has detected that the following machines at <strong>{{ site.name }}</strong> ({{ site.location }}) are due for maintenance soon.</p>
+        
+        {% if overdue_parts %}
+        <h3>Sample Overdue Parts</h3>
+        <ul>
+            {% for part in overdue_parts %}
+            <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        
+        {% if due_soon_parts %}
+        <h3>Sample Parts Due Soon</h3>
+        <ul>
+            {% for part in due_soon_parts %}
+            <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% endif %}
+        
+        <p>Email configuration appears to be working!</p>
+        
+        <div class="footer">
+            <p>This is a test email from the Preventative Maintenance System.</p>
+        </div>
+    </div>
+</body>
+</html>
+            """)
+        print("Created template email HTML files")
 
 # Initialize Flask app
 app = Flask(__name__)
