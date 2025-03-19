@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import click  # Add the missing click import
 from datetime import datetime, timedelta
 import logging
 from functools import wraps
@@ -825,6 +826,130 @@ def check_notification_settings():
         print(f"    - Overdue: {parts_overdue}")
         print(f"    - Due soon: {parts_due_soon}")
         print(f"    - Already notified: {parts_notified}")
+
+@app.cli.command("create-excel-template")
+@click.argument("output_file", default="maintenance_import_template.xlsx")
+def create_excel_template_cmd(output_file):
+    """Create a template Excel file for importing maintenance data."""
+    from create_excel_template import create_template
+    create_template(output_file)
+    print(f"Template created: {output_file}")
+
+@app.cli.command("import-excel")
+@click.argument("file_path")
+def import_excel_cmd(file_path):
+    """Import maintenance data from an Excel file.
+    
+    FILE_PATH is the path to the Excel file to import.
+    
+    The Excel file should contain the following sheets:
+    - Sites: with columns for name, location, contact_email, enable_notifications, notification_threshold
+    - Machines: with columns for name, model, site_name
+    - Parts: with columns for name, description, machine_name, site_name, maintenance_frequency, last_maintenance
+    """
+    try:
+        stats = import_excel(file_path)
+        print("Import completed successfully!")
+        print(f"Sites: {stats['sites_added']} added, {stats['sites_skipped']} skipped")
+        print(f"Machines: {stats['machines_added']} added, {stats['machines_skipped']} skipped")
+        print(f"Parts: {stats['parts_added']} added, {stats['parts_skipped']} skipped")
+        print(f"Errors: {stats['errors']}")
+    except Exception as e:
+        print(f"Import failed: {str(e)}")
+
+@app.route('/admin/test-email', methods=['GET', 'POST'])
+@login_required
+def test_email():
+    """Send a test email to verify email configuration."""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        recipient = request.form.get('email')
+        subject = request.form.get('subject', 'Maintenance Tracker - Test Email')
+        message = request.form.get('message', 'This is a test email from the Maintenance Tracker system.')
+        site_name = request.form.get('site_name', 'Test Site')
+        site_location = request.form.get('site_location', 'Test Location')
+        notification_threshold = int(request.form.get('notification_threshold', 7))
+        include_samples = 'include_samples' in request.form
+        
+        # Sample data for overdue and due-soon items
+        sample_data = {}
+        if include_samples:
+            now = datetime.utcnow()
+            threshold = notification_threshold
+            
+            # Sample overdue parts
+            sample_data['overdue_parts'] = [
+                {
+                    'machine': 'CNC Mill',
+                    'part': 'Spindle',
+                    'days': 3,
+                    'due_date': (now - timedelta(days=3)).strftime('%Y-%m-%d'),
+                    'part_id': 1
+                },
+                {
+                    'machine': 'Lathe',
+                    'part': 'Chuck',
+                    'days': 5,
+                    'due_date': (now - timedelta(days=5)).strftime('%Y-%m-%d'),
+                    'part_id': 2
+                }
+            ]
+            
+            # Sample due-soon parts
+            sample_data['due_soon_parts'] = [
+                {
+                    'machine': 'Assembly Robot',
+                    'part': 'Servo Motor',
+                    'days': 2,
+                    'due_date': (now + timedelta(days=2)).strftime('%Y-%m-%d'),
+                    'part_id': 3
+                },
+                {
+                    'machine': 'CNC Mill',
+                    'part': 'Coolant System',
+                    'days': threshold - 1,
+                    'due_date': (now + timedelta(days=threshold - 1)).strftime('%Y-%m-%d'),
+                    'part_id': 4
+                }
+            ]
+            
+            # Sample site info
+            sample_data['site'] = {
+                'name': site_name,
+                'location': site_location
+            }
+            
+            sample_data['threshold'] = threshold
+        
+        try:
+            msg = Message(
+                subject=subject,
+                recipients=[recipient],
+                html=render_template('email/test_email.html', 
+                                    message=message,
+                                    now=datetime.utcnow(),
+                                    **sample_data)
+            )
+            mail.send(msg)
+            flash(f'Test email sent to {recipient} successfully!')
+        except Exception as e:
+            flash(f'Failed to send test email: {str(e)}')
+        
+        return redirect(url_for('test_email'))
+    
+    # Get current email configuration
+    email_config = {
+        'MAIL_SERVER': app.config['MAIL_SERVER'],
+        'MAIL_PORT': app.config['MAIL_PORT'],
+        'MAIL_USE_TLS': app.config['MAIL_USE_TLS'],
+        'MAIL_USERNAME': app.config['MAIL_USERNAME'],
+        'MAIL_DEFAULT_SENDER': app.config['MAIL_DEFAULT_SENDER']
+    }
+    
+    return render_template('admin_test_email.html', config=email_config)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5050)
