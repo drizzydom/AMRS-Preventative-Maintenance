@@ -1,10 +1,11 @@
-Flask==2.2.5
-Flask-SQLAlchemy==3.0.3
-Flask-Login==0.6.2
-Werkzeug==2.2.3
-SQLAlchemy==2.0.9
+flask==2.3.3
+flask-sqlalchemy==3.1.1
+flask-login==0.6.2
+werkzeug==2.3.7
+SQLAlchemy==2.0.21
 Jinja2==3.1.2
-Flask-Mail==0.9.1
+flask-mail==0.9.1
 python-dotenv==1.0.0
 pandas==2.0.3
 openpyxl==3.1.2
+# Add any other dependencies your project uses

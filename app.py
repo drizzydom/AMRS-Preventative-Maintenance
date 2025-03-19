@@ -9,7 +9,30 @@ import logging
 from functools import wraps
 from flask_mail import Mail, Message
 from dotenv import load_dotenv
-load_dotenv()  # Load environment variables from .env file
+
+# Get the directory of this file
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+# Look for .env file in the current directory
+dotenv_path = os.path.join(BASE_DIR, '.env')
+# Load environment variables from .env file
+load_dotenv(dotenv_path)
+
+# Function to ensure .env file exists
+def ensure_env_file():
+    if not os.path.exists(dotenv_path):
+        with open(dotenv_path, 'w') as f:
+            f.write("# Email Configuration\n")
+            f.write("MAIL_SERVER=smtp.example.com\n")
+            f.write("MAIL_PORT=587\n")
+            f.write("MAIL_USE_TLS=True\n")
+            f.write("MAIL_USERNAME=user@example.com\n")
+            f.write("MAIL_PASSWORD=password\n")
+            f.write("MAIL_DEFAULT_SENDER=maintenance@example.com\n")
+        print(f"Created default .env file at {dotenv_path}")
+        print("Please update with your actual email configuration")
+
+# Ensure .env file exists
+ensure_env_file()
 
 # Initialize Flask app
 app = Flask(__name__)
