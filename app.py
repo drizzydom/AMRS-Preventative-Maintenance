@@ -500,150 +500,151 @@ def delete_role(role_id):
     if role.users:
         flash(f'Cannot delete role "{role.name}" because it has assigned users')
         return redirect(url_for('manage_roles'))
+    
+    role_name = role.name
     db.session.delete(role)
     db.session.commit()
-    flash(f'Role "{role.name}" deleted successfully') if role_id else None, is_admin=is_admin)
-    return redirect(url_for('manage_roles'))d(password)
+    flash(f'Role "{role_name}" deleted successfully')
+    return redirect(url_for('manage_roles'))
 
-# New routes for User management = Site.query.get(site_id)
+# New routes for User management
 @app.route('/admin/users', methods=['GET', 'POST'])
-@login_requiredes.append(site)
-def manage_users():new_user)
+@login_required
+def manage_users():
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')sername}" added successfully')
-        return redirect(url_for('dashboard'))e:
-    if request.method == 'POST':ack()
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
         username = request.form.get('username')
-        password = request.form.get('password')            flash(f'Error creating user: {str(e)}')
+        password = request.form.get('password')
         full_name = request.form.get('full_name')
-        email = request.form.get('email')r.query.all()
-        role_id = request.form.get('role_id')l()
-        is_admin = True if request.form.get('is_admin') else False_users.html', roles=roles, users=users, sites=sites, current_user=current_user)
+        email = request.form.get('email')
+        role_id = request.form.get('role_id')
+        is_admin = True if request.form.get('is_admin') else False
         site_ids = request.form.getlist('site_ids')
-        if User.query.filter_by(username=username).first():', methods=['POST'])
+        if User.query.filter_by(username=username).first():
             flash(f'Username "{username}" already exists')
             roles = Role.query.all()
             users = User.query.all()
-            sites = Site.query.all()leges required.')
-            return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)_for('dashboard'))
-        new_user = User(username=username, full_name=full_name, email=email,nt_user.id:
+            sites = Site.query.all()
+            return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)
+        new_user = User(username=username, full_name=full_name, email=email,
                         role_id=role_id if role_id else None, is_admin=is_admin)
-        new_user.set_password(password)s'))
-        for site_id in site_ids:    user = User.query.get_or_404(user_id)
+        new_user.set_password(password)
+        for site_id in site_ids:
             site = Site.query.get(site_id)
             if site:
                 new_user.sites.append(site)
-        db.session.add(new_user)('manage_users'))
+        db.session.add(new_user)
         db.session.commit()
-        flash(f'User "{username}" added successfully')ding notification and send emails
+        flash(f'User "{username}" added successfully')
     roles = Role.query.all()
-    users = User.query.all()ewly entered the 'due soon' threshold and send notifications"""
+    users = User.query.all()
     sites = Site.query.all()
-    return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)t have notifications enabled
-s_with_notifications = []
-@app.route('/admin/users/delete/<int:user_id>', methods=['POST']).filter_by(enable_notifications=True).all():
-@login_required_email:
-def delete_user(user_id):fications enabled but no contact email")
-    if not current_user.is_admin:    continue
+    return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)
+
+@app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
         flash('Access denied. Admin privileges required.')
         return redirect(url_for('dashboard'))
     if user_id == current_user.id:
-        flash('Cannot delete your own user account')k as notified
+        flash('Cannot delete your own user account')
         return redirect(url_for('manage_users'))
-    user = User.query.get_or_404(user_id)in site.machines:
+    user = User.query.get_or_404(user_id)
     db.session.delete(user)
-    db.session.commit()# Skip parts that have already had notifications sent
-    flash(f'User "{user.username}" deleted successfully')on_sent:
+    db.session.commit()
+    flash(f'User "{user.username}" deleted successfully')
     return redirect(url_for('manage_users'))
 
-# Function to check for parts needing notification and send emailsintenance - now).days
+# Function to check for parts needing notification and send emails
 def check_for_due_soon_parts():
     """Check for parts that have newly entered the 'due soon' threshold and send notifications"""
     now = datetime.utcnow()
-    # Find sites that have notifications enabled  'machine': machine.name,
+    # Find sites that have notifications enabled
     sites_with_notifications = []
     for site in Site.query.filter_by(enable_notifications=True).all():
-        if not site.contact_email:xt_maintenance.strftime('%Y-%m-%d'),
+        if not site.contact_email:
             app.logger.info(f"Site {site.name} has notifications enabled but no contact email")
             continue
-        rt)
         overdue_parts = []
-        due_soon_parts = []{
-        parts_to_mark = []  # Parts to mark as notified  'machine': machine.name,
+        due_soon_parts = []
+        parts_to_mark = []  # Parts to mark as notified
         
-        for machine in site.machines:                'days': days_until,
-            for part in machine.parts:xt_maintenance.strftime('%Y-%m-%d'),
+        for machine in site.machines:
+            for part in machine.parts:
                 # Skip parts that have already had notifications sent
                 if part.notification_sent:
                     continue
                     
                 days_until = (part.next_maintenance - now).days
-                tes_with_notifications.append({
-                if days_until < 0:            'site': site,
-                    overdue_parts.append({: overdue_parts,
-                        'machine': machine.name,ue_soon_parts': due_soon_parts,
+                
+                if days_until < 0:
+                    overdue_parts.append({
+                        'machine': machine.name,
                         'part': part.name,
                         'days': abs(days_until),
                         'due_date': part.next_maintenance.strftime('%Y-%m-%d'),
                         'part_id': part.id
                     })
-                    parts_to_mark.append(part)site_info in sites_with_notifications:
-                elif days_until <= site.notification_threshold:']
+                    parts_to_mark.append(part)
+                elif days_until <= site.notification_threshold:
                     due_soon_parts.append({
-                        'machine': machine.name,due_soon_parts = site_info['due_soon_parts']
-                        'part': part.name,fo['parts_to_mark']
+                        'machine': machine.name,
+                        'part': part.name,
                         'days': days_until,
                         'due_date': part.next_maintenance.strftime('%Y-%m-%d'),
-                        'part_id': part.idintenance Alert: {site.name}"
+                        'part_id': part.id
                     })
                     parts_to_mark.append(part)
         
-        if overdue_parts or due_soon_parts:   'email/maintenance_alert.html',
-            sites_with_notifications.append({    site=site,
-                'site': site,arts,
-                'overdue_parts': overdue_parts,due_soon_parts=due_soon_parts,
-                'due_soon_parts': due_soon_parts,.notification_threshold
+        if overdue_parts or due_soon_parts:
+            sites_with_notifications.append({
+                'site': site,
+                'overdue_parts': overdue_parts,
+                'due_soon_parts': due_soon_parts,
                 'parts_to_mark': parts_to_mark
             })
-    email
+    
     # Send emails for each site
     sent_count = 0
     for site_info in sites_with_notifications:
-        site = site_info['site'][site.contact_email],
-        overdue_parts = site_info['overdue_parts']    html=html_body
+        site = site_info['site']
+        overdue_parts = site_info['overdue_parts']
         due_soon_parts = site_info['due_soon_parts']
         parts_to_mark = site_info['parts_to_mark']
-        ification sent to {site.contact_email} for site {site.name}")
-        # Create email contentsent_count += 1
+        
+        # Create email content
         subject = f"Maintenance Alert: {site.name}"
-        tified
+        
         # Render email template
-        html_body = render_template(            part.notification_sent = True
+        html_body = render_template(
             'email/maintenance_alert.html',
-            site=site,            db.session.commit()
+            site=site,
             overdue_parts=overdue_parts,
-            due_soon_parts=due_soon_parts,n email: {str(e)}")
+            due_soon_parts=due_soon_parts,
             threshold=site.notification_threshold
         )
         
         # Create and send the email
-        try:ods=['GET'])
-            msg = Message(in_required
+        try:
+            msg = Message(
                 subject=subject,
-                recipients=[site.contact_email],t_user.is_admin:
+                recipients=[site.contact_email],
                 html=html_body
-            )eturn redirect(url_for('dashboard'))
+            )
             mail.send(msg)
-            app.logger.info(f"Maintenance notification sent to {site.contact_email} for site {site.name}")count = check_for_due_soon_parts()
+            app.logger.info(f"Maintenance notification sent to {site.contact_email} for site {site.name}")
             sent_count += 1
-                    flash(f'Sent notifications for {count} sites with parts due soon or overdue.')
+            
             # Mark parts as notified
-            for part in parts_to_mark:ications to send.')
+            for part in parts_to_mark:
                 part.notification_sent = True
             
             db.session.commit()
         except Exception as e:
-            app.logger.error(f"Failed to send notification email: {str(e)}")"init-db")
+            app.logger.error(f"Failed to send notification email: {str(e)}")
     
     return sent_count
 
@@ -653,48 +654,46 @@ def check_for_due_soon_parts():
 def check_notifications():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.')
-        return redirect(url_for('dashboard'))LETE,
-     Permissions.ROLES_VIEW, Permissions.ROLES_CREATE, Permissions.ROLES_EDIT, Permissions.ROLES_DELETE,
-    count = check_for_due_soon_parts()ITES_EDIT, Permissions.SITES_DELETE, Permissions.SITES_VIEW_ASSIGNED,
-    if count > 0:_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
+        return redirect(url_for('dashboard'))
+    count = check_for_due_soon_parts()
+    if count > 0:
         flash(f'Sent notifications for {count} sites with parts due soon or overdue.')
     else:
         flash('No new notifications to send.')
-    ,
-    return redirect(url_for('admin'))missions=','.join([
-ons.SITES_DELETE,
-# CLI commandsVIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
-@app.cli.command("init-db").PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
-def init_db():_RECORD
+    return redirect(url_for('admin'))
+
+# CLI commands
+@app.cli.command("init-db")
+def init_db():
     """Initialize the database with sample data."""
-    db.create_all()e='Technician', description='Can update maintenance records for assigned sites',
+    db.create_all()
     admin = User.query.filter_by(username='admin').first()
-    if not admin:        Permissions.SITES_VIEW_ASSIGNED,
-        # Create roles first with detailed permissions                                   Permissions.MACHINES_VIEW, Permissions.PARTS_VIEW,
-        admin_role = Role(name='Administrator', description='Full system access',        Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD
+    if not admin:
+        # Create roles first with detailed permissions
+        admin_role = Role(name='Administrator', description='Full system access',
                           permissions=','.join([
-                              Permissions.ADMIN_ACCESS, Permissions.ADMIN_FULL,ole, manager_role, technician_role])
+                              Permissions.ADMIN_ACCESS, Permissions.ADMIN_FULL,
                               Permissions.USERS_VIEW, Permissions.USERS_CREATE, Permissions.USERS_EDIT, Permissions.USERS_DELETE,
                               Permissions.ROLES_VIEW, Permissions.ROLES_CREATE, Permissions.ROLES_EDIT, Permissions.ROLES_DELETE,
-                              Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT, Permissions.SITES_DELETE, Permissions.SITES_VIEW_ASSIGNED,        # Create admin user
-                              Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,me='admin', full_name='Administrator', email='admin@example.com', is_admin=True, role_id=admin_role.id)
+                              Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT, Permissions.SITES_DELETE, Permissions.SITES_VIEW_ASSIGNED,
+                              Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
                               Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
                               Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_SCHEDULE, Permissions.MAINTENANCE_RECORD
                           ]))
         manager_role = Role(name='Manager', description='Can manage sites and view all data',
                             permissions=','.join([
-                                Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT, Permissions.SITES_DELETE,        site1 = Site(name='Main Factory', location='123 Industrial Ave')
-                                Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,embly Plant', location='456 Production Blvd', enable_notifications=True,
-                                Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,threshold=7)
+                                Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT, Permissions.SITES_DELETE,
+                                Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
+                                Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
                                 Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD
                             ]))
         technician_role = Role(name='Technician', description='Can update maintenance records for assigned sites',
                                permissions=','.join([
-                                   Permissions.SITES_VIEW_ASSIGNED,name='CNC Mill', model='XYZ-1000', site_id=site1.id)
-                                   Permissions.MACHINES_VIEW, Permissions.PARTS_VIEW,        machine2 = Machine(name='Lathe', model='LT-500', site_id=site1.id)
-                                   Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORDll Press', model='DP-750', site_id=site2.id)
-                               ]))='Assembly Robot', model='AR-200', site_id=site2.id)
-        db.session.add_all([admin_role, manager_role, technician_role])        db.session.add_all([machine1, machine2, machine3, machine4])
+                                   Permissions.SITES_VIEW_ASSIGNED,
+                                   Permissions.MACHINES_VIEW, Permissions.PARTS_VIEW,
+                                   Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD
+                               ]))
+        db.session.add_all([admin_role, manager_role, technician_role])
         db.session.commit()
 
         # Create admin user
@@ -704,56 +703,56 @@ def init_db():_RECORD
         db.session.commit()
 
         # Create test sites
-        site1 = Site(name='Main Factory', location='123 Industrial Ave') 3 days overdue
-        site2 = Site(name='Assembly Plant', location='456 Production Blvd', enable_notifications=True,,
-                     contact_email='factory.manager@example.com', notification_threshold=7) overdue
+        site1 = Site(name='Main Factory', location='123 Industrial Ave')
+        site2 = Site(name='Assembly Plant', location='456 Production Blvd', enable_notifications=True,
+                     contact_email='factory.manager@example.com', notification_threshold=7)
         db.session.add_all([site1, site2])
-        db.session.commit()ance=now - timedelta(days=20)),  # Due in 10 days
-d,
+        db.session.commit()
+
         # Create test machines
-        machine1 = Machine(name='CNC Mill', model='XYZ-1000', site_id=site1.id)d=machine2.id,
+        machine1 = Machine(name='CNC Mill', model='XYZ-1000', site_id=site1.id)
         machine2 = Machine(name='Lathe', model='LT-500', site_id=site1.id)
         machine3 = Machine(name='Drill Press', model='DP-750', site_id=site2.id)
         machine4 = Machine(name='Assembly Robot', model='AR-200', site_id=site2.id)
-        db.session.add_all([machine1, machine2, machine3, machine4]) in 25 days
+        db.session.add_all([machine1, machine2, machine3, machine4])
         db.session.commit()
- in 45 days
-        # Current date for reference
-        now = datetime.utcnow()  # Due in 40 days
 
-        # Create test parts with varying maintenance frequencies and past maintenance dates0 days
+        # Current date for reference
+        now = datetime.utcnow()
+
+        # Create test parts with varying maintenance frequencies and past maintenance dates
         parts = [
-            # Overdue parts (past maintenance date)),  # Due in 60 days
+            # Overdue parts (past maintenance date)
             Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id,
-                 maintenance_frequency=7, last_maintenance=now - timedelta(days=10)),  # 3 days overdue        maintenance_frequency=180, last_maintenance=now - timedelta(days=30)),  # Due in 150 days
-            Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,ly', description='Electrical power unit', machine_id=machine4.id,
-                 maintenance_frequency=14, last_maintenance=now - timedelta(days=20)),  # 6 days overduee_frequency=365, last_maintenance=now - timedelta(days=90)),  # Due in 275 days
-            Part(name='Tool Changer', description='Automatic tool changer', machine_id=machine1.id,            Part(name='Gripper', description='End effector', machine_id=machine4.id,
-                 maintenance_frequency=30, last_maintenance=now - timedelta(days=20)),  # Due in 10 dayst_maintenance=now - timedelta(days=20))  # Due in 100 days
+                 maintenance_frequency=7, last_maintenance=now - timedelta(days=10)),  # 3 days overdue
+            Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,
+                 maintenance_frequency=14, last_maintenance=now - timedelta(days=20)),  # 6 days overdue
+            Part(name='Tool Changer', description='Automatic tool changer', machine_id=machine1.id,
+                 maintenance_frequency=30, last_maintenance=now - timedelta(days=20)),  # Due in 10 days
             Part(name='Chuck', description='Workholding device', machine_id=machine2.id,
                  maintenance_frequency=21, last_maintenance=now - timedelta(days=15)),  # Due in 6 days
             Part(name='Tailstock', description='Supports workpiece end', machine_id=machine2.id,
                  maintenance_frequency=30, last_maintenance=now - timedelta(days=22)),  # Due in 8 days
-            # OK parts (maintenance due beyond 14 days) Update next_maintenance for all parts
+            # OK parts (maintenance due beyond 14 days)
             Part(name='Drill Bit', description='Cutting tool', machine_id=machine3.id,
-                 maintenance_frequency=45, last_maintenance=now - timedelta(days=20)),  # Due in 25 days            part.update_next_maintenance()
+                 maintenance_frequency=45, last_maintenance=now - timedelta(days=20)),  # Due in 25 days
             Part(name='Table', description='Work surface', machine_id=machine3.id,
-                 maintenance_frequency=60, last_maintenance=now - timedelta(days=15)),  # Due in 45 daysalized with test data.")
+                 maintenance_frequency=60, last_maintenance=now - timedelta(days=15)),  # Due in 45 days
             Part(name='Servo Motor A', description='Axis 1 movement', machine_id=machine4.id,
-                 maintenance_frequency=60, last_maintenance=now - timedelta(days=20)),  # Due in 40 daysta. Skipping initialization.")
+                 maintenance_frequency=60, last_maintenance=now - timedelta(days=20)),  # Due in 40 days
             Part(name='Servo Motor B', description='Axis 2 movement', machine_id=machine4.id,
-                 maintenance_frequency=90, last_maintenance=now - timedelta(days=30)),  # Due in 60 days@app.cli.command("send-notifications")
-            Part(name='Servo Motor C', description='Axis 3 movement', machine_id=machine4.id,:
-                 maintenance_frequency=90, last_maintenance=now - timedelta(days=30)),  # Due in 60 daysntenance notifications for all sites that have them enabled."""
+                 maintenance_frequency=90, last_maintenance=now - timedelta(days=30)),  # Due in 60 days
+            Part(name='Servo Motor C', description='Axis 3 movement', machine_id=machine4.id,
+                 maintenance_frequency=90, last_maintenance=now - timedelta(days=30)),  # Due in 60 days
             Part(name='Controller', description='Robot brain', machine_id=machine4.id,
-                 maintenance_frequency=180, last_maintenance=now - timedelta(days=30)),  # Due in 150 days{sent_count} notification emails.")
+                 maintenance_frequency=180, last_maintenance=now - timedelta(days=30)),  # Due in 150 days
             Part(name='Power Supply', description='Electrical power unit', machine_id=machine4.id,
                  maintenance_frequency=365, last_maintenance=now - timedelta(days=90)),  # Due in 275 days
-            Part(name='Gripper', description='End effector', machine_id=machine4.id,def reset_db():
-                 maintenance_frequency=120, last_maintenance=now - timedelta(days=20))  # Due in 100 days database tables."""
-        ]()
+            Part(name='Gripper', description='End effector', machine_id=machine4.id,
+                 maintenance_frequency=120, last_maintenance=now - timedelta(days=20))  # Due in 100 days
+        ]
         db.session.add_all(parts)
-        db.session.commit()n reset. Run 'flask init-db' to initialize with sample data.")
+        db.session.commit()
 
         # Update next_maintenance for all parts
         for part in parts:
@@ -761,32 +760,32 @@ d,
         db.session.commit()
         print("Database initialized with test data.")
     else:
-        print("Database already contains data. Skipping initialization.")_exist:
-.get_columns('part')]
-@app.cli.command("send-notifications")f 'notification_sent' not in columns:
-def send_all_notifications():")
-    """Send maintenance notifications for all sites that have them enabled."""                print("Please run 'flask --app app reset-db' to update the database schema.")
-    sent_count = check_for_due_soon_parts()
-    print(f"Sent {sent_count} notification emails.")hema is up to date.")
+        print("Database already contains data. Skipping initialization.")
 
-@app.cli.command("reset-db")tables don't exist. Run 'flask --app app init-db' to initialize.")
+@app.cli.command("send-notifications")
+def send_all_notifications():
+    """Send maintenance notifications for all sites that have them enabled."""
+    sent_count = check_for_due_soon_parts()
+    print(f"Sent {sent_count} notification emails.")
+
+@app.cli.command("reset-db")
 def reset_db():
-    """Drop and recreate all database tables.""""check-notification-settings")
+    """Drop and recreate all database tables."""
     db.drop_all()
-    db.create_all() notification settings for all sites."""
-    print("Database has been reset. Run 'flask init-db' to initialize with sample data.")sites = Site.query.all()
+    db.create_all()
+    print("Database has been reset. Run 'flask init-db' to initialize with sample data.")
 
 @app.cli.command("check-db")
-def check_db():s found in database.")
+def check_db():
     """Check if the database schema needs to be updated."""
     with app.app_context():
         inspector = db.inspect(db.engine)
         tables_exist = inspector.has_table("part")
-        if tables_exist:site in sites:
-            columns = [col['name'] for col in inspector.get_columns('part')]ame}")
-            if 'notification_sent' not in columns:tions Enabled: {site.enable_notifications}")
-                print("Database schema needs updating - 'notification_sent' column is missing.") Email: {site.contact_email or 'NOT SET'}")
-                print("Please run 'flask --app app reset-db' to update the database schema.")tion Threshold: {site.notification_threshold} days")
+        if tables_exist:
+            columns = [col['name'] for col in inspector.get_columns('part')]
+            if 'notification_sent' not in columns:
+                print("Database schema needs updating - 'notification_sent' column is missing.")
+                print("Please run 'flask --app app reset-db' to update the database schema.")
             else:
                 print("Database schema is up to date.")
         else:
@@ -795,46 +794,36 @@ def check_db():s found in database.")
 @app.cli.command("check-notification-settings")
 def check_notification_settings():
     """Display notification settings for all sites."""
-    sites = Site.query.all() in machine.parts:
-    .next_maintenance - now).days
+    sites = Site.query.all()
     if not sites:
         print("No sites found in database.")
         return
                 
     print("\nNotification Settings for Sites:")
     print("--------------------------------------")
-    for site in sites:on_threshold:
+    for site in sites:
         print(f"\nSite: {site.name}")
-        print(f"  Notifications Enabled: {site.enable_notifications}")        
-        print(f"  Contact Email: {site.contact_email or 'NOT SET'}")atus Summary:")
+        print(f"  Notifications Enabled: {site.enable_notifications}")
+        print(f"  Contact Email: {site.contact_email or 'NOT SET'}")
         print(f"  Notification Threshold: {site.notification_threshold} days")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    app.run(debug=True, host='0.0.0.0', port=5050)if __name__ == '__main__':        print(f"    - Already notified: {parts_notified}")        print(f"    - Due soon: {parts_due_soon}")        print(f"    - Overdue: {parts_overdue}")        print(f"  Parts Status Summary:")                            parts_due_soon += 1                elif days_until <= site.notification_threshold:                    parts_overdue += 1                if days_until < 0:                                        parts_notified += 1                if part.notification_sent:                                days_until = (part.next_maintenance - now).days            for part in machine.parts:        for machine in site.machines:        now = datetime.utcnow()                parts_notified = 0        parts_overdue = 0        parts_due_soon = 0        # Count parts by status                print(f"    - Due soon: {parts_due_soon}")
+        now = datetime.utcnow()
+        parts_notified = 0
+        parts_overdue = 0
+        parts_due_soon = 0
+        # Count parts by status
+        for machine in site.machines:
+            for part in machine.parts:
+                if part.notification_sent:
+                    parts_notified += 1
+                else:
+                    days_until = (part.next_maintenance - now).days
+                    if days_until < 0:
+                        parts_overdue += 1
+                    elif days_until <= site.notification_threshold:
+                        parts_due_soon += 1
+        print(f"  Parts Status Summary:")
+        print(f"    - Overdue: {parts_overdue}")
+        print(f"    - Due soon: {parts_due_soon}")
         print(f"    - Already notified: {parts_notified}")
 
 if __name__ == '__main__':
