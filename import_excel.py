@@ -72,6 +72,8 @@ def import_excel(file_path):
             new_machine = Machine(
                 name=machine_name,
                 model=row.get('model', ''),
+                machine_number=row.get('machine_number', ''),
+                serial_number=row.get('serial_number', ''),
                 site_id=site.id
             )
             db.session.add(new_machine)
