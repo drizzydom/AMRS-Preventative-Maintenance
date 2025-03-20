@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Part - Maintenance Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #333;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .nav-links a {
+            color: white;
+            margin-left: 15px;
+            text-decoration: none;
+        }
+        .container {
+            padding: 20px;
+        }
+        .edit-panel {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        .edit-panel h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .btn-cancel {
+            background-color: #6c757d;
+        }
+        .btn-cancel:hover {
+            background-color: #5a6268;
+        }
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Maintenance Tracker - Edit Part</h1>
+        <div class="nav-links">
+            <a href="{{ url_for('admin') }}">Admin Home</a>
+            <a href="{{ url_for('manage_parts') }}">Parts</a>
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                <div class="flash-message">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="edit-panel">
+            <h2>Edit Part: {{ part.name }}</h2>
+            <form method="POST">
+                <div class="form-group">
+                    <label for="name">Part Name</label>
+                    <input type="text" id="name" name="name" value="{{ part.name }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <input type="text" id="description" name="description" value="{{ part.description }}">
+                </div>
+                <div class="form-group">
+                    <label for="machine_id">Machine</label>
+                    <select id="machine_id" name="machine_id" required>
+                        {% for machine in machines %}
+                        <option value="{{ machine.id }}" {% if machine.id == part.machine_id %}selected{% endif %}>
+                            {{ machine.name }} ({{ machine.site.name }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="maintenance_frequency">Maintenance Frequency</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="maintenance_frequency" name="maintenance_frequency" min="1" 
+                               value="{{ part.maintenance_frequency if part.maintenance_unit == 'day' else 
+                                         (part.maintenance_frequency // 7 if part.maintenance_unit == 'week' else 
+                                          (part.maintenance_frequency // 30 if part.maintenance_unit == 'month' else 
+                                           part.maintenance_frequency // 365)) }}" 
+                               required style="flex: 1;">
+                        <select id="maintenance_unit" name="maintenance_unit" style="flex: 1;">
+                            <option value="day" {% if part.maintenance_unit == 'day' %}selected{% endif %}>Days</option>
+                            <option value="week" {% if part.maintenance_unit == 'week' %}selected{% endif %}>Weeks</option>
+                            <option value="month" {% if part.maintenance_unit == 'month' %}selected{% endif %}>Months</option>
+                            <option value="year" {% if part.maintenance_unit == 'year' %}selected{% endif %}>Years</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button type="submit">Update Part</button>
+                    <a href="{{ url_for('manage_parts') }}">
+                        <button type="button" class="btn-cancel">Cancel</button>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

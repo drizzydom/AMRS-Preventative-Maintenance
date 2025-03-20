@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backups - Maintenance Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #333;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .nav-links a {
+            color: white;
+            margin-left: 15px;
+            text-decoration: none;
+        }
+        .container {
+            padding: 20px;
+        }
+        .panel {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .panel h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .btn-delete {
+            background-color: #dc3545;
+        }
+        .btn-delete:hover {
+            background-color: #c82333;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .backup-list {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+        }
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .checkbox-wrapper {
+            margin: 10px 0;
+        }
+        .checkbox-label {
+            margin-left: 8px;
+            font-weight: normal;
+        }
+        .info-box {
+            background-color: #e2f0fd;
+            border-left: 5px solid #0d6efd;
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Maintenance Tracker - Backups</h1>
+        <div class="nav-links">
+            <a href="{{ url_for('admin') }}">Admin Home</a>
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="flash-message {% if category == 'error' %}error-message{% endif %}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="panel">
+            <h2>Create Backup</h2>
+            <div class="info-box">
+                <p>Backups include all sites, machines, parts, and maintenance history. You can optionally include user and role information.</p>
+            </div>
+            <form method="POST" action="{{ url_for('create_backup') }}">
+                <div class="form-group">
+                    <label for="backup_name">Backup Name (Optional)</label>
+                    <input type="text" id="backup_name" name="backup_name" placeholder="e.g., Weekly_Backup">
+                    <small>If not specified, backup will be named with timestamp</small>
+                </div>
+                
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="include_users" name="include_users">
+                    <label for="include_users" class="checkbox-label">Include users and roles</label>
+                </div>
+                
+                <button type="submit">Create Backup</button>
+            </form>
+        </div>
+        
+        <div class="panel">
+            <h2>Restore from Backup</h2>
+            <div class="warning-box">
+                <p><strong>Warning:</strong> Restoring from a backup will modify your current data. It's recommended to create a backup first.</p>
+            </div>
+            <form method="POST" action="{{ url_for('restore_backup') }}" onsubmit="return confirm('Are you sure you want to restore from this backup? This will modify your current data.');">
+                <div class="form-group">
+                    <label for="backup_file">Select Backup</label>
+                    <select id="backup_file" name="backup_file" required>
+                        <option value="">-- Select a backup file --</option>
+                        {% for backup in backups %}
+                        <option value="{{ backup.filename }}">{{ backup.created }} - {{ backup.filename }} ({{ backup.sites_count }} sites, {{ backup.machines_count }} machines, {{ backup.parts_count }} parts)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="restore_users" name="restore_users" {% if not backups or not backups[0].includes_users %}disabled{% endif %}>
+                    <label for="restore_users" class="checkbox-label">Restore users and roles</label>
+                    {% if backups and not backups[0].includes_users %}
+                    <small>(Not available for this backup)</small>
+                    {% endif %}
+                </div>
+                
+                <button type="submit">Restore</button>
+            </form>
+        </div>
+        
+        <div class="backup-list">
+            <h2>Available Backups</h2>
+            {% if backups %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date Created</th>
+                        <th>Filename</th>
+                        <th>Size</th>
+                        <th>Contents</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for backup in backups %}
+                    <tr>
+                        <td>{{ backup.created }}</td>
+                        <td>{{ backup.filename }}</td>
+                        <td>{{ (backup.size / 1024)|round(1) }} KB</td>
+                        <td>
+                            {{ backup.sites_count }} sites, 
+                            {{ backup.machines_count }} machines, 
+                            {{ backup.parts_count }} parts
+                            {% if backup.includes_users %}
+                            <br><small>(Includes user data)</small>
+                            {% endif %}
+                        </td>
+                        <td class="actions">
+                            <a href="{{ url_for('download_backup', filename=backup.filename) }}">
+                                <button class="btn-secondary">Export Backup File</button>
+                            </a>
+                            <form action="{{ url_for('delete_backup_route', filename=backup.filename) }}" method="POST" 
+                                  onsubmit="return confirm('Are you sure you want to delete this backup? This cannot be undone.');">
+                                <button type="submit" class="btn-delete">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>No backups available.</p>
+            {% endif %}
+        </div>
+    </div>
+    <script>
+        // Update the restore_users checkbox state when selecting a backup
+        document.getElementById('backup_file').addEventListener('change', function() {
+            var selectedOption = this.options[this.selectedIndex];
+            var restoreUsersCheckbox = document.getElementById('restore_users');
+            
+            // Check all options to find if the selected backup includes users
+            var backups = {{ backups|tojson }};
+            var selectedFilename = this.value;
+            
+            if (selectedFilename) {
+                var selectedBackup = backups.find(backup => backup.filename === selectedFilename);
+                
+                if (selectedBackup) {
+                    restoreUsersCheckbox.disabled = !selectedBackup.includes_users;
+                    restoreUsersCheckbox.checked = selectedBackup.includes_users;
+                    
+                    if (!selectedBackup.includes_users) {
+                        var label = document.querySelector('label[for="restore_users"]');
+                        if (label.nextElementSibling && label.nextElementSibling.tagName === 'SMALL') {
+                            label.nextElementSibling.textContent = '(Not available for this backup)';
+                        } else {
+                            var small = document.createElement('small');
+                            small.textContent = '(Not available for this backup)';
+                            label.insertAdjacentElement('afterend', small);
+                        }
+                    } else {
+                        var label = document.querySelector('label[for="restore_users"]');
+                        if (label.nextElementSibling && label.nextElementSibling.tagName === 'SMALL') {
+                            label.nextElementSibling.textContent = '';
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -231,6 +231,13 @@ class Permissions:
     MAINTENANCE_SCHEDULE = 'maintenance.schedule'
     MAINTENANCE_RECORD = 'maintenance.record'
     
+    # Backup management
+    BACKUP_VIEW = 'backup.view'
+    BACKUP_CREATE = 'backup.create'
+    BACKUP_RESTORE = 'backup.restore'
+    BACKUP_EXPORT = 'backup.export'
+    BACKUP_DELETE = 'backup.delete'
+    
     # Administration
     ADMIN_ACCESS = 'admin.access'
     ADMIN_FULL = 'admin.full'
@@ -314,7 +321,7 @@ class Site(db.Model):
     machines = db.relationship('Machine', backref='site', lazy=True, cascade="all, delete-orphan")
     enable_notifications = db.Column(db.Boolean, default=False)
     contact_email = db.Column(db.String(100))  # Contact email for notifications
-    notification_threshold = db.Column(db.Integer, default=7)  # Days before due date to notify
+    notification_threshold = db.Column(db.Integer, default=30)  # Days before due date to notify
 
     def get_parts_status(self, now=None):
         """Return counts of parts by status (overdue, due_soon, ok)"""
@@ -358,6 +365,7 @@ class Part(db.Model):
     description = db.Column(db.Text)
     machine_id = db.Column(db.Integer, db.ForeignKey('machine.id'), nullable=False)
     maintenance_frequency = db.Column(db.Integer, default=7)  # in days
+    maintenance_unit = db.Column(db.String(10), default='day')  # 'day', 'week', 'month', or 'year'
     last_maintenance = db.Column(db.DateTime, default=datetime.utcnow)
     next_maintenance = db.Column(db.DateTime)
     notification_sent = db.Column(db.Boolean, default=False)  # Track if notification has been sent
@@ -365,7 +373,15 @@ class Part(db.Model):
     invoice_number = db.Column(db.String(50))  # New field for invoice tracking
 
     def __init__(self, **kwargs):
-        super(Part, self).__init__(**kwargs)  # Fix: use **kwargs instead of just kwargs
+        # Extract frequency and unit if provided
+        frequency = kwargs.get('maintenance_frequency', 7)
+        unit = kwargs.get('maintenance_unit', 'day')
+        
+        # Convert to days for internal storage
+        if 'maintenance_frequency' in kwargs and 'maintenance_unit' in kwargs:
+            kwargs['maintenance_frequency'] = self.convert_to_days(frequency, unit)
+        
+        super(Part, self).__init__(**kwargs)
         if 'maintenance_frequency' in kwargs and 'last_maintenance' in kwargs:
             self.update_next_maintenance()
 
@@ -373,6 +389,34 @@ class Part(db.Model):
         """Update next maintenance date and reset notification status"""
         self.next_maintenance = self.last_maintenance + timedelta(days=self.maintenance_frequency)
         self.notification_sent = False  # Reset notification status when maintenance is done
+
+    @staticmethod
+    def convert_to_days(value, unit):
+        """Convert a value from specified unit to days"""
+        value = int(value)
+        if unit == 'day':
+            return value
+        elif unit == 'week':
+            return value * 7
+        elif unit == 'month':
+            return value * 30
+        elif unit == 'year':
+            return value * 365
+        else:
+            return value  # Default to days
+
+    def get_frequency_display(self):
+        """Return a human-readable frequency with appropriate unit"""
+        days = self.maintenance_frequency
+        
+        if days % 365 == 0 and days >= 365:
+            return f"{days // 365} {'year' if days // 365 == 1 else 'years'}"
+        elif days % 30 == 0 and days >= 30:
+            return f"{days // 30} {'month' if days // 30 == 1 else 'months'}"
+        elif days % 7 == 0 and days >= 7:
+            return f"{days // 7} {'week' if days // 7 == 1 else 'weeks'}"
+        else:
+            return f"{days} {'day' if days == 1 else 'days'}"
 
 class MaintenanceLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -463,7 +507,7 @@ def manage_sites():
         location = request.form.get('location')
         contact_email = request.form.get('contact_email')
         enable_notifications = True if request.form.get('enable_notifications') else False
-        notification_threshold = int(request.form.get('notification_threshold', 7))
+        notification_threshold = int(request.form.get('notification_threshold', 30))  # Changed default from 7 to 30
         new_site = Site(name=name, location=location, contact_email=contact_email,
                         enable_notifications=enable_notifications, notification_threshold=notification_threshold)
         db.session.add(new_site)
@@ -483,7 +527,7 @@ def edit_site(site_id):
         site.location = request.form.get('location')
         site.contact_email = request.form.get('contact_email')
         site.enable_notifications = True if request.form.get('enable_notifications') else False
-        site.notification_threshold = int(request.form.get('notification_threshold', 7))
+        site.notification_threshold = int(request.form.get('notification_threshold', 30))  # Changed default from 7 to 30
         db.session.commit()
         flash(f'Site "{site.name}" updated successfully')
         return redirect(url_for('manage_sites'))
@@ -543,13 +587,56 @@ def manage_parts():
         name = request.form.get('name')
         description = request.form.get('description')
         machine_id = request.form.get('machine_id')
-        maintenance_frequency = int(request.form.get('maintenance_frequency'))
-        new_part = Part(name=name, description=description, machine_id=machine_id,
-                        maintenance_frequency=maintenance_frequency, last_maintenance=datetime.utcnow())
+        
+        # Get frequency and unit from form
+        maintenance_frequency = int(request.form.get('maintenance_frequency', 7))
+        maintenance_unit = request.form.get('maintenance_unit', 'day')
+        
+        # Check if maintenance_unit column exists before using it
+        try:
+            # Convert to days based on unit
+            days = Part.convert_to_days(maintenance_frequency, maintenance_unit)
+            
+            # Create new part with maintenance_unit
+            new_part = Part(
+                name=name, 
+                description=description, 
+                machine_id=machine_id,
+                maintenance_frequency=days,
+                maintenance_unit=maintenance_unit,
+                last_maintenance=datetime.utcnow()
+            )
+        except Exception as e:
+            # Fallback if maintenance_unit column doesn't exist
+            app.logger.error(f"Error using maintenance_unit: {str(e)}")
+            # Create part without maintenance_unit, using direct days value
+            if maintenance_unit == 'week':
+                maintenance_frequency *= 7
+            elif maintenance_unit == 'month':
+                maintenance_frequency *= 30
+            elif maintenance_unit == 'year':
+                maintenance_frequency *= 365
+                
+            new_part = Part(
+                name=name, 
+                description=description, 
+                machine_id=machine_id,
+                maintenance_frequency=maintenance_frequency,
+                last_maintenance=datetime.utcnow()
+            )
+            
         db.session.add(new_part)
         db.session.commit()
         flash('Part added successfully')
-    parts = Part.query.all()
+        
+    try:
+        parts = Part.query.all()
+    except Exception as e:
+        # Handle the case when the column doesn't exist
+        app.logger.error(f"Error querying parts: {str(e)}")
+        flash("Database schema needs to be updated. Please run the add_maintenance_unit.py script.")
+        parts = []
+        
     machines = Machine.query.all()
     return render_template('admin_parts.html', parts=parts, machines=machines)
 
@@ -563,7 +650,15 @@ def edit_part(part_id):
         part.name = request.form.get('name')
         part.description = request.form.get('description')
         part.machine_id = request.form.get('machine_id')
-        part.maintenance_frequency = int(request.form.get('maintenance_frequency'))
+        
+        # Get frequency and unit from form
+        frequency = int(request.form.get('maintenance_frequency'))
+        unit = request.form.get('maintenance_unit', 'day')
+        
+        # Convert to days based on unit
+        part.maintenance_frequency = Part.convert_to_days(frequency, unit)
+        part.maintenance_unit = unit
+        
         part.last_maintenance = datetime.utcnow()
         part.update_next_maintenance()
         db.session.commit()
@@ -888,14 +983,19 @@ def init_db():
                               Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT, Permissions.SITES_DELETE, Permissions.SITES_VIEW_ASSIGNED,
                               Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
                               Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
-                              Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD
+                              Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD,
+                              # Add backup permissions to administrator role
+                              Permissions.BACKUP_VIEW, Permissions.BACKUP_CREATE, Permissions.BACKUP_RESTORE, 
+                              Permissions.BACKUP_EXPORT, Permissions.BACKUP_DELETE
                           ]))
         manager_role = Role(name='Manager', description='Can manage sites and view all data',
                             permissions=','.join([
                                 Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT, Permissions.SITES_DELETE,
                                 Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
                                 Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
-                                Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD
+                                Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD,
+                                # Managers can view and create backups, but not restore or delete them
+                                Permissions.BACKUP_VIEW, Permissions.BACKUP_CREATE, Permissions.BACKUP_EXPORT
                             ]))
         technician_role = Role(name='Technician', description='Can update maintenance records for assigned sites',
                                permissions=','.join([
@@ -1209,6 +1309,8 @@ def update_db_schema():
             missing_part_columns.append('last_maintained_by')
         if 'invoice_number' not in part_columns:
             missing_part_columns.append('invoice_number')
+        if 'maintenance_unit' not in part_columns:
+            missing_part_columns.append('maintenance_unit')
         
         if missing_part_columns:
             # Add missing columns to the tables
@@ -1218,6 +1320,8 @@ def update_db_schema():
                         conn.execute(db.text(f'ALTER TABLE part ADD COLUMN {column} VARCHAR(100)'))
                     elif column == 'invoice_number':
                         conn.execute(db.text(f'ALTER TABLE part ADD COLUMN {column} VARCHAR(50)'))
+                    elif column == 'maintenance_unit':
+                        conn.execute(db.text(f'ALTER TABLE part ADD COLUMN {column} VARCHAR(10) DEFAULT "day"'))
                 conn.commit()
             print(f"Added new columns to Part table: {', '.join(missing_part_columns)}")
         else:
@@ -1287,6 +1391,105 @@ def machine_history(machine_id):
             flash(f'Could not create maintenance log table: {str(create_error)}')
     
     return render_template('machine_history.html', machine=machine, logs=logs)
+
+# Import backup utilities
+from backup_utils import backup_database, restore_database, list_backups, delete_backup
+import os
+
+# Update backup routes to use permission checking
+@app.route('/admin/backups')
+@login_required
+def admin_backups():
+    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_VIEW)):
+        flash('Access denied. You need permission to view backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    backups = list_backups()
+    return render_template('admin_backups.html', backups=backups)
+
+@app.route('/admin/backups/create', methods=['POST'])
+@login_required
+def create_backup():
+    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_CREATE)):
+        flash('Access denied. You need permission to create backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    backup_name = request.form.get('backup_name', '')
+    include_users = 'include_users' in request.form
+    
+    try:
+        backup_path = backup_database(include_users=include_users, backup_name=backup_name)
+        flash(f'Backup created successfully: {os.path.basename(backup_path)}')
+    except Exception as e:
+        flash(f'Error creating backup: {str(e)}', 'error')
+    
+    return redirect(url_for('admin_backups'))
+
+@app.route('/admin/backups/restore', methods=['POST'])
+@login_required
+def restore_backup():
+    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_RESTORE)):
+        flash('Access denied. You need permission to restore backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    backup_file = request.form.get('backup_file', '')
+    restore_users = 'restore_users' in request.form
+    
+    if not backup_file:
+        flash('No backup file selected', 'error')
+        return redirect(url_for('admin_backups'))
+    
+    backups_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'backups')
+    backup_path = os.path.join(backups_dir, backup_file)
+    
+    try:
+        stats = restore_database(backup_path, restore_users=restore_users)
+        
+        # Generate success message with statistics
+        message = 'Restore completed successfully. '
+        message += f'Created: {stats["sites_created"]} sites, {stats["machines_created"]} machines, {stats["parts_created"]} parts. '
+        message += f'Updated: {stats["sites_updated"]} sites, {stats["machines_updated"]} machines, {stats["parts_updated"]} parts. '
+        message += f'Restored: {stats["logs_restored"]} maintenance logs'
+        
+        if restore_users:
+            message += f', {stats["roles_restored"]} roles, {stats["users_restored"]} users, {stats["assignments_restored"]} site assignments'
+        
+        if stats['errors']:
+            message += f'. There were {len(stats["errors"])} errors.'
+            for i, error in enumerate(stats['errors'][:3]):  # Show first 3 errors
+                message += f' Error {i+1}: {error}.'
+            if len(stats['errors']) > 3:
+                message += ' ...'
+        
+        flash(message)
+    except Exception as e:
+        flash(f'Error restoring backup: {str(e)}', 'error')
+    
+    return redirect(url_for('admin_backups'))
+
+@app.route('/admin/backups/download/<filename>')
+@login_required
+def download_backup(filename):
+    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_EXPORT)):
+        flash('Access denied. You need permission to export backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    backups_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'backups')
+    return send_from_directory(backups_dir, filename, as_attachment=True)
+
+@app.route('/admin/backups/delete/<filename>', methods=['POST'])
+@login_required
+def delete_backup_route(filename):
+    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_DELETE)):
+        flash('Access denied. You need permission to delete backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if delete_backup(filename):
+        flash(f'Backup "{filename}" deleted successfully')
+    else:
+        flash(f'Error deleting backup "{filename}"', 'error')
+    
+    return redirect(url_for('admin_backups'))
 
 if __name__ == '__main__':
     ensure_env_file()
