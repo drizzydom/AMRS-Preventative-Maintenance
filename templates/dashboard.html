@@ -86,6 +86,10 @@
             color: #666;
             margin-bottom: 10px;
         }
+        .machine-number, .machine-serial {
+            color: #666;
+            margin-bottom: 5px;
+        }
         .parts-list {
             margin-top: 15px;
             display: block;
@@ -278,6 +282,22 @@
         .machine.expanded .parts-list {
             display: block;
         }
+
+        /* Add to existing styles */
+        .history-btn {
+            display: inline-block;
+            padding: 5px 10px;
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.8em;
+            margin-right: 5px;
+        }
+        .history-btn:hover {
+            background-color: #138496;
+        }
     </style>
 </head>
 <body>
@@ -405,15 +425,32 @@
                                     {{ machine_status_text }}
                                 </span>
                             </h3>
-                            <button class="toggle-btn" onclick="toggleMachine({{ machine.id }})">Expand</button>
+                            <div>
+                                <a href="{{ url_for('machine_history', machine_id=machine.id) }}" class="history-btn" title="View Maintenance History">
+                                    History
+                                </a>
+                                <button class="toggle-btn" onclick="toggleMachine({{ machine.id }})">Expand</button>
+                            </div>
                         </div>
                         <div class="machine-model">Model: {{ machine.model }}</div>
+                        <!-- Debug data -->
+                        <div style="background-color:#eee;padding:5px;margin:5px 0;font-size:0.8em;">
+                            <strong>Debug:</strong> 
+                            machine_number: "{{ machine.machine_number }}" ({% if machine.machine_number %}set{% else %}not set{% endif %}),
+                            serial_number: "{{ machine.serial_number }}" ({% if machine.serial_number %}set{% else %}not set{% endif %})
+                        </div>
+                        <!-- Original conditional display -->
+                        {% if machine.machine_number %}
+                        <div class="machine-number">Number: {{ machine.machine_number }}</div>
+                        {% endif %}
+                        {% if machine.serial_number %}
+                        <div class="machine-serial">Serial: {{ machine.serial_number }}</div>
+                        {% endif %}
                         
                         <!-- SIMPLIFIED: Status summary with consistent status classes -->
                         <div class="status-summary">
                             {% if overdue_parts|length > 0 %}
                                 <div style="background-color: #f8d7da; padding: 10px; border-radius: 4px;">
-                                    <strong>Maintenance Required</strong>
                                     <p>{{ overdue_parts|length }} component(s) overdue for maintenance:</p>
                                     <ul>
                                         {% for part in overdue_parts %}
@@ -424,7 +461,6 @@
                                 </div>
                             {% elif due_soon_parts|length > 0 %}
                                 <div style="background-color: #fff3cd; padding: 10px; border-radius: 4px;">
-                                    <strong>Maintenance Due Soon</strong>
                                     <p>{{ due_soon_parts|length }} component(s) need maintenance soon:</p>
                                     <ul>
                                         {% for part in due_soon_parts %}
@@ -445,7 +481,6 @@
                         <div class="parts-list">
                             {% for part in machine.parts %}
                                 {% set days_until = (part.next_maintenance - now).days %}
-                                
                                 {% if days_until < 0 %}
                                     {% set status_class = "maintenance-urgent" %}
                                     {% set status_text = "OVERDUE" %}
@@ -465,6 +500,12 @@
                                     <div class="maintenance-info">
                                         <div>Maintenance Every: {{ part.maintenance_frequency }} days</div>
                                         <div>Last: {{ part.last_maintenance.strftime('%Y-%m-%d') }}</div>
+                                        {% if part.last_maintained_by %}
+                                        <div>Maintained By: {{ part.last_maintained_by }}</div>
+                                        {% endif %}
+                                        {% if part.invoice_number %}
+                                        <div>Invoice: {{ part.invoice_number }}</div>
+                                        {% endif %}
                                         <div>Next: {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                                         {% if days_until < 0 %}
                                             <div><strong style="color:#dc3545">OVERDUE by {{ days_until|abs }} days</strong></div>
@@ -473,15 +514,14 @@
                                         {% else %}
                                             <div><strong style="color:#28a745">Due in {{ days_until }} days</strong></div>
                                         {% endif %}
-                                        
-                                        {% if current_user.has_permission('maintenance.record') %}
-                                            <div class="part-actions">
-                                                <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="POST">
-                                                    <button type="submit" class="maintenance-btn">Record Maintenance</button>
-                                                </form>
-                                            </div>
-                                        {% endif %}
                                     </div>
+                                    {% if current_user.has_permission('maintenance.record') %}
+                                    <div class="part-actions">
+                                        <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="maintenance-btn" style="text-decoration: none; display: inline-block;">
+                                            Record Maintenance
+                                        </a>
+                                    </div>
+                                    {% endif %}
                                 </div>
                             {% endfor %}
                         </div>
@@ -558,7 +598,6 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Collapse all machines by default and ensure proper display
             document.querySelectorAll('.machine').forEach(machine => {
-                // Remove any conflicting classes
                 machine.classList.remove('expanded');
                 machine.classList.add('collapsed');
                 

@@ -348,6 +348,9 @@ class Machine(db.Model):
     model = db.Column(db.String(100))
     site_id = db.Column(db.Integer, db.ForeignKey('site.id'), nullable=False)
     parts = db.relationship('Part', backref='machine', lazy=True, cascade="all, delete-orphan")
+    machine_number = db.Column(db.String(100))  # New column for machine number
+    serial_number = db.Column(db.String(100))  # New column for serial number
+    maintenance_logs = db.relationship('MaintenanceLog', backref='machine', lazy=True, cascade="all, delete-orphan")
 
 class Part(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -358,9 +361,11 @@ class Part(db.Model):
     last_maintenance = db.Column(db.DateTime, default=datetime.utcnow)
     next_maintenance = db.Column(db.DateTime)
     notification_sent = db.Column(db.Boolean, default=False)  # Track if notification has been sent
+    last_maintained_by = db.Column(db.String(100))  # New field for who performed maintenance
+    invoice_number = db.Column(db.String(50))  # New field for invoice tracking
 
     def __init__(self, **kwargs):
-        super(Part, self).__init__(**kwargs)
+        super(Part, self).__init__(**kwargs)  # Fix: use **kwargs instead of just kwargs
         if 'maintenance_frequency' in kwargs and 'last_maintenance' in kwargs:
             self.update_next_maintenance()
 
@@ -368,6 +373,18 @@ class Part(db.Model):
         """Update next maintenance date and reset notification status"""
         self.next_maintenance = self.last_maintenance + timedelta(days=self.maintenance_frequency)
         self.notification_sent = False  # Reset notification status when maintenance is done
+
+class MaintenanceLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machine.id'), nullable=False)
+    part_id = db.Column(db.Integer, db.ForeignKey('part.id'), nullable=False)
+    performed_by = db.Column(db.String(100), nullable=False)
+    invoice_number = db.Column(db.String(50))
+    maintenance_date = db.Column(db.DateTime, default=datetime.utcnow)
+    notes = db.Column(db.Text)
+    
+    # Reference to the part to track which part was maintained
+    part = db.relationship('Part', backref='maintenance_logs')
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -422,7 +439,7 @@ def dashboard():
     return render_template('dashboard.html', 
                           sites=sites, 
                           machines=Machine.query.all(), 
-                          now=now,
+                          now=now, 
                           is_admin=current_user.is_admin,
                           current_user=current_user)
 
@@ -481,8 +498,16 @@ def manage_machines():
     if request.method == 'POST':
         name = request.form.get('name')
         model = request.form.get('model')
+        machine_number = request.form.get('machine_number')
+        serial_number = request.form.get('serial_number')
         site_id = request.form.get('site_id')
-        new_machine = Machine(name=name, model=model, site_id=site_id)
+        new_machine = Machine(
+            name=name, 
+            model=model, 
+            machine_number=machine_number,
+            serial_number=serial_number,
+            site_id=site_id
+        )
         db.session.add(new_machine)
         db.session.commit()
         flash('Machine added successfully')
@@ -499,6 +524,8 @@ def edit_machine(machine_id):
     if request.method == 'POST':
         machine.name = request.form.get('name')
         machine.model = request.form.get('model')
+        machine.machine_number = request.form.get('machine_number')  # Update machine number
+        machine.serial_number = request.form.get('serial_number')    # Update serial number
         machine.site_id = request.form.get('site_id')
         db.session.commit()
         flash(f'Machine "{machine.name}" updated successfully')
@@ -582,18 +609,58 @@ def delete_part(part_id):
     flash(f'Part "{part.name}" has been deleted')
     return redirect(url_for('manage_parts'))
 
-@app.route('/admin/parts/update-maintenance/<int:part_id>', methods=['POST'])
+@app.route('/admin/parts/update-maintenance/<int:part_id>', methods=['GET', 'POST'])
 @login_required
 def update_maintenance(part_id):
     if not current_user.is_admin and not current_user.has_permission(Permissions.MAINTENANCE_RECORD):
         flash('Access denied. You need permission to record maintenance.')
         return redirect(url_for('dashboard'))
+    
     part = Part.query.get_or_404(part_id)
-    part.last_maintenance = datetime.utcnow()
-    part.update_next_maintenance()
-    db.session.commit()
-    flash(f'Maintenance for "{part.name}" has been updated')
-    return redirect(url_for('manage_parts'))
+    
+    if request.method == 'GET':
+        # Display form for entering maintenance details
+        return render_template('record_maintenance.html', part=part)
+    
+    elif request.method == 'POST':
+        # Update part maintenance information
+        maintenance_date = datetime.utcnow()
+        
+        # Get form values - prioritize full name over username
+        performed_by = request.form.get('maintained_by', '').strip()
+        if not performed_by:
+            performed_by = current_user.full_name or current_user.username
+            
+        invoice_number = request.form.get('invoice_number', '')
+        notes = request.form.get('notes', '')
+        
+        part.last_maintenance = maintenance_date
+        part.last_maintained_by = performed_by
+        part.invoice_number = invoice_number
+        part.update_next_maintenance()
+        db.session.commit()
+        
+        # Create maintenance log entry
+        log = MaintenanceLog(
+            machine_id=part.machine_id,
+            part_id=part.id,
+            performed_by=performed_by,
+            invoice_number=invoice_number,
+            maintenance_date=maintenance_date,
+            notes=notes
+        )
+        
+        db.session.add(log)
+        db.session.commit()
+        
+        flash(f'Maintenance for "{part.name}" has been recorded')
+        
+        # Check if the request came from dashboard or admin page
+        referrer = request.referrer
+        if referrer and 'dashboard' in referrer:
+            return redirect(url_for('dashboard'))
+        else:
+            return redirect(url_for('manage_parts'))
 
 # New routes for Role management
 @app.route('/admin/roles', methods=['GET', 'POST'])
@@ -646,7 +713,6 @@ def delete_role(role_id):
     if role.users:
         flash(f'Cannot delete role "{role.name}" because it has assigned users')
         return redirect(url_for('manage_roles'))
-    
     role_name = role.name
     db.session.delete(role)
     db.session.commit()
@@ -714,6 +780,7 @@ def check_for_due_soon_parts():
         if not site.contact_email:
             app.logger.info(f"Site {site.name} has notifications enabled but no contact email")
             continue
+        
         overdue_parts = []
         due_soon_parts = []
         parts_to_mark = []  # Parts to mark as notified
@@ -723,7 +790,7 @@ def check_for_due_soon_parts():
                 # Skip parts that have already had notifications sent
                 if part.notification_sent:
                     continue
-                    
+                
                 days_until = (part.next_maintenance - now).days
                 
                 if days_until < 0:
@@ -752,7 +819,7 @@ def check_for_due_soon_parts():
                 'due_soon_parts': due_soon_parts,
                 'parts_to_mark': parts_to_mark
             })
-    
+
     # Send emails for each site
     sent_count = 0
     for site_info in sites_with_notifications:
@@ -763,7 +830,6 @@ def check_for_due_soon_parts():
         
         # Create email content
         subject = f"Maintenance Alert: {site.name}"
-        
         # Render email template
         html_body = render_template(
             'email/maintenance_alert.html',
@@ -783,15 +849,13 @@ def check_for_due_soon_parts():
             mail.send(msg)
             app.logger.info(f"Maintenance notification sent to {site.contact_email} for site {site.name}")
             sent_count += 1
-            
+
             # Mark parts as notified
             for part in parts_to_mark:
                 part.notification_sent = True
-            
             db.session.commit()
         except Exception as e:
             app.logger.error(f"Failed to send notification email: {str(e)}")
-    
     return sent_count
 
 # Add the missing route for checking notifications
@@ -815,7 +879,7 @@ def init_db():
     db.create_all()
     admin = User.query.filter_by(username='admin').first()
     if not admin:
-        # Create roles first with detailed permissions
+        # Create roles first
         admin_role = Role(name='Administrator', description='Full system access',
                           permissions=','.join([
                               Permissions.ADMIN_ACCESS, Permissions.ADMIN_FULL,
@@ -824,7 +888,7 @@ def init_db():
                               Permissions.SITES_VIEW, Permissions.SITES_CREATE, Permissions.SITES_EDIT, Permissions.SITES_DELETE, Permissions.SITES_VIEW_ASSIGNED,
                               Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
                               Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
-                              Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_SCHEDULE, Permissions.MAINTENANCE_RECORD
+                              Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD
                           ]))
         manager_role = Role(name='Manager', description='Can manage sites and view all data',
                             permissions=','.join([
@@ -865,11 +929,11 @@ def init_db():
 
         # Current date for reference
         now = datetime.utcnow()
-        
+
         # Create test parts with varying maintenance frequencies and past maintenance dates
         parts = [
             # Overdue parts (past maintenance date)
-            Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id,
+            Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id, 
                  maintenance_frequency=7, last_maintenance=now - timedelta(days=10)),  # 3 days overdue
             Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,
                  maintenance_frequency=14, last_maintenance=now - timedelta(days=20)),  # 6 days overdue
@@ -879,6 +943,11 @@ def init_db():
                  maintenance_frequency=21, last_maintenance=now - timedelta(days=15)),  # Due in 6 days
             Part(name='Tailstock', description='Supports workpiece end', machine_id=machine2.id,
                  maintenance_frequency=30, last_maintenance=now - timedelta(days=22)),  # Due in 8 days
+            # Due soon parts (maintenance due within 14 days)
+            Part(name='Servo Motor', description='Axis movement', machine_id=machine4.id,
+                 maintenance_frequency=60, last_maintenance=now - timedelta(days=58)),  # Due in 2 days
+            Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,
+                 maintenance_frequency=14, last_maintenance=now - timedelta(days=9)),  # Due in 5 days
             # OK parts (maintenance due beyond 14 days)
             Part(name='Drill Bit', description='Cutting tool', machine_id=machine3.id,
                  maintenance_frequency=45, last_maintenance=now - timedelta(days=20)),  # Due in 25 days
@@ -944,7 +1013,7 @@ def check_notification_settings():
     if not sites:
         print("No sites found in database.")
         return
-                
+    
     print("\nNotification Settings for Sites:")
     print("--------------------------------------")
     for site in sites:
@@ -952,10 +1021,12 @@ def check_notification_settings():
         print(f"  Notifications Enabled: {site.enable_notifications}")
         print(f"  Contact Email: {site.contact_email or 'NOT SET'}")
         print(f"  Notification Threshold: {site.notification_threshold} days")
+        
         now = datetime.utcnow()
         parts_notified = 0
         parts_overdue = 0
         parts_due_soon = 0
+        
         # Count parts by status
         for machine in site.machines:
             for part in machine.parts:
@@ -967,6 +1038,7 @@ def check_notification_settings():
                         parts_overdue += 1
                     elif days_until <= site.notification_threshold:
                         parts_due_soon += 1
+        
         print(f"  Parts Status Summary:")
         print(f"    - Overdue: {parts_overdue}")
         print(f"    - Due soon: {parts_due_soon}")
@@ -984,7 +1056,6 @@ def create_excel_template_cmd(output_file):
 @click.argument("file_path")
 def import_excel_cmd(file_path):
     """Import maintenance data from an Excel file.
-    
     FILE_PATH is the path to the Excel file to import.
     """
     from import_excel import import_excel
@@ -1019,7 +1090,6 @@ def test_email():
         sample_data = {}
         if include_samples:
             now = datetime.utcnow()
-            
             # Sample overdue parts
             sample_data['overdue_parts'] = [
                 {
@@ -1037,7 +1107,6 @@ def test_email():
                     'part_id': 2
                 }
             ]
-            
             # Sample due-soon parts
             sample_data['due_soon_parts'] = [
                 {
@@ -1055,13 +1124,11 @@ def test_email():
                     'part_id': 4
                 }
             ]
-            
             # Sample site info
             sample_data['site'] = {
                 'name': site_name,
                 'location': site_location
             }
-            
             sample_data['threshold'] = notification_threshold
         
         try:
@@ -1077,19 +1144,151 @@ def test_email():
             flash(f'Test email sent to {recipient} successfully!')
         except Exception as e:
             flash(f'Failed to send test email: {str(e)}')
-        
         return redirect(url_for('test_email'))
+    else:
+        # Get current email configuration
+        email_config = {
+            'MAIL_SERVER': app.config['MAIL_SERVER'],
+            'MAIL_PORT': app.config['MAIL_PORT'],
+            'MAIL_USE_TLS': app.config['MAIL_USE_TLS'],
+            'MAIL_USERNAME': app.config['MAIL_USERNAME'],
+            'MAIL_DEFAULT_SENDER': app.config['MAIL_DEFAULT_SENDER']
+        }
+        
+        return render_template('admin_test_email.html', config=email_config)
+
+@app.cli.command("update-db-schema")
+def update_db_schema():
+    """Update database schema with new fields without losing data."""
+    with app.app_context():
+        inspector = db.inspect(db.engine)
+        
+        # Check if maintenance_log table exists
+        tables = inspector.get_table_names()
+        if 'maintenance_log' not in tables:
+            # Create the maintenance_log table
+            with db.engine.connect() as conn:
+                conn.execute(db.text('''
+                    CREATE TABLE maintenance_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        machine_id INTEGER NOT NULL,
+                        part_id INTEGER NOT NULL,
+                        performed_by VARCHAR(100) NOT NULL,
+                        invoice_number VARCHAR(50),
+                        maintenance_date DATETIME NOT NULL,
+                        notes TEXT,
+                        FOREIGN KEY (machine_id) REFERENCES machine (id),
+                        FOREIGN KEY (part_id) REFERENCES part (id)
+                    )
+                '''))
+                conn.commit()
+            print("Created maintenance_log table")
+        
+        # Check Machine table columns
+        machine_columns = [col['name'] for col in inspector.get_columns('machine')]
+        missing_machine_columns = []
+        if 'machine_number' not in machine_columns:
+            missing_machine_columns.append('machine_number')
+        if 'serial_number' not in machine_columns:
+            missing_machine_columns.append('serial_number')
+        
+        if missing_machine_columns:
+            # Add new columns to the table using the modern approach
+            with db.engine.connect() as conn:
+                for column in missing_machine_columns:
+                    conn.execute(db.text(f'ALTER TABLE machine ADD COLUMN {column} VARCHAR(100)'))
+                conn.commit()
+            print(f"Added new columns to Machine table: {', '.join(missing_machine_columns)}")
+        else:
+            print("Machine table schema is already up to date.")
+        
+        # Check Part table columns
+        part_columns = [col['name'] for col in inspector.get_columns('part')]
+        missing_part_columns = []
+        if 'last_maintained_by' not in part_columns:
+            missing_part_columns.append('last_maintained_by')
+        if 'invoice_number' not in part_columns:
+            missing_part_columns.append('invoice_number')
+        
+        if missing_part_columns:
+            # Add missing columns to the tables
+            with db.engine.connect() as conn:
+                for column in missing_part_columns:
+                    if column == 'last_maintained_by':
+                        conn.execute(db.text(f'ALTER TABLE part ADD COLUMN {column} VARCHAR(100)'))
+                    elif column == 'invoice_number':
+                        conn.execute(db.text(f'ALTER TABLE part ADD COLUMN {column} VARCHAR(50)'))
+                conn.commit()
+            print(f"Added new columns to Part table: {', '.join(missing_part_columns)}")
+        else:
+            print("Part table schema is already up to date.")
+
+@app.route('/admin/debug/schema')
+@login_required
+def debug_schema():
+    """Debug route to display database schema information."""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
     
-    # Get current email configuration
-    email_config = {
-        'MAIL_SERVER': app.config['MAIL_SERVER'],
-        'MAIL_PORT': app.config['MAIL_PORT'],
-        'MAIL_USE_TLS': app.config['MAIL_USE_TLS'],
-        'MAIL_USERNAME': app.config['MAIL_USERNAME'],
-        'MAIL_DEFAULT_SENDER': app.config['MAIL_DEFAULT_SENDER']
-    }
+    inspector = db.inspect(db.engine)
+    tables = {}
     
-    return render_template('admin_test_email.html', config=email_config)
+    for table_name in inspector.get_table_names():
+        columns = []
+        for column in inspector.get_columns(table_name):
+            columns.append({
+                'name': column['name'],
+                'type': str(column['type']),
+                'nullable': column['nullable']
+            })
+        tables[table_name] = columns
+    
+    return render_template('debug_schema.html', tables=tables)
+
+@app.route('/machine/<int:machine_id>/history')
+@login_required
+def machine_history(machine_id):
+    machine = Machine.query.get_or_404(machine_id)
+    
+    # Check if user has access to this machine's site
+    if not current_user.is_admin and not current_user.has_permission(Permissions.MACHINES_VIEW):
+        # For non-admins without general view permission, check if they have access to the site
+        if machine.site not in current_user.sites:
+            flash('Access denied. You do not have permission to view this machine.')
+            return redirect(url_for('dashboard'))
+    
+    # Get maintenance logs sorted by date (newest first)
+    logs = []
+    try:
+        logs = MaintenanceLog.query.filter_by(machine_id=machine_id).order_by(MaintenanceLog.maintenance_date.desc()).all()
+    except Exception as e:
+        flash(f'Error retrieving maintenance history. Database might need to be updated: {str(e)}')
+        # Create the table if it doesn't exist
+        try:
+            with app.app_context():
+                with db.engine.connect() as conn:
+                    conn.execute(db.text('''
+                        CREATE TABLE IF NOT EXISTS maintenance_log (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            machine_id INTEGER NOT NULL,
+                            part_id INTEGER NOT NULL,
+                            performed_by VARCHAR(100) NOT NULL,
+                            invoice_number VARCHAR(50),
+                            maintenance_date DATETIME NOT NULL,
+                            notes TEXT,
+                            FOREIGN KEY (machine_id) REFERENCES machine (id),
+                            FOREIGN KEY (part_id) REFERENCES part (id)
+                        )
+                    '''))
+                    conn.commit()
+            flash('Maintenance log table was created. Please try again.')
+        except Exception as create_error:
+            flash(f'Could not create maintenance log table: {str(create_error)}')
+    
+    return render_template('machine_history.html', machine=machine, logs=logs)
 
 if __name__ == '__main__':
+    ensure_env_file()
+    ensure_email_templates()
     app.run(debug=True, host='0.0.0.0', port=5050)

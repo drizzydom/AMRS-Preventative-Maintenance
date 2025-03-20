@@ -23,6 +23,8 @@ def create_template(output_file="maintenance_import_template.xlsx"):
         machines_df = pd.DataFrame({
             'name': ['Machine 1', 'Machine 2', 'Machine 3'],
             'model': ['Model A', 'Model B', 'Model C'],
+            'machine_number': ['M001', 'M002', 'M003'],
+            'serial_number': ['SN12345', 'SN67890', 'SN11223'],
             'site_name': ['Example Site 1', 'Example Site 1', 'Example Site 2']
         })
         machines_df.to_excel(writer, sheet_name='Machines', index=False)
