@@ -15,7 +15,7 @@ def create_template(output_file="maintenance_import_template.xlsx"):
             'location': ['123 Main St', '456 Elm St'],
             'contact_email': ['site1@example.com', 'site2@example.com'],
             'enable_notifications': [True, False],
-            'notification_threshold': [7, 14]
+            'notification_threshold': [30, 45]  # Changed from [7, 14] to [30, 45]
         })
         sites_df.to_excel(writer, sheet_name='Sites', index=False)
         

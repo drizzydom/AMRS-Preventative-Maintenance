@@ -152,8 +152,16 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="maintenance_frequency">Maintenance Frequency (days)</label>
-                    <input type="number" id="maintenance_frequency" name="maintenance_frequency" min="1" max="365" required>
+                    <label for="maintenance_frequency">Maintenance Frequency</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="maintenance_frequency" name="maintenance_frequency" min="1" value="7" required style="flex: 1;">
+                        <select id="maintenance_unit" name="maintenance_unit" style="flex: 1;">
+                            <option value="day">Days</option>
+                            <option value="week">Weeks</option>
+                            <option value="month">Months</option>
+                            <option value="year">Years</option>
+                        </select>
+                    </div>
                 </div>
                 <button type="submit">Add Part</button>
             </form>
@@ -184,7 +192,7 @@
                         <td>{{ part.description }}</td>
                         <td>{{ part.machine.name }}</td>
                         <td>{{ part.machine.site.name }}</td>
-                        <td>{{ part.maintenance_frequency }} days</td>
+                        <td>{{ part.get_frequency_display() }}</td>
                         <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
                         <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                         <td class="actions">

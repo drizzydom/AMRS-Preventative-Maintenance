@@ -498,7 +498,13 @@
                                         <span>{{ status_text }}</span>
                                     </div>
                                     <div class="maintenance-info">
-                                        <div>Maintenance Every: {{ part.maintenance_frequency }} days</div>
+                                        <div>Maintenance Every: 
+                                            {% if part.get_frequency_display is defined %}
+                                                {{ part.get_frequency_display() }}
+                                            {% else %}
+                                                {{ part.maintenance_frequency }} days
+                                            {% endif %}
+                                        </div>
                                         <div>Last: {{ part.last_maintenance.strftime('%Y-%m-%d') }}</div>
                                         {% if part.last_maintained_by %}
                                         <div>Maintained By: {{ part.last_maintained_by }}</div>
@@ -509,7 +515,7 @@
                                         <div>Next: {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                                         {% if days_until < 0 %}
                                             <div><strong style="color:#dc3545">OVERDUE by {{ days_until|abs }} days</strong></div>
-                                        {% elif days_until <= 14 %}
+                                        {% elif days_until <= site.notification_threshold %}
                                             <div><strong style="color:#ffc107">Due in {{ days_until }} days</strong></div>
                                         {% else %}
                                             <div><strong style="color:#28a745">Due in {{ days_until }} days</strong></div>
