@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  maintenance-app:
+    build: .
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./instance:/app/instance  # Persist the database
+      - ./backups:/app/backups    # Persist backups
+      - ./templates:/app/templates # Persist templates
+    restart: unless-stopped
+    environment:
+      - MAIL_SERVER=smtp.example.com
+      - MAIL_PORT=587
+      - MAIL_USE_TLS=True
+      - MAIL_USERNAME=user@example.com
+      - MAIL_PASSWORD=password
+      - MAIL_DEFAULT_SENDER=maintenance@example.com
