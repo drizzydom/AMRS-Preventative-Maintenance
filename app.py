@@ -4,6 +4,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import click  # Add the missing click import
+import secrets  # Add secrets for generating secure tokens
 from datetime import datetime, timedelta
 import logging
 from functools import wraps
@@ -35,17 +36,14 @@ def ensure_env_file():
 def ensure_email_templates():
     templates_dir = os.path.join(BASE_DIR, 'templates')
     email_dir = os.path.join(templates_dir, 'email')
-    
     # Create templates directory if it doesn't exist
     if not os.path.exists(templates_dir):
         os.makedirs(templates_dir, exist_ok=True)
         print(f"Created templates directory: {templates_dir}")
-    
     # Create email directory if it doesn't exist
     if not os.path.exists(email_dir):
         os.makedirs(email_dir, exist_ok=True)
         print(f"Created email templates directory: {email_dir}")
-        
         # Create example template files
         with open(os.path.join(email_dir, 'maintenance_alert.html'), 'w') as f:
             f.write("""<!DOCTYPE html>
@@ -66,9 +64,7 @@ def ensure_email_templates():
 <body>
     <div class="container">
         <h1>Maintenance Alert</h1>
-        
         <p>You are receiving this email because our service has detected that the following machines at <strong>{{ site.name }}</strong> ({{ site.location }}) are due for maintenance soon.</p>
-        
         {% if overdue_parts %}
         <div class="overdue">
             <h2>⚠️ Overdue Maintenance Items</h2>
@@ -79,7 +75,6 @@ def ensure_email_templates():
             </ul>
         </div>
         {% endif %}
-        
         {% if due_soon_parts %}
         <div class="due-soon">
             <h2>🔔 Maintenance Due Soon ({{ threshold }} days)</h2>
@@ -290,13 +285,15 @@ class User(db.Model, UserMixin):
                            backref=db.backref('users', lazy=True))
     email = db.Column(db.String(100))
     full_name = db.Column(db.String(100))
-
+    reset_token = db.Column(db.String(100))
+    reset_token_expiration = db.Column(db.DateTime)
+    
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
-
+    
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-
+    
     def has_permission(self, permission):
         if self.is_admin:
             return True
@@ -313,6 +310,29 @@ class User(db.Model, UserMixin):
             if permission.startswith('admin.') and self.role.has_permission('admin.full'):
                 return True
         return False
+    
+    def generate_reset_token(self):
+        # Generate a secure token for password reset
+        token = secrets.token_urlsafe(32)
+        self.reset_token = token
+        # Token expires after 1 hour
+        self.reset_token_expiration = datetime.utcnow() + timedelta(hours=1)
+        db.session.commit()
+        return token
+    
+    def verify_reset_token(self, token):
+        # Verify the reset token is valid and not expired
+        if self.reset_token != token:
+            return False
+        if not self.reset_token_expiration or self.reset_token_expiration < datetime.utcnow():
+            return False
+        return True
+    
+    def clear_reset_token(self):
+        # Clear the reset token after use
+        self.reset_token = None
+        self.reset_token_expiration = None
+        db.session.commit()
 
 class Site(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1326,6 +1346,27 @@ def update_db_schema():
             print(f"Added new columns to Part table: {', '.join(missing_part_columns)}")
         else:
             print("Part table schema is already up to date.")
+            
+        # Check User table columns
+        user_columns = [col['name'] for col in inspector.get_columns('user')]
+        missing_user_columns = []
+        if 'reset_token' not in user_columns:
+            missing_user_columns.append('reset_token')
+        if 'reset_token_expiration' not in user_columns:
+            missing_user_columns.append('reset_token_expiration')
+        
+        if missing_user_columns:
+            # Add missing columns to the User table
+            with db.engine.connect() as conn:
+                for column in missing_user_columns:
+                    if column == 'reset_token':
+                        conn.execute(db.text(f'ALTER TABLE user ADD COLUMN {column} VARCHAR(100)'))
+                    elif column == 'reset_token_expiration':
+                        conn.execute(db.text(f'ALTER TABLE user ADD COLUMN {column} DATETIME'))
+                conn.commit()
+            print(f"Added new columns to User table: {', '.join(missing_user_columns)}")
+        else:
+            print("User table schema is already up to date.")
 
 @app.route('/admin/debug/schema')
 @login_required
@@ -1467,7 +1508,7 @@ def restore_backup():
     
     return redirect(url_for('admin_backups'))
 
-@app.route('/admin/backups/download/<filename>')
+@app.route('/admin/backups/download/<filename>', methods=['GET'])
 @login_required
 def download_backup(filename):
     if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_EXPORT)):
@@ -1490,6 +1531,122 @@ def delete_backup_route(filename):
         flash(f'Error deleting backup "{filename}"', 'error')
     
     return redirect(url_for('admin_backups'))
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        
+        # Find user by email
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            # Generate reset token
+            token = user.generate_reset_token()
+            
+            # Build reset URL
+            reset_url = url_for('reset_password', user_id=user.id, token=token, _external=True)
+            
+            # Create email
+            subject = "Password Reset Request"
+            html_body = f"""
+            <h1>Password Reset Request</h1>
+            <p>Hello {user.full_name or user.username},</p>
+            <p>You requested to reset your password. Please click the link below to reset your password:</p>
+            <p><a href="{reset_url}">{reset_url}</a></p>
+            <p>This link is only valid for 1 hour.</p>
+            <p>If you did not request a password reset, please ignore this email.</p>
+            """
+            
+            try:
+                # Send email
+                msg = Message(
+                    subject=subject,
+                    recipients=[email],
+                    html=html_body
+                )
+                mail.send(msg)
+                flash("Password reset link has been sent to your email", "success")
+            except Exception as e:
+                app.logger.error(f"Failed to send password reset email: {str(e)}")
+                flash("Failed to send password reset email. Please try again later.", "error")
+        else:
+            # Still show success message even if email not found
+            # This prevents user enumeration attacks
+            flash("If that email is in our system, a password reset link has been sent", "success")
+        
+        return redirect(url_for('login'))
+    
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])
+def reset_password(user_id, token):
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    # Find user
+    user = User.query.get(user_id)
+    
+    # Verify user and token
+    if not user or not user.verify_reset_token(token):
+        flash("The password reset link is invalid or has expired.", "error")
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validate password
+        if not password or len(password) < 8:
+            flash("Password must be at least 8 characters long.", "error")
+            return render_template('reset_password.html', user_id=user_id, token=token)
+        
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return render_template('reset_password.html', user_id=user_id, token=token)
+        
+        # Update password
+        user.set_password(password)
+        # Clear reset token
+        user.clear_reset_token()
+        
+        flash("Your password has been successfully reset. You can now log in with your new password.", "success")
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password.html', user_id=user_id, token=token)
+
+@app.cli.command("add-reset-columns")
+def add_reset_columns_cmd():
+    """Add password reset columns to the user table."""
+    inspector = db.inspect(db.engine)
+    user_columns = [col['name'] for col in inspector.get_columns('user')]
+    
+    columns_added = False
+    
+    # Add columns if they don't exist
+    with db.engine.connect() as conn:
+        if 'reset_token' not in user_columns:
+            print("Adding reset_token column to user table...")
+            conn.execute(db.text("ALTER TABLE user ADD COLUMN reset_token VARCHAR(100)"))
+            columns_added = True
+        else:
+            print("reset_token column already exists")
+            
+        if 'reset_token_expiration' not in user_columns:
+            print("Adding reset_token_expiration column to user table...")
+            conn.execute(db.text("ALTER TABLE user ADD COLUMN reset_token_expiration DATETIME"))
+            columns_added = True
+        else:
+            print("reset_token_expiration column already exists")
+        
+        if columns_added:
+            conn.commit()
+            print("Password reset columns added successfully!")
+        else:
+            print("No changes needed. Password reset columns already exist.")
 
 if __name__ == '__main__':
     ensure_env_file()
