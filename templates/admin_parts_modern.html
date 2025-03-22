@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Parts - Maintenance Tracker{% endblock %}
+
+{% block header_title %}Manage Parts{% endblock %}
+
+{% block content %}
+<div class="parts-management">
+    <!-- Add new part card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3>Add New Part</h3>
+        </div>
+        <div class="card-body">
+            <form method="POST" class="add-part-form">
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="name" class="form-label">Part Name</label>
+                            <input type="text" id="name" name="name" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="machine_id" class="form-label">Machine</label>
+                            <select id="machine_id" name="machine_id" class="form-control" required>
+                                <option value="">-- Select Machine --</option>
+                                {% for machine in machines %}
+                                <option value="{{ machine.id }}">{{ machine.name }} ({{ machine.site.name }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea id="description" name="description" class="form-control" rows="2" required></textarea>
+                </div>
+                
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="maintenance_frequency" class="form-label">Maintenance Frequency</label>
+                            <div class="d-flex gap-2">
+                                <input type="number" id="maintenance_frequency" name="maintenance_frequency" 
+                                       class="form-control" min="1" value="7" required>
+                                <select id="maintenance_unit" name="maintenance_unit" class="form-control">
+                                    <option value="day">Days</option>
+                                    <option value="week">Weeks</option>
+                                    <option value="month">Months</option>
+                                    <option value="year">Years</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="last_maintenance" class="form-label">Last Maintenance Date</label>
+                            <input type="date" id="last_maintenance" name="last_maintenance" 
+                                   class="form-control" value="{{ now.strftime('%Y-%m-%d') }}">
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary mt-3">
+                    <i class="fas fa-plus"></i> Add Part
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Parts list card -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3>Part List</h3>
+            <div class="header-actions">
+                <div class="form-group mb-0" style="width: 200px;">
+                    <input type="text" id="partSearch" class="form-control" placeholder="Search parts...">
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if parts %}
+                <div class="table-container">
+                    <table class="table" id="partsTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>Machine</th>
+                                <th>Site</th>
+                                <th>Frequency</th>
+                                <th>Last Maintenance</th>
+                                <th>Next Due</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for part in parts %}
+                            <tr>
+                                <td>{{ part.name }}</td>
+                                <td>{{ part.description }}</td>
+                                <td>{{ part.machine.name }}</td>
+                                <td>{{ part.machine.site.name }}</td>
+                                <td>{{ part.get_frequency_display() }}</td>
+                                <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <div class="d-flex gap-2">
+                                        <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="btn btn-sm btn-success">
+                                            <i class="fas fa-wrench"></i> Maintain
+                                        </a>
+                                        <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </a>
+                                        <form action="{{ url_for('delete_part', part_id=part.id) }}" method="POST" 
+                                              onsubmit="return confirm('Are you sure you want to delete this part?');">
+                                            <button type="submit" class="btn btn-sm btn-danger">
+                                                <i class="fas fa-trash-alt"></i> Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    No parts have been added yet. Use the form above to add your first part.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add search functionality
+        const searchInput = document.getElementById('partSearch');
+        if (searchInput) {
+            searchInput.addEventListener('keyup', function() {
+                const searchTerm = this.value.toLowerCase();
+                const table = document.getElementById('partsTable');
+                const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+                
+                for (let i = 0; i < rows.length; i++) {
+                    let found = false;
+                    const cells = rows[i].getElementsByTagName('td');
+                    
+                    for (let j = 0; j < cells.length - 1; j++) { // Skip the last cell (Actions)
+                        const cellText = cells[j].textContent.toLowerCase();
+                        if (cellText.indexOf(searchTerm) > -1) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    
+                    if (found) {
+                        rows[i].style.display = '';
+                    } else {
+                        rows[i].style.display = 'none';
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
