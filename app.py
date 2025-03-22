@@ -471,10 +471,11 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
             login_user(user)
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid username or password')
-    return render_template('login.html')
+            # Get the next parameter or default to dashboard
+            next_page = request.args.get('next', 'dashboard')
+            return redirect(url_for(next_page))
+        flash('Invalid username or password')
+    return render_template('login_modern.html')  # Fix this line - use login_modern.html
 
 @app.route('/logout')
 @login_required
@@ -490,37 +491,38 @@ def dashboard():
         # Admins see all sites
         sites = Site.query.all()
     elif current_user.has_permission(Permissions.SITES_VIEW):
-        # Users with sites.view permission see all sites
         sites = Site.query.all()
     elif current_user.has_permission(Permissions.SITES_VIEW_ASSIGNED):
-        # Users with sites.view.assigned permission see only their assigned sites
         sites = current_user.sites
     else:
-        # Users with no site permissions see only their assigned sites
-        sites = current_user.sites
+        sites = []
 
     now = datetime.utcnow()
-    return render_template('dashboard.html', 
-                          sites=sites, 
-                          machines=Machine.query.all(), 
-                          now=now, 
-                          is_admin=current_user.is_admin,
-                          current_user=current_user)
+    machines = Machine.query.all()
+    return render_template(
+        'dashboard_modern.html',  # Use the modern dashboard
+        sites=sites, 
+        machines=machines, 
+        now=now, 
+        is_admin=current_user.is_admin,
+        current_user=current_user
+    )
 
 # Admin routes
 @app.route('/admin')
 @login_required
 def admin():
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
+        flash("You don't have permission to access the admin panel", "danger")
         return redirect(url_for('dashboard'))
-    return render_template('admin.html')
+    return render_template('admin_modern.html')  # Use the modern admin template instead of admin.html
 
 # CRUD routes for Sites
 @app.route('/admin/sites', methods=['GET', 'POST'])
 @login_required
 def manage_sites():
     if not current_user.is_admin:
+        flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
         name = request.form.get('name')
@@ -534,12 +536,13 @@ def manage_sites():
         db.session.commit()
         flash('Site added successfully')
     sites = Site.query.all()
-    return render_template('admin_sites.html', sites=sites)
+    return render_template('admin_sites_modern.html', sites=sites)
 
 @app.route('/admin/sites/edit/<int:site_id>', methods=['GET', 'POST'])
 @login_required
 def edit_site(site_id):
     if not current_user.is_admin:
+        flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
     site = Site.query.get_or_404(site_id)
     if request.method == 'POST':
@@ -551,7 +554,7 @@ def edit_site(site_id):
         db.session.commit()
         flash(f'Site "{site.name}" updated successfully')
         return redirect(url_for('manage_sites'))
-    return render_template('admin_edit_site.html', site=site)
+    return render_template('admin_edit_site_modern.html', site=site)
 
 # CRUD routes for Machines
 @app.route('/admin/machines', methods=['GET', 'POST'])
@@ -568,21 +571,24 @@ def manage_machines():
         new_machine = Machine(
             name=name, 
             model=model, 
-            machine_number=machine_number,
+            machine_number=machine_number, 
             serial_number=serial_number,
             site_id=site_id
         )
         db.session.add(new_machine)
         db.session.commit()
-        flash('Machine added successfully')
+        flash('Machine added successfully!', 'success')
+        return redirect(url_for('manage_machines'))
+        
     machines = Machine.query.all()
     sites = Site.query.all()
-    return render_template('admin_machines.html', machines=machines, sites=sites)
+    return render_template('admin_machines_modern.html', machines=machines, sites=sites)  # Use the modern machines template
 
 @app.route('/admin/machines/edit/<int:machine_id>', methods=['GET', 'POST'])
 @login_required
 def edit_machine(machine_id):
     if not current_user.is_admin:
+        flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
     machine = Machine.query.get_or_404(machine_id)
     if request.method == 'POST':
@@ -595,14 +601,16 @@ def edit_machine(machine_id):
         flash(f'Machine "{machine.name}" updated successfully')
         return redirect(url_for('manage_machines'))
     sites = Site.query.all()
-    return render_template('admin_edit_machine.html', machine=machine, sites=sites)
+    return render_template('admin_edit_machine_modern.html', machine=machine, sites=sites)
 
 # CRUD routes for Parts
 @app.route('/admin/parts', methods=['GET', 'POST'])
 @login_required
 def manage_parts():
-    if not current_user.is_admin:
+    if not current_user.is_admin and not current_user.has_permission(Permissions.PARTS_VIEW):
+        flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
@@ -658,14 +666,18 @@ def manage_parts():
         parts = []
         
     machines = Machine.query.all()
-    return render_template('admin_parts.html', parts=parts, machines=machines)
+    now = datetime.utcnow()
+    return render_template('admin_parts_modern.html', parts=parts, machines=machines, now=now)
 
 @app.route('/admin/parts/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
 def edit_part(part_id):
-    if not current_user.is_admin:
+    if not current_user.is_admin and not current_user.has_permission(Permissions.PARTS_EDIT):
+        flash("You don't have permission to edit parts", "danger")
         return redirect(url_for('dashboard'))
+    
     part = Part.query.get_or_404(part_id)
+    
     if request.method == 'POST':
         part.name = request.form.get('name')
         part.description = request.form.get('description')
@@ -685,7 +697,7 @@ def edit_part(part_id):
         flash(f'Part "{part.name}" updated successfully')
         return redirect(url_for('manage_parts'))
     machines = Machine.query.all()
-    return render_template('admin_edit_part.html', part=part, machines=machines)
+    return render_template('admin_edit_part_modern.html', part=part, machines=machines)
 
 # Delete routes
 @app.route('/admin/sites/delete/<int:site_id>', methods=['POST'])
@@ -728,14 +740,14 @@ def delete_part(part_id):
 @login_required
 def update_maintenance(part_id):
     if not current_user.is_admin and not current_user.has_permission(Permissions.MAINTENANCE_RECORD):
-        flash('Access denied. You need permission to record maintenance.')
+        flash("You don't have permission to record maintenance", "danger")
         return redirect(url_for('dashboard'))
     
     part = Part.query.get_or_404(part_id)
     
     if request.method == 'GET':
         # Display form for entering maintenance details
-        return render_template('record_maintenance.html', part=part)
+        return render_template('record_maintenance_modern.html', part=part)
     
     elif request.method == 'POST':
         # Update part maintenance information
@@ -782,8 +794,9 @@ def update_maintenance(part_id):
 @login_required
 def manage_roles():
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
+        flash("You don't have permission to manage roles", "danger")
         return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
@@ -794,16 +807,19 @@ def manage_roles():
         flash(f'Role "{name}" added successfully')
         return redirect(url_for('admin'))
     roles = Role.query.all()
-    return render_template('admin_roles.html', roles=roles, all_permissions=Permissions.get_all_permissions())
+    return render_template('admin_roles_modern.html', roles=roles, all_permissions=Permissions.get_all_permissions())
 
 # Add a new route for editing a specific role
 @app.route('/admin/roles/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
 def edit_role(role_id):
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
+        flash("You don't have permission to edit roles", "danger")
         return redirect(url_for('dashboard'))
+    
     role = Role.query.get_or_404(role_id)
+    role_permissions = role.get_permissions_list()
+    
     if request.method == 'POST':
         role.name = request.form.get('name')
         role.description = request.form.get('description')
@@ -812,10 +828,7 @@ def edit_role(role_id):
         db.session.commit()
         flash(f'Role "{role.name}" updated successfully')
         return redirect(url_for('manage_roles'))
-    role_permissions = role.get_permissions_list()
-    return render_template('admin_edit_role.html', role=role,
-                           role_permissions=role_permissions,
-                           all_permissions=Permissions.get_all_permissions())
+    return render_template('admin_edit_role_modern.html', role=role, role_permissions=role_permissions, all_permissions=Permissions.get_all_permissions())
 
 # New route for deleting a specific role
 @app.route('/admin/roles/delete/<int:role_id>', methods=['POST'])
@@ -839,9 +852,11 @@ def delete_role(role_id):
 @login_required
 def manage_users():
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
+        flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
+        # Existing form handling code
         username = request.form.get('username')
         password = request.form.get('password')
         full_name = request.form.get('full_name')
@@ -854,7 +869,7 @@ def manage_users():
             roles = Role.query.all()
             users = User.query.all()
             sites = Site.query.all()
-            return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)
+            return render_template('admin_users_modern.html', roles=roles, users=users, sites=sites, current_user=current_user)
         new_user = User(username=username, full_name=full_name, email=email,
                         role_id=role_id if role_id else None, is_admin=is_admin)
         new_user.set_password(password)
@@ -868,7 +883,7 @@ def manage_users():
     roles = Role.query.all()
     users = User.query.all()
     sites = Site.query.all()
-    return render_template('admin_users.html', roles=roles, users=users, sites=sites, current_user=current_user)
+    return render_template('admin_users_modern.html', roles=roles, users=users, sites=sites, current_user=current_user)
 
 @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
 @login_required
@@ -877,20 +892,20 @@ def delete_user(user_id):
         flash('Access denied. Admin privileges required.')
         return redirect(url_for('dashboard'))
     if user_id == current_user.id:
-        flash('Cannot delete your own user account')
+        flash('Cannot delete your own user account', 'danger')
         return redirect(url_for('manage_users'))
     user = User.query.get_or_404(user_id)
     db.session.delete(user)
     db.session.commit()
-    flash(f'User "{user.username}" deleted successfully')
+    flash(f'User "{user.username}" has been deleted', 'success')
     return redirect(url_for('manage_users'))
 
 # Function to check for parts needing notification and send emails
 def check_for_due_soon_parts():
     """Check for parts that have newly entered the 'due soon' threshold and send notifications"""
-    now = datetime.utcnow()
-    # Find sites that have notifications enabled
     sites_with_notifications = []
+    now = datetime.utcnow()
+    
     for site in Site.query.filter_by(enable_notifications=True).all():
         if not site.contact_email:
             app.logger.info(f"Site {site.name} has notifications enabled but no contact email")
@@ -945,7 +960,6 @@ def check_for_due_soon_parts():
         
         # Create email content
         subject = f"Maintenance Alert: {site.name}"
-        # Render email template
         html_body = render_template(
             'email/maintenance_alert.html',
             site=site,
@@ -954,7 +968,6 @@ def check_for_due_soon_parts():
             threshold=site.notification_threshold
         )
         
-        # Create and send the email
         try:
             msg = Message(
                 subject=subject,
@@ -964,13 +977,14 @@ def check_for_due_soon_parts():
             mail.send(msg)
             app.logger.info(f"Maintenance notification sent to {site.contact_email} for site {site.name}")
             sent_count += 1
-
+            
             # Mark parts as notified
             for part in parts_to_mark:
                 part.notification_sent = True
             db.session.commit()
         except Exception as e:
             app.logger.error(f"Failed to send notification email: {str(e)}")
+    
     return sent_count
 
 # Add the missing route for checking notifications
@@ -978,13 +992,11 @@ def check_for_due_soon_parts():
 @login_required
 def check_notifications():
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
+        flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
+        
     count = check_for_due_soon_parts()
-    if count > 0:
-        flash(f'Sent notifications for {count} sites with parts due soon or overdue.')
-    else:
-        flash('No new notifications to send.')
+    flash(f'Sent notifications for {count} sites with parts due soon or overdue.')
     return redirect(url_for('admin'))
 
 # CLI commands
@@ -1205,7 +1217,7 @@ def test_email():
         site_location = request.form.get('site_location', 'Test Location')
         notification_threshold = int(request.form.get('notification_threshold', 7))
         include_samples = 'include_samples' in request.form
-        
+
         # Sample data for overdue and due-soon items
         sample_data = {}
         if include_samples:
@@ -1274,8 +1286,7 @@ def test_email():
             'MAIL_USERNAME': app.config['MAIL_USERNAME'],
             'MAIL_DEFAULT_SENDER': app.config['MAIL_DEFAULT_SENDER']
         }
-        
-        return render_template('admin_test_email.html', config=email_config)
+        return render_template('test_email_modern.html', config=email_config)
 
 @app.cli.command("update-db-schema")
 def update_db_schema():
@@ -1346,7 +1357,7 @@ def update_db_schema():
             print(f"Added new columns to Part table: {', '.join(missing_part_columns)}")
         else:
             print("Part table schema is already up to date.")
-            
+        
         # Check User table columns
         user_columns = [col['name'] for col in inspector.get_columns('user')]
         missing_user_columns = []
@@ -1398,10 +1409,8 @@ def machine_history(machine_id):
     
     # Check if user has access to this machine's site
     if not current_user.is_admin and not current_user.has_permission(Permissions.MACHINES_VIEW):
-        # For non-admins without general view permission, check if they have access to the site
-        if machine.site not in current_user.sites:
-            flash('Access denied. You do not have permission to view this machine.')
-            return redirect(url_for('dashboard'))
+        flash("You don't have permission to view this machine's history", "danger")
+        return redirect(url_for('dashboard'))
     
     # Get maintenance logs sorted by date (newest first)
     logs = []
@@ -1431,11 +1440,10 @@ def machine_history(machine_id):
         except Exception as create_error:
             flash(f'Could not create maintenance log table: {str(create_error)}')
     
-    return render_template('machine_history.html', machine=machine, logs=logs)
+    return render_template('machine_history_modern.html', machine=machine, logs=logs)
 
 # Import backup utilities
 from backup_utils import backup_database, restore_database, list_backups, delete_backup
-import os
 
 # Update backup routes to use permission checking
 @app.route('/admin/backups')
@@ -1446,7 +1454,7 @@ def admin_backups():
         return redirect(url_for('dashboard'))
     
     backups = list_backups()
-    return render_template('admin_backups.html', backups=backups)
+    return render_template('admin_backups_modern.html', backups=backups)
 
 @app.route('/admin/backups/create', methods=['POST'])
 @login_required
@@ -1485,13 +1493,11 @@ def restore_backup():
     
     try:
         stats = restore_database(backup_path, restore_users=restore_users)
-        
         # Generate success message with statistics
         message = 'Restore completed successfully. '
         message += f'Created: {stats["sites_created"]} sites, {stats["machines_created"]} machines, {stats["parts_created"]} parts. '
         message += f'Updated: {stats["sites_updated"]} sites, {stats["machines_updated"]} machines, {stats["parts_updated"]} parts. '
         message += f'Restored: {stats["logs_restored"]} maintenance logs'
-        
         if restore_users:
             message += f', {stats["roles_restored"]} roles, {stats["users_restored"]} users, {stats["assignments_restored"]} site assignments'
         
@@ -1546,10 +1552,8 @@ def forgot_password():
         if user:
             # Generate reset token
             token = user.generate_reset_token()
-            
             # Build reset URL
             reset_url = url_for('reset_password', user_id=user.id, token=token, _external=True)
-            
             # Create email
             subject = "Password Reset Request"
             html_body = f"""
@@ -1560,7 +1564,6 @@ def forgot_password():
             <p>This link is only valid for 1 hour.</p>
             <p>If you did not request a password reset, please ignore this email.</p>
             """
-            
             try:
                 # Send email
                 msg = Message(
@@ -1579,7 +1582,6 @@ def forgot_password():
             flash("If that email is in our system, a password reset link has been sent", "success")
         
         return redirect(url_for('login'))
-    
     return render_template('forgot_password.html')
 
 @app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])
@@ -1612,10 +1614,8 @@ def reset_password(user_id, token):
         user.set_password(password)
         # Clear reset token
         user.clear_reset_token()
-        
         flash("Your password has been successfully reset. You can now log in with your new password.", "success")
         return redirect(url_for('login'))
-    
     return render_template('reset_password.html', user_id=user_id, token=token)
 
 @app.cli.command("add-reset-columns")
@@ -1624,29 +1624,67 @@ def add_reset_columns_cmd():
     inspector = db.inspect(db.engine)
     user_columns = [col['name'] for col in inspector.get_columns('user')]
     
-    columns_added = False
-    
-    # Add columns if they don't exist
     with db.engine.connect() as conn:
+        columns_added = False
         if 'reset_token' not in user_columns:
             print("Adding reset_token column to user table...")
             conn.execute(db.text("ALTER TABLE user ADD COLUMN reset_token VARCHAR(100)"))
             columns_added = True
-        else:
-            print("reset_token column already exists")
-            
+        
         if 'reset_token_expiration' not in user_columns:
             print("Adding reset_token_expiration column to user table...")
             conn.execute(db.text("ALTER TABLE user ADD COLUMN reset_token_expiration DATETIME"))
             columns_added = True
-        else:
-            print("reset_token_expiration column already exists")
         
         if columns_added:
             conn.commit()
             print("Password reset columns added successfully!")
         else:
             print("No changes needed. Password reset columns already exist.")
+
+@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    if not current_user.is_admin:
+        flash("You don't have permission to access this page", "danger")
+        return redirect(url_for('dashboard'))
+        
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        full_name = request.form.get('full_name')
+        email = request.form.get('email')
+        role_id = request.form.get('role_id') or None
+        is_admin = 'is_admin' in request.form
+        sites = request.form.getlist('sites')
+        
+        # Update the user's details
+        user.username = username
+        user.full_name = full_name
+        user.email = email
+        user.role_id = role_id
+        user.is_admin = is_admin
+        
+        # Update password only if provided
+        if password:
+            user.set_password(password)
+            
+        # Update site assignments
+        user.sites = []
+        for site_id in sites:
+            site = Site.query.get(site_id)
+            if site:
+                user.sites.append(site)
+        
+        db.session.commit()
+        flash(f'User "{username}" updated successfully!', 'success')
+        return redirect(url_for('manage_users'))
+    
+    roles = Role.query.all()
+    sites = Site.query.all()
+    return render_template('admin_edit_user_modern.html', user=user, roles=roles, sites=sites)
 
 if __name__ == '__main__':
     ensure_env_file()

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - {{ user.username }}{% endblock %}
+
+{% block header_title %}Edit User{% endblock %}
+
+{% block content %}
+<div class="edit-user">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3>Edit User: {{ user.username }}</h3>
+            <a href="{{ url_for('manage_users') }}" class="btn btn-sm btn-outline">
+                <i class="fas fa-arrow-left"></i> Back to Users
+            </a>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" id="username" name="username" class="form-control" 
+                                   value="{{ user.username }}" required>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" id="password" name="password" class="form-control"
+                                   placeholder="Leave blank to keep current password">
+                            <span class="form-text">Leave blank to keep current password</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="full_name" class="form-label">Full Name</label>
+                            <input type="text" id="full_name" name="full_name" class="form-control"
+                                   value="{{ user.full_name or '' }}">
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" id="email" name="email" class="form-control"
+                                   value="{{ user.email or '' }}">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="role_id" class="form-label">Role</label>
+                            <select id="role_id" name="role_id" class="form-control">
+                                <option value="">-- No Role --</option>
+                                {% for role in roles %}
+                                <option value="{{ role.id }}" {% if user.role_id == role.id %}selected{% endif %}>
+                                    {{ role.name }} - {{ role.description }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="sites" class="form-label">Assigned Sites</label>
+                            <select id="sites" name="sites" multiple class="form-control" style="height: 100px">
+                                {% for site in sites %}
+                                <option value="{{ site.id }}" {% if site in user.sites %}selected{% endif %}>
+                                    {{ site.name }} ({{ site.location }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group mt-2">
+                    <div class="d-flex align-items-center">
+                        <input type="checkbox" id="is_admin" name="is_admin" 
+                               {% if user.is_admin %}checked{% endif %} class="mr-2">
+                        <label for="is_admin" class="form-label mb-0 ml-2">
+                            Administrator privileges
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                    <a href="{{ url_for('manage_users') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Maintenance Tracker{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-tools"></i>
+                    <span>Maintenance</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li>
+                        <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}">
+                            <i class="fas fa-tachometer-alt"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                    <li>
+                        <a href="{{ url_for('admin') }}" class="{{ 'active' if request.endpoint == 'admin' else '' }}">
+                            <i class="fas fa-cogs"></i>
+                            <span>Administration</span>
+                        </a>
+                    </li>
+                    <li class="nav-group">
+                        <span class="nav-group-title">Manage</span>
+                        <ul>
+                            <li>
+                                <a href="{{ url_for('manage_sites') }}" class="{{ 'active' if request.endpoint == 'manage_sites' else '' }}">
+                                    <i class="fas fa-building"></i>
+                                    <span>Sites</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ url_for('manage_machines') }}" class="{{ 'active' if request.endpoint == 'manage_machines' else '' }}">
+                                    <i class="fas fa-industry"></i>
+                                    <span>Machines</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ url_for('manage_parts') }}" class="{{ 'active' if request.endpoint == 'manage_parts' else '' }}">
+                                    <i class="fas fa-cog"></i>
+                                    <span>Parts</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ url_for('manage_users') }}" class="{{ 'active' if request.endpoint == 'manage_users' else '' }}">
+                                    <i class="fas fa-users"></i>
+                                    <span>Users</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ url_for('manage_roles') }}" class="{{ 'active' if request.endpoint == 'manage_roles' else '' }}">
+                                    <i class="fas fa-user-tag"></i>
+                                    <span>Roles</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li class="nav-group">
+                        <span class="nav-group-title">System</span>
+                        <ul>
+                            <li>
+                                <a href="{{ url_for('admin_backups') }}" class="{{ 'active' if request.endpoint == 'admin_backups' else '' }}">
+                                    <i class="fas fa-database"></i>
+                                    <span>Backups</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ url_for('test_email') }}" class="{{ 'active' if request.endpoint == 'test_email' else '' }}">
+                                    <i class="fas fa-envelope"></i>
+                                    <span>Email Settings</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-header">
+                <div class="header-left">
+                    <h1 class="page-title">{% block header_title %}Maintenance Tracker{% endblock %}</h1>
+                </div>
+                <div class="header-right">
+                    {% if current_user.is_authenticated %}
+                    <div class="user-menu">
+                        <button class="user-menu-trigger">
+                            <div class="avatar">{{ current_user.username[0].upper() }}</div>
+                            <span class="username">{{ current_user.full_name or current_user.username }}</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="user-dropdown">
+                            <div class="user-info">
+                                <div class="avatar large">{{ current_user.username[0].upper() }}</div>
+                                <div>
+                                    <span class="full-name">{{ current_user.full_name or current_user.username }}</span>
+                                    <span class="email">{{ current_user.email }}</span>
+                                </div>
+                            </div>
+                            <hr>
+                            <ul>
+                                <li><a href="#"><i class="fas fa-user-circle"></i> Profile</a></li>
+                                <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </header>
+
+            <div class="content-container">
+                {% block flash_messages %}
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert {{ 'alert-' + category if category else 'alert-info' }}">
+                                    {{ message }}
+                                    <button type="button" class="close-alert">&times;</button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                {% endblock %}
+                
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Sidebar toggle functionality
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function() {
+                    document.body.classList.toggle('sidebar-collapsed');
+                    localStorage.setItem('sidebar-collapsed', document.body.classList.contains('sidebar-collapsed'));
+                });
+            }
+            
+            // Check saved sidebar state
+            if (localStorage.getItem('sidebar-collapsed') === 'true') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+            
+            // User dropdown menu toggle
+            const userMenuTrigger = document.querySelector('.user-menu-trigger');
+            if (userMenuTrigger) {
+                userMenuTrigger.addEventListener('click', function() {
+                    this.parentElement.classList.toggle('open');
+                });
+                
+                // Close the dropdown when clicking outside
+                document.addEventListener('click', function(event) {
+                    const userMenu = document.querySelector('.user-menu');
+                    if (userMenu && !userMenu.contains(event.target)) {
+                        userMenu.classList.remove('open');
+                    }
+                });
+            }
+            
+            // Alert close buttons
+            document.querySelectorAll('.close-alert').forEach(button => {
+                button.addEventListener('click', function() {
+                    this.parentElement.remove();
+                });
+            });
+            
+            // Auto-dismiss alerts after 5 seconds
+            setTimeout(function() {
+                document.querySelectorAll('.alert').forEach(alert => {
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 500);
+                });
+            }, 5000);
+        });
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
