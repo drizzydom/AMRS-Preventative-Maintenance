@@ -40,4 +40,3 @@ These instructions will help you run the application directly on your Synology N
   ```bash
   python -m flask add-reset-columns
   python -m flask init-db
-  
