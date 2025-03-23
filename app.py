@@ -290,6 +290,7 @@ class User(db.Model, UserMixin):
     full_name = db.Column(db.String(100))
     reset_token = db.Column(db.String(100))
     reset_token_expiration = db.Column(db.DateTime)
+    notification_preferences = db.Column(db.Text, default='{}')  # Add this column for storing preferences as JSON string
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -336,6 +337,27 @@ class User(db.Model, UserMixin):
         self.reset_token = None
         self.reset_token_expiration = None
         db.session.commit()
+
+    def get_notification_preferences(self):
+        """Get notification preferences with defaults for missing values"""
+        import json
+        try:
+            # Try to parse stored preferences
+            if self.notification_preferences:
+                prefs = json.loads(self.notification_preferences)
+            else:
+                prefs = {}
+        except:
+            prefs = {}
+            
+        # Set defaults for missing keys
+        if 'enable_email' not in prefs:
+            prefs['enable_email'] = True
+        if 'email_frequency' not in prefs:
+            prefs['email_frequency'] = 'weekly'
+        if 'notification_types' not in prefs:
+            prefs['notification_types'] = ['overdue', 'due_soon']
+        return prefs
 
 class Site(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1413,6 +1435,8 @@ def update_db_schema():
             missing_user_columns.append('reset_token')
         if 'reset_token_expiration' not in user_columns:
             missing_user_columns.append('reset_token_expiration')
+        if 'notification_preferences' not in user_columns:
+            missing_user_columns.append('notification_preferences')
         if missing_user_columns:
             # Add missing columns to the User table
             with db.engine.connect() as conn:
@@ -1421,6 +1445,8 @@ def update_db_schema():
                         conn.execute(db.text(f'ALTER TABLE user ADD COLUMN {column} VARCHAR(100)'))
                     elif column == 'reset_token_expiration':
                         conn.execute(db.text(f'ALTER TABLE user ADD COLUMN {column} DATETIME'))
+                    elif column == 'notification_preferences':
+                        conn.execute(db.text(f'ALTER TABLE user ADD COLUMN {column} TEXT DEFAULT \'{{}}\''))
                 conn.commit()
             print(f"Added new columns to User table: {', '.join(missing_user_columns)}")
         else:
@@ -1679,19 +1705,36 @@ def add_reset_columns_cmd():
 @login_required
 def user_profile():
     """Display the user profile page"""
-    # Ensure notification_preferences exists
-    if not hasattr(current_user, 'notification_preferences') or current_user.notification_preferences is None:
-        current_user.notification_preferences = {
+    # Get notification preferences using the new method
+    try:
+        preferences = current_user.get_notification_preferences()
+        if not isinstance(preferences, dict):
+            print(f"Warning: preferences is not a dictionary: {type(preferences)}")
+            preferences = {
+                'enable_email': True,
+                'email_frequency': 'weekly',
+                'notification_types': ['overdue', 'due_soon']
+            }
+        # Debug output - see what values are actually stored
+        print(f"Current user preferences: {preferences}")
+    except Exception as e:
+        print(f"Error getting preferences: {str(e)}")
+        preferences = {
             'enable_email': True,
             'email_frequency': 'weekly',
             'notification_types': ['overdue', 'due_soon']
         }
-        db.session.commit()
     
-    # Debug output - see what values are actually stored
-    print(f"Current user preferences: {current_user.notification_preferences}")
+    # Pass individual preference values to avoid potential template issues
+    enable_email = preferences.get('enable_email', True)
+    email_frequency = preferences.get('email_frequency', 'weekly')
+    notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
     
-    return render_template('user_profile.html')
+    return render_template('user_profile.html', 
+                           preferences=preferences,
+                           enable_email=enable_email,
+                           email_frequency=email_frequency,
+                           notification_types=notification_types)
 
 @app.route('/profile/update', methods=['POST'])
 @login_required
@@ -1750,6 +1793,7 @@ def change_password():
 @login_required
 def update_notification_preferences():
     """Update user notification preferences"""
+    import json
     try:
         # Get form data
         enable_email = 'enable_email' in request.form
@@ -1758,31 +1802,23 @@ def update_notification_preferences():
         
         print(f"Form data: enable_email={enable_email}, email_frequency={email_frequency}, types={notification_types}")
         
-        if not hasattr(current_user, 'notification_preferences') or current_user.notification_preferences is None:
-            current_user.notification_preferences = {}
-        
-        # Directly set each preference value
-        # Using direct assignment seems more reliable than dict operations
-        current_user.notification_preferences = {
+        # Update preferences as JSON string
+        preferences = {
             'enable_email': enable_email,
             'email_frequency': email_frequency if email_frequency else 'weekly',
             'notification_types': notification_types
         }
         
-        # Use direct database connection to update the user
-        try:
-            db.session.add(current_user)  # Make sure the user is tracked
-            db.session.commit()
-            
-            print(f"Saved preferences: {current_user.notification_preferences}")
-            flash('Notification preferences updated successfully', 'success')
-        except Exception as db_err:
-            db.session.rollback()
-            print(f"Database error: {str(db_err)}")
-            flash(f'Database error: {str(db_err)}', 'danger')
+        # Store as JSON string
+        current_user.notification_preferences = json.dumps(preferences)
+        db.session.commit()
+        
+        print(f"Saved preferences: {current_user.notification_preferences}")
+        flash('Notification preferences updated successfully', 'success')
             
     except Exception as e:
         print(f"General error: {str(e)}")
+        db.session.rollback()
         flash(f'Error updating preferences: {str(e)}', 'danger')
     
     return redirect(url_for('user_profile'))
@@ -1954,3 +1990,18 @@ if __name__ == '__main__':
     ensure_email_templates()
     ensure_env_file()
     app.run(debug=True, host='0.0.0.0', port=5050)
+
+@app.cli.command("add-notification-preferences")
+def add_notification_preferences_cmd():
+    """Add notification preferences column to the user table."""
+    inspector = db.inspect(db.engine)
+    user_columns = [col['name'] for col in inspector.get_columns('user')]
+    
+    with db.engine.connect() as conn:
+        if 'notification_preferences' not in user_columns:
+            print("Adding notification_preferences column to user table...")
+            conn.execute(text("ALTER TABLE user ADD COLUMN notification_preferences TEXT DEFAULT '{{}}'"))
+            conn.commit()
+            print("Notification preferences column added successfully!")
+        else:
+            print("No changes needed. Notification preferences column already exists.")
