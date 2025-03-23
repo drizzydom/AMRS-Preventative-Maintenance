@@ -1,5 +1,5 @@
 :root {
-  /* Color palette - Modern blue theme */
+  /* Light mode colors - default */
   --primary-color: #2563eb;
   --primary-light: #60a5fa;
   --primary-dark: #1e40af;
@@ -9,7 +9,7 @@
   --danger-color: #ef4444;
   --info-color: #06b6d4;
   
-  /* Neutral colors */
+  /* Light mode neutral colors */
   --gray-50: #f8fafc;
   --gray-100: #f1f5f9;
   --gray-200: #e2e8f0;
@@ -21,7 +21,7 @@
   --gray-800: #1e293b;
   --gray-900: #0f172a;
   
-  /* UI colors */
+  /* Light mode UI colors */
   --body-bg: #f9fafb;
   --card-bg: #ffffff;
   --sidebar-bg: #1e293b;
@@ -29,15 +29,40 @@
   --header-bg: #ffffff;
   --header-text: #1e293b;
   --border-color: var(--gray-200);
+  --text-color: var(--gray-700);
+  --text-muted: var(--gray-500);
+  --text-dark: var(--gray-900);
+  --overlay-bg: rgba(255, 255, 255, 0.8);
+  --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode colors */
+[data-theme="dark"] {
+  /* Dark mode neutral colors */
+  --gray-50: #0f172a; /* Reversed */
+  --gray-100: #1e293b;
+  --gray-200: #334155;
+  --gray-300: #475569;
+  --gray-400: #64748b;
+  --gray-500: #94a3b8;
+  --gray-600: #cbd5e1;
+  --gray-700: #e2e8f0;
+  --gray-800: #f1f5f9;
+  --gray-900: #f8fafc;
   
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  
-  /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* Dark mode UI colors */
+  --body-bg: #0f172a;
+  --card-bg: #1e293b;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #e2e8f0;
+  --header-bg: #1e293b;
+  --header-text: #f1f5f9;
+  --border-color: #334155;
+  --text-color: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-dark: #f8fafc;
+  --overlay-bg: rgba(15, 23, 42, 0.8);
+  --shadow-color: rgba(0, 0, 0, 0.5);
 }
 
 /* Base styles */
@@ -51,13 +76,14 @@ html, body {
 }
 
 body {
-  font-family: var(--font-family);
-  font-size: 0.9375rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 1rem; /* Restore original font size */
   line-height: 1.5;
-  color: var(--gray-700);
+  color: var(--text-color);
   background-color: var(--body-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Layout - Modern Dashboard Layout */
@@ -217,7 +243,7 @@ body {
 .page-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--gray-800);
+  color: var(--text-dark);
   margin: 0;
 }
 
@@ -274,13 +300,14 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  background-color: white;
+  background-color: var(--card-bg);
   border-radius: 6px;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
   width: 240px;
   z-index: 100;
   display: none;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .user-menu.open .user-dropdown {
@@ -308,6 +335,7 @@ body {
   margin: 0;
   border: none;
   border-top: 1px solid var(--border-color);
+  transition: border-color 0.3s ease;
 }
 
 .user-dropdown ul {
@@ -320,10 +348,10 @@ body {
   display: flex;
   align-items: center;
   padding: 8px 16px;
-  color: var(--gray-700);
+  color: var(--text-color);
   text-decoration: none;
   border-radius: 4px;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, color 0.3s ease;
 }
 
 .user-dropdown ul a:hover {
@@ -438,6 +466,10 @@ body.sidebar-collapsed .sidebar-footer i {
   background-color: var(--gray-100);
 }
 
+[data-theme="dark"] .btn-outline:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
 .btn i {
   margin-right: 6px;
 }
@@ -485,12 +517,12 @@ body.sidebar-collapsed .sidebar-footer i {
   font-size: 0.9375rem;
   font-weight: 400;
   line-height: 1.5;
-  color: var(--gray-700);
-  background-color: white;
+  color: var(--text-color);
+  background-color: var(--card-bg);
   background-clip: padding-box;
-  border: 1px solid var(--gray-300);
+  border: 1px solid var(--border-color);
   border-radius: 0.375rem;
-  transition: border-color 0.2s ease-in-out;
+  transition: border-color 0.2s ease-in-out, background-color 0.3s ease, color 0.3s ease;
 }
 
 .form-control:focus {
@@ -499,30 +531,41 @@ body.sidebar-collapsed .sidebar-footer i {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
+[data-theme="dark"] .form-control::placeholder {
+  color: var(--gray-400);
+}
+
 .form-text {
   display: block;
   margin-top: 0.25rem;
   font-size: 0.8125rem;
-  color: var(--gray-500);
+  color: var(--text-muted);
+  transition: color 0.3s ease;
 }
 
 /* Card Component */
 .card {
-  background-color: white;
+  background-color: var(--card-bg);
   border-radius: 0.5rem;
-  box-shadow: var(--shadow);
+  box-shadow: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color);
   border: 1px solid var(--border-color);
   margin-bottom: 1.5rem;
   overflow: hidden;
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .card-header {
   padding: 1rem 1.25rem;
-  background-color: var(--gray-50);
+  background-color: rgba(0, 0, 0, 0.03);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="dark"] .card-header {
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 .card-header h2, .card-header h3 {
@@ -551,7 +594,7 @@ body.sidebar-collapsed .sidebar-footer i {
   border-radius: 0.375rem;
   display: flex;
   align-items: center;
-  transition: opacity 0.3s;
+  transition: opacity 0.3s, background-color 0.3s ease, color 0.3s ease;
 }
 
 .alert-success {
@@ -606,25 +649,32 @@ body.sidebar-collapsed .sidebar-footer i {
 .table {
   width: 100%;
   margin-bottom: 0;
-  color: var(--gray-700);
+  color: var(--text-color);
   border-collapse: collapse;
+  transition: color 0.3s ease;
 }
 
 .table th,
 .table td {
   padding: 0.75rem 1rem;
   vertical-align: middle;
-  border-bottom: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--border-color);
+  transition: border-color 0.3s ease;
 }
 
 .table thead th {
   font-weight: 600;
-  color: var(--gray-600);
-  background-color: var(--gray-50);
+  color: var(--text-muted);
+  background-color: rgba(0, 0, 0, 0.02);
   border-bottom-width: 1px;
   text-transform: uppercase;
   font-size: 0.8125rem;
   letter-spacing: 0.03em;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+[data-theme="dark"] .table thead th {
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 .table tbody tr:last-child td {
@@ -632,7 +682,11 @@ body.sidebar-collapsed .sidebar-footer i {
 }
 
 .table tbody tr:hover {
-  background-color: rgba(0, 0, 0, 0.01);
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 /* Responsive breakpoints */
@@ -699,6 +753,7 @@ body.sidebar-collapsed .sidebar-footer i {
   white-space: nowrap;
   vertical-align: middle;
   border-radius: 0.375rem;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .status-success {
@@ -725,13 +780,13 @@ body.sidebar-collapsed .sidebar-footer i {
 }
 
 .stat-card {
-  background-color: white;
+  background-color: var(--card-bg);
   border-radius: 0.5rem;
   padding: 1.25rem;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s;
+  transition: transform 0.2s, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   border: 1px solid var(--border-color);
 }
 
@@ -780,7 +835,7 @@ body.sidebar-collapsed .sidebar-footer i {
 
 .stat-icon.success {
   background-color: rgba(16, 185, 129, 0.1);
-  color: var(--success-color);
+  color: var (--success-color);
 }
 
 .stat-value {
@@ -806,13 +861,13 @@ body.sidebar-collapsed .sidebar-footer i {
 
 .machine-card {
   position: relative;
-  background-color: white;
+  background-color: var(--card-bg);
   border-radius: 0.5rem;
   padding: 1.25rem;
   box-shadow: var(--shadow);
   border: 1px solid var(--border-color);
   border-left: 4px solid var(--gray-400);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .machine-card:hover {
@@ -920,56 +975,222 @@ body.sidebar-collapsed .sidebar-footer i {
   border-radius: 0.375rem;
 }
 
-/* Card grid for admin dashboard */
-.admin-dashboard .stats-grid {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-}
-
-.admin-dashboard .stat-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.admin-dashboard .stat-card .btn {
-  margin-top: auto;
-}
-
-/* Improved alert styling */
-.alert {
+/* Theme switch in header - adjust to make it more visible */
+.theme-switch {
   display: flex;
   align-items: center;
-  padding: 1rem;
-  border-radius: 0.375rem;
-  margin-bottom: 1.5rem;
+  margin-right: 1rem;
+  cursor: pointer;
 }
 
-.alert-info {
-  background-color: rgba(6, 182, 212, 0.1);
-  color: #0e7490;
-  border-left: 4px solid var(--info-color);
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+  margin: 0 10px;
 }
 
-/* Add machine form spacing */
-.machines-management .form-group {
-  margin-bottom: 1rem;
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
-/* Responsive improvements */
-@media (max-width: 768px) {
-  .row {
-    flex-direction: column;
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--gray-300);
+  transition: 0.4s;
+  border-radius: 26px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.4s;
+}
+
+input:checked + .slider {
+  background-color: var(--primary-color);
+}
+
+input:checked + .slider:before {
+  transform: translateX(24px);
+}
+
+.theme-switch-icon {
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
+/* Stats card and status badges updates for dark mode */
+.stat-card {
+  background-color: var(--card-bg);
+  box-shadow: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color);
+  border: 1px solid var(--border-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-value {
+  color: var(--text-dark);
+  transition: color 0.3s ease;
+}
+
+.stat-description {
+  color: var(--text-muted);
+  transition: color 0.3s ease;
+}
+
+/* Override for status badges in dark mode */
+[data-theme="dark"] .status-badge.status-success {
+  background-color: rgba(16, 185, 129, 0.2);
+}
+
+[data-theme="dark"] .status-badge.status-warning {
+  background-color: rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .status-badge.status-danger {
+  background-color: rgba(239, 68, 68, 0.2);
+}
+
+[data-theme="dark"] .status-badge.status-info {
+  background-color: rgba(6, 182, 212, 0.2);
+}
+
+[data-theme="dark"] .status-badge.status-secondary {
+  background-color: rgba(100, 116, 139, 0.2);
+}
+
+/* Permission items in role management */
+.permission-category {
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border-color);
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+
+.permission-item {
+  color: var(--text-color);
+  transition: color 0.3s ease;
+}
+
+/* Schema debugging page */
+[data-theme="dark"] .nav-pills .nav-link {
+  background-color: var(--gray-100);
+}
+
+[data-theme="dark"] .nav-pills .nav-link.active {
+  background-color: var(--primary-color);
+}
+
+/* Button styles */
+.btn {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Machine cards */
+.machine-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.machine-name {
+  color: var(--text-dark);
+  transition: color 0.3s ease;
+}
+
+.detail-label {
+  color: var(--text-muted);
+  transition: color 0.3s ease;
+}
+
+.detail-value {
+  color: var(--text-color);
+  transition: color 0.3s ease;
+}
+
+/* Accordion and collapsible items */
+.btn-link {
+  color: var(--text-dark);
+  transition: color 0.3s ease;
+}
+
+.btn-link:hover {
+  color: var(--primary-color);
+}
+
+/* Password requirements */
+.requirement {
+  color: var(--text-muted);
+  transition: color 0.3s ease;
+}
+
+.requirement.valid {
+  color: var(--success-color);
+}
+
+/* Email testing page */
+.form-control-static {
+  color: var(--text-color);
+  background-color: var(--body-bg);
+  border: 1px solid var(--border-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+/* Print styles - force light theme for printing */
+@media print {
+  :root {
+    /* Reset to light theme for printing */
+    --body-bg: white;
+    --card-bg: white;
+    --text-color: black;
+    --border-color: #ddd;
   }
   
-  .header-actions {
-    flex-direction: column;
-    align-items: stretch;
-    margin-top: 0.5rem;
+  .sidebar, 
+  .top-header, 
+  .theme-switch,
+  .btn,
+  .no-print {
+    display: none !important;
   }
   
-  .d-flex.gap-2 {
-    flex-direction: column;
-    gap: 0.5rem !important;
+  .app-container {
+    display: block;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    padding: 0;
+  }
+  
+  .content-container {
+    padding: 0;
+  }
+  
+  .card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+  
+  .table {
+    border-collapse: collapse;
+  }
+  
+  .table th,
+  .table td {
+    border: 1px solid #ddd;
   }
 }
-
-/* More utility classes can be added as needed */

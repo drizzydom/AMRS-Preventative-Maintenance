@@ -25,6 +25,7 @@
             --success: #10b981;
             --error: #ef4444;
             --warning: #f59e0b;
+            --font-size: 1rem; /* Standard font size */
         }
         
         * {
@@ -33,6 +34,7 @@
         
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: var(--font-size);
             margin: 0;
             padding: 0;
             background-color: #f3f4f6;
@@ -42,6 +44,7 @@
             align-items: center;
             justify-content: center;
             background-image: linear-gradient(135deg, #f5f7fa 0%, #eef2f7 100%);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         
         .login-container {
@@ -201,9 +204,114 @@
                 max-width: 400px;
             }
         }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #0f172a;
+                background-image: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            }
+            
+            .login-container {
+                background-color: #1e293b;
+                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -4px rgba(0,0,0,0.3);
+            }
+            
+            .login-title, .form-label {
+                color: #e2e8f0;
+            }
+            
+            .form-control {
+                color: #e2e8f0;
+                background-color: #0f172a;
+                border: 1px solid #334155;
+            }
+            
+            .form-control:focus {
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+            }
+            
+            .login-footer {
+                background-color: #0f172a;
+                border-top: 1px solid #334155;
+            }
+            
+            .input-icon {
+                color: #64748b;
+            }
+            
+            .alert-error {
+                background-color: rgba(239, 68, 68, 0.2);
+                color: #fca5a5;
+                border-color: #ef4444;
+            }
+        }
+        
+        /* Theme toggle */
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            color: #64748b;
+            font-size: 1.5rem;
+            cursor: pointer;
+            z-index: 10;
+        }
+        
+        .theme-toggle:focus {
+            outline: none;
+        }
+        
+        /* Manual dark mode class */
+        html[data-theme="dark"] {
+            background-color: #0f172a;
+            background-image: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+        
+        html[data-theme="dark"] .login-container {
+            background-color: #1e293b;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -4px rgba(0,0,0,0.3);
+        }
+        
+        html[data-theme="dark"] .login-title, 
+        html[data-theme="dark"] .form-label {
+            color: #e2e8f0;
+        }
+        
+        html[data-theme="dark"] .form-control {
+            color: #e2e8f0;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+        }
+        
+        html[data-theme="dark"] .form-control:focus {
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+        }
+        
+        html[data-theme="dark"] .login-footer {
+            background-color: #0f172a;
+            border-top: 1px solid #334155;
+        }
+        
+        html[data-theme="dark"] .input-icon {
+            color: #64748b;
+        }
+        
+        html[data-theme="dark"] .alert-error {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border-color: #ef4444;
+        }
     </style>
 </head>
 <body>
+    <!-- Dark/light mode toggle button -->
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+        <i class="fas fa-moon" id="theme-icon"></i>
+    </button>
+
     <div class="login-container">
         <div class="login-header">
             <div class="login-logo">
@@ -250,5 +358,39 @@
             <a href="{{ url_for('forgot_password') }}">Forgot your password?</a>
         </div>
     </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const htmlEl = document.documentElement;
+            
+            // Check for saved theme preference or respect OS preference
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            function setTheme(theme) {
+                htmlEl.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            }
+            
+            // Apply initial theme
+            if (savedTheme) {
+                setTheme(savedTheme);
+            } else if (prefersDarkScheme) {
+                setTheme('dark');
+            } else {
+                setTheme('light');
+            }
+            
+            // Toggle theme on click
+            themeToggle.addEventListener('click', function() {
+                const currentTheme = htmlEl.getAttribute('data-theme') || 'light';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                setTheme(newTheme);
+            });
+        });
+    </script>
 </body>
 </html>
