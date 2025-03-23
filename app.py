@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,12 +10,15 @@ import logging
 from functools import wraps
 from flask_mail import Mail, Message
 from dotenv import load_dotenv
+from sqlalchemy import text
+from sqlalchemy.orm.attributes import flag_modified  # Add this import
+import traceback
 
 # Get the directory of this file
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-# Look for .env file in the current directory
+
+# Define dotenv_path before using it
 dotenv_path = os.path.join(BASE_DIR, '.env')
-# Load environment variables from .env file
 load_dotenv(dotenv_path)
 
 # Function to ensure .env file exists
@@ -69,7 +72,7 @@ def ensure_email_templates():
         <div class="overdue">
             <h2>⚠️ Overdue Maintenance Items</h2>
             <ul>
-                {% for part in overdue_parts %}
+                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date }})</li>
                 <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date }})</li>
                 {% endfor %}
             </ul>
@@ -77,8 +80,8 @@ def ensure_email_templates():
         {% endif %}
         {% if due_soon_parts %}
         <div class="due-soon">
-            <h2>🔔 Maintenance Due Soon ({{ threshold }} days)</h2>
-            <ul>
+            <ul>🔔 Maintenance Due Soon ({{ threshold }} days)</h2>
+                {% for part in due_soon_parts %}
                 {% for part in due_soon_parts %}
                 <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days ({{ part.due_date }})</li>
                 {% endfor %}
@@ -987,6 +990,62 @@ def check_for_due_soon_parts():
     
     return sent_count
 
+def send_maintenance_notification(site, overdue_parts, due_soon_parts):
+    """Send email notification about maintenance due for a site"""
+    if not site.enable_notifications or not site.contact_email:
+        return False
+    
+    # Get users associated with this site
+    site_users = site.users
+    
+    # For each user with this site assigned
+    for user in site_users:
+        # Check user notification preferences
+        preferences = user.get_notification_preferences()
+        
+        # Skip if user has disabled email notifications
+        if not preferences.get('enable_email', True) or not user.email:
+            continue
+            
+        # Check notification types the user wants to receive
+        notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
+        
+        # Filter parts based on user preferences
+        parts_to_notify = []
+        if 'overdue' in notification_types and overdue_parts:
+            parts_to_notify.extend(overdue_parts)
+        if 'due_soon' in notification_types and due_soon_parts:
+            parts_to_notify.extend(due_soon_parts)
+            
+        # Skip if no parts to notify about after filtering
+        if not parts_to_notify:
+            continue
+        
+        # Prepare email content
+        subject = f"Maintenance Needed at {site.name}"
+        
+        # Create email content based on parts
+        html = render_template(
+            'email/maintenance_notification.html',
+            site=site,
+            overdue_parts=overdue_parts if 'overdue' in notification_types else [],
+            due_soon_parts=due_soon_parts if 'due_soon' in notification_types else [],
+            user=user
+        )
+        
+        # Send email
+        try:
+            msg = Message(subject=subject,
+                        recipients=[user.email],
+                        html=html,
+                        sender=app.config['MAIL_DEFAULT_SENDER'])
+            mail.send(msg)
+        except Exception as e:
+            print(f"Failed to send email to {user.email}: {str(e)}")
+            continue
+            
+    return True
+
 # Add the missing route for checking notifications
 @app.route('/admin/check-notifications', methods=['GET'])
 @login_required
@@ -994,7 +1053,6 @@ def check_notifications():
     if not current_user.is_admin:
         flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
-        
     count = check_for_due_soon_parts()
     flash(f'Sent notifications for {count} sites with parts due soon or overdue.')
     return redirect(url_for('admin'))
@@ -1037,20 +1095,17 @@ def init_db():
                                ]))
         db.session.add_all([admin_role, manager_role, technician_role])
         db.session.commit()
-
         # Create admin user
         admin = User(username='admin', full_name='Administrator', email='admin@example.com', is_admin=True, role_id=admin_role.id)
         admin.set_password('admin')
         db.session.add(admin)
         db.session.commit()
-
         # Create test sites
         site1 = Site(name='Main Factory', location='123 Industrial Ave')
         site2 = Site(name='Assembly Plant', location='456 Production Blvd', enable_notifications=True,
                      contact_email='factory.manager@example.com', notification_threshold=7)
         db.session.add_all([site1, site2])
         db.session.commit()
-
         # Create test machines
         machine1 = Machine(name='CNC Mill', model='XYZ-1000', site_id=site1.id)
         machine2 = Machine(name='Lathe', model='LT-500', site_id=site1.id)
@@ -1058,7 +1113,6 @@ def init_db():
         machine4 = Machine(name='Assembly Robot', model='AR-200', site_id=site2.id)
         db.session.add_all([machine1, machine2, machine3, machine4])
         db.session.commit()
-
         # Current date for reference
         now = datetime.utcnow()
 
@@ -1100,7 +1154,6 @@ def init_db():
         ]
         db.session.add_all(parts)
         db.session.commit()
-
         # Update next_maintenance for all parts
         for part in parts:
             part.update_next_maintenance()
@@ -1170,7 +1223,6 @@ def check_notification_settings():
                         parts_overdue += 1
                     elif days_until <= site.notification_threshold:
                         parts_due_soon += 1
-        
         print(f"  Parts Status Summary:")
         print(f"    - Overdue: {parts_overdue}")
         print(f"    - Due soon: {parts_due_soon}")
@@ -1208,7 +1260,6 @@ def test_email():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.')
         return redirect(url_for('dashboard'))
-    
     if request.method == 'POST':
         recipient = request.form.get('email')
         subject = request.form.get('subject', 'Maintenance Tracker - Test Email')
@@ -1217,7 +1268,7 @@ def test_email():
         site_location = request.form.get('site_location', 'Test Location')
         notification_threshold = int(request.form.get('notification_threshold', 7))
         include_samples = 'include_samples' in request.form
-
+        
         # Sample data for overdue and due-soon items
         sample_data = {}
         if include_samples:
@@ -1262,7 +1313,6 @@ def test_email():
                 'location': site_location
             }
             sample_data['threshold'] = notification_threshold
-        
         try:
             msg = Message(
                 subject=subject,
@@ -1322,7 +1372,6 @@ def update_db_schema():
             missing_machine_columns.append('machine_number')
         if 'serial_number' not in machine_columns:
             missing_machine_columns.append('serial_number')
-        
         if missing_machine_columns:
             # Add new columns to the table using the modern approach
             with db.engine.connect() as conn:
@@ -1342,9 +1391,8 @@ def update_db_schema():
             missing_part_columns.append('invoice_number')
         if 'maintenance_unit' not in part_columns:
             missing_part_columns.append('maintenance_unit')
-        
         if missing_part_columns:
-            # Add missing columns to the tables
+            # Add missing columns to the table
             with db.engine.connect() as conn:
                 for column in missing_part_columns:
                     if column == 'last_maintained_by':
@@ -1365,7 +1413,6 @@ def update_db_schema():
             missing_user_columns.append('reset_token')
         if 'reset_token_expiration' not in user_columns:
             missing_user_columns.append('reset_token_expiration')
-        
         if missing_user_columns:
             # Add missing columns to the User table
             with db.engine.connect() as conn:
@@ -1399,7 +1446,6 @@ def debug_schema():
                 'nullable': column['nullable']
             })
         tables[table_name] = columns
-    
     return render_template('debug_schema.html', tables=tables)
 
 @app.route('/machine/<int:machine_id>/history')
@@ -1439,7 +1485,6 @@ def machine_history(machine_id):
             flash('Maintenance log table was created. Please try again.')
         except Exception as create_error:
             flash(f'Could not create maintenance log table: {str(create_error)}')
-    
     return render_template('machine_history_modern.html', machine=machine, logs=logs)
 
 # Import backup utilities
@@ -1452,17 +1497,15 @@ def admin_backups():
     if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_VIEW)):
         flash('Access denied. You need permission to view backups.', 'error')
         return redirect(url_for('dashboard'))
-    
     backups = list_backups()
     return render_template('admin_backups_modern.html', backups=backups)
-
+    
 @app.route('/admin/backups/create', methods=['POST'])
 @login_required
 def create_backup():
     if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_CREATE)):
         flash('Access denied. You need permission to create backups.', 'error')
         return redirect(url_for('dashboard'))
-    
     backup_name = request.form.get('backup_name', '')
     include_users = 'include_users' in request.form
     
@@ -1471,7 +1514,6 @@ def create_backup():
         flash(f'Backup created successfully: {os.path.basename(backup_path)}')
     except Exception as e:
         flash(f'Error creating backup: {str(e)}', 'error')
-    
     return redirect(url_for('admin_backups'))
 
 @app.route('/admin/backups/restore', methods=['POST'])
@@ -1480,7 +1522,6 @@ def restore_backup():
     if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_RESTORE)):
         flash('Access denied. You need permission to restore backups.', 'error')
         return redirect(url_for('dashboard'))
-    
     backup_file = request.form.get('backup_file', '')
     restore_users = 'restore_users' in request.form
     
@@ -1500,18 +1541,15 @@ def restore_backup():
         message += f'Restored: {stats["logs_restored"]} maintenance logs'
         if restore_users:
             message += f', {stats["roles_restored"]} roles, {stats["users_restored"]} users, {stats["assignments_restored"]} site assignments'
-        
         if stats['errors']:
             message += f'. There were {len(stats["errors"])} errors.'
             for i, error in enumerate(stats['errors'][:3]):  # Show first 3 errors
                 message += f' Error {i+1}: {error}.'
             if len(stats['errors']) > 3:
                 message += ' ...'
-        
         flash(message)
     except Exception as e:
         flash(f'Error restoring backup: {str(e)}', 'error')
-    
     return redirect(url_for('admin_backups'))
 
 @app.route('/admin/backups/download/<filename>', methods=['GET'])
@@ -1520,29 +1558,25 @@ def download_backup(filename):
     if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_EXPORT)):
         flash('Access denied. You need permission to export backups.', 'error')
         return redirect(url_for('dashboard'))
-    
     backups_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'backups')
     return send_from_directory(backups_dir, filename, as_attachment=True)
-
+    
 @app.route('/admin/backups/delete/<filename>', methods=['POST'])
 @login_required
 def delete_backup_route(filename):
     if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_DELETE)):
         flash('Access denied. You need permission to delete backups.', 'error')
         return redirect(url_for('dashboard'))
-    
     if delete_backup(filename):
         flash(f'Backup "{filename}" deleted successfully')
     else:
         flash(f'Error deleting backup "{filename}"', 'error')
-    
     return redirect(url_for('admin_backups'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    
     if request.method == 'POST':
         email = request.form.get('email')
         
@@ -1580,10 +1614,9 @@ def forgot_password():
             # Still show success message even if email not found
             # This prevents user enumeration attacks
             flash("If that email is in our system, a password reset link has been sent", "success")
-        
         return redirect(url_for('login'))
     return render_template('forgot_password.html')
-
+        
 @app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])
 def reset_password(user_id, token):
     if current_user.is_authenticated:
@@ -1642,15 +1675,125 @@ def add_reset_columns_cmd():
         else:
             print("No changes needed. Password reset columns already exist.")
 
+@app.route('/user/profile', methods=['GET'])
+@login_required
+def user_profile():
+    """Display the user profile page"""
+    # Ensure notification_preferences exists
+    if not hasattr(current_user, 'notification_preferences') or current_user.notification_preferences is None:
+        current_user.notification_preferences = {
+            'enable_email': True,
+            'email_frequency': 'weekly',
+            'notification_types': ['overdue', 'due_soon']
+        }
+        db.session.commit()
+    
+    # Debug output - see what values are actually stored
+    print(f"Current user preferences: {current_user.notification_preferences}")
+    
+    return render_template('user_profile.html')
+
+@app.route('/profile/update', methods=['POST'])
+@login_required
+def update_profile():
+    username = request.form.get('username')
+    email = request.form.get('email')
+    full_name = request.form.get('full_name')
+    
+    # Check for duplicate username (if changed)
+    if username != current_user.username and User.query.filter_by(username=username).first():
+        flash('Username already in use. Please choose a different one.', 'danger')
+        return redirect(url_for('user_profile'))
+    
+    # Check for duplicate email (if changed)
+    if email != current_user.email and User.query.filter_by(email=email).first():
+        flash('Email already in use. Please choose a different one.', 'danger')
+        return redirect(url_for('user_profile'))
+    
+    # Update user details
+    current_user.username = username
+    current_user.email = email
+    current_user.full_name = full_name
+    db.session.commit()
+    flash('Profile updated successfully!', 'success')
+    return redirect(url_for('user_profile'))
+
+@app.route('/profile/change-password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Verify current password
+    if not current_user.check_password(current_password):
+        flash('Current password is incorrect.', 'danger')
+        return redirect(url_for('user_profile'))
+    
+    # Check password requirements
+    if len(new_password) < 8 or not any(c.isupper() for c in new_password) or not any(c.isdigit() for c in new_password):
+        flash('Password must be at least 8 characters long, contain an uppercase letter and a number.', 'danger')
+        return redirect(url_for('user_profile'))
+    
+    # Confirm passwords match
+    if new_password != confirm_password:
+        flash('New passwords do not match.', 'danger')
+        return redirect(url_for('user_profile'))
+    
+    # Update password
+    current_user.set_password(new_password)
+    db.session.commit()
+    flash('Password updated successfully!', 'success')
+    return redirect(url_for('user_profile'))
+
+@app.route('/profile/notification-preferences', methods=['POST'])
+@login_required
+def update_notification_preferences():
+    """Update user notification preferences"""
+    try:
+        # Get form data
+        enable_email = 'enable_email' in request.form
+        email_frequency = request.form.get('email_frequency')
+        notification_types = request.form.getlist('notification_types')
+        
+        print(f"Form data: enable_email={enable_email}, email_frequency={email_frequency}, types={notification_types}")
+        
+        if not hasattr(current_user, 'notification_preferences') or current_user.notification_preferences is None:
+            current_user.notification_preferences = {}
+        
+        # Directly set each preference value
+        # Using direct assignment seems more reliable than dict operations
+        current_user.notification_preferences = {
+            'enable_email': enable_email,
+            'email_frequency': email_frequency if email_frequency else 'weekly',
+            'notification_types': notification_types
+        }
+        
+        # Use direct database connection to update the user
+        try:
+            db.session.add(current_user)  # Make sure the user is tracked
+            db.session.commit()
+            
+            print(f"Saved preferences: {current_user.notification_preferences}")
+            flash('Notification preferences updated successfully', 'success')
+        except Exception as db_err:
+            db.session.rollback()
+            print(f"Database error: {str(db_err)}")
+            flash(f'Database error: {str(db_err)}', 'danger')
+            
+    except Exception as e:
+        print(f"General error: {str(e)}")
+        flash(f'Error updating preferences: {str(e)}', 'danger')
+    
+    return redirect(url_for('user_profile'))
+
 @app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def edit_user(user_id):
     if not current_user.is_admin:
         flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
-        
     user = User.query.get_or_404(user_id)
-    
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -1670,7 +1813,7 @@ def edit_user(user_id):
         # Update password only if provided
         if password:
             user.set_password(password)
-            
+        
         # Update site assignments
         user.sites = []
         for site_id in sites:
@@ -1681,12 +1824,133 @@ def edit_user(user_id):
         db.session.commit()
         flash(f'User "{username}" updated successfully!', 'success')
         return redirect(url_for('manage_users'))
-    
     roles = Role.query.all()
     sites = Site.query.all()
     return render_template('admin_edit_user_modern.html', user=user, roles=roles, sites=sites)
 
+# New routes for checking and sending notifications
+@app.route('/admin/check_notifications')
+@login_required
+def admin_check_notifications():  # Changed from check_notifications to admin_check_notifications
+    """Check for maintenance notifications"""
+    if not current_user.is_admin and not current_user.has_permission('admin.access'):
+        flash("You don't have permission to access this page", "danger")
+        return redirect(url_for('dashboard'))
+    
+    now = datetime.utcnow()
+    sites = Site.query.all()
+    
+    # Count stats
+    overdue_count = 0
+    due_soon_count = 0
+    sites_with_notifications = 0
+    
+    for site in sites:
+        if site.enable_notifications:
+            sites_with_notifications += 1
+        
+        for machine in site.machines:
+            for part in machine.parts:
+                days_until = (part.next_maintenance - now).days
+                if days_until < 0:
+                    overdue_count += 1
+                elif days_until <= site.notification_threshold:
+                    due_soon_count += 1
+    return render_template('admin_notifications_modern.html', 
+                          sites=sites,         
+                          now=now, 
+                          overdue_count=overdue_count,
+                          due_soon_count=due_soon_count,
+                          sites_with_notifications=sites_with_notifications,
+                          total_sites=len(sites))
+
+@app.route('/admin/send_notifications', methods=['POST'])
+@login_required
+def admin_send_notifications():  # Changed from send_notifications to admin_send_notifications
+    """Send maintenance notifications to sites"""
+    if not current_user.is_admin and not current_user.has_permission('admin.access'):
+        flash("You don't have permission to access this page", "danger")
+        return redirect(url_for('dashboard'))
+    
+    success_count = 0
+    error_count = 0
+    now = datetime.utcnow()
+    sites = Site.query.all()
+    
+    for site in sites:
+        if not site.enable_notifications or not site.contact_email:
+            continue
+        
+        overdue_parts = []
+        due_soon_parts = []
+        
+        for machine in site.machines:
+            for part in machine.parts:
+                days_until = (part.next_maintenance - now).days
+                if days_until < 0:
+                    overdue_parts.append(part)
+                elif days_until <= site.notification_threshold:
+                    due_soon_parts.append(part)
+        
+        # Skip if no parts need attention
+        if not overdue_parts and not due_soon_parts:
+            continue
+        
+        # For all users assigned to this site
+        site_users = site.users
+        for user in site_users:
+            # Get notification preferences
+            preferences = user.get_notification_preferences()
+            if not preferences.get('enable_email', True):
+                continue
+            
+            # Check if this is an immediate notification
+            if preferences.get('email_frequency') != 'immediate':
+                continue
+            
+            # Check notification types the user wants to receive
+            notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
+            
+            # Only send if there are parts that match the user's notification types
+            if ('overdue' in notification_types and overdue_parts) or ('due_soon' in notification_types and due_soon_parts):
+                try:
+                    # Prepare email content
+                    subject = f"Maintenance Needed at {site.name}"
+                    
+                    # Filter parts based on user preferences
+                    filtered_overdue = overdue_parts if 'overdue' in notification_types else []
+                    filtered_due_soon = due_soon_parts if 'due_soon' in notification_types else []
+                    
+                    # Create email content
+                    html = render_template(
+                        'email/maintenance_notification.html',
+                        site=site,
+                        overdue_parts=filtered_overdue,
+                        due_soon_parts=filtered_due_soon,
+                        user=user,
+                        now=now
+                    )
+                    
+                    # Send email
+                    msg = Message(subject=subject,
+                                recipients=[user.email],
+                                html=html,
+                                sender=app.config['MAIL_DEFAULT_SENDER'])
+                    mail.send(msg)
+                    success_count += 1
+                except Exception as e:
+                    error_count += 1
+                    app.logger.error(f"Failed to send notification email: {str(e)}")
+    
+    if success_count > 0:
+        flash(f"Successfully sent {success_count} notification emails", "success")
+    if error_count > 0:
+        flash(f"Failed to send {error_count} notification emails. Check the logs for details.", "warning")
+    if success_count == 0 and error_count == 0:
+        flash("No notification emails were sent. This could mean there are no immediate notifications configured or no maintenance is currently due.", "info")
+    return redirect(url_for('admin_check_notifications'))
+
 if __name__ == '__main__':
-    ensure_env_file()
     ensure_email_templates()
+    ensure_env_file()
     app.run(debug=True, host='0.0.0.0', port=5050)

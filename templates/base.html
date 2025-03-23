@@ -107,6 +107,16 @@
                     <h1 class="page-title">{% block header_title %}Maintenance Tracker{% endblock %}</h1>
                 </div>
                 <div class="header-right">
+                    <!-- Theme switcher -->
+                    <div class="theme-switch">
+                        <i class="fas fa-sun theme-switch-icon"></i>
+                        <label class="switch">
+                            <input type="checkbox" id="theme-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <i class="fas fa-moon theme-switch-icon"></i>
+                    </div>
+                    
                     {% if current_user.is_authenticated %}
                     <div class="user-menu">
                         <button class="user-menu-trigger">
@@ -124,7 +134,7 @@
                             </div>
                             <hr>
                             <ul>
-                                <li><a href="#"><i class="fas fa-user-circle"></i> Profile</a></li>
+                                <li><a href="{{ url_for('user_profile') }}"><i class="fas fa-user-circle"></i> My Profile</a></li>
                                 <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
                             </ul>
                         </div>
@@ -167,6 +177,35 @@
             if (localStorage.getItem('sidebar-collapsed') === 'true') {
                 document.body.classList.add('sidebar-collapsed');
             }
+            
+            // Theme toggle functionality - fixed implementation
+            const themeToggle = document.getElementById('theme-toggle');
+            
+            // Check for saved theme preference or respect OS preference
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            // Apply the theme to the HTML element, not the body
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                themeToggle.checked = (theme === 'dark');
+            }
+            
+            // Initialize theme
+            if (savedTheme) {
+                applyTheme(savedTheme);
+            } else if (prefersDarkScheme) {
+                applyTheme('dark');
+            } else {
+                applyTheme('light');
+            }
+            
+            // Handle toggle click
+            themeToggle.addEventListener('change', function() {
+                const newTheme = this.checked ? 'dark' : 'light';
+                applyTheme(newTheme);
+                localStorage.setItem('theme', newTheme);
+            });
             
             // User dropdown menu toggle
             const userMenuTrigger = document.querySelector('.user-menu-trigger');
