@@ -17,9 +17,10 @@
                 Backups include all sites, machines, parts, and maintenance history. You can optionally include user and role information.
             </div>
             
-            <form method="POST" action="{{ url_for('create_backup') }}">
+            <form method="POST" action="{{ url_for('admin_backups') }}">
+                <input type="hidden" name="action" value="create">
                 <div class="row">
-                    <div class="col">
+                    <div class="col-lg-6">
                         <div class="form-group">
                             <label for="backup_name" class="form-label">Backup Name (Optional)</label>
                             <input type="text" id="backup_name" name="backup_name" class="form-control"
@@ -27,7 +28,7 @@
                             <small class="form-text">If not specified, backup will be named with timestamp</small>
                         </div>
                     </div>
-                    <div class="col">
+                    <div class="col-lg-6">
                         <div class="form-group mt-4">
                             <div class="d-flex align-items-center">
                                 <input type="checkbox" id="include_users" name="include_users" class="mr-2">
@@ -58,7 +59,8 @@
                 <strong>Warning:</strong> Restoring from a backup will modify your current data. It's recommended to create a backup first.
             </div>
             
-            <form method="POST" action="{{ url_for('restore_backup') }}" onsubmit="return confirm('Are you sure you want to restore from this backup? This will modify your current data.');">
+            <form method="POST" action="{{ url_for('admin_backups') }}" onsubmit="return confirm('Are you sure you want to restore from this backup? This will modify your current data.');">
+                <input type="hidden" name="action" value="restore">
                 <div class="row">
                     <div class="col">
                         <div class="form-group">
@@ -112,7 +114,7 @@
         </div>
         <div class="card-body">
             {% if backups %}
-                <div class="table-container">
+                <div class="table-responsive">
                     <table class="table" id="backupsTable">
                         <thead>
                             <tr>
@@ -139,12 +141,17 @@
                                 </td>
                                 <td>
                                     <div class="d-flex gap-2">
-                                        <a href="{{ url_for('download_backup', filename=backup.filename) }}" 
-                                           class="btn btn-sm btn-outline">
-                                            <i class="fas fa-file-download"></i> Download
-                                        </a>
-                                        <form action="{{ url_for('delete_backup_route', filename=backup.filename) }}" method="POST" 
+                                        <form method="GET" action="{{ url_for('admin_backups') }}">
+                                            <input type="hidden" name="action" value="download">
+                                            <input type="hidden" name="filename" value="{{ backup.filename }}">
+                                            <button type="submit" class="btn btn-sm btn-outline">
+                                                <i class="fas fa-file-download"></i> Download
+                                            </button>
+                                        </form>
+                                        <form action="{{ url_for('admin_backups') }}" method="POST" 
                                               onsubmit="return confirm('Are you sure you want to delete this backup? This cannot be undone.');">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="filename" value="{{ backup.filename }}">
                                             <button type="submit" class="btn btn-sm btn-danger">
                                                 <i class="fas fa-trash-alt"></i> Delete
                                             </button>

@@ -235,6 +235,7 @@ class Permissions:
     BACKUP_RESTORE = 'backup.restore'
     BACKUP_EXPORT = 'backup.export'
     BACKUP_DELETE = 'backup.delete'
+    BACKUP_SCHEDULE = 'backup.schedule'  # New permission for managing scheduled backups
     
     # Administration
     ADMIN_ACCESS = 'admin.access'
@@ -266,16 +267,16 @@ class Role(db.Model):
     description = db.Column(db.String(200))
     permissions = db.Column(db.String(500), default="view")
     users = db.relationship('User', backref='role', lazy=True)
-
+    
     def has_permission(self, permission):
         return permission in self.permissions.split(',')
-
+    
     def get_permissions_list(self):
         return self.permissions.split(',')
 
 user_site = db.Table('user_site',
     db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
-    db.Column('site_id', db.Integer, db.ForeignKey('site.id'), primary_key=True)
+    db.Column('site_id', db.Integer, db.ForeignKey('site.id'), primary_key=True),
 )
 
 class User(db.Model, UserMixin):
@@ -337,7 +338,7 @@ class User(db.Model, UserMixin):
         self.reset_token = None
         self.reset_token_expiration = None
         db.session.commit()
-
+    
     def get_notification_preferences(self):
         """Get notification preferences with defaults for missing values"""
         import json
@@ -349,7 +350,6 @@ class User(db.Model, UserMixin):
                 prefs = {}
         except:
             prefs = {}
-            
         # Set defaults for missing keys
         if 'enable_email' not in prefs:
             prefs['enable_email'] = True
@@ -367,31 +367,27 @@ class Site(db.Model):
     enable_notifications = db.Column(db.Boolean, default=False)
     contact_email = db.Column(db.String(100))  # Contact email for notifications
     notification_threshold = db.Column(db.Integer, default=30)  # Days before due date to notify
-
+    
     def get_parts_status(self, now=None):
         """Return counts of parts by status (overdue, due_soon, ok)"""
         if now is None:
             now = datetime.utcnow()
-            
         overdue_parts = []
         due_soon_parts = []
         ok_parts = []
-        
         for machine in self.machines:
             for part in machine.parts:
                 days_until = (part.next_maintenance - now).days
-                
                 if days_until < 0:
                     overdue_parts.append(part)
                 elif days_until <= self.notification_threshold:
                     due_soon_parts.append(part)
                 else:
                     ok_parts.append(part)
-        
         return {
             'overdue': overdue_parts,
             'due_soon': due_soon_parts,
-            'ok': ok_parts
+            'ok': ok_parts,
         }
 
 class Machine(db.Model):
@@ -416,25 +412,23 @@ class Part(db.Model):
     notification_sent = db.Column(db.Boolean, default=False)  # Track if notification has been sent
     last_maintained_by = db.Column(db.String(100))  # New field for who performed maintenance
     invoice_number = db.Column(db.String(50))  # New field for invoice tracking
-
+    
     def __init__(self, **kwargs):
         # Extract frequency and unit if provided
         frequency = kwargs.get('maintenance_frequency', 7)
         unit = kwargs.get('maintenance_unit', 'day')
-        
         # Convert to days for internal storage
         if 'maintenance_frequency' in kwargs and 'maintenance_unit' in kwargs:
             kwargs['maintenance_frequency'] = self.convert_to_days(frequency, unit)
-        
         super(Part, self).__init__(**kwargs)
         if 'maintenance_frequency' in kwargs and 'last_maintenance' in kwargs:
             self.update_next_maintenance()
-
+    
     def update_next_maintenance(self):
         """Update next maintenance date and reset notification status"""
         self.next_maintenance = self.last_maintenance + timedelta(days=self.maintenance_frequency)
         self.notification_sent = False  # Reset notification status when maintenance is done
-
+    
     @staticmethod
     def convert_to_days(value, unit):
         """Convert a value from specified unit to days"""
@@ -449,11 +443,10 @@ class Part(db.Model):
             return value * 365
         else:
             return value  # Default to days
-
+    
     def get_frequency_display(self):
         """Return a human-readable frequency with appropriate unit"""
         days = self.maintenance_frequency
-        
         if days % 365 == 0 and days >= 365:
             return f"{days // 365} {'year' if days // 365 == 1 else 'years'}"
         elif days % 30 == 0 and days >= 30:
@@ -471,7 +464,6 @@ class MaintenanceLog(db.Model):
     invoice_number = db.Column(db.String(50))
     maintenance_date = db.Column(db.DateTime, default=datetime.utcnow)
     notes = db.Column(db.Text)
-    
     # Reference to the part to track which part was maintained
     part = db.relationship('Part', backref='maintenance_logs')
 
@@ -521,19 +513,19 @@ def dashboard():
         sites = current_user.sites
     else:
         sites = []
-
+    
     now = datetime.utcnow()
     machines = Machine.query.all()
     return render_template(
         'dashboard_modern.html',  # Use the modern dashboard
-        sites=sites, 
-        machines=machines, 
+        sites=sites,
+        machines=machines,
         now=now, 
         is_admin=current_user.is_admin,
         current_user=current_user
     )
 
-# Admin routes
+# Admin routes  
 @app.route('/admin')
 @login_required
 def admin():
@@ -604,7 +596,6 @@ def manage_machines():
         db.session.commit()
         flash('Machine added successfully!', 'success')
         return redirect(url_for('manage_machines'))
-        
     machines = Machine.query.all()
     sites = Site.query.all()
     return render_template('admin_machines_modern.html', machines=machines, sites=sites)  # Use the modern machines template
@@ -635,7 +626,6 @@ def manage_parts():
     if not current_user.is_admin and not current_user.has_permission(Permissions.PARTS_VIEW):
         flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
-    
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
@@ -649,7 +639,6 @@ def manage_parts():
         try:
             # Convert to days based on unit
             days = Part.convert_to_days(maintenance_frequency, maintenance_unit)
-            
             # Create new part with maintenance_unit
             new_part = Part(
                 name=name, 
@@ -669,7 +658,6 @@ def manage_parts():
                 maintenance_frequency *= 30
             elif maintenance_unit == 'year':
                 maintenance_frequency *= 365
-                
             new_part = Part(
                 name=name, 
                 description=description, 
@@ -677,11 +665,9 @@ def manage_parts():
                 maintenance_frequency=maintenance_frequency,
                 last_maintenance=datetime.utcnow()
             )
-            
         db.session.add(new_part)
         db.session.commit()
         flash('Part added successfully')
-        
     try:
         parts = Part.query.all()
     except Exception as e:
@@ -689,7 +675,6 @@ def manage_parts():
         app.logger.error(f"Error querying parts: {str(e)}")
         flash("Database schema needs to be updated. Please run the add_maintenance_unit.py script.")
         parts = []
-        
     machines = Machine.query.all()
     now = datetime.utcnow()
     return render_template('admin_parts_modern.html', parts=parts, machines=machines, now=now)
@@ -700,22 +685,18 @@ def edit_part(part_id):
     if not current_user.is_admin and not current_user.has_permission(Permissions.PARTS_EDIT):
         flash("You don't have permission to edit parts", "danger")
         return redirect(url_for('dashboard'))
-    
+        
     part = Part.query.get_or_404(part_id)
-    
     if request.method == 'POST':
         part.name = request.form.get('name')
         part.description = request.form.get('description')
         part.machine_id = request.form.get('machine_id')
-        
         # Get frequency and unit from form
         frequency = int(request.form.get('maintenance_frequency'))
         unit = request.form.get('maintenance_unit', 'day')
-        
         # Convert to days based on unit
         part.maintenance_frequency = Part.convert_to_days(frequency, unit)
         part.maintenance_unit = unit
-        
         part.last_maintenance = datetime.utcnow()
         part.update_next_maintenance()
         db.session.commit()
@@ -724,7 +705,7 @@ def edit_part(part_id):
     machines = Machine.query.all()
     return render_template('admin_edit_part_modern.html', part=part, machines=machines)
 
-# Delete routes
+# Delete routes for Parts
 @app.route('/admin/sites/delete/<int:site_id>', methods=['POST'])
 @login_required
 def delete_site(site_id):
@@ -736,7 +717,7 @@ def delete_site(site_id):
     db.session.commit()
     flash(f'Site "{site.name}" and all associated machines and parts have been deleted')
     return redirect(url_for('manage_sites'))
-
+        
 @app.route('/admin/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
 def delete_machine(machine_id):
@@ -767,13 +748,12 @@ def update_maintenance(part_id):
     if not current_user.is_admin and not current_user.has_permission(Permissions.MAINTENANCE_RECORD):
         flash("You don't have permission to record maintenance", "danger")
         return redirect(url_for('dashboard'))
-    
+        
     part = Part.query.get_or_404(part_id)
-    
     if request.method == 'GET':
         # Display form for entering maintenance details
         return render_template('record_maintenance_modern.html', part=part)
-    
+            
     elif request.method == 'POST':
         # Update part maintenance information
         maintenance_date = datetime.utcnow()
@@ -782,7 +762,6 @@ def update_maintenance(part_id):
         performed_by = request.form.get('maintained_by', '').strip()
         if not performed_by:
             performed_by = current_user.full_name or current_user.username
-            
         invoice_number = request.form.get('invoice_number', '')
         notes = request.form.get('notes', '')
         
@@ -801,12 +780,9 @@ def update_maintenance(part_id):
             maintenance_date=maintenance_date,
             notes=notes
         )
-        
         db.session.add(log)
         db.session.commit()
-        
         flash(f'Maintenance for "{part.name}" has been recorded')
-        
         # Check if the request came from dashboard or admin page
         referrer = request.referrer
         if referrer and 'dashboard' in referrer:
@@ -841,7 +817,6 @@ def edit_role(role_id):
     if not current_user.is_admin:
         flash("You don't have permission to edit roles", "danger")
         return redirect(url_for('dashboard'))
-    
     role = Role.query.get_or_404(role_id)
     role_permissions = role.get_permissions_list()
     
@@ -879,7 +854,6 @@ def manage_users():
     if not current_user.is_admin:
         flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
-    
     if request.method == 'POST':
         # Existing form handling code
         username = request.form.get('username')
@@ -930,24 +904,19 @@ def check_for_due_soon_parts():
     """Check for parts that have newly entered the 'due soon' threshold and send notifications"""
     sites_with_notifications = []
     now = datetime.utcnow()
-    
     for site in Site.query.filter_by(enable_notifications=True).all():
         if not site.contact_email:
             app.logger.info(f"Site {site.name} has notifications enabled but no contact email")
             continue
-        
         overdue_parts = []
         due_soon_parts = []
         parts_to_mark = []  # Parts to mark as notified
-        
         for machine in site.machines:
             for part in machine.parts:
                 # Skip parts that have already had notifications sent
                 if part.notification_sent:
                     continue
-                
                 days_until = (part.next_maintenance - now).days
-                
                 if days_until < 0:
                     overdue_parts.append({
                         'machine': machine.name,
@@ -966,7 +935,6 @@ def check_for_due_soon_parts():
                         'part_id': part.id
                     })
                     parts_to_mark.append(part)
-        
         if overdue_parts or due_soon_parts:
             sites_with_notifications.append({
                 'site': site,
@@ -974,7 +942,6 @@ def check_for_due_soon_parts():
                 'due_soon_parts': due_soon_parts,
                 'parts_to_mark': parts_to_mark
             })
-
     # Send emails for each site
     sent_count = 0
     for site_info in sites_with_notifications:
@@ -982,7 +949,6 @@ def check_for_due_soon_parts():
         overdue_parts = site_info['overdue_parts']
         due_soon_parts = site_info['due_soon_parts']
         parts_to_mark = site_info['parts_to_mark']
-        
         # Create email content
         subject = f"Maintenance Alert: {site.name}"
         html_body = render_template(
@@ -992,7 +958,6 @@ def check_for_due_soon_parts():
             due_soon_parts=due_soon_parts,
             threshold=site.notification_threshold
         )
-        
         try:
             msg = Message(
                 subject=subject,
@@ -1002,14 +967,12 @@ def check_for_due_soon_parts():
             mail.send(msg)
             app.logger.info(f"Maintenance notification sent to {site.contact_email} for site {site.name}")
             sent_count += 1
-            
             # Mark parts as notified
             for part in parts_to_mark:
                 part.notification_sent = True
             db.session.commit()
         except Exception as e:
             app.logger.error(f"Failed to send notification email: {str(e)}")
-    
     return sent_count
 
 def send_maintenance_notification(site, overdue_parts, due_soon_parts):
@@ -1028,7 +991,7 @@ def send_maintenance_notification(site, overdue_parts, due_soon_parts):
         # Skip if user has disabled email notifications
         if not preferences.get('enable_email', True) or not user.email:
             continue
-            
+        
         # Check notification types the user wants to receive
         notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
         
@@ -1038,14 +1001,13 @@ def send_maintenance_notification(site, overdue_parts, due_soon_parts):
             parts_to_notify.extend(overdue_parts)
         if 'due_soon' in notification_types and due_soon_parts:
             parts_to_notify.extend(due_soon_parts)
-            
+        
         # Skip if no parts to notify about after filtering
         if not parts_to_notify:
             continue
         
         # Prepare email content
         subject = f"Maintenance Needed at {site.name}"
-        
         # Create email content based on parts
         html = render_template(
             'email/maintenance_notification.html',
@@ -1054,7 +1016,6 @@ def send_maintenance_notification(site, overdue_parts, due_soon_parts):
             due_soon_parts=due_soon_parts if 'due_soon' in notification_types else [],
             user=user
         )
-        
         # Send email
         try:
             msg = Message(subject=subject,
@@ -1065,7 +1026,6 @@ def send_maintenance_notification(site, overdue_parts, due_soon_parts):
         except Exception as e:
             print(f"Failed to send email to {user.email}: {str(e)}")
             continue
-            
     return True
 
 # Add the missing route for checking notifications
@@ -1096,9 +1056,9 @@ def init_db():
                               Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
                               Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
                               Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD,
-                              # Add backup permissions to administrator role
+                              # Add backup permissions to administrator role, including the new BACKUP_SCHEDULE permission
                               Permissions.BACKUP_VIEW, Permissions.BACKUP_CREATE, Permissions.BACKUP_RESTORE, 
-                              Permissions.BACKUP_EXPORT, Permissions.BACKUP_DELETE
+                              Permissions.BACKUP_EXPORT, Permissions.BACKUP_DELETE, Permissions.BACKUP_SCHEDULE
                           ]))
         manager_role = Role(name='Manager', description='Can manage sites and view all data',
                             permissions=','.join([
@@ -1106,8 +1066,8 @@ def init_db():
                                 Permissions.MACHINES_VIEW, Permissions.MACHINES_CREATE, Permissions.MACHINES_EDIT, Permissions.MACHINES_DELETE,
                                 Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
                                 Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD,
-                                # Managers can view and create backups, but not restore or delete them
-                                Permissions.BACKUP_VIEW, Permissions.BACKUP_CREATE, Permissions.BACKUP_EXPORT
+                                # Managers can view, create and schedule backups but not restore or delete them
+                                Permissions.BACKUP_VIEW, Permissions.BACKUP_CREATE, Permissions.BACKUP_EXPORT, Permissions.BACKUP_SCHEDULE
                             ]))
         technician_role = Role(name='Technician', description='Can update maintenance records for assigned sites',
                                permissions=','.join([
@@ -1137,7 +1097,6 @@ def init_db():
         db.session.commit()
         # Current date for reference
         now = datetime.utcnow()
-
         # Create test parts with varying maintenance frequencies and past maintenance dates
         parts = [
             # Overdue parts (past maintenance date)
@@ -1516,88 +1475,46 @@ def machine_history(machine_id):
 # Import backup utilities
 from backup_utils import backup_database, restore_database, list_backups, delete_backup
 
-# Update backup routes to use permission checking
-@app.route('/admin/backups')
+@app.route('/admin/backups', methods=['GET', 'POST'])
 @login_required
 def admin_backups():
-    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_VIEW)):
-        flash('Access denied. You need permission to view backups.', 'error')
+    if not current_user.is_admin and not current_user.has_permission(Permissions.BACKUP_VIEW):
+        flash("You don't have permission to access this page", "danger")
         return redirect(url_for('dashboard'))
-    backups = list_backups()
-    return render_template('admin_backups_modern.html', backups=backups)
     
-@app.route('/admin/backups/create', methods=['POST'])
-@login_required
-def create_backup():
-    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_CREATE)):
-        flash('Access denied. You need permission to create backups.', 'error')
-        return redirect(url_for('dashboard'))
-    backup_name = request.form.get('backup_name', '')
-    include_users = 'include_users' in request.form
-    
-    try:
-        backup_path = backup_database(include_users=include_users, backup_name=backup_name)
-        flash(f'Backup created successfully: {os.path.basename(backup_path)}')
-    except Exception as e:
-        flash(f'Error creating backup: {str(e)}', 'error')
-    return redirect(url_for('admin_backups'))
-
-@app.route('/admin/backups/restore', methods=['POST'])
-@login_required
-def restore_backup():
-    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_RESTORE)):
-        flash('Access denied. You need permission to restore backups.', 'error')
-        return redirect(url_for('dashboard'))
-    backup_file = request.form.get('backup_file', '')
-    restore_users = 'restore_users' in request.form
-    
-    if not backup_file:
-        flash('No backup file selected', 'error')
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'create':
+            if not current_user.has_permission(Permissions.BACKUP_CREATE):
+                flash("You don't have permission to create backups", "danger")
+                return redirect(url_for('admin_backups'))
+            filename = backup_database()
+            if filename:
+                flash(f'Backup created successfully: {filename}')
+            else:
+                flash('Error creating backup', 'error')
+        elif action == 'restore':
+            if not current_user.has_permission(Permissions.BACKUP_RESTORE):
+                flash("You don't have permission to restore backups", "danger")
+                return redirect(url_for('admin_backups'))
+            filename = request.form.get('filename')
+            if restore_database(filename):
+                flash(f'Backup restored successfully: {filename}')
+            else:
+                flash(f'Error restoring backup: {filename}', 'error')
+        elif action == 'delete':
+            if not current_user.has_permission(Permissions.BACKUP_DELETE):
+                flash("You don't have permission to delete backups", "danger")
+                return redirect(url_for('admin_backups'))
+            filename = request.form.get('filename')
+            if delete_backup(filename):
+                flash(f'Backup "{filename}" deleted successfully')
+            else:
+                flash(f'Error deleting backup "{filename}"', 'error')
         return redirect(url_for('admin_backups'))
     
-    backups_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'backups')
-    backup_path = os.path.join(backups_dir, backup_file)
-    
-    try:
-        stats = restore_database(backup_path, restore_users=restore_users)
-        # Generate success message with statistics
-        message = 'Restore completed successfully. '
-        message += f'Created: {stats["sites_created"]} sites, {stats["machines_created"]} machines, {stats["parts_created"]} parts. '
-        message += f'Updated: {stats["sites_updated"]} sites, {stats["machines_updated"]} machines, {stats["parts_updated"]} parts. '
-        message += f'Restored: {stats["logs_restored"]} maintenance logs'
-        if restore_users:
-            message += f', {stats["roles_restored"]} roles, {stats["users_restored"]} users, {stats["assignments_restored"]} site assignments'
-        if stats['errors']:
-            message += f'. There were {len(stats["errors"])} errors.'
-            for i, error in enumerate(stats['errors'][:3]):  # Show first 3 errors
-                message += f' Error {i+1}: {error}.'
-            if len(stats['errors']) > 3:
-                message += ' ...'
-        flash(message)
-    except Exception as e:
-        flash(f'Error restoring backup: {str(e)}', 'error')
-    return redirect(url_for('admin_backups'))
-
-@app.route('/admin/backups/download/<filename>', methods=['GET'])
-@login_required
-def download_backup(filename):
-    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_EXPORT)):
-        flash('Access denied. You need permission to export backups.', 'error')
-        return redirect(url_for('dashboard'))
-    backups_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'backups')
-    return send_from_directory(backups_dir, filename, as_attachment=True)
-    
-@app.route('/admin/backups/delete/<filename>', methods=['POST'])
-@login_required
-def delete_backup_route(filename):
-    if not (current_user.is_admin or current_user.has_permission(Permissions.BACKUP_DELETE)):
-        flash('Access denied. You need permission to delete backups.', 'error')
-        return redirect(url_for('dashboard'))
-    if delete_backup(filename):
-        flash(f'Backup "{filename}" deleted successfully')
-    else:
-        flash(f'Error deleting backup "{filename}"', 'error')
-    return redirect(url_for('admin_backups'))
+    backups = list_backups()
+    return render_template('admin_backups_modern.html', backups=backups)
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
