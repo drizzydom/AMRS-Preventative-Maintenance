@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.orm.attributes import flag_modified  # Add this import
 import traceback
+import jwt
 
 # Get the directory of this file
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -1959,6 +1960,14 @@ def debug_info():
         return "Not authorized", 403
     
     # ...existing code...
+
+@app.route('/api/health')
+def api_health():
+    return jsonify({
+        'status': 'ok',
+        'version': '1.0.0',
+        'message': 'API is running'
+    })
 
 if __name__ == '__main__':
     ensure_env_file()
