@@ -156,9 +156,16 @@ def ensure_email_templates():
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['PREFERRED_URL_SCHEME'] = 'http'  # Or 'https' if you're using SSL
+
+# Add session configuration to work across networks
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True only if using HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')  # Optional, use for multi-domain setup
 
 # Email configuration
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.example.com')
@@ -979,7 +986,6 @@ def send_maintenance_notification(site, overdue_parts, due_soon_parts):
     """Send email notification about maintenance due for a site"""
     if not site.enable_notifications or not site.contact_email:
         return False
-    
     # Get users associated with this site
     site_users = site.users
     
@@ -987,7 +993,6 @@ def send_maintenance_notification(site, overdue_parts, due_soon_parts):
     for user in site_users:
         # Check user notification preferences
         preferences = user.get_notification_preferences()
-        
         # Skip if user has disabled email notifications
         if not preferences.get('enable_email', True) or not user.email:
             continue
@@ -1057,7 +1062,7 @@ def init_db():
                               Permissions.PARTS_VIEW, Permissions.PARTS_CREATE, Permissions.PARTS_EDIT, Permissions.PARTS_DELETE,
                               Permissions.MAINTENANCE_VIEW, Permissions.MAINTENANCE_RECORD,
                               # Add backup permissions to administrator role, including the new BACKUP_SCHEDULE permission
-                              Permissions.BACKUP_VIEW, Permissions.BACKUP_CREATE, Permissions.BACKUP_RESTORE, 
+                              Permissions.BACKUP_VIEW, Permissions.BACKUP_CREATE, Permissions.BACKUP_RESTORE,
                               Permissions.BACKUP_EXPORT, Permissions.BACKUP_DELETE, Permissions.BACKUP_SCHEDULE
                           ]))
         manager_role = Role(name='Manager', description='Can manage sites and view all data',
@@ -1100,7 +1105,7 @@ def init_db():
         # Create test parts with varying maintenance frequencies and past maintenance dates
         parts = [
             # Overdue parts (past maintenance date)
-            Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id, 
+            Part(name='Spindle', description='Main cutting spindle', machine_id=machine1.id,
                  maintenance_frequency=7, last_maintenance=now - timedelta(days=10)),  # 3 days overdue
             Part(name='Coolant System', description='Cutting fluid circulation', machine_id=machine1.id,
                  maintenance_frequency=14, last_maintenance=now - timedelta(days=20)),  # 6 days overdue
@@ -1324,7 +1329,6 @@ def update_db_schema():
     """Update database schema with new fields without losing data."""
     with app.app_context():
         inspector = db.inspect(db.engine)
-        
         # Check if maintenance_log table exists
         tables = inspector.get_table_names()
         if 'maintenance_log' not in tables:
@@ -1373,7 +1377,7 @@ def update_db_schema():
         if 'maintenance_unit' not in part_columns:
             missing_part_columns.append('maintenance_unit')
         if missing_part_columns:
-            # Add missing columns to the table
+            # Add new columns to the table using the modern approach
             with db.engine.connect() as conn:
                 for column in missing_part_columns:
                     if column == 'last_maintained_by':
@@ -1488,7 +1492,11 @@ def admin_backups():
             if not current_user.has_permission(Permissions.BACKUP_CREATE):
                 flash("You don't have permission to create backups", "danger")
                 return redirect(url_for('admin_backups'))
-            filename = backup_database()
+            
+            backup_name = request.form.get('backup_name')
+            include_users = 'include_users' in request.form
+            filename = backup_database(backup_name, include_users)
+            
             if filename:
                 flash(f'Backup created successfully: {filename}')
             else:
@@ -1497,8 +1505,11 @@ def admin_backups():
             if not current_user.has_permission(Permissions.BACKUP_RESTORE):
                 flash("You don't have permission to restore backups", "danger")
                 return redirect(url_for('admin_backups'))
-            filename = request.form.get('filename')
-            if restore_database(filename):
+            
+            filename = request.form.get('backup_file')
+            restore_users = 'restore_users' in request.form
+            
+            if restore_database(filename, restore_users):
                 flash(f'Backup restored successfully: {filename}')
             else:
                 flash(f'Error restoring backup: {filename}', 'error')
@@ -1506,6 +1517,7 @@ def admin_backups():
             if not current_user.has_permission(Permissions.BACKUP_DELETE):
                 flash("You don't have permission to delete backups", "danger")
                 return redirect(url_for('admin_backups'))
+            
             filename = request.form.get('filename')
             if delete_backup(filename):
                 flash(f'Backup "{filename}" deleted successfully')
@@ -1520,6 +1532,7 @@ def admin_backups():
 def forgot_password():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         email = request.form.get('email')
         
@@ -1558,8 +1571,9 @@ def forgot_password():
             # This prevents user enumeration attacks
             flash("If that email is in our system, a password reset link has been sent", "success")
         return redirect(url_for('login'))
+    
     return render_template('forgot_password.html')
-        
+
 @app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])
 def reset_password(user_id, token):
     if current_user.is_authenticated:
@@ -1590,8 +1604,11 @@ def reset_password(user_id, token):
         user.set_password(password)
         # Clear reset token
         user.clear_reset_token()
+        
+        db.session.commit()
         flash("Your password has been successfully reset. You can now log in with your new password.", "success")
         return redirect(url_for('login'))
+    
     return render_template('reset_password.html', user_id=user_id, token=token)
 
 @app.cli.command("add-reset-columns")
@@ -1647,7 +1664,7 @@ def user_profile():
     email_frequency = preferences.get('email_frequency', 'weekly')
     notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
     
-    return render_template('user_profile.html', 
+    return render_template('user_profile.html',
                            preferences=preferences,
                            enable_email=enable_email,
                            email_frequency=email_frequency,
@@ -1675,6 +1692,7 @@ def update_profile():
     current_user.email = email
     current_user.full_name = full_name
     db.session.commit()
+    
     flash('Profile updated successfully!', 'success')
     return redirect(url_for('user_profile'))
 
@@ -1809,6 +1827,7 @@ def admin_check_notifications():  # Changed from check_notifications to admin_ch
                     overdue_count += 1
                 elif days_until <= site.notification_threshold:
                     due_soon_count += 1
+    
     return render_template('admin_notifications_modern.html', 
                           sites=sites,         
                           now=now, 
@@ -1892,8 +1911,8 @@ def admin_send_notifications():  # Changed from send_notifications to admin_send
                     mail.send(msg)
                     success_count += 1
                 except Exception as e:
-                    error_count += 1
                     app.logger.error(f"Failed to send notification email: {str(e)}")
+                    error_count += 1
     
     if success_count > 0:
         flash(f"Successfully sent {success_count} notification emails", "success")
@@ -1901,12 +1920,8 @@ def admin_send_notifications():  # Changed from send_notifications to admin_send
         flash(f"Failed to send {error_count} notification emails. Check the logs for details.", "warning")
     if success_count == 0 and error_count == 0:
         flash("No notification emails were sent. This could mean there are no immediate notifications configured or no maintenance is currently due.", "info")
+    
     return redirect(url_for('admin_check_notifications'))
-
-if __name__ == '__main__':
-    ensure_email_templates()
-    ensure_env_file()
-    app.run(debug=True, host='0.0.0.0', port=5050)
 
 @app.cli.command("add-notification-preferences")
 def add_notification_preferences_cmd():
@@ -1917,8 +1932,13 @@ def add_notification_preferences_cmd():
     with db.engine.connect() as conn:
         if 'notification_preferences' not in user_columns:
             print("Adding notification_preferences column to user table...")
-            conn.execute(text("ALTER TABLE user ADD COLUMN notification_preferences TEXT DEFAULT '{{}}'"))
+            conn.execute(text("ALTER TABLE user ADD COLUMN notification_preferences TEXT DEFAULT '{}'"))
             conn.commit()
             print("Notification preferences column added successfully!")
         else:
             print("No changes needed. Notification preferences column already exists.")
+
+if __name__ == '__main__':
+    ensure_env_file()
+    ensure_email_templates()
+    app.run(debug=True, host='0.0.0.0', port=5050)

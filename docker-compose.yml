@@ -14,8 +14,10 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
+      - SECRET_KEY=change_this_to_a_secure_random_string
+      # Comment out SERVER_NAME if you're using a reverse proxy or don't need domain-specific routing
+      # - SERVER_NAME=your.domain.com 
     container_name: amrs-maintenance-tracker
-    # Add healthcheck to detect problems early
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
       interval: 30s
@@ -25,7 +27,6 @@ services:
     networks:
       - app-network
 
-# Define network to isolate container communication
 networks:
   app-network:
     driver: bridge
