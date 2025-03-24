@@ -25,4 +25,11 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 # Run with gunicorn for production with proper bind to 0.0.0.0
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "app:app"]
+# Get number of workers from environment or default to 2
+CMD gunicorn --bind 0.0.0.0:5000 \
+    --workers ${GUNICORN_WORKERS:-2} \
+    --threads ${GUNICORN_THREADS:-2} \
+    --timeout ${GUNICORN_TIMEOUT:-120} \
+    --keepalive ${GUNICORN_KEEPALIVE:-5} \
+    --log-level info \
+    app:app

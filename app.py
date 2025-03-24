@@ -154,6 +154,9 @@ def ensure_email_templates():
 </html>""")
         print("Created template email HTML files")
 
+# Import cache configuration
+from cache_config import configure_caching
+
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
@@ -166,6 +169,9 @@ app.config['SESSION_COOKIE_SECURE'] = False  # Set to True only if using HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')  # Optional, use for multi-domain setup
+
+# Configure caching for static assets
+configure_caching(app)
 
 # Email configuration
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.example.com')
@@ -1937,6 +1943,22 @@ def add_notification_preferences_cmd():
             print("Notification preferences column added successfully!")
         else:
             print("No changes needed. Notification preferences column already exists.")
+
+@app.route('/debug-info')
+def debug_info():
+    """Show debug information to help diagnose issues."""
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # If this is an AJAX request, return JSON
+        data = {
+            "server_time": datetime.utcnow().isoformat(),
+            "ajax_detected": True
+        }
+        return jsonify(data)
+    
+    if not current_user.is_authenticated or not current_user.is_admin:
+        return "Not authorized", 403
+    
+    # ...existing code...
 
 if __name__ == '__main__':
     ensure_env_file()
