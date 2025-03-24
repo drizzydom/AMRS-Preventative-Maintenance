@@ -2,24 +2,23 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements first for better layer caching
+# Copy requirements first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install gunicorn
 
 # Copy application code
 COPY . .
 
-# Create the instance directory for the SQLite database
-RUN mkdir -p instance
-# Ensure the backups directory exists
-RUN mkdir -p backups
+# Create volume mount points
+VOLUME ["/app/instance", "/app/backups"]
 
 # Set environment variables
 ENV FLASK_APP=app.py
-ENV PYTHONUNBUFFERED=1
+ENV FLASK_ENV=production
 
-# Expose the port
-EXPOSE 5050
+# Expose port
+EXPOSE 5000
 
-# Run setup commands at startup
-CMD ["sh", "-c", "python -m flask add-reset-columns && python app.py"]
+# Run with gunicorn for production
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
