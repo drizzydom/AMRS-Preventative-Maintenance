@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Create Backup Schedule{% endblock %}
+
+{% block header_title %}Create Backup Schedule{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <h2>Create New Backup Schedule</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('create_backup_schedule') }}">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Schedule Name</label>
+                    <input type="text" class="form-control" id="name" name="name" required 
+                           placeholder="Daily Backup">
+                    <div class="form-text">A descriptive name for this backup schedule</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="frequency" class="form-label">Frequency</label>
+                    <select class="form-select" id="frequency" name="frequency" required>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+                
+                <!-- Weekly options -->
+                <div class="mb-3 frequency-option" id="weekly-options" style="display: none;">
+                    <label for="day_of_week" class="form-label">Day of Week</label>
+                    <select class="form-select" id="day_of_week" name="day_of_week">
+                        <option value="0">Monday</option>
+                        <option value="1">Tuesday</option>
+                        <option value="2">Wednesday</option>
+                        <option value="3">Thursday</option>
+                        <option value="4">Friday</option>
+                        <option value="5">Saturday</option>
+                        <option value="6">Sunday</option>
+                    </select>
+                </div>
+                
+                <!-- Monthly options -->
+                <div class="mb-3 frequency-option" id="monthly-options" style="display: none;">
+                    <label for="day_of_month" class="form-label">Day of Month</label>
+                    <select class="form-select" id="day_of_month" name="day_of_month">
+                        {% for day in range(1, 29) %}
+                            <option value="{{ day }}">{{ day }}</option>
+                        {% endfor %}
+                        <option value="29">29 (when available)</option>
+                        <option value="30">30 (when available)</option>
+                        <option value="31">31 (when available)</option>
+                    </select>
+                    <div class="form-text">If the selected day doesn't exist in a month (e.g., 31 in February), the backup will run on the last day of the month</div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="hour" class="form-label">Hour (24-hour format)</label>
+                            <select class="form-select" id="hour" name="hour">
+                                {% for hour in range(24) %}
+                                    <option value="{{ hour }}">{{ '{:02d}'.format(hour) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="minute" class="form-label">Minute</label>
+                            <select class="form-select" id="minute" name="minute">
+                                {% for minute in range(0, 60, 5) %}
+                                    <option value="{{ minute }}">{{ '{:02d}'.format(minute) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="retention_count" class="form-label">Retention Policy</label>
+                    <select class="form-select" id="retention_count" name="retention_count">
+                        <option value="3">Keep 3 most recent backups</option>
+                        <option value="5" selected>Keep 5 most recent backups</option>
+                        <option value="7">Keep 7 most recent backups</option>
+                        <option value="10">Keep 10 most recent backups</option>
+                        <option value="30">Keep 30 most recent backups</option>
+                        <option value="999">Keep all backups</option>
+                    </select>
+                    <div class="form-text">The system will automatically delete older backups based on this setting</div>
+                </div>
+                
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="include_users" name="include_users" checked>
+                    <label class="form-check-label" for="include_users">
+                        Include user accounts and permissions
+                    </label>
+                    <div class="form-text">When checked, backups will include user accounts, roles and permissions</div>
+                </div>
+                
+                <div class="d-flex mt-4">
+                    <a href="{{ url_for('backup_schedules') }}" class="btn btn-secondary me-2">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Create Schedule
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const frequencySelect = document.getElementById('frequency');
+    const weeklyOptions = document.getElementById('weekly-options');
+    const monthlyOptions = document.getElementById('monthly-options');
+    
+    function updateFrequencyOptions() {
+        const frequency = frequencySelect.value;
+        
+        // Hide all options first
+        weeklyOptions.style.display = 'none';
+        monthlyOptions.style.display = 'none';
+        
+        // Show relevant options
+        if (frequency === 'weekly') {
+            weeklyOptions.style.display = 'block';
+        } else if (frequency === 'monthly') {
+            monthlyOptions.style.display = 'block';
+        }
+    }
+    
+    // Initial setup
+    updateFrequencyOptions();
+    
+    // Update when frequency changes
+    frequencySelect.addEventListener('change', updateFrequencyOptions);
+});
+</script>
+{% endblock %}

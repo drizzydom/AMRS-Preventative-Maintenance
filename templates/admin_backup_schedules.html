@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Backup Schedules{% endblock %}
+
+{% block header_title %}Backup Schedules{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Scheduled Backups</h2>
+        <a href="{{ url_for('create_backup_schedule') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create New Schedule
+        </a>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>How Scheduled Backups Work:</strong>
+                <p class="mb-0">
+                    Scheduled backups run automatically at defined intervals using the command: 
+                    <code>flask run-scheduled-backups</code>. This command needs to be run periodically 
+                    using a task scheduler (like cron on Linux or Task Scheduler on Windows).
+                </p>
+            </div>
+            
+            <h3 class="mb-3">Current Schedules</h3>
+            
+            {% if schedules %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Frequency</th>
+                                <th>Schedule</th>
+                                <th>Retention</th>
+                                <th>Include Users</th>
+                                <th>Status</th>
+                                <th>Last Run</th>
+                                <th>Next Run</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for schedule in schedules %}
+                                <tr>
+                                    <td>{{ schedule.name }}</td>
+                                    <td>
+                                        <span class="badge {% if schedule.enabled %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ schedule.frequency.capitalize() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if schedule.frequency == 'daily' %}
+                                            Every day at {{ '{:02d}:{:02d}'.format(schedule.hour, schedule.minute) }}
+                                        {% elif schedule.frequency == 'weekly' %}
+                                            {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                                            Every {{ days[schedule.day_of_week] }} at {{ '{:02d}:{:02d}'.format(schedule.hour, schedule.minute) }}
+                                        {% elif schedule.frequency == 'monthly' %}
+                                            Day {{ schedule.day_of_month }} of each month at {{ '{:02d}:{:02d}'.format(schedule.hour, schedule.minute) }}
+                                        {% endif %}
+                                    </td>
+                                    <td>Keep {{ schedule.retention_count }} backups</td>
+                                    <td>
+                                        {% if schedule.include_users %}
+                                            <span class="text-success"><i class="fas fa-check"></i> Yes</span>
+                                        {% else %}
+                                            <span class="text-muted"><i class="fas fa-times"></i> No</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if not schedule.enabled %}
+                                            <span class="badge bg-secondary">Disabled</span>
+                                        {% elif schedule.last_status and 'failed' in schedule.last_status %}
+                                            <span class="badge bg-danger" title="{{ schedule.last_status }}">Failed</span>
+                                        {% elif schedule.last_status == 'success' %}
+                                            <span class="badge bg-success">Success</span>
+                                        {% else %}
+                                            <span class="badge bg-info">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if schedule.last_run %}
+                                            {{ schedule.last_run.strftime('%Y-%m-%d %H:%M') }}
+                                        {% else %}
+                                            Never run
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ schedule.get_next_run().strftime('%Y-%m-%d %H:%M') if schedule.enabled else 'Disabled' }}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <a href="{{ url_for('edit_backup_schedule', schedule_id=schedule.id) }}" 
+                                               class="btn btn-sm btn-outline-primary" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                    title="Delete" data-bs-toggle="modal" 
+                                                    data-bs-target="#deleteScheduleModal{{ schedule.id }}">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Delete Modal -->
+                                        <div class="modal fade" id="deleteScheduleModal{{ schedule.id }}" tabindex="-1">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Delete Backup Schedule</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <p>Are you sure you want to delete the backup schedule "{{ schedule.name }}"?</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                        <form action="{{ url_for('delete_backup_schedule', schedule_id=schedule.id) }}" method="POST">
+                                                            <button type="submit" class="btn btn-danger">Delete</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> No backup schedules defined yet.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>Setting Up Automated Runs</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h4>Linux (using cron)</h4>
+                    <pre class="bg-light p-3 code-block">
+# Run every hour (adjust path as needed)
+0 * * * * cd /Users/dominicmoriello/Documents/GitHub/AMRS\ Preventative\ Maintenance && flask run-scheduled-backups >> backup_logs.txt 2>&1
+</pre>
+                </div>
+                <div class="col-md-6">
+                    <h4>Windows (using Task Scheduler)</h4>
+                    <p>Create a batch file with:</p>
+                    <pre class="bg-light p-3 code-block">
+@echo off
+cd /d "C:\path\to\your\app"
+call venv\Scripts\activate.bat
+flask run-scheduled-backups
+                    </pre>
+                    <p>Then create a scheduled task to run this batch file at your desired frequency.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-3 mb-4">
+        <a href="{{ url_for('admin_backups') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Backups
+        </a>
+    </div>
+</div>
+{% endblock %}
