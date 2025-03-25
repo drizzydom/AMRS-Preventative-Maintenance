@@ -1,0 +1,14 @@
+watch:
+  - path: .
+    action: sync
+    target: /app
+    ignore:
+      - instance/
+      - backups/
+      - __pycache__/
+      - *.pyc
+      - .git/
+  - path: ./app.py
+    action: rebuild
+  - path: ./requirements.txt
+    action: rebuild

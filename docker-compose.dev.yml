@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  maintenance-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: always
+    ports:
+      - "9000:5000"
+    volumes:
+      - ./:/app  # Mount the entire application directory
+      - ./instance:/app/instance
+      - ./backups:/app/backups
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - SECRET_KEY=dev_secret_key_for_development_only
+    container_name: amrs-maintenance-tracker-dev
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
