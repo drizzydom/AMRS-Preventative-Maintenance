@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    restart: always
+    restart: "no"  # Temporarily change from "always" to "no" for debugging
     ports:
       - "9000:5000"  # Using port 9000 for host
     volumes:
