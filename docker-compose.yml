@@ -9,17 +9,20 @@ services:
     ports:
       - "9000:5000"  # Using port 9000 for host
     volumes:
+      - ./:/app  # Mount the entire application directory
       - ./instance:/app/instance
       - ./backups:/app/backups
     environment:
       - FLASK_APP=app.py
-      - FLASK_ENV=production
+      - FLASK_ENV=development  # Change to development for auto-reloading
       - SECRET_KEY=change_this_to_a_secure_random_string
       # Performance tuning for gunicorn
-      - GUNICORN_WORKERS=4
+      - GUNICORN_WORKERS=2  # Fewer workers in development mode
       - GUNICORN_THREADS=2
       - GUNICORN_TIMEOUT=120
       - GUNICORN_KEEPALIVE=5
+      # Enable auto-reloading
+      - GUNICORN_RELOAD=True
     container_name: amrs-maintenance-tracker
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
