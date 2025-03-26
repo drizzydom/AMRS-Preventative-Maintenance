@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Database Backups{% endblock %}
+
+{% block header_title %}Database Backups{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title h5 mb-0">Create Backup</h2>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('admin_backups') }}" method="post">
+                    <input type="hidden" name="action" value="create">
+                    
+                    <div class="mb-3">
+                        <label for="backup_name" class="form-label">Backup Name</label>
+                        <input type="text" class="form-control" id="backup_name" name="backup_name" 
+                               placeholder="Optional custom name">
+                        <small class="text-muted">If left blank, a timestamp will be used</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="include_users" name="include_users" checked>
+                            <label class="form-check-label" for="include_users">
+                                Include user accounts
+                            </label>
+                        </div>
+                        <small class="text-muted">Uncheck to back up only sites, machines, and parts data</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Create Backup
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="card-title h5 mb-0">Restore Backup</h2>
+            </div>
+            <div class="card-body">
+                {% if backups %}
+                <form action="{{ url_for('admin_backups') }}" method="post">
+                    <input type="hidden" name="action" value="restore">
+                    
+                    <div class="mb-3">
+                        <label for="backup_file" class="form-label">Select Backup</label>
+                        <select class="form-select" id="backup_file" name="backup_file" required>
+                            <option value="" selected disabled>Choose a backup file</option>
+                            {% for backup in backups %}
+                            <option value="{{ backup.filename }}">
+                                {{ backup.display_name }} ({{ backup.size_mb }} MB, {{ backup.created }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="restore_users" name="restore_users">
+                            <label class="form-check-label" for="restore_users">
+                                Restore user accounts
+                            </label>
+                        </div>
+                        <small class="text-muted">Uncheck to restore only sites, machines, and parts data</small>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong> 
+                        Restoring a backup will overwrite all current data. This action cannot be undone.
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-upload"></i> Restore Backup
+                    </button>
+                </form>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No backup files available. Create a backup first.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="card-title h5 mb-0">Available Backups</h2>
+            </div>
+            <div class="card-body">
+                {% if backups %}
+                <div class="admin-table-container">
+                    <table class="table table-hover table-fixed">
+                        <thead>
+                            <tr>
+                                <th style="width: 35%">Backup Name</th>
+                                <th style="width: 25%" class="hide-md">Created</th>
+                                <th style="width: 15%">Size</th>
+                                <th style="width: 15%">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for backup in backups %}
+                            <tr>
+                                <td><span class="cell-truncate" title="{{ backup.display_name }}">{{ backup.display_name }}</span></td>
+                                <td class="hide-md">{{ backup.created }}</td>
+                                <td>{{ backup.size_mb }} MB</td>
+                                <td>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteBackupModal{{ loop.index }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>
+                            
+                            <!-- Delete Backup Modal -->
+                            <div class="modal fade" id="deleteBackupModal{{ loop.index }}" tabindex="-1" aria-labelledby="deleteBackupModalLabel{{ loop.index }}" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="deleteBackupModalLabel{{ loop.index }}">Confirm Delete</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to delete the backup "{{ backup.display_name }}"?</p>
+                                            <p><strong>Warning:</strong> This action cannot be undone.</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <form action="{{ url_for('admin_backups') }}" method="post">
+                                                <input type="hidden" name="action" value="delete">
+                                                <input type="hidden" name="filename" value="{{ backup.filename }}">
+                                                <button type="submit" class="btn btn-danger">Delete Backup</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No backup files available. Create a backup using the form on the left.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="card-title h5 mb-0">Backup Information</h2>
+            </div>
+            <div class="card-body">
+                <p>The backup feature allows you to save your maintenance database and restore it if needed. Here's what you should know:</p>
+                
+                <h6>What gets backed up:</h6>
+                <ul>
+                    <li><strong>Sites, Machines & Parts</strong> - All equipment and maintenance schedules</li>
+                    <li><strong>Maintenance History</strong> - All past maintenance records</li>
+                    <li><strong>User Accounts</strong> - Optional, includes user logins, permissions, and settings</li>
+                </ul>
+                
+                <h6>Best practices:</h6>
+                <ul>
+                    <li>Create regular backups, especially before major changes</li>
+                    <li>Download and store backup files in a secure location</li>
+                    <li>Test restoration occasionally to ensure backups are working properly</li>
+                </ul>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i> <strong>Tip:</strong>
+                    For additional security, consider keeping offline copies of critical backups.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
