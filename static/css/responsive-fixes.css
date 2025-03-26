@@ -1,0 +1,116 @@
+/* Additional responsive fixes to prevent horizontal scrolling */
+
+/* Core layout fixes */
+html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+/* Tighter margins and padding on mobile */
+@media (max-width: 768px) {
+    .container, .container-fluid, .container-lg, 
+    .container-md, .container-sm, .container-xl, .container-xxl {
+        padding-right: 10px;
+        padding-left: 10px;
+    }
+    
+    .card-header {
+        padding: 12px;
+    }
+    
+    .card-body {
+        padding: 12px;
+    }
+    
+    .row {
+        margin-right: -5px;
+        margin-left: -5px;
+    }
+    
+    .row > * {
+        padding-right: 5px;
+        padding-left: 5px;
+    }
+    
+    /* Smaller text on mobile */
+    body {
+        font-size: 0.875rem;
+    }
+    
+    h5 {
+        font-size: 1.1rem;
+    }
+    
+    .btn {
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Text truncation for long content */
+.text-truncate-md {
+    max-width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}
+
+.text-truncate-sm {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}
+
+/* Responsive tables */
+.table-responsive {
+    margin-bottom: 0;
+}
+
+/* Better column width control */
+.w-10 {
+    width: 10% !important;
+}
+
+.w-15 {
+    width: 15% !important;
+}
+
+.w-20 {
+    width: 20% !important;
+}
+
+/* Better buttons on small screens */
+@media (max-width: 576px) {
+    .btn-responsive-sm {
+        padding: 0.15rem 0.4rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Stack buttons on mobile */
+    .stack-sm .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .stack-sm .btn-group .btn {
+        border-radius: 0.25rem !important;
+        margin-bottom: 0.25rem;
+    }
+}
+
+/* Dropdown menu positioning fix */
+.dropdown-menu-fix {
+    min-width: 8rem;
+    max-width: calc(100vw - 30px);
+}
+
+/* Make modal content properly handle mobile screens */
+.modal-body {
+    word-break: break-word;
+}
+
+.modal-footer {
+    flex-wrap: wrap;
+}

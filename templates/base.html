@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
     <title>{% block title %}Maintenance Tracker{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-fixes.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-fix.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -518,68 +522,48 @@
         </aside>
 
         <main class="main-content">
-            <header class="top-header">
-                <div class="header-left">
-                    <h1 class="page-title">{% block header_title %}Maintenance Tracker{% endblock %}</h1>
-                </div>
-                <div class="header-right">
-                    <!-- Theme switcher -->
-                    <div class="theme-switch">
-                        <i class="fas fa-sun theme-switch-icon"></i>
-                        <label class="switch">
-                            <input type="checkbox" id="theme-toggle">
-                            <span class="slider"></span>
-                        </label>
-                        <i class="fas fa-moon theme-switch-icon"></i>
+            <header class="page-header">
+                <div class="container-fluid">
+                    <div class="content-wrapper">
+                        <h1 class="page-title">{% block header_title %}{% endblock %}</h1>
                     </div>
-                    
-                    {% if current_user.is_authenticated %}
-                    <div class="user-menu">
-                        <button class="user-menu-trigger">
-                            <div class="avatar">{{ current_user.username[0].upper() }}</div>
-                            <span class="username">{{ current_user.full_name or current_user.username }}</span>
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                        <div class="user-dropdown">
-                            <div class="user-info">
-                                <div class="avatar large">{{ current_user.username[0].upper() }}</div>
-                                <div>
-                                    <span class="full-name">{{ current_user.full_name or current_user.username }}</span>
-                                    <span class="email">{{ current_user.email }}</span>
-                                </div>
-                            </div>
-                            <hr>
-                            <ul>
-                                <li><a href="{{ url_for('user_profile') }}"><i class="fas fa-user-circle"></i> My Profile</a></li>
-                                <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
-                            </ul>
-                        </div>
-                    </div>
-                    {% endif %}
                 </div>
             </header>
 
             <div class="content-container">
-                {% block flash_messages %}
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                                <div class="alert {{ 'alert-' + category if category else 'alert-info' }}">
-                                    {{ message }}
-                                    <button type="button" class="close-alert">&times;</button>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                    {% endwith %}
-                {% endblock %}
-                
-                {% block content %}{% endblock %}
+                <div class="content-wrapper">
+                    {% block flash_messages %}
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert {{ 'alert-' + category if category else 'alert-info' }}">
+                                        {{ message }}
+                                        <button type="button" class="close-alert">&times;</button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                    {% endblock %}
+                    
+                    {% block content %}{% endblock %}
+                </div>
             </div>
         </main>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Ensure Bootstrap modals work correctly
+            var modals = document.querySelectorAll('.modal');
+            if (typeof bootstrap !== 'undefined') {
+                modals.forEach(function(modal) {
+                    new bootstrap.Modal(modal, {
+                        backdrop: true,
+                        keyboard: true,
+                        focus: true
+                    });
+                });
+            }
             // Sidebar toggle functionality
             const sidebarToggle = document.getElementById('sidebarToggle');
             if (sidebarToggle) {
@@ -752,16 +736,11 @@
             
             // Call on window resize
             window.addEventListener('resize', handleResponsiveLayout);
-            
-            // Existing sidebar toggle functionality for desktop
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            if (sidebarToggle) {
-                // ...existing code...
-            }
-            
-            // ...existing code...
         });
     </script>
+    
+    <!-- Add Bootstrap JavaScript before the closing body tag -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
     {% block scripts %}{% endblock %}
 </body>

@@ -274,3 +274,139 @@ class AjaxLoader {
 document.addEventListener('DOMContentLoaded', () => {
     window.ajaxLoader = new AjaxLoader();
 });
+
+/**
+ * AJAX Loader for Maintenance Tracker
+ * 
+ * This script handles offline detection and synchronization functionality
+ */
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Reference to the offline banner
+    const offlineBanner = document.getElementById('offline-banner');
+    
+    // Check if we're online when the page loads
+    updateOnlineStatus();
+    
+    // Add event listeners for online/offline events
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    // Function to update the UI based on connection status
+    function updateOnlineStatus() {
+        if (navigator.onLine) {
+            // We're online - hide the offline banner
+            if (offlineBanner) {
+                offlineBanner.style.display = 'none';
+            }
+            
+            // Attempt to sync any pending changes
+            syncPendingChanges();
+        } else {
+            // We're offline - show the banner
+            if (offlineBanner) {
+                offlineBanner.style.display = 'block';
+            }
+        }
+    }
+    
+    // Function to sync changes stored in local storage
+    function syncPendingChanges() {
+        // Check if we have any pending changes to sync
+        const pendingChanges = localStorage.getItem('pending-changes');
+        
+        if (pendingChanges) {
+            try {
+                const changes = JSON.parse(pendingChanges);
+                
+                // For each pending change, send it to the server
+                Promise.all(changes.map(change => {
+                    return fetch(change.url, {
+                        method: change.method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(change.data)
+                    }).then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to sync change');
+                        }
+                        return response;
+                    });
+                }))
+                .then(() => {
+                    // All changes synced successfully
+                    localStorage.removeItem('pending-changes');
+                    console.log('All pending changes synced successfully');
+                    
+                    // Show notification that changes were synced
+                    showSyncNotification();
+                })
+                .catch(error => {
+                    console.error('Error syncing changes:', error);
+                });
+            } catch (e) {
+                console.error('Error parsing pending changes:', e);
+            }
+        }
+    }
+    
+    // Function to show a notification that changes were synced
+    function showSyncNotification() {
+        if (offlineBanner) {
+            // Temporarily show online notification
+            offlineBanner.classList.add('online-notification');
+            offlineBanner.querySelector('i').className = 'fas fa-wifi';
+            offlineBanner.querySelector('span').textContent = 'You are back online. Your changes have been synchronized.';
+            offlineBanner.style.display = 'block';
+            
+            // Hide the notification after 3 seconds
+            setTimeout(() => {
+                offlineBanner.style.display = 'none';
+                
+                // Reset to offline style after hiding
+                setTimeout(() => {
+                    offlineBanner.classList.remove('online-notification');
+                    offlineBanner.querySelector('i').className = 'fas fa-wifi-slash';
+                    offlineBanner.querySelector('span').textContent = 'You are currently working offline. Changes will be synchronized when you reconnect.';
+                }, 300);
+            }, 3000);
+        }
+    }
+    
+    // Add event listeners to forms to handle offline submissions
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            if (!navigator.onLine) {
+                e.preventDefault();
+                
+                // Store form data to submit later
+                const formData = new FormData(form);
+                const data = {};
+                for (const [key, value] of formData.entries()) {
+                    data[key] = value;
+                }
+                
+                // Get existing pending changes or initialize empty array
+                let pendingChanges = [];
+                const existingChanges = localStorage.getItem('pending-changes');
+                if (existingChanges) {
+                    pendingChanges = JSON.parse(existingChanges);
+                }
+                
+                // Add this change to pending changes
+                pendingChanges.push({
+                    url: form.action,
+                    method: form.method || 'POST',
+                    data: data
+                });
+                
+                // Save back to local storage
+                localStorage.setItem('pending-changes', JSON.stringify(pendingChanges));
+                
+                // Show feedback to user
+                alert('You are currently offline. Your changes will be submitted when you reconnect to the internet.');
+            }
+        });
+    });
+});
