@@ -506,7 +506,7 @@ def login():
             next_page = request.args.get('next', 'dashboard')
             return redirect(url_for(next_page))
         flash('Invalid username or password')
-    return render_template('login_modern.html')  # Fix this line - use login_modern.html
+    return render_template('login.html')  # Changed from login_modern.html
 
 @app.route('/logout')
 @login_required
@@ -531,7 +531,7 @@ def dashboard():
     now = datetime.utcnow()
     machines = Machine.query.all()
     return render_template(
-        'dashboard_modern.html',  # Use the modern dashboard
+        'dashboard.html',  # Changed from dashboard_modern.html
         sites=sites,
         machines=machines,
         now=now, 
@@ -546,7 +546,7 @@ def admin():
     if not current_user.is_admin:
         flash("You don't have permission to access the admin panel", "danger")
         return redirect(url_for('dashboard'))
-    return render_template('admin_modern.html')  # Use the modern admin template instead of admin.html
+    return render_template('admin.html')  # Changed from admin_modern.html
 
 # CRUD routes for Sites
 @app.route('/admin/sites', methods=['GET', 'POST'])
@@ -567,7 +567,7 @@ def manage_sites():
         db.session.commit()
         flash('Site added successfully')
     sites = Site.query.all()
-    return render_template('admin_sites_modern.html', sites=sites)
+    return render_template('admin/sites.html', sites=sites)  # Changed from admin_sites_modern.html
 
 @app.route('/admin/sites/edit/<int:site_id>', methods=['GET', 'POST'])
 @login_required
@@ -585,7 +585,7 @@ def edit_site(site_id):
         db.session.commit()
         flash(f'Site "{site.name}" updated successfully')
         return redirect(url_for('manage_sites'))
-    return render_template('admin_edit_site_modern.html', site=site)
+    return render_template('admin/edit_site.html', site=site)  # Changed from admin_edit_site_modern.html
 
 # CRUD routes for Machines
 @app.route('/admin/machines', methods=['GET', 'POST'])
@@ -612,7 +612,7 @@ def manage_machines():
         return redirect(url_for('manage_machines'))
     machines = Machine.query.all()
     sites = Site.query.all()
-    return render_template('admin_machines_modern.html', machines=machines, sites=sites)  # Use the modern machines template
+    return render_template('admin/machines.html', machines=machines, sites=sites)  # Changed from admin_machines_modern.html
 
 @app.route('/admin/machines/edit/<int:machine_id>', methods=['GET', 'POST'])
 @login_required
@@ -631,7 +631,7 @@ def edit_machine(machine_id):
         flash(f'Machine "{machine.name}" updated successfully')
         return redirect(url_for('manage_machines'))
     sites = Site.query.all()
-    return render_template('admin_edit_machine_modern.html', machine=machine, sites=sites)
+    return render_template('admin/edit_machine.html', machine=machine, sites=sites)  # Changed from admin_edit_machine_modern.html
 
 # CRUD routes for Parts
 @app.route('/admin/parts', methods=['GET', 'POST'])
@@ -691,7 +691,7 @@ def manage_parts():
         parts = []
     machines = Machine.query.all()
     now = datetime.utcnow()
-    return render_template('admin_parts_modern.html', parts=parts, machines=machines, now=now)
+    return render_template('admin/parts.html', parts=parts, machines=machines, now=now)  # Changed from admin_parts_modern.html
 
 @app.route('/admin/parts/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
@@ -717,7 +717,7 @@ def edit_part(part_id):
         flash(f'Part "{part.name}" updated successfully')
         return redirect(url_for('manage_parts'))
     machines = Machine.query.all()
-    return render_template('admin_edit_part_modern.html', part=part, machines=machines)
+    return render_template('admin/edit_part.html', part=part, machines=machines)  # Changed from admin_edit_part_modern.html
 
 # Delete routes for Parts
 @app.route('/admin/sites/delete/<int:site_id>', methods=['POST'])
@@ -766,7 +766,7 @@ def update_maintenance(part_id):
     part = Part.query.get_or_404(part_id)
     if request.method == 'GET':
         # Display form for entering maintenance details
-        return render_template('record_maintenance_modern.html', part=part)
+        return render_template('admin/record_maintenance.html', part=part)  # Changed from record_maintenance_modern.html
             
     elif request.method == 'POST':
         # Update part maintenance information
@@ -822,7 +822,7 @@ def manage_roles():
         flash(f'Role "{name}" added successfully')
         return redirect(url_for('admin'))
     roles = Role.query.all()
-    return render_template('admin_roles_modern.html', roles=roles, all_permissions=Permissions.get_all_permissions())
+    return render_template('admin/roles.html', roles=roles, all_permissions=Permissions.get_all_permissions())  # Changed from admin_roles_modern.html
 
 # Add a new route for editing a specific role
 @app.route('/admin/roles/edit/<int:role_id>', methods=['GET', 'POST'])
@@ -842,7 +842,7 @@ def edit_role(role_id):
         db.session.commit()
         flash(f'Role "{role.name}" updated successfully')
         return redirect(url_for('manage_roles'))
-    return render_template('admin_edit_role_modern.html', role=role, role_permissions=role_permissions, all_permissions=Permissions.get_all_permissions())
+    return render_template('admin/edit_role.html', role=role, role_permissions=role_permissions, all_permissions=Permissions.get_all_permissions())  # Changed from admin_edit_role_modern.html
 
 # New route for deleting a specific role
 @app.route('/admin/roles/delete/<int:role_id>', methods=['POST'])
@@ -882,7 +882,7 @@ def manage_users():
             roles = Role.query.all()
             users = User.query.all()
             sites = Site.query.all()
-            return render_template('admin_users_modern.html', roles=roles, users=users, sites=sites, current_user=current_user)
+            return render_template('admin/users.html', roles=roles, users=users, sites=sites, current_user=current_user)  # Changed from admin_users_modern.html
         new_user = User(username=username, full_name=full_name, email=email,
                         role_id=role_id if role_id else None, is_admin=is_admin)
         new_user.set_password(password)
@@ -896,7 +896,7 @@ def manage_users():
     roles = Role.query.all()
     users = User.query.all()
     sites = Site.query.all()
-    return render_template('admin_users_modern.html', roles=roles, users=users, sites=sites, current_user=current_user)
+    return render_template('admin/users.html', roles=roles, users=users, sites=sites, current_user=current_user)  # Changed from admin_users_modern.html
 
 @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
 @login_required
@@ -1329,7 +1329,7 @@ def test_email():
             'MAIL_USERNAME': app.config['MAIL_USERNAME'],
             'MAIL_DEFAULT_SENDER': app.config['MAIL_DEFAULT_SENDER']
         }
-        return render_template('test_email_modern.html', config=email_config)
+        return render_template('admin/test_email.html', config=email_config)  # Changed from test_email_modern.html
 
 @app.cli.command("update-db-schema")
 def update_db_schema():
@@ -1481,7 +1481,7 @@ def machine_history(machine_id):
             flash('Maintenance log table was created. Please try again.')
         except Exception as create_error:
             flash(f'Could not create maintenance log table: {str(create_error)}')
-    return render_template('machine_history_modern.html', machine=machine, logs=logs)
+    return render_template('machine_history.html', machine=machine, logs=logs)  # Changed from machine_history_modern.html
 
 # Import backup utilities
 from backup_utils import backup_database, restore_database, list_backups, delete_backup
@@ -1533,7 +1533,7 @@ def admin_backups():
         return redirect(url_for('admin_backups'))
     
     backups = list_backups()
-    return render_template('admin_backups_modern.html', backups=backups)
+    return render_template('admin/backups.html', backups=backups)  # Changed from admin_backups_modern.html
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
@@ -1804,7 +1804,7 @@ def edit_user(user_id):
         return redirect(url_for('manage_users'))
     roles = Role.query.all()
     sites = Site.query.all()
-    return render_template('admin_edit_user_modern.html', user=user, roles=roles, sites=sites)
+    return render_template('admin/edit_user.html', user=user, roles=roles, sites=sites)  # Changed from admin_edit_user_modern.html
 
 # New routes for checking and sending notifications
 @app.route('/admin/check_notifications')
@@ -1835,7 +1835,7 @@ def admin_check_notifications():  # Changed from check_notifications to admin_ch
                 elif days_until <= site.notification_threshold:
                     due_soon_count += 1
     
-    return render_template('admin_notifications_modern.html', 
+    return render_template('admin/notifications.html',   # Changed from admin_notifications_modern.html
                           sites=sites,         
                           now=now, 
                           overdue_count=overdue_count,

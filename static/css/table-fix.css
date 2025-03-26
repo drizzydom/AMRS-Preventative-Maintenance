@@ -1,0 +1,335 @@
+/* Table overflow fixing styles */
+
+/* Container for all admin tables */
+.admin-table-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 0;
+}
+
+/* Better column width handling */
+.table-fixed {
+    table-layout: fixed;
+    width: 100%;
+}
+
+/* Ensure table cells don't overflow */
+.table-fixed td, .table-fixed th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.35rem 0.5rem; /* Reduced padding to make tables more compact */
+    line-height: 1.3; /* Tighter line height */
+    font-size: 0.95rem; /* Slightly smaller font */
+}
+
+/* More compact table option */
+.table-compact td, .table-compact th {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.9rem;
+}
+
+/* Actions column improvements */
+.table-fixed th:last-child {
+    text-align: center;
+}
+
+.table-fixed td:last-child {
+    text-align: center;
+    padding: 0.2rem;
+    width: auto;
+    min-width: 60px;
+}
+
+/* Standard column widths for common columns */
+.table-col-actions {
+    width: 80px; /* Reduced from 100px */
+    min-width: 80px;
+}
+
+/* Column width classes optimized for different content types */
+.table-col-name {
+    width: 20%;
+}
+
+.table-col-description {
+    width: 25%;
+}
+
+.table-col-date {
+    width: 90px;
+    min-width: 90px;
+}
+
+.table-col-number {
+    width: 70px;
+    min-width: 70px;
+}
+
+.table-col-status {
+    width: 80px;
+    min-width: 80px;
+}
+
+.table-col-icon {
+    width: 40px;
+    min-width: 40px;
+}
+
+/* Text truncation for table cells */
+.cell-truncate {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+/* Better button display in tables */
+.table .btn-sm {
+    padding: 0.12rem 0.35rem;
+    font-size: 0.8rem;
+}
+
+/* Table height reductions */
+.table-fixed tr {
+    height: auto;
+}
+
+/* Stacked content styling */
+.machine-info, .part-info {
+    padding: 0.25rem 0;
+}
+
+.machine-name, .part-name {
+    font-size: 1.05rem;
+    margin-bottom: 0.25rem;
+}
+
+.machine-info .text-muted, .part-info .text-muted {
+    line-height: 1.4;
+}
+
+/* Better button spacing in action columns */
+.table .d-flex.gap-2 {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.3rem !important;
+}
+
+.table .d-flex.gap-2 .btn {
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+}
+
+/* Improve badge display */
+.table .badge {
+    font-size: 0.8125rem;
+    padding: 0.35em 0.65em;
+    white-space: normal;
+}
+
+/* Fix button display on smaller screens */
+@media (max-width: 768px) {
+    .table .d-flex.gap-2 {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem !important;
+    }
+    
+    .table .d-flex.gap-2 .btn {
+        width: 100%;
+        margin-right: 0 !important;
+    }
+}
+
+/* Make more room for machines and parts info on small screens */
+@media (max-width: 576px) {
+    .machine-name, .part-name {
+        font-size: 1rem;
+        margin-bottom: 0.15rem;
+    }
+}
+
+/* Responsive table column widths for small screens */
+@media (max-width: 768px) {
+    .table-fixed th:first-child, 
+    .table-fixed td:first-child {
+        width: 50% !important;
+    }
+    
+    .table-fixed th:nth-child(2), 
+    .table-fixed td:nth-child(2) {
+        width: 20% !important;
+    }
+    
+    .table-fixed th:last-child, 
+    .table-fixed td:last-child {
+        width: 30% !important;
+    }
+}
+
+.table > :not(:first-child) {
+    border-top: 1px solid currentColor;
+}
+
+/* Compact buttons for tables */
+.table-action-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Dropdown menu fixes */
+.dropdown-menu {
+    min-width: 8rem;
+    font-size: 0.875rem;
+    margin: 0.125rem 0;
+}
+
+.fa-fw {
+    width: 1.25em;
+    text-align: center;
+    display: inline-block;
+}
+
+/* Ensure dropdown menus don't get cut off by container boundaries */
+.dropdown-menu.dropdown-menu-end {
+    right: 0;
+    left: auto;
+    transform: none !important;
+    top: 100% !important;
+    max-width: 200px;
+}
+
+.dropdown-item {
+    white-space: normal;
+    word-wrap: break-word;
+    padding: 0.4rem 1rem;
+}
+
+/* Icon button sizing */
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Remove extra padding from action buttons */
+.actions-menu .dropdown-toggle::after {
+    display: none;
+}
+
+/* For tables where some columns can shrink */
+.table-shrink th.shrink, 
+.table-shrink td.shrink {
+    width: 1%;
+    white-space: nowrap;
+}
+
+/* Hide columns based on screen size */
+@media (max-width: 1199px) {
+    .hide-xl {
+        display: none;
+    }
+}
+
+@media (max-width: 991px) {
+    .hide-lg {
+        display: none;
+    }
+}
+
+@media (max-width: 767px) {
+    .hide-md {
+        display: none;
+    }
+}
+
+@media (max-width: 575px) {
+    .hide-sm {
+        display: none;
+    }
+    
+    /* Adjust button groups for small screens */
+    .btn-group-sm-vertical {
+        flex-direction: column;
+    }
+    
+    .btn-group-sm-vertical .btn {
+        width: 100%;
+        margin-bottom: 0.25rem;
+        border-radius: 0.25rem !important;
+    }
+}
+
+/* Make tables scroll horizontally on small screens but keep the fixed layout */
+@media (max-width: 767px) {
+    .admin-table-container {
+        border: 0;
+    }
+    
+    .btn-group > .btn {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Simplify actions column on mobile */
+    .table-fixed td:last-child {
+        min-width: 40px !important;
+        width: 40px !important;
+    }
+    
+    /* Ensure action dropdown is properly positioned */
+    .dropdown-menu.dropdown-menu-end {
+        right: 0;
+        left: auto !important;
+        transform: none !important;
+    }
+    
+    /* Adjust cell padding to be more compact */
+    .table-fixed th, 
+    .table-fixed td {
+        padding: 0.3rem 0.25rem;
+        font-size: 0.85rem;
+    }
+    
+    /* Action buttons more compact */
+    .actions-menu .btn {
+        padding: 0.15rem;
+    }
+}
+
+/* Fix table column spacing on small screens */
+@media (max-width: 992px) {
+    .table-fixed th:last-child, 
+    .table-fixed td:last-child {
+        width: 120px !important;
+        min-width: 120px;
+    }
+    
+    .table-fixed th, 
+    .table-fixed td {
+        padding: 0.5rem 0.4rem;
+    }
+}
+
+/* Make dropdowns better positioned and sized */
+@media (max-width: 576px) {
+    .dropdown-menu.dropdown-menu-end {
+        min-width: 120px;
+        max-width: 180px;
+    }
+    
+    .dropdown-item {
+        padding: 0.35rem 0.7rem;
+        font-size: 0.8125rem;
+    }
+}
