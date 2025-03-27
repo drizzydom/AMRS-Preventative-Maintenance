@@ -6,6 +6,24 @@
 
 {% block content %}
 <div class="dashboard">
+    <!-- Site Filter Dropdown -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <label for="site-filter" class="form-label mb-0 me-2"><i class="fas fa-filter me-1"></i> Filter by Site:</label>
+                    <select class="form-select form-select-sm d-inline-block w-auto" id="site-filter">
+                        <option value="all" selected>All Sites</option>
+                        {% for site in sites %}
+                        <option value="{{ site.id }}">{{ site.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <small class="text-muted">Currently showing: <span id="current-filter">All Sites</span></small>
+            </div>
+        </div>
+    </div>
+
     <!-- Status counters -->
     <div class="row g-2 mb-4">
         {% set overdue_count = 0 %}
@@ -123,7 +141,7 @@
                                         {% for part in machine.parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
                                             {% if days_until < 0 %}
-                                                <tr>
+                                                <tr data-site-id="{{ site.id }}">
                                                     <td>{{ part.name }}</td>
                                                     <td>{{ machine.name }}</td>
                                                     <td>{{ site.name }}</td>
@@ -175,7 +193,7 @@
                                         {% for part in machine.parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
                                             {% if days_until >= 0 and days_until <= site.notification_threshold %}
-                                                <tr>
+                                                <tr data-site-id="{{ site.id }}">
                                                     <td>{{ part.name }}</td>
                                                     <td>{{ machine.name }}</td>
                                                     <td>{{ site.name }}</td>
@@ -217,7 +235,7 @@
         <div class="card-body p-0">
             <div class="accordion" id="sitesAccordion">
                 {% for site in sites %}
-                <div class="accordion-item border-0 border-bottom">
+                <div class="accordion-item border-0 border-bottom site-item" data-site-id="{{ site.id }}">
                     <h2 class="accordion-header" id="heading-site-{{ site.id }}">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#site-{{ site.id }}" aria-expanded="false" aria-controls="site-{{ site.id }}">
                             <div class="d-flex align-items-center w-100 flex-wrap">
@@ -293,7 +311,9 @@
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-sm btn-outline-secondary btn-icon toggle-parts-btn" type="button" data-bs-toggle="collapse" data-bs-target="#machine-parts-{{ machine.id }}" aria-label="Show parts">
+                                                    <button class="btn btn-sm btn-outline-secondary btn-icon toggle-parts-btn" type="button" 
+                                                            data-target="#machine-parts-{{ machine.id }}" 
+                                                            aria-label="Show parts">
                                                         <i class="fas fa-list"></i>
                                                     </button>
                                                     
@@ -421,149 +441,185 @@
 </style>
 
 <script>
+// Clean implementation of both features
 document.addEventListener('DOMContentLoaded', function() {
-    // Find the toggle all button
-    const toggleAllBtn = document.getElementById('toggleAllMachineParts');
-    const toggleAllText = document.getElementById('toggleAllText');
-    let partsVisible = true;
+    // ------- SITE FILTERING FUNCTIONALITY -------
+    const siteFilter = document.getElementById('site-filter');
+    const currentFilter = document.getElementById('current-filter');
+    const siteItems = document.querySelectorAll('.site-item');
+    const overdueCounter = document.querySelector('.stats-danger .stats-value');
+    const dueSoonCounter = document.querySelector('.stats-warning .stats-value');
+    const okCounter = document.querySelector('.stats-success .stats-value');
+    const totalCounter = document.querySelector('.stats-primary .stats-value');
     
-    // Only proceed if the button exists
-    if (!toggleAllBtn) return;
-    
-    toggleAllBtn.addEventListener('click', function() {
-        // Directly trigger clicks on each toggle button to use Bootstrap's built-in handlers
-        const toggleButtons = document.querySelectorAll('.toggle-parts-btn');
-        
-        toggleButtons.forEach(function(btn) {
-            // Get current state
-            const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+    // Initialize with "All Sites" selected
+    if (siteFilter) {
+        siteFilter.addEventListener('change', function() {
+            const selectedSiteId = this.value;
             
-            // Click only buttons that need state change
-            if (partsVisible && isExpanded) {
-                // We want to hide and this is expanded - click it
-                btn.click();
-            } else if (!partsVisible && !isExpanded) {
-                // We want to show and this is collapsed - click it
-                btn.click();
+            // Update the current filter text
+            if (selectedSiteId === 'all') {
+                currentFilter.textContent = 'All Sites';
+            } else {
+                const selectedOption = this.options[this.selectedIndex];
+                currentFilter.textContent = selectedOption.text;
             }
+            
+            // Filter the site rows in the Sites Overview section
+            let overdueCount = 0;
+            let dueSoonCount = 0;
+            let okCount = 0;
+            
+            siteItems.forEach(function(siteItem) {
+                const siteId = siteItem.getAttribute('data-site-id');
+                const isVisible = selectedSiteId === 'all' || selectedSiteId === siteId;
+                
+                // Show/hide the site row
+                siteItem.style.display = isVisible ? '' : 'none';
+                
+                // Only count stats for visible sites
+                if (isVisible) {
+                    // Count parts by status within this site
+                    const overdueBadges = siteItem.querySelectorAll('.badge.bg-danger:not(.ms-1)');
+                    const dueSoonBadges = siteItem.querySelectorAll('.badge.bg-warning:not(.text-dark)');
+                    const okBadges = siteItem.querySelectorAll('.badge.bg-success');
+                    
+                    // Extract numeric values from badges (they contain text like "2 Overdue")
+                    overdueBadges.forEach(badge => {
+                        const matches = badge.textContent.match(/(\d+)/);
+                        if (matches && matches[1]) {
+                            overdueCount += parseInt(matches[1], 10);
+                        }
+                    });
+                    
+                    dueSoonBadges.forEach(badge => {
+                        const matches = badge.textContent.match(/(\d+)/);
+                        if (matches && matches[1]) {
+                            dueSoonCount += parseInt(matches[1], 10);
+                        }
+                    });
+                    
+                    // For OK badges, we count 1 per badge since they just say "All OK"
+                    okCount += okBadges.length;
+                }
+            });
+            
+            // Filter the parts tables in the Overdue and Due Soon panels
+            document.querySelectorAll('.table tr[data-site-id]').forEach(function(row) {
+                const rowSiteId = row.getAttribute('data-site-id');
+                row.style.display = (selectedSiteId === 'all' || selectedSiteId === rowSiteId) ? '' : 'none';
+            });
+            
+            // Update the counters
+            if (overdueCounter) overdueCounter.textContent = overdueCount;
+            if (dueSoonCounter) dueSoonCounter.textContent = dueSoonCount;
+            if (okCounter) okCounter.textContent = okCount;
+            if (totalCounter) totalCounter.textContent = overdueCount + dueSoonCount + okCount;
         });
-        
-        // Update main toggle button appearance
-        if (partsVisible) {
-            toggleAllText.textContent = 'Show All Parts';
-            toggleAllBtn.querySelector('i').className = 'fas fa-eye me-1';
-        } else {
-            toggleAllText.textContent = 'Hide All Parts';
-            toggleAllBtn.querySelector('i').className = 'fas fa-eye-slash me-1';
-        }
-        
-        // Toggle state
-        partsVisible = !partsVisible;
-    });
-});
-</script>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Make sure Bootstrap is available
-    if (typeof bootstrap === 'undefined') {
-        console.error('Bootstrap JavaScript is not loaded');
-        return;
     }
     
-    // Global toggle for showing/hiding all parts
+    // ------- TOGGLE PARTS VISIBILITY FUNCTIONALITY -------
     const toggleAllBtn = document.getElementById('toggleAllMachineParts');
     const toggleAllText = document.getElementById('toggleAllText');
-    let partsVisible = true;
-    
-    // Explicitly initialize all collapsible elements
-    const collapsibleRows = document.querySelectorAll('.machine-parts-row');
+    const partRows = document.querySelectorAll('.machine-parts-row');
     const toggleButtons = document.querySelectorAll('.toggle-parts-btn');
     
-    // Create collapse instances for all rows
-    const collapseInstances = {};
-    collapsibleRows.forEach(row => {
-        collapseInstances[row.id] = new bootstrap.Collapse(row, {
-            toggle: false // Don't toggle on initialization
-        });
-    });
+    // Start with parts hidden
+    let partsVisible = false;
     
-    // Function to toggle all parts visibility
-    function toggleAllParts() {
-        if (partsVisible) {
-            // Hide all parts
-            collapsibleRows.forEach(row => {
-                // Use the stored instance or try to get a new one
-                if (collapseInstances[row.id]) {
-                    collapseInstances[row.id].hide();
-                } else {
-                    // Direct DOM manipulation as fallback
-                    row.classList.remove('show');
-                }
-            });
+    function hideAllParts() {
+        partRows.forEach(function(row) {
+            row.style.display = 'none';
+            row.classList.remove('show');
+        });
+        
+        toggleButtons.forEach(function(btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            btn.classList.remove('active');
+        });
+        
+        if (toggleAllText) toggleAllText.textContent = 'Show All Parts';
+        if (toggleAllBtn) toggleAllBtn.querySelector('i').className = 'fas fa-eye me-1';
+        
+        partsVisible = false;
+    }
+    
+    function showAllParts() {
+        partRows.forEach(function(row) {
+            row.style.display = 'table-row';
+            row.classList.add('show');
+        });
+        
+        toggleButtons.forEach(function(btn) {
+            btn.setAttribute('aria-expanded', 'true');
+            btn.classList.add('active');
+        });
+        
+        if (toggleAllText) toggleAllText.textContent = 'Hide All Parts';
+        if (toggleAllBtn) toggleAllBtn.querySelector('i').className = 'fas fa-eye-slash me-1';
+        
+        partsVisible = true;
+    }
+    
+    // Set up global toggle button
+    if (toggleAllBtn) {
+        toggleAllBtn.addEventListener('click', function() {
+            if (partsVisible) {
+                hideAllParts();
+            } else {
+                showAllParts();
+            }
+        });
+    }
+    
+    // Set up individual toggle buttons
+    toggleButtons.forEach(function(btn) {
+        const targetId = btn.getAttribute('data-target');
+        if (!targetId) return;
+        
+        const targetRow = document.querySelector(targetId);
+        if (!targetRow) return;
+        
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             
-            // Update toggle buttons appearance
-            toggleButtons.forEach(btn => {
+            const isVisible = targetRow.style.display === 'table-row';
+            
+            if (isVisible) {
+                targetRow.style.display = 'none';
+                targetRow.classList.remove('show');
                 btn.setAttribute('aria-expanded', 'false');
                 btn.classList.remove('active');
-            });
-            
-            // Update main toggle button
-            toggleAllText.textContent = 'Show All Parts';
-            toggleAllBtn.querySelector('i').className = 'fas fa-eye me-1';
-        } else {
-            // Show all parts
-            collapsibleRows.forEach(row => {
-                if (collapseInstances[row.id]) {
-                    collapseInstances[row.id].show();
-                } else {
-                    // Direct DOM manipulation as fallback
-                    row.classList.add('show');
-                }
-            });
-            
-            // Update toggle buttons appearance
-            toggleButtons.forEach(btn => {
+            } else {
+                targetRow.style.display = 'table-row';
+                targetRow.classList.add('show');
                 btn.setAttribute('aria-expanded', 'true');
                 btn.classList.add('active');
-            });
+            }
             
-            // Update main toggle button
-            toggleAllText.textContent = 'Hide All Parts';
-            toggleAllBtn.querySelector('i').className = 'fas fa-eye-slash me-1';
-        }
-        
-        partsVisible = !partsVisible;
-    }
-    
-    // Attach click handler
-    if (toggleAllBtn) {
-        toggleAllBtn.addEventListener('click', toggleAllParts);
-    }
-    
-    // Update individual toggle buttons to reflect state on click
-    toggleButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Use setTimeout to ensure this runs after Bootstrap's own handler
-            setTimeout(() => {
-                const expanded = this.getAttribute('aria-expanded') === 'true';
-                if (expanded) {
-                    this.classList.add('active');
-                } else {
-                    this.classList.remove('active');
-                }
-            }, 10);
+            // Update global button state based on current visible rows
+            updateGlobalToggleState();
         });
     });
     
-    // Add keyboard accessibility
-    toggleAllBtn.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            toggleAllParts();
+    function updateGlobalToggleState() {
+        if (!toggleAllBtn || !toggleAllText) return;
+        
+        const visibleRows = document.querySelectorAll('.machine-parts-row[style="display: table-row;"]');
+        
+        if (visibleRows.length === 0) {
+            toggleAllText.textContent = 'Show All Parts';
+            toggleAllBtn.querySelector('i').className = 'fas fa-eye me-1';
+            partsVisible = false;
+        } else if (visibleRows.length === partRows.length) {
+            toggleAllText.textContent = 'Hide All Parts';
+            toggleAllBtn.querySelector('i').className = 'fas fa-eye-slash me-1';
+            partsVisible = true;
         }
-    });
+    }
+    
+    // Initialize parts to be hidden on page load
+    hideAllParts();
 });
 </script>
-
 {% endblock %}
