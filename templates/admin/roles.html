@@ -51,10 +51,10 @@
                                         {% endif %}
                                     </div>
                                     <button class="btn btn-sm btn-outline-secondary mt-1" type="button" 
-                                            onclick="togglePermissions('permissions-{{ role.id }}', this)">
+                                            onclick="togglePermissionsById('permissions-{{ role.id }}', this)">
                                         <i class="fas fa-list-ul me-1"></i> <span class="toggle-text">View All</span>
                                     </button>
-                                    <div class="permissions-container mt-2" id="permissions-{{ role.id }}" style="display: none;">
+                                    <div class="permission-list-container mt-2" id="permissions-{{ role.id }}" style="display: none;">
                                         <div class="card card-body p-2">
                                             <div class="permission-list" style="max-height: 150px; overflow-y: auto;">
                                                 <ul class="list-unstyled mb-0 small">
@@ -186,12 +186,14 @@
 </div>
 {% endblock %}
 <script>
-function togglePermissions(id, button) {
-    // Get the permissions container
+function togglePermissionsById(id, button) {
+    // Get the permissions container - using getElementById for reliability
     const container = document.getElementById(id);
+    if (!container) return; // Safety check
+    
     const textSpan = button.querySelector('.toggle-text');
     
-    // Toggle visibility
+    // Toggle visibility with explicit check for display none
     if (container.style.display === 'none') {
         // Show the permissions
         container.style.display = 'block';
