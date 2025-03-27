@@ -18,50 +18,54 @@
             <table class="table table-hover table-fixed table-compact">
                 <thead>
                     <tr>
-                        <th style="width: 18%">Username</th>
-                        <th style="width: 20%" class="hide-md">Full Name</th>
-                        <th style="width: 20%" class="hide-md">Email</th>
-                        <th style="width: 15%">Role</th>
-                        <th style="width: 8%">Admin</th>
-                        <th style="width: 6%">Sites</th>
-                        <th style="width: 10%">Actions</th>
+                        <th style="width: 50%">User Details</th>
+                        <th style="width: 30%">Role & Permissions</th>
+                        <th style="width: 20%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for user in users %}
                     <tr>
-                        <td><span class="cell-truncate" title="{{ user.username }}">{{ user.username }}</span></td>
-                        <td class="hide-md"><span class="cell-truncate" title="{{ user.full_name }}">{{ user.full_name or '-' }}</span></td>
-                        <td class="hide-md"><span class="cell-truncate" title="{{ user.email }}">{{ user.email or '-' }}</span></td>
-                        <td><span class="cell-truncate" title="{{ user.role.name if user.role else '-' }}">{{ user.role.name if user.role else '-' }}</span></td>
                         <td>
-                            {% if user.is_admin %}
-                                <span class="badge bg-danger">Admin</span>
-                            {% else %}
-                                <span class="badge bg-secondary">User</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ user.sites|length }}</td>
-                        <td>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-icon btn-outline-secondary table-action-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-ellipsis-v"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li>
-                                        <a class="dropdown-item" href="{{ url_for('edit_user', user_id=user.id) }}">
-                                            <i class="fas fa-edit text-primary fa-fw"></i> Edit
-                                        </a>
-                                    </li>
-                                    {% if user.id != current_user.id %}
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#deleteUserModal{{ user.id }}">
-                                            <i class="fas fa-trash-alt fa-fw"></i> Delete
-                                        </a>
-                                    </li>
+                            <div class="user-info">
+                                <div class="text-muted small">
+                                    <div class="fw-bold username-field"><span class="fw-medium">Username:</span> {{ user.username }}</div>
+                                    {% if user.email %}
+                                    <div><span class="fw-medium">Email:</span> {{ user.email }}</div>
                                     {% endif %}
-                                </ul>
+                                    {% if user.full_name %}
+                                    <div><span class="fw-medium">Name:</span> {{ user.full_name }}</div>
+                                    {% endif %}
+                                    <div><span class="fw-medium">Sites:</span> {{ user.sites|length }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                <div class="mb-1">
+                                    {% if user.is_admin %}
+                                        <span class="badge bg-danger">Administrator</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Regular User</span>
+                                    {% endif %}
+                                </div>
+                                {% if user.role %}
+                                    <div><span class="fw-medium">Role:</span> {{ user.role.name }}</div>
+                                {% else %}
+                                    <div class="text-muted small">No role assigned</div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                {% if user.id != current_user.id %}
+                                <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteUserModal{{ user.id }}">
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
