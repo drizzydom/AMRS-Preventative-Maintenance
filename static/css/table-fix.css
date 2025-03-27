@@ -333,3 +333,113 @@
         font-size: 0.8125rem;
     }
 }
+
+/* User and Role Info Styling */
+.user-info, .role-info {
+    padding: 0.25rem 0;
+}
+
+.username-field {
+    margin-bottom: 0.25rem;
+    font-size: 1rem;
+}
+
+.user-info .text-muted {
+    line-height: 1.3;
+}
+
+.fs-5 {
+    font-size: 1rem !important;
+}
+
+.role-name {
+    font-size: 1.05rem;
+    margin-bottom: 0.5rem !important;
+    display: block;
+    line-height: 1.3;
+}
+
+/* Permissions toggle styling - improved version */
+.toggle-permissions {
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.toggle-permissions[aria-expanded="true"] {
+    background-color: #6c757d;
+    color: white;
+}
+
+.toggle-permissions[aria-expanded="false"] {
+    background-color: transparent;
+}
+
+.user-name, .role-name {
+    font-size: 1.05rem;
+    margin-bottom: 0.5rem !important; /* Added important to ensure separation */
+    display: block; /* Ensures username is on its own line */
+    line-height: 1.3;
+}
+
+.permission-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.permission-badges .badge {
+    font-size: 0.75rem;
+    font-weight: normal;
+}
+
+/* Fix permissions toggle button behavior */
+.toggle-permissions[aria-expanded="true"] .toggle-text {
+    content: "Hide";
+}
+
+.toggle-permissions[aria-expanded="false"] .toggle-text {
+    content: "View All";
+}
+
+/* Improve permission badges on mobile */
+@media (max-width: 768px) {
+    .permission-badges {
+        gap: 0.15rem;
+    }
+    
+    .permission-badges .badge {
+        font-size: 0.7rem;
+        padding: 0.25em 0.5em;
+    }
+    
+    .permission-list {
+        max-height: 100px !important;
+    }
+    
+    .user-name, .role-name {
+        font-size: 1rem;
+    }
+}
+
+/* Custom permission toggle styling */
+.permission-toggle {
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.permission-toggle.active {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Permissions toggle styling - active state */
+.btn-outline-secondary.active {
+    background-color: #6c757d !important;
+    color: white !important;
+    border-color: #6c757d !important;
+}
+
+.permissions-container {
+    transition: all 0.3s ease;
+}

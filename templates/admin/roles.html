@@ -15,50 +15,71 @@
     <div class="card-body">
         {% if roles %}
         <div class="admin-table-container">
-            <table class="table table-hover table-fixed">
+            <table class="table table-hover table-fixed table-compact">
                 <thead>
                     <tr>
-                        <th style="width: 20%">Role Name</th>
-                        <th style="width: 35%">Description</th>
-                        <th style="width: 10%">Users</th>
-                        <th style="width: 20%">Permissions</th>
-                        <th style="width: 15%">Actions</th>
+                        <th style="width: 40%">Role Details</th>
+                        <th style="width: 40%">Permissions</th>
+                        <th style="width: 20%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for role in roles %}
                     <tr>
-                        <td><span class="cell-truncate" title="{{ role.name }}">{{ role.name }}</span></td>
-                        <td><span class="cell-truncate" title="{{ role.description }}">{{ role.description }}</span></td>
-                        <td>{{ role.users|length }}</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#permissions-{{ role.id }}">
-                                View Permissions
-                            </button>
-                            <div class="collapse mt-2" id="permissions-{{ role.id }}">
-                                <div class="card card-body">
-                                    <div class="permission-list" style="max-height: 150px; overflow-y: auto;">
-                                        {% set permission_list = role.get_permissions_list() %}
-                                        {% if permission_list|length > 0 %}
-                                            <ul class="list-unstyled mb-0">
-                                                {% for permission in permission_list %}
-                                                <li><small>{{ all_permissions.get(permission, permission) }}</small></li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% else %}
-                                            <small class="text-muted">No permissions assigned</small>
-                                        {% endif %}
-                                    </div>
+                            <div class="role-info">
+                                <div class="role-name fw-bold">{{ role.name }}</div>
+                                {% if role.description %}
+                                <div class="text-muted small">{{ role.description }}</div>
+                                {% endif %}
+                                <div class="text-muted small">
+                                    <span class="fw-medium">Users:</span> <span class="badge bg-secondary">{{ role.users|length }}</span>
                                 </div>
                             </div>
                         </td>
                         <td>
-                            <div class="btn-group btn-group-sm btn-group-sm-vertical">
-                                <a href="{{ url_for('edit_role', role_id=role.id) }}" class="btn btn-outline-primary">
-                                    <i class="fas fa-edit"></i><span class="hide-sm"> Edit</span>
+                            <div class="permission-summary">
+                                {% set permission_list = role.get_permissions_list() %}
+                                {% if permission_list|length > 0 %}
+                                    <div class="permission-badges">
+                                        {% set max_display = 3 %}
+                                        {% for permission in permission_list[:max_display] %}
+                                        <span class="badge bg-info text-dark mb-1">{{ permission }}</span>
+                                        {% endfor %}
+                                        {% if permission_list|length > max_display %}
+                                        <span class="badge bg-secondary">+{{ permission_list|length - max_display }} more</span>
+                                        {% endif %}
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary mt-1" type="button" 
+                                            onclick="togglePermissions('permissions-{{ role.id }}', this)">
+                                        <i class="fas fa-list-ul me-1"></i> <span class="toggle-text">View All</span>
+                                    </button>
+                                    <div class="permissions-container mt-2" id="permissions-{{ role.id }}" style="display: none;">
+                                        <div class="card card-body p-2">
+                                            <div class="permission-list" style="max-height: 150px; overflow-y: auto;">
+                                                <ul class="list-unstyled mb-0 small">
+                                                    {% for permission in permission_list %}
+                                                    <li><small>{{ all_permissions.get(permission, permission) }}</small></li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <small class="text-muted">No permissions assigned</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('edit_role', role_id=role.id) }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-edit"></i> Edit
                                 </a>
-                                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteRoleModal{{ role.id }}">
-                                    <i class="fas fa-trash"></i><span class="hide-sm"> Delete</span>
+                                <button type="button" class="btn btn-danger btn-sm" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#deleteRoleModal{{ role.id }}"
+                                        {% if role.users|length > 0 %}disabled{% endif %}>
+                                    <i class="fas fa-trash-alt"></i> Delete
                                 </button>
                             </div>
                         </td>
@@ -164,3 +185,41 @@
     </div>
 </div>
 {% endblock %}
+<script>
+function togglePermissions(id, button) {
+    // Get the permissions container
+    const container = document.getElementById(id);
+    const textSpan = button.querySelector('.toggle-text');
+    
+    // Toggle visibility
+    if (container.style.display === 'none') {
+        // Show the permissions
+        container.style.display = 'block';
+        textSpan.textContent = 'Hide All';
+        button.classList.add('active');
+    } else {
+        // Hide the permissions
+        container.style.display = 'none';
+        textSpan.textContent = 'View All';
+        button.classList.remove('active');
+    }
+}
+
+// Ensure all permissions containers start hidden when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Hide all permissions containers
+    document.querySelectorAll('.permissions-container').forEach(function(container) {
+        container.style.display = 'none';
+    });
+    
+    // Ensure all toggle buttons say "View All"
+    document.querySelectorAll('.toggle-text').forEach(function(span) {
+        span.textContent = 'View All';
+    });
+    
+    // Remove any active class from toggle buttons
+    document.querySelectorAll('.btn-outline-secondary').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+});
+</script>
