@@ -22,8 +22,11 @@ function dashboardInit() {
     // 4. Set up individual toggle buttons
     setupPartToggles();
     
-    // 5. Hide all parts initially
-    hideAllParts();
+    // 5. Show all parts initially (instead of hiding them)
+    showAllParts();
+    
+    // 6. Update button text to match the initial state (all parts are now shown)
+    updateToggleButtonText(true);
     
     console.log("Dashboard initialization complete");
 }
@@ -170,6 +173,9 @@ function setupToggleAllParts() {
             showAllParts();
         }
     });
+    
+    // Set initial button text based on parts visibility
+    updateToggleButtonText(areAllPartsShowing());
 }
 
 // Check if all machine parts are shown
@@ -199,14 +205,7 @@ function hideAllParts() {
     });
     
     // Update toggle all button text and icon
-    const toggleText = document.getElementById('toggleAllText');
-    const toggleBtn = document.getElementById('toggleAllMachineParts');
-    
-    if (toggleText) toggleText.textContent = 'Show All Parts';
-    if (toggleBtn) {
-        const icon = toggleBtn.querySelector('i');
-        if (icon) icon.className = 'fas fa-eye me-1';
-    }
+    updateToggleButtonText(false);
 }
 
 // Show all machine parts
@@ -223,13 +222,23 @@ function showAllParts() {
     });
     
     // Update toggle all button text and icon
+    updateToggleButtonText(true);
+}
+
+// Helper function to update the toggle button text and icon
+function updateToggleButtonText(isShowing) {
     const toggleText = document.getElementById('toggleAllText');
     const toggleBtn = document.getElementById('toggleAllMachineParts');
     
-    if (toggleText) toggleText.textContent = 'Hide All Parts';
+    if (toggleText) {
+        toggleText.textContent = isShowing ? 'Hide All Parts' : 'Show All Parts';
+    }
+    
     if (toggleBtn) {
         const icon = toggleBtn.querySelector('i');
-        if (icon) icon.className = 'fas fa-eye-slash me-1';
+        if (icon) {
+            icon.className = isShowing ? 'fas fa-eye-slash me-1' : 'fas fa-eye me-1';
+        }
     }
 }
 
