@@ -236,29 +236,41 @@
             <div class="accordion" id="sitesAccordion">
                 {% for site in sites %}
                 <div class="accordion-item border-0 border-bottom site-item" data-site-id="{{ site.id }}">
-                    <h2 class="accordion-header" id="heading-site-{{ site.id }}">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#site-{{ site.id }}" aria-expanded="false" aria-controls="site-{{ site.id }}">
-                            <div class="d-flex align-items-center w-100 flex-wrap">
-                                <div class="flex-grow-1 me-2">
-                                    <span class="fw-medium">{{ site.name }}</span>
-                                    <span class="text-muted d-inline-block text-truncate" style="max-width:150px">{{ site.location }}</span>
+                    <h2 class="accordion-header site-header" id="heading-site-{{ site.id }}">
+                        <button class="accordion-button collapsed site-accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#site-{{ site.id }}" aria-expanded="false" aria-controls="site-{{ site.id }}">
+                            <div class="d-flex align-items-center w-100">
+                                <div class="flex-grow-1">
+                                    <div class="site-title">{{ site.name }}</div>
+                                    <span class="text-muted d-inline-block text-truncate site-location">{{ site.location }}</span>
                                 </div>
-                                {% set site_status = site.get_parts_status(now) %}
-                                <div class="me-2">
-                                    {% if site_status.overdue|length > 0 %}
-                                        <span class="badge bg-danger">{{ site_status.overdue|length }} Overdue</span>
-                                    {% elif site_status.due_soon|length > 0 %}
-                                        <span class="badge bg-warning text-dark">{{ site_status.due_soon|length }} Due Soon</span>
-                                    {% else %}
-                                        <span class="badge bg-success">All OK</span>
-                                    {% endif %}
-                                </div>
-                                <div class="badge bg-light text-dark">{{ site.machines|length }}</div>
+                                <!-- Site statistics moved to inside the accordion panel -->
                             </div>
                         </button>
                     </h2>
                     <div id="site-{{ site.id }}" class="accordion-collapse collapse" aria-labelledby="heading-site-{{ site.id }}" data-bs-parent="#sitesAccordion">
                         <div class="accordion-body p-0">
+                            <!-- Site statistics summary -->
+                            <div class="site-stats-summary px-3 py-2 bg-light border-bottom">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        {% set site_status = site.get_parts_status(now) %}
+                                        {% if site_status.overdue|length > 0 %}
+                                            <span class="badge bg-danger me-1">{{ site_status.overdue|length }} Parts Overdue</span>
+                                        {% endif %}
+                                        
+                                        {% if site_status.due_soon|length > 0 %}
+                                            <span class="badge bg-warning text-dark me-1">{{ site_status.due_soon|length }} Parts Due Soon</span>
+                                        {% endif %}
+                                        
+                                        {% if site_status.overdue|length == 0 and site_status.due_soon|length == 0 %}
+                                            <span class="badge bg-success me-1">All Parts OK</span>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-primary">{{ site.machines|length }} Machines</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-hover mb-0">
                                     <thead>
@@ -438,188 +450,253 @@
     background-color: #6c757d;
     color: white;
 }
+
+/* Site header styling */
+.site-accordion-button {
+    padding: 0.75rem 1rem;
+    background-color: #f8f9fa;
+    border: none;
+    box-shadow: none;
+}
+
+.site-accordion-button:not(.collapsed) {
+    background-color: #f1f3f5;
+    color: #212529;
+    box-shadow: none;
+}
+
+.site-accordion-button:focus {
+    box-shadow: none;
+    border-color: rgba(0,0,0,.125);
+}
+
+.site-accordion-button::after {
+    width: 1rem;
+    height: 1rem;
+    background-size: 1rem;
+}
+
+.site-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #343a40;
+    margin-bottom: 0.1rem;
+    line-height: 1.3;
+}
+
+.site-location {
+    font-size: 0.9rem;
+    max-width: 250px;
+}
+
+.site-header {
+    margin-bottom: 0;
+}
+
+/* Remove the old stats-card styling that conflicts with unified-ui.css */
+/* Only keep necessary mobile styles */
+@media (max-width: 767.98px) {
+    .site-title {
+        font-size: 1.1rem;
+    }
+    
+    .site-location {
+        max-width: 150px;
+        font-size: 0.85rem;
+    }
+    
+    .site-accordion-button {
+        padding: 0.6rem 0.75rem;
+    }
+}
 </style>
 
 <script>
-// Clean implementation of both features
+// Basic dashboard functionality - no frills, just works
 document.addEventListener('DOMContentLoaded', function() {
-    // ------- SITE FILTERING FUNCTIONALITY -------
-    const siteFilter = document.getElementById('site-filter');
-    const currentFilter = document.getElementById('current-filter');
-    const siteItems = document.querySelectorAll('.site-item');
-    const overdueCounter = document.querySelector('.stats-danger .stats-value');
-    const dueSoonCounter = document.querySelector('.stats-warning .stats-value');
-    const okCounter = document.querySelector('.stats-success .stats-value');
-    const totalCounter = document.querySelector('.stats-primary .stats-value');
+    initializeDashboard();
+});
+
+function initializeDashboard() {
+    console.log('Initializing dashboard...');
     
-    // Initialize with "All Sites" selected
+    // Store original stats
+    const originalStats = {
+        overdue: document.querySelector('.stats-danger .stats-value').textContent,
+        dueSoon: document.querySelector('.stats-warning .stats-value').textContent,
+        ok: document.querySelector('.stats-success .stats-value').textContent,
+        total: document.querySelector('.stats-primary .stats-value').textContent
+    };
+    
+    // Set up site filter
+    const siteFilter = document.getElementById('site-filter');
     if (siteFilter) {
-        siteFilter.addEventListener('change', function() {
-            const selectedSiteId = this.value;
+        siteFilter.onchange = function() {
+            const siteId = this.value;
             
-            // Update the current filter text
-            if (selectedSiteId === 'all') {
-                currentFilter.textContent = 'All Sites';
-            } else {
-                const selectedOption = this.options[this.selectedIndex];
-                currentFilter.textContent = selectedOption.text;
+            // Update filter display name
+            const currentFilter = document.getElementById('current-filter');
+            if (currentFilter) {
+                if (siteId === 'all') {
+                    currentFilter.textContent = 'All Sites';
+                } else {
+                    currentFilter.textContent = this.options[this.selectedIndex].text;
+                }
             }
             
-            // Filter the site rows in the Sites Overview section
-            let overdueCount = 0;
-            let dueSoonCount = 0;
-            let okCount = 0;
+            if (siteId === 'all') {
+                // Show all site rows
+                document.querySelectorAll('[data-site-id]').forEach(function(el) {
+                    el.style.display = '';
+                });
+                
+                // Reset stats to original values
+                document.querySelector('.stats-danger .stats-value').textContent = originalStats.overdue;
+                document.querySelector('.stats-warning .stats-value').textContent = originalStats.dueSoon;
+                document.querySelector('.stats-success .stats-value').textContent = originalStats.ok;
+                document.querySelector('.stats-primary .stats-value').textContent = originalStats.total;
+            } else {
+                // Hide all site rows
+                document.querySelectorAll('[data-site-id]').forEach(function(el) {
+                    el.style.display = 'none';
+                });
+                
+                // Show only matching site rows
+                document.querySelectorAll('[data-site-id="' + siteId + '"]').forEach(function(el) {
+                    el.style.display = '';
+                });
+                
+                // Update site counters for selected site
+                updateSiteCounters(siteId);
+            }
+        };
+    }
+    
+    // Set up toggle all parts button
+    const toggleAllBtn = document.getElementById('toggleAllMachineParts');
+    if (toggleAllBtn) {
+        toggleAllBtn.onclick = function() {
+            const partRows = document.querySelectorAll('.machine-parts-row');
+            let anyVisible = false;
             
-            siteItems.forEach(function(siteItem) {
-                const siteId = siteItem.getAttribute('data-site-id');
-                const isVisible = selectedSiteId === 'all' || selectedSiteId === siteId;
-                
-                // Show/hide the site row
-                siteItem.style.display = isVisible ? '' : 'none';
-                
-                // Only count stats for visible sites
-                if (isVisible) {
-                    // Count parts by status within this site
-                    const overdueBadges = siteItem.querySelectorAll('.badge.bg-danger:not(.ms-1)');
-                    const dueSoonBadges = siteItem.querySelectorAll('.badge.bg-warning:not(.text-dark)');
-                    const okBadges = siteItem.querySelectorAll('.badge.bg-success');
-                    
-                    // Extract numeric values from badges (they contain text like "2 Overdue")
-                    overdueBadges.forEach(badge => {
-                        const matches = badge.textContent.match(/(\d+)/);
-                        if (matches && matches[1]) {
-                            overdueCount += parseInt(matches[1], 10);
-                        }
-                    });
-                    
-                    dueSoonBadges.forEach(badge => {
-                        const matches = badge.textContent.match(/(\d+)/);
-                        if (matches && matches[1]) {
-                            dueSoonCount += parseInt(matches[1], 10);
-                        }
-                    });
-                    
-                    // For OK badges, we count 1 per badge since they just say "All OK"
-                    okCount += okBadges.length;
+            // Check if any rows are visible
+            partRows.forEach(function(row) {
+                if (row.style.display === 'table-row') {
+                    anyVisible = true;
                 }
             });
             
-            // Filter the parts tables in the Overdue and Due Soon panels
-            document.querySelectorAll('.table tr[data-site-id]').forEach(function(row) {
-                const rowSiteId = row.getAttribute('data-site-id');
-                row.style.display = (selectedSiteId === 'all' || selectedSiteId === rowSiteId) ? '' : 'none';
-            });
-            
-            // Update the counters
-            if (overdueCounter) overdueCounter.textContent = overdueCount;
-            if (dueSoonCounter) dueSoonCounter.textContent = dueSoonCount;
-            if (okCounter) okCounter.textContent = okCount;
-            if (totalCounter) totalCounter.textContent = overdueCount + dueSoonCount + okCount;
-        });
-    }
-    
-    // ------- TOGGLE PARTS VISIBILITY FUNCTIONALITY -------
-    const toggleAllBtn = document.getElementById('toggleAllMachineParts');
-    const toggleAllText = document.getElementById('toggleAllText');
-    const partRows = document.querySelectorAll('.machine-parts-row');
-    const toggleButtons = document.querySelectorAll('.toggle-parts-btn');
-    
-    // Start with parts hidden
-    let partsVisible = false;
-    
-    function hideAllParts() {
-        partRows.forEach(function(row) {
-            row.style.display = 'none';
-            row.classList.remove('show');
-        });
-        
-        toggleButtons.forEach(function(btn) {
-            btn.setAttribute('aria-expanded', 'false');
-            btn.classList.remove('active');
-        });
-        
-        if (toggleAllText) toggleAllText.textContent = 'Show All Parts';
-        if (toggleAllBtn) toggleAllBtn.querySelector('i').className = 'fas fa-eye me-1';
-        
-        partsVisible = false;
-    }
-    
-    function showAllParts() {
-        partRows.forEach(function(row) {
-            row.style.display = 'table-row';
-            row.classList.add('show');
-        });
-        
-        toggleButtons.forEach(function(btn) {
-            btn.setAttribute('aria-expanded', 'true');
-            btn.classList.add('active');
-        });
-        
-        if (toggleAllText) toggleAllText.textContent = 'Hide All Parts';
-        if (toggleAllBtn) toggleAllBtn.querySelector('i').className = 'fas fa-eye-slash me-1';
-        
-        partsVisible = true;
-    }
-    
-    // Set up global toggle button
-    if (toggleAllBtn) {
-        toggleAllBtn.addEventListener('click', function() {
-            if (partsVisible) {
-                hideAllParts();
+            // Toggle based on current state
+            if (anyVisible) {
+                // Hide all rows
+                partRows.forEach(function(row) {
+                    row.style.display = 'none';
+                });
+                
+                // Update toggle buttons
+                document.querySelectorAll('.toggle-parts-btn').forEach(function(btn) {
+                    btn.setAttribute('aria-expanded', 'false');
+                    btn.classList.remove('active');
+                });
+                
+                // Update toggle button text and icon
+                document.getElementById('toggleAllText').textContent = 'Show All Parts';
+                this.querySelector('i').className = 'fas fa-eye me-1';
             } else {
-                showAllParts();
+                // Show all rows
+                partRows.forEach(function(row) {
+                    row.style.display = 'table-row';
+                });
+                
+                // Update toggle buttons
+                document.querySelectorAll('.toggle-parts-btn').forEach(function(btn) {
+                    btn.setAttribute('aria-expanded', 'true');
+                    btn.classList.add('active');
+                });
+                
+                // Update toggle button text and icon
+                document.getElementById('toggleAllText').textContent = 'Hide All Parts';
+                this.querySelector('i').className = 'fas fa-eye-slash me-1';
             }
-        });
+            
+            return false; // Prevent default action
+        };
     }
     
-    // Set up individual toggle buttons
-    toggleButtons.forEach(function(btn) {
-        const targetId = btn.getAttribute('data-target');
-        if (!targetId) return;
-        
-        const targetRow = document.querySelector(targetId);
-        if (!targetRow) return;
-        
-        btn.addEventListener('click', function(e) {
+    // Set up individual part toggles
+    document.querySelectorAll('.toggle-parts-btn').forEach(function(btn) {
+        btn.onclick = function(e) {
             e.preventDefault();
+            e.stopPropagation();
             
-            const isVisible = targetRow.style.display === 'table-row';
+            const targetId = this.getAttribute('data-target');
+            const row = document.querySelector(targetId);
             
-            if (isVisible) {
-                targetRow.style.display = 'none';
-                targetRow.classList.remove('show');
-                btn.setAttribute('aria-expanded', 'false');
-                btn.classList.remove('active');
+            if (!row) return;
+            
+            // Toggle row visibility
+            if (row.style.display === 'table-row') {
+                row.style.display = 'none';
+                this.setAttribute('aria-expanded', 'false');
+                this.classList.remove('active');
             } else {
-                targetRow.style.display = 'table-row';
-                targetRow.classList.add('show');
-                btn.setAttribute('aria-expanded', 'true');
-                btn.classList.add('active');
+                row.style.display = 'table-row';
+                this.setAttribute('aria-expanded', 'true');
+                this.classList.add('active');
             }
-            
-            // Update global button state based on current visible rows
-            updateGlobalToggleState();
-        });
+        };
     });
     
-    function updateGlobalToggleState() {
-        if (!toggleAllBtn || !toggleAllText) return;
-        
-        const visibleRows = document.querySelectorAll('.machine-parts-row[style="display: table-row;"]');
-        
-        if (visibleRows.length === 0) {
-            toggleAllText.textContent = 'Show All Parts';
-            toggleAllBtn.querySelector('i').className = 'fas fa-eye me-1';
-            partsVisible = false;
-        } else if (visibleRows.length === partRows.length) {
-            toggleAllText.textContent = 'Hide All Parts';
-            toggleAllBtn.querySelector('i').className = 'fas fa-eye-slash me-1';
-            partsVisible = true;
-        }
-    }
+    // Hide all parts initially
+    document.querySelectorAll('.machine-parts-row').forEach(function(row) {
+        row.style.display = 'none';
+    });
     
-    // Initialize parts to be hidden on page load
-    hideAllParts();
-});
+    // Function to update stats counters for a specific site
+    function updateSiteCounters(siteId) {
+        const siteItem = document.querySelector(`.site-item[data-site-id="${siteId}"]`);
+        if (!siteItem) return;
+        
+        let overdueCount = 0;
+        let dueSoonCount = 0;
+        let okCount = 0;
+        
+        // Get counts from badges
+        const overdueBadge = siteItem.querySelector('.badge.bg-danger');
+        if (overdueBadge) {
+            const match = overdueBadge.textContent.match(/(\d+)/);
+            if (match) overdueCount = parseInt(match[1]);
+        }
+        
+        const dueSoonBadge = siteItem.querySelector('.badge.bg-warning');
+        if (dueSoonBadge) {
+            const match = dueSoonBadge.textContent.match(/(\d+)/);
+            if (match) dueSoonCount = parseInt(match[1]);
+        }
+        
+        // Handle "All Parts OK" case
+        const okBadge = siteItem.querySelector('.badge.bg-success');
+        if (okBadge && okBadge.textContent.includes('All Parts OK')) {
+            // Count all parts for this site
+            const machines = siteItem.querySelectorAll('.machine-row');
+            machines.forEach(function(machine) {
+                const parts = machine.nextElementSibling.querySelectorAll('tbody tr');
+                okCount = parts.length;
+            });
+        }
+        
+        // Update counter displays
+        document.querySelector('.stats-danger .stats-value').textContent = overdueCount;
+        document.querySelector('.stats-warning .stats-value').textContent = dueSoonCount;
+        document.querySelector('.stats-success .stats-value').textContent = okCount;
+        document.querySelector('.stats-primary .stats-value').textContent = (overdueCount + dueSoonCount + okCount);
+    }
+}
+
+// Run a second initialization in case DOMContentLoaded didn't fire or the DOM wasn't ready
+window.onload = function() {
+    initializeDashboard();
+};
 </script>
+
 {% endblock %}

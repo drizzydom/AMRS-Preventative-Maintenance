@@ -12,213 +12,183 @@
     {% set preferences = {'enable_email': True, 'email_frequency': 'weekly', 'notification_types': ['overdue', 'due_soon']} %}
 {% endif %}
 
-<div class="user-profile">
+<div class="row">
     <!-- Personal Information -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h3>Personal Information</h3>
-        </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('update_profile') }}">
-                <div class="row">
-                    <div class="col">
-                        <div class="form-group">
-                            <label for="username" class="form-label">Username</label>
-                            <input type="text" id="username" name="username" class="form-control" 
-                                   value="{{ current_user.username }}" required>
-                        </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-circle me-2 text-primary"></i>
+                    Personal Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_profile') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" value="{{ current_user.username }}" readonly disabled>
+                        <small class="form-text text-muted">Username cannot be changed</small>
                     </div>
-                    <div class="col">
-                        <div class="form-group">
-                            <label for="email" class="form-label">Email Address</label>
-                            <input type="email" id="email" name="email" class="form-control" 
-                                   value="{{ current_user.email or '' }}" required>
-                            <small class="form-text">Used for account recovery and notifications</small>
-                        </div>
+                    
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name" value="{{ current_user.full_name or '' }}">
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="full_name" class="form-label">Full Name</label>
-                    <input type="text" id="full_name" name="full_name" class="form-control" 
-                           value="{{ current_user.full_name or '' }}">
-                </div>
-                
-                <button type="submit" class="btn btn-primary mt-3">
-                    <i class="fas fa-save"></i> Save Changes
-                </button>
-            </form>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ current_user.email or '' }}">
+                        <small class="form-text text-muted">Used for notifications and password recovery</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Save Changes
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
     
     <!-- Security Settings -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h3>Security</h3>
-        </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('change_password') }}" id="passwordForm">
-                <div class="row">
-                    <div class="col">
-                        <div class="form-group">
-                            <label for="current_password" class="form-label">Current Password</label>
-                            <input type="password" id="current_password" name="current_password" class="form-control" required>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-shield-alt me-2 text-danger"></i>
+                    Security
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('change_password') }}" id="passwordForm">
+                    <div class="mb-3">
+                        <label for="current_password" class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="current_password" name="current_password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                    </div>
+                    
+                    <div class="password-requirements mb-4 p-3 bg-light border rounded">
+                        <div class="requirement" id="length-requirement">
+                            <i class="fas fa-circle fa-xs me-2"></i> At least 8 characters
+                        </div>
+                        <div class="requirement" id="uppercase-requirement">
+                            <i class="fas fa-circle fa-xs me-2"></i> At least one uppercase letter
+                        </div>
+                        <div class="requirement" id="number-requirement">
+                            <i class="fas fa-circle fa-xs me-2"></i> At least one number
                         </div>
                     </div>
-                </div>
-
-                <div class="row">
-                    <div class="col">
-                        <div class="form-group">
-                            <label for="new_password" class="form-label">New Password</label>
-                            <input type="password" id="new_password" name="new_password" class="form-control" required>
-                        </div>
-                    </div>
-                    <div class="col">
-                        <div class="form-group">
-                            <label for="confirm_password" class="form-label">Confirm New Password</label>
-                            <input type="password" id="confirm_password" name="confirm_password" class="form-control" required>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="password-requirements mt-2">
-                    <div class="requirement" id="length-requirement">
-                        <i class="fas fa-circle"></i>
-                        At least 8 characters long
-                    </div>
-                    <div class="requirement" id="uppercase-requirement">
-                        <i class="fas fa-circle"></i>
-                        Contains at least 1 uppercase letter
-                    </div>
-                    <div class="requirement" id="number-requirement">
-                        <i class="fas fa-circle"></i>
-                        Contains at least 1 number
-                    </div>
-                </div>
-                
-                <button type="submit" class="btn btn-primary mt-3">
-                    <i class="fas fa-key"></i> Change Password
-                </button>
-            </form>
+                    
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-key me-1"></i> Change Password
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
     
     <!-- Notification Preferences -->
-    <div class="card">
-        <div class="card-header">
-            <h3>Notification Preferences</h3>
-        </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('update_notification_preferences') }}">
-                <div class="form-group">
-                    <div class="d-flex align-items-center mb-3">
-                        <input type="checkbox" id="enable_email" name="enable_email" 
-                               {% if enable_email %}checked{% endif %} class="mr-2">
-                        <label for="enable_email" class="form-label mb-0 ml-2">
-                            Receive email notifications
-                        </label>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-bell me-2 text-warning"></i>
+                    Notification Preferences
+                </h5>
+            </div>
+            <form action="{{ url_for('update_notification_preferences') }}" method="post" class="mb-3">
+                <div class="card-body">
+                    <h5 class="mb-3">Email Notifications</h5>
+                    
+                    <!-- Main toggle switch -->
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="enable_email" name="enable_email"
+                               {% if notification_preferences.enable_email %}checked{% endif %}
+                               onchange="toggleNotificationOptions(this.checked)">
+                        <label class="form-check-label" for="enable_email">Enable email notifications</label>
+                    </div>
+                    
+                    <!-- Options section - hidden/shown based on toggle -->
+                    <div id="notification-options" class="ps-4 pt-2 pb-2 border-start" 
+                         {% if not notification_preferences.enable_email %}style="display: none;"{% endif %}>
+                        
+                        <!-- FIXED: Ensure radio buttons use proper name attributes -->
+                        <div class="mb-3">
+                            <label class="form-label">Notification Frequency</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notification_frequency" 
+                                       id="freq_immediate" value="immediate"
+                                       {% if notification_preferences.notification_frequency == 'immediate' %}checked{% endif %}>
+                                <label class="form-check-label" for="freq_immediate">
+                                    Immediate (send as soon as maintenance is due)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notification_frequency" 
+                                       id="freq_daily" value="daily"
+                                       {% if notification_preferences.notification_frequency == 'daily' %}checked{% endif %}>
+                                <label class="form-check-label" for="freq_daily">
+                                    Daily summary
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notification_frequency" 
+                                       id="freq_weekly" value="weekly"
+                                       {% if notification_preferences.notification_frequency == 'weekly' %}checked{% endif %}>
+                                <label class="form-check-label" for="freq_weekly">
+                                    Weekly summary
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- FIXED: Ensure radio buttons use proper name attributes -->
+                        <div class="mb-3">
+                            <label class="form-label">Email Format</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="email_format" 
+                                       id="format_html" value="html"
+                                       {% if notification_preferences.email_format == 'html' %}checked{% endif %}>
+                                <label class="form-check-label" for="format_html">
+                                    HTML (formatted with colors)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="email_format" 
+                                       id="format_text" value="text"
+                                       {% if notification_preferences.email_format == 'text' %}checked{% endif %}>
+                                <label class="form-check-label" for="format_text">
+                                    Plain text
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Save Preferences
+                        </button>
                     </div>
                 </div>
                 
-                <div class="form-group" id="email-frequency-group">
-                    <label class="form-label">Email Notification Frequency</label>
-                    <div class="d-flex flex-column gap-2">
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="email_frequency" id="email-immediate" 
-                                  value="immediate" {% if email_frequency == 'immediate' %}checked{% endif %}>
-                            <label class="form-check-label" for="email-immediate">
-                                Immediate - Send notifications as soon as maintenance is due
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="email_frequency" id="email-daily" 
-                                  value="daily" {% if email_frequency == 'daily' %}checked{% endif %}>
-                            <label class="form-check-label" for="email-daily">
-                                Daily Digest - Send one email per day with all due items
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="email_frequency" id="email-weekly" 
-                                  value="weekly" {% if email_frequency == 'weekly' %}checked{% endif %}>
-                            <label class="form-check-label" for="email-weekly">
-                                Weekly Summary - Send one email per week with all due items
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="email_frequency" id="email-monthly" 
-                                  value="monthly" {% if email_frequency == 'monthly' %}checked{% endif %}>
-                            <label class="form-check-label" for="email-monthly">
-                                Monthly Summary - Send one email per month with all due items
-                            </label>
-                        </div>
-                    </div>
+                <!-- Debug info is now always included but hidden by default -->
+                <div class="card-footer bg-light">
+                    <details>
+                        <summary class="text-muted small">Debug information</summary>
+                        <pre class="small">{{ notification_preferences|tojson(indent=2) }}</pre>
+                    </details>
                 </div>
-                
-                <div class="form-group mt-3">
-                    <label class="form-label">Notification Types</label>
-                    <div class="d-flex flex-column gap-2">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="notify-overdue" name="notification_types" 
-                                   value="overdue" {% if 'overdue' in notification_types %}checked{% endif %}>
-                            <label class="form-check-label" for="notify-overdue">
-                                Overdue Maintenance - Items past their due date
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="notify-due-soon" name="notification_types" 
-                                   value="due_soon" {% if 'due_soon' in notification_types %}checked{% endif %}>
-                            <label class="form-check-label" for="notify-due-soon">
-                                Due Soon - Items within the notification threshold
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="notify-completion" name="notification_types" 
-                                   value="completion" {% if 'completion' in notification_types %}checked{% endif %}>
-                            <label class="form-check-label" for="notify-completion">
-                                Completion Notifications - When maintenance is recorded by other users
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                
-                <button type="submit" class="btn btn-primary mt-3">
-                    <i class="fas fa-bell"></i> Save Notification Preferences
-                </button>
             </form>
         </div>
     </div>
 </div>
-
-<style>
-    .password-requirements {
-        margin: 0.5rem 0 1rem;
-        padding: 1rem;
-        background-color: var(--gray-50);
-        border-radius: 0.375rem;
-    }
-    
-    .requirement {
-        display: flex;
-        align-items: center;
-        margin-bottom: 0.5rem;
-        color: var(--gray-600);
-        font-size: 0.875rem;
-    }
-    
-    .requirement i {
-        margin-right: 0.5rem;
-        font-size: 0.75rem;
-    }
-    
-    .requirement.valid {
-        color: var(--success-color);
-    }
-    
-    .requirement.invalid {
-        color: var(--gray-500);
-    }
-</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -228,75 +198,87 @@
         const lengthReq = document.getElementById('length-requirement');
         const uppercaseReq = document.getElementById('uppercase-requirement');
         const numberReq = document.getElementById('number-requirement');
-        const form = document.getElementById('passwordForm');
         
-        function updateRequirements() {
-            const password = passwordField.value;
+        passwordField.addEventListener('input', function() {
+            const password = this.value;
             
-            // Check length
+            // Check length requirement
             if (password.length >= 8) {
                 lengthReq.classList.add('valid');
                 lengthReq.classList.remove('invalid');
-                lengthReq.querySelector('i').className = 'fas fa-check-circle';
+                lengthReq.querySelector('i').className = 'fas fa-check-circle fa-xs me-2 text-success';
             } else {
                 lengthReq.classList.add('invalid');
                 lengthReq.classList.remove('valid');
-                lengthReq.querySelector('i').className = 'fas fa-circle';
+                lengthReq.querySelector('i').className = 'fas fa-circle fa-xs me-2 text-muted';
             }
             
-            // Check uppercase
+            // Check uppercase requirement
             if (/[A-Z]/.test(password)) {
                 uppercaseReq.classList.add('valid');
                 uppercaseReq.classList.remove('invalid');
-                uppercaseReq.querySelector('i').className = 'fas fa-check-circle';
+                uppercaseReq.querySelector('i').className = 'fas fa-check-circle fa-xs me-2 text-success';
             } else {
                 uppercaseReq.classList.add('invalid');
                 uppercaseReq.classList.remove('valid');
-                uppercaseReq.querySelector('i').className = 'fas fa-circle';
+                uppercaseReq.querySelector('i').className = 'fas fa-circle fa-xs me-2 text-muted';
             }
             
-            // Check number
-            if (/\d/.test(password)) {
+            // Check number requirement
+            if (/[0-9]/.test(password)) {
                 numberReq.classList.add('valid');
                 numberReq.classList.remove('invalid');
-                numberReq.querySelector('i').className = 'fas fa-check-circle';
+                numberReq.querySelector('i').className = 'fas fa-check-circle fa-xs me-2 text-success';
             } else {
                 numberReq.classList.add('invalid');
                 numberReq.classList.remove('valid');
-                numberReq.querySelector('i').className = 'fas fa-circle';
-            }
-        }
-        
-        passwordField.addEventListener('input', updateRequirements);
-        
-        form.addEventListener('submit', function(e) {
-            const password = passwordField.value;
-            
-            // Validate password
-            if (password.length < 8 || !/[A-Z]/.test(password) || !/\d/.test(password)) {
-                e.preventDefault();
-                alert('Please ensure your password meets all requirements.');
-                return;
-            }
-            
-            // Check if passwords match
-            if (passwordField.value !== confirmField.value) {
-                e.preventDefault();
-                alert('Passwords do not match. Please try again.');
-                return;
+                numberReq.querySelector('i').className = 'fas fa-circle fa-xs me-2 text-muted';
             }
         });
         
-        // Toggle email frequency options based on email notifications enabled/disabled
+        // Toggle email frequency visibility based on enable email checkbox
         const enableEmailCheckbox = document.getElementById('enable_email');
-        const emailFrequencyGroup = document.getElementById('email-frequency-group');
+        const emailFrequencyGroup = document.getElementById('emailFrequencyGroup');
         
         enableEmailCheckbox.addEventListener('change', function() {
             emailFrequencyGroup.style.display = this.checked ? 'block' : 'none';
         });
         
-        // Initialize email frequency visibility
+        // Set initial visibility
         emailFrequencyGroup.style.display = enableEmailCheckbox.checked ? 'block' : 'none';
     });
+
+    function toggleNotificationOptions(enabled) {
+        const optionsDiv = document.getElementById('notification-options');
+        optionsDiv.style.display = enabled ? 'block' : 'none';
+    }
 </script>
+
+<style>
+    .requirement {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+    
+    .requirement.valid {
+        color: #198754;
+    }
+    
+    .requirement.invalid {
+        color: #6c757d;
+    }
+    
+    .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    /* Switch toggle styling */
+    .form-switch .form-check-input {
+        width: 2em;
+    }
+</style>
 {% endblock %}

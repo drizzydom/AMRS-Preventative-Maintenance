@@ -9,18 +9,21 @@ body {
 
 /* Container adjustments */
 .container-fluid {
-    padding-right: 12px;
-    padding-left: 12px;
+    padding-right: 1rem;
+    padding-left: 1rem;
+    width: 100%;
+    max-width: 100%;
 }
 
 /* Card improvements */
 .card {
-    border: none;
+    border: 1px solid rgba(0,0,0,0.1); /* More visible border */
     border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08); /* Stronger shadow */
     margin-bottom: 24px;
     transition: all 0.2s ease;
     word-wrap: break-word; /* Prevent text overflow */
+    background-color: #fff; /* Explicit background */
 }
 
 .card:hover {
@@ -28,10 +31,11 @@ body {
 }
 
 .card-header {
-    background-color: #fff;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+    background-color: #f8f9fa !important; /* Light gray background */
+    border-bottom: 1px solid rgba(0,0,0,0.1); /* More visible border */
     padding: 16px 20px;
     border-radius: 8px 8px 0 0 !important;
+    font-weight: 500;
 }
 
 .card-body {
@@ -40,26 +44,29 @@ body {
 
 /* Table improvements */
 .table {
-    margin-bottom: 0;
-    width: 100%; /* Ensure tables don't overflow */
-    table-layout: fixed; /* Fixed layout for better control */
+    width: 100%;
+    margin-bottom: 1rem;
+    color: #212529;
+    border-collapse: separate;
+    border-spacing: 0;
 }
 
-.table th, .table td {
-    padding: 0.5rem;
-    text-overflow: ellipsis;
-    overflow: hidden;
-}
-
-.table th {
-    border-top: none;
-    border-bottom: 2px solid #e9ecef;
-    font-weight: 600;
-    color: #495057;
-}
-
+.table th, 
 .table td {
-    vertical-align: middle;
+    padding: 0.75rem;
+    vertical-align: top;
+    border-top: 1px solid #dee2e6;
+}
+
+.table thead th {
+    vertical-align: bottom;
+    border-bottom: 2px solid #dee2e6;
+    background-color: #f8f9fa; /* Light header background */
+}
+
+/* IMPROVED: Better row hover effect */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.04); /* More noticeable hover */
 }
 
 /* Responsive table improvements */
@@ -74,10 +81,14 @@ body {
 
 /* Button improvements */
 .btn {
+    position: relative;
+    z-index: 5; /* Higher z-index to prevent overlap issues */
     border-radius: 6px;
     font-weight: 500;
     padding: 0.5rem 1rem;
+    border: 1px solid transparent;
     transition: all 0.2s;
+    cursor: pointer; /* Ensure pointer cursor */
 }
 
 .btn-sm {
@@ -86,14 +97,26 @@ body {
 }
 
 .btn-primary {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
+    background-color: #0d6efd !important;
+    border-color: #0d6efd !important;
+    color: white !important;
 }
 
 .btn-primary:hover {
-    background-color: #0b5ed7;
-    border-color: #0a58ca;
-    box-shadow: 0 3px 10px rgba(13, 110, 253, 0.25);
+    background-color: #0b5ed7 !important;
+    border-color: #0a58ca !important;
+}
+
+.btn-secondary {
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+    color: white !important;
+}
+
+.btn-danger {
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+    color: white !important;
 }
 
 /* Badges */
@@ -288,7 +311,14 @@ body {
 }
 
 /* Improve button group spacing */
+.btn-group {
+    display: inline-flex;
+    vertical-align: middle;
+    z-index: 5; /* Ensure clickability */
+}
+
 .btn-group > .btn {
+    position: relative;
     flex: 0 1 auto;
 }
 
@@ -324,7 +354,7 @@ html[data-theme="dark"] {
     --card-bg: #2d3748;
     --body-bg: #1a202c;
     --text-color: #e2e8f0;
-    --border-color: #4a5568;
+    --border-color: rgba(255, 255, 255, 0.1); /* More visible borders */
     --input-bg: #2d3748;
     --input-color: #e2e8f0;
 }
@@ -335,12 +365,13 @@ html[data-theme="dark"] body {
 }
 
 html[data-theme="dark"] .card {
-    background-color: var(--card-bg);
+    background-color: var(--card-bg) !important; /* Force background */
     color: var(--text-color);
+    border: 1px solid var(--border-color); /* Add border for definition */
 }
 
 html[data-theme="dark"] .card-header {
-    background-color: var(--card-bg);
+    background-color: rgba(255, 255, 255, 0.05) !important; /* Slightly lighter than card */
     border-bottom-color: var(--border-color);
 }
 
@@ -358,4 +389,14 @@ html[data-theme="dark"] .form-select {
     background-color: var(--input-bg);
     border-color: var(--border-color);
     color: var(--input-color);
+}
+
+html[data-theme="dark"] .btn-outline-secondary {
+    color: #cbd5e0 !important;
+    border-color: #4a5568 !important;
+}
+
+html[data-theme="dark"] .btn-outline-secondary:hover {
+    background-color: #4a5568 !important;
+    color: #e2e8f0 !important;
 }

@@ -1,0 +1,56 @@
+/*
+ * NAVBAR APPEARANCE FIX
+ * Improves navbar contrast and readability
+ */
+
+/* Better navbar contrast */
+.navbar-dark {
+    background-color: #0d6efd !important; /* Primary blue */
+}
+
+/* Ensure navbar text is white for contrast */
+.navbar-dark .navbar-brand,
+.navbar-dark .nav-link,
+.navbar-dark .navbar-text {
+    color: white !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); /* Add subtle text shadow */
+}
+
+/* Improve hover states */
+.navbar-dark .nav-link:hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Active/current page indicator */
+.navbar-dark .nav-link.active {
+    color: white !important;
+    font-weight: 600;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+/* Better user dropdown contrast */
+.navbar-dark .user-dropdown-toggle {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.navbar-dark .user-dropdown-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Ensure navbar has proper padding */
+.navbar {
+    padding: 0.5rem 1rem !important;
+}
+
+/* Mobile menu toggle button */
+.navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Dark mode adjustments */
+html[data-theme="dark"] .navbar-dark {
+    background-color: #1e40af !important; /* Darker blue for dark mode */
+}

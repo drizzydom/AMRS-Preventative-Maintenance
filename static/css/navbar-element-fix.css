@@ -1,0 +1,84 @@
+/*
+ * NAVBAR ELEMENT SPACING FIX
+ * Ensures all navbar elements fit properly within the navbar
+ * Load this file after all other navbar-related CSS
+ */
+
+/* Increase navbar height to accommodate elements */
+.navbar {
+    min-height: 60px !important; /* Increased from 56px */
+    height: auto !important; /* Allow height to expand if needed */
+    padding: 0.5rem 1rem !important; /* Ensure consistent padding */
+}
+
+/* Adjust body padding to match new navbar height */
+body {
+    padding-top: 60px !important; /* Match the new navbar height */
+}
+
+/* Also adjust sidebar top position */
+.sidebar {
+    top: 60px !important; /* Match the new navbar height */
+    height: calc(100vh - 60px) !important; /* Adjust height calculation */
+}
+
+/* Adjust content area calculation */
+.content-container,
+.main-content,
+.col-content,
+.page-content {
+    min-height: calc(100vh - 60px) !important; /* Match new navbar height */
+}
+
+/* Better element spacing within navbar */
+.navbar-brand {
+    margin-right: 1.5rem !important;
+    font-size: 1.25rem !important;
+    white-space: nowrap !important;
+}
+
+.navbar-nav {
+    flex-wrap: nowrap !important; /* Prevent wrapping */
+    align-items: center !important;
+}
+
+.navbar-nav .nav-item {
+    margin: 0 2px !important; /* Add spacing between items */
+}
+
+.nav-link {
+    padding: 0.4rem 0.8rem !important; /* More compact padding */
+    font-size: 0.95rem !important; /* Slightly smaller font */
+    white-space: nowrap !important;
+}
+
+/* Ensure dropdown toggle fits */
+.user-dropdown-toggle {
+    padding: 0.25rem 0.75rem !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+    .navbar-collapse {
+        max-height: calc(100vh - 60px) !important;
+        overflow-y: auto !important;
+    }
+    
+    .user-dropdown-toggle {
+        padding: 0.4rem !important;
+    }
+    
+    .navbar-brand {
+        max-width: 200px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 359px) {
+    .navbar-brand {
+        max-width: 160px !important;
+        font-size: 1.1rem !important;
+    }
+}

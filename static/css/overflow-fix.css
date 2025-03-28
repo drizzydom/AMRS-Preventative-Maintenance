@@ -1,0 +1,85 @@
+/*
+ * OVERFLOW SCROLLING FIX
+ * Ensures content that extends beyond the viewport bottom is scrollable
+ */
+
+/* Force the body to expand to accommodate all content */
+body {
+    min-height: 100%;
+    height: auto !important;
+    overflow-y: auto !important;
+    position: relative !important;
+}
+
+/* Override any maximum height constraints on containers */
+.container, 
+.container-fluid,
+.row,
+main,
+.page-content,
+.content-wrapper,
+.main-content,
+.dashboard {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+}
+
+/* Ensure nested elements don't trap scrolling behavior */
+div, section, article, aside, form, table {
+    overflow: visible !important;
+    height: auto !important;
+}
+
+/* Make sure overflow content can be accessed */
+.card, .modal-body, .table-responsive, .accordion {
+    overflow: visible !important;
+    max-height: none !important;
+}
+
+/* Special fix for scrollable card-body elements */
+.card-body {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}
+
+/* Fix accordion items that might be hiding content */
+.accordion-collapse, .accordion-body {
+    overflow: visible !important;
+    max-height: none !important;
+}
+
+/* Fix any position:fixed elements that might block access to content */
+.position-fixed, .fixed-bottom {
+    position: absolute !important;
+}
+
+/* Make sure deeply nested elements like modals expand properly */
+.modal {
+    max-height: none;
+}
+
+.modal-content {
+    max-height: none;
+}
+
+/* Fix any element with 100vh height that might be causing issues */
+[style*="height: 100vh"],
+[style*="min-height: 100vh"],
+[class*="vh-100"] {
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+/* Override Bootstrap's new vh-100 classes */
+.vh-100 {
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+/* Ensure footer is properly positioned at the end of content */
+.footer {
+    position: relative !important;
+    bottom: auto !important;
+}
