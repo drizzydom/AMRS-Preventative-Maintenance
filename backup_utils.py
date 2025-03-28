@@ -25,7 +25,7 @@ def serialize_datetime(obj):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
 
-def backup_database(include_users=False, backup_name=None):
+def backup_database(backup_name=None, include_users=True):
     """
     Create a backup of the database.
     
@@ -36,6 +36,13 @@ def backup_database(include_users=False, backup_name=None):
     Returns:
         str: Path to the backup file
     """
+    # Handle case where backup_name is not a string
+    if not backup_name or not isinstance(backup_name, str):
+        backup_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    else:
+        # Only clean up the name if it's actually a string
+        backup_name = ''.join(c if c.isalnum() else '_' for c in backup_name)
+    
     # Import here to avoid circular imports
     from app import app, db, Site, Machine, Part, MaintenanceLog, User, Role, user_site
     
@@ -44,12 +51,7 @@ def backup_database(include_users=False, backup_name=None):
         
         # Generate backup filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if backup_name:
-            # Sanitize custom name (replace spaces and special chars with underscores)
-            backup_name = ''.join(c if c.isalnum() else '_' for c in backup_name)
-            filename = f"{timestamp}_{backup_name}.json"
-        else:
-            filename = f"{timestamp}_backup.json"
+        filename = f"{timestamp}_{backup_name}.json"
         
         backup_path = os.path.join(BACKUP_DIR, filename)
         

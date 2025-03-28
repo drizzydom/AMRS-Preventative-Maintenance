@@ -1,0 +1,619 @@
+{
+  "metadata": {
+    "timestamp": "20250328_162114",
+    "datetime": "2025-03-28T16:21:14.262693",
+    "include_users": true,
+    "version": "1.0"
+  },
+  "sites": [
+    {
+      "id": 1,
+      "name": "Main Factory",
+      "location": "123 Industrial Ave",
+      "enable_notifications": true,
+      "contact_email": "",
+      "notification_threshold": 30
+    },
+    {
+      "id": 2,
+      "name": "Assembly Plant",
+      "location": "456 Production Blvd",
+      "enable_notifications": true,
+      "contact_email": "factory.manager@example.com",
+      "notification_threshold": 30
+    }
+  ],
+  "machines": [
+    {
+      "id": 1,
+      "name": "CNC Mill",
+      "model": "XYZ-1000",
+      "site_id": 1,
+      "machine_number": "M0001",
+      "serial_number": "SN1-CNCMILL"
+    },
+    {
+      "id": 2,
+      "name": "Lathe",
+      "model": "LT-500",
+      "site_id": 1,
+      "machine_number": "M0002",
+      "serial_number": "SN2-LATHE"
+    },
+    {
+      "id": 3,
+      "name": "Drill Press",
+      "model": "DP-750",
+      "site_id": 2,
+      "machine_number": "M0003",
+      "serial_number": "SN3-DRILLPRESS"
+    },
+    {
+      "id": 4,
+      "name": "Assembly Robot",
+      "model": "AR-200",
+      "site_id": 2,
+      "machine_number": "M0004",
+      "serial_number": "SN4-ASSEMBLYROBOT"
+    }
+  ],
+  "parts": [
+    {
+      "id": 1,
+      "name": "Spindle",
+      "description": "Main cutting spindle",
+      "machine_id": 1,
+      "maintenance_frequency": 7,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-03-27T19:42:33.453211",
+      "next_maintenance": "2025-04-03T19:42:33.453211",
+      "notification_sent": false,
+      "last_maintained_by": "Administrator",
+      "invoice_number": ""
+    },
+    {
+      "id": 2,
+      "name": "Coolant System",
+      "description": "Cutting fluid circulation",
+      "machine_id": 1,
+      "maintenance_frequency": 14,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-03-19T22:07:55.807116",
+      "next_maintenance": "2025-04-02T22:07:55.807116",
+      "notification_sent": false,
+      "last_maintained_by": "test",
+      "invoice_number": ""
+    },
+    {
+      "id": 3,
+      "name": "Tool Changer",
+      "description": "Automatic tool changer",
+      "machine_id": 1,
+      "maintenance_frequency": 30,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-26T21:21:43.623439",
+      "next_maintenance": "2025-03-28T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 4,
+      "name": "Chuck",
+      "description": "Workholding device",
+      "machine_id": 2,
+      "maintenance_frequency": 21,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-03-19T22:16:18.812980",
+      "next_maintenance": "2025-04-09T22:16:18.812980",
+      "notification_sent": false,
+      "last_maintained_by": "Administrator",
+      "invoice_number": "cheese"
+    },
+    {
+      "id": 5,
+      "name": "Tailstock",
+      "description": "Supports workpiece end",
+      "machine_id": 2,
+      "maintenance_frequency": 30,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-24T21:21:43.623439",
+      "next_maintenance": "2025-03-26T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 6,
+      "name": "Drill Bit",
+      "description": "Cutting tool",
+      "machine_id": 3,
+      "maintenance_frequency": 45,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-26T21:21:43.623439",
+      "next_maintenance": "2025-04-12T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 7,
+      "name": "Table",
+      "description": "Work surface",
+      "machine_id": 3,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-03-03T21:21:43.623439",
+      "next_maintenance": "2025-05-02T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 8,
+      "name": "Servo Motor A",
+      "description": "Axis 1 movement",
+      "machine_id": 4,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-26T21:21:43.623439",
+      "next_maintenance": "2025-04-27T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 9,
+      "name": "Servo Motor B",
+      "description": "Axis 2 movement",
+      "machine_id": 4,
+      "maintenance_frequency": 90,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-16T21:21:43.623439",
+      "next_maintenance": "2025-05-17T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 10,
+      "name": "Servo Motor C",
+      "description": "Axis 3 movement",
+      "machine_id": 4,
+      "maintenance_frequency": 90,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-16T21:21:43.623439",
+      "next_maintenance": "2025-05-17T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 11,
+      "name": "Controller",
+      "description": "Robot brain",
+      "machine_id": 4,
+      "maintenance_frequency": 180,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-16T21:21:43.623439",
+      "next_maintenance": "2025-08-15T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 12,
+      "name": "Power Supply",
+      "description": "Electrical power unit",
+      "machine_id": 4,
+      "maintenance_frequency": 365,
+      "maintenance_unit": "day",
+      "last_maintenance": "2024-12-18T21:21:43.623439",
+      "next_maintenance": "2025-12-18T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 13,
+      "name": "Gripper",
+      "description": "End effector",
+      "machine_id": 4,
+      "maintenance_frequency": 120,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-26T21:21:43.623439",
+      "next_maintenance": "2025-06-26T21:21:43.623439",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 14,
+      "name": "Poop ",
+      "description": "Poop",
+      "machine_id": 1,
+      "maintenance_frequency": 200,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-03-20T16:35:37.817085",
+      "next_maintenance": "2025-10-06T16:35:37.817085",
+      "notification_sent": false,
+      "last_maintained_by": "Administrator",
+      "invoice_number": ""
+    },
+    {
+      "id": 15,
+      "name": "Test-Main Factory-1-1",
+      "description": "Test part with 60-day frequency, due in 5 days (due soon)",
+      "machine_id": 1,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-24T17:00:47.560226",
+      "next_maintenance": "2025-03-25T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 16,
+      "name": "Test-Main Factory-1-2",
+      "description": "Test part with 60-day frequency, due in 10 days (ok)",
+      "machine_id": 1,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-29T17:00:47.560226",
+      "next_maintenance": "2025-03-30T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 17,
+      "name": "Test-Main Factory-1-3",
+      "description": "Test part with 60-day frequency, due in 15 days (ok)",
+      "machine_id": 1,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-03T17:00:47.560226",
+      "next_maintenance": "2025-04-04T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 18,
+      "name": "Test-Main Factory-1-4",
+      "description": "Test part with 60-day frequency, due in 20 days (ok)",
+      "machine_id": 1,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-08T17:00:47.560226",
+      "next_maintenance": "2025-04-09T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 19,
+      "name": "Test-Main Factory-1-5",
+      "description": "Test part with 60-day frequency, due in 25 days (ok)",
+      "machine_id": 1,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-13T17:00:47.560226",
+      "next_maintenance": "2025-04-14T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 20,
+      "name": "Test-Main Factory-2-1",
+      "description": "Test part with 60-day frequency, due in 5 days (due soon)",
+      "machine_id": 2,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-24T17:00:47.560226",
+      "next_maintenance": "2025-03-25T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 21,
+      "name": "Test-Main Factory-2-2",
+      "description": "Test part with 60-day frequency, due in 10 days (ok)",
+      "machine_id": 2,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-29T17:00:47.560226",
+      "next_maintenance": "2025-03-30T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 22,
+      "name": "Test-Main Factory-2-3",
+      "description": "Test part with 60-day frequency, due in 15 days (ok)",
+      "machine_id": 2,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-03T17:00:47.560226",
+      "next_maintenance": "2025-04-04T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 23,
+      "name": "Test-Main Factory-2-4",
+      "description": "Test part with 60-day frequency, due in 20 days (ok)",
+      "machine_id": 2,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-08T17:00:47.560226",
+      "next_maintenance": "2025-04-09T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 24,
+      "name": "Test-Main Factory-2-5",
+      "description": "Test part with 60-day frequency, due in 25 days (ok)",
+      "machine_id": 2,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-13T17:00:47.560226",
+      "next_maintenance": "2025-04-14T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 25,
+      "name": "Test-Assembly Plant-1-1",
+      "description": "Test part with 60-day frequency, due in 5 days (due soon)",
+      "machine_id": 3,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-24T17:00:47.560226",
+      "next_maintenance": "2025-03-25T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 26,
+      "name": "Test-Assembly Plant-1-2",
+      "description": "Test part with 60-day frequency, due in 10 days (due soon)",
+      "machine_id": 3,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-29T17:00:47.560226",
+      "next_maintenance": "2025-03-30T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 27,
+      "name": "Test-Assembly Plant-1-3",
+      "description": "Test part with 60-day frequency, due in 15 days (due soon)",
+      "machine_id": 3,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-03T17:00:47.560226",
+      "next_maintenance": "2025-04-04T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 28,
+      "name": "Test-Assembly Plant-1-4",
+      "description": "Test part with 60-day frequency, due in 20 days (due soon)",
+      "machine_id": 3,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-08T17:00:47.560226",
+      "next_maintenance": "2025-04-09T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 29,
+      "name": "Test-Assembly Plant-1-5",
+      "description": "Test part with 60-day frequency, due in 25 days (due soon)",
+      "machine_id": 3,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-13T17:00:47.560226",
+      "next_maintenance": "2025-04-14T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 30,
+      "name": "Test-Assembly Plant-2-1",
+      "description": "Test part with 60-day frequency, due in 5 days (due soon)",
+      "machine_id": 4,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-24T17:00:47.560226",
+      "next_maintenance": "2025-03-25T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 31,
+      "name": "Test-Assembly Plant-2-2",
+      "description": "Test part with 60-day frequency, due in 10 days (due soon)",
+      "machine_id": 4,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-01-29T17:00:47.560226",
+      "next_maintenance": "2025-03-30T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 32,
+      "name": "Test-Assembly Plant-2-3",
+      "description": "Test part with 60-day frequency, due in 15 days (due soon)",
+      "machine_id": 4,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-03T17:00:47.560226",
+      "next_maintenance": "2025-04-04T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 33,
+      "name": "Test-Assembly Plant-2-4",
+      "description": "Test part with 60-day frequency, due in 20 days (due soon)",
+      "machine_id": 4,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-08T17:00:47.560226",
+      "next_maintenance": "2025-04-09T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    },
+    {
+      "id": 34,
+      "name": "Test-Assembly Plant-2-5",
+      "description": "Test part with 60-day frequency, due in 25 days (due soon)",
+      "machine_id": 4,
+      "maintenance_frequency": 60,
+      "maintenance_unit": "day",
+      "last_maintenance": "2025-02-13T17:00:47.560226",
+      "next_maintenance": "2025-04-14T17:00:47.560226",
+      "notification_sent": false,
+      "last_maintained_by": null,
+      "invoice_number": null
+    }
+  ],
+  "maintenance_logs": [
+    {
+      "id": 1,
+      "machine_id": 1,
+      "part_id": 1,
+      "performed_by": "test",
+      "invoice_number": "",
+      "maintenance_date": "2025-03-19T22:07:49.212343",
+      "notes": ""
+    },
+    {
+      "id": 2,
+      "machine_id": 1,
+      "part_id": 2,
+      "performed_by": "test",
+      "invoice_number": "",
+      "maintenance_date": "2025-03-19T22:07:55.807116",
+      "notes": ""
+    },
+    {
+      "id": 3,
+      "machine_id": 1,
+      "part_id": 1,
+      "performed_by": "test",
+      "invoice_number": "",
+      "maintenance_date": "2025-03-19T22:07:58.672046",
+      "notes": ""
+    },
+    {
+      "id": 4,
+      "machine_id": 2,
+      "part_id": 4,
+      "performed_by": "Administrator",
+      "invoice_number": "",
+      "maintenance_date": "2025-03-19T22:08:16.407208",
+      "notes": ""
+    },
+    {
+      "id": 5,
+      "machine_id": 2,
+      "part_id": 4,
+      "performed_by": "Administrator",
+      "invoice_number": "cheese",
+      "maintenance_date": "2025-03-19T22:16:18.812980",
+      "notes": "poopy pants"
+    },
+    {
+      "id": 6,
+      "machine_id": 1,
+      "part_id": 14,
+      "performed_by": "Administrator",
+      "invoice_number": "",
+      "maintenance_date": "2025-03-20T16:35:37.817085",
+      "notes": ""
+    },
+    {
+      "id": 7,
+      "machine_id": 1,
+      "part_id": 1,
+      "performed_by": "Administrator",
+      "invoice_number": "",
+      "maintenance_date": "2025-03-27T19:42:33.453211",
+      "notes": ""
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password_hash": "pbkdf2:sha256:260000$QMVEAMQ0v3leXkYd$fd584292e4520ab89ed8e61e732b501df7d7ea3d3926b53f2a75d38d030b96f4",
+      "is_admin": true,
+      "role_id": 1,
+      "email": "admin@example.com",
+      "full_name": "Administrator"
+    },
+    {
+      "id": 2,
+      "username": "test",
+      "password_hash": "pbkdf2:sha256:600000$uJRQM6zd66sOAamQ$bd17718e64929b26af1b0d7602f1609170c530d7a4a3130c538a6e1b3ec404ec",
+      "is_admin": false,
+      "role_id": 3,
+      "email": "test@test.com",
+      "full_name": "test"
+    },
+    {
+      "id": 3,
+      "username": "pw",
+      "password_hash": "pbkdf2:sha256:600000$iuO26XzFDAIKt02y$9a3bd4485b8ce863079121d92291e0e85741cfc504a28770a4719895adb0809c",
+      "is_admin": false,
+      "role_id": null,
+      "email": "techsupport@accuratemachinerepair.com",
+      "full_name": "password reset test"
+    }
+  ],
+  "roles": [
+    {
+      "id": 1,
+      "name": "Administrator",
+      "description": "Full system access",
+      "permissions": "admin.access,admin.full,users.view,users.create,users.edit,users.delete,roles.view,roles.create,roles.edit,roles.delete,sites.view,sites.create,sites.edit,sites.delete,sites.view.assigned,machines.view,machines.create,machines.edit,machines.delete,parts.view,parts.create,parts.edit,parts.delete,maintenance.view,maintenance.schedule,maintenance.record"
+    },
+    {
+      "id": 2,
+      "name": "Manager",
+      "description": "Can manage sites and view all data",
+      "permissions": "sites.view,sites.create,sites.edit,sites.delete,machines.view,machines.create,machines.edit,machines.delete,parts.view,parts.create,parts.edit,parts.delete,maintenance.view,maintenance.record"
+    },
+    {
+      "id": 3,
+      "name": "Technician",
+      "description": "Can update maintenance records for assigned sites",
+      "permissions": "sites.view,machines.view,parts.view,maintenance.view,maintenance.record"
+    }
+  ],
+  "user_site_assignments": []
+}

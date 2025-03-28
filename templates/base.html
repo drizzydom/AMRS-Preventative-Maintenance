@@ -4,746 +4,237 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
     <title>{% block title %}Maintenance Tracker{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- App CSS files -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-fixes.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-fix.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-fixes.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile-dropdown.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/card-color-patch.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/overflow-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-width-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-unified-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-sidebar-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-element-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-toggle.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-visibility-fix.css') }}">
     
-    <style>
-        /* Offline notification banner styles - fixed positioning */
-        .offline-notification {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background-color: #f8d7da;
-            color: #721c24;
-            border-bottom: 1px solid #f5c6cb;
-            padding: 10px 15px;
-            z-index: 9999;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            text-align: center;
-            /* Make sure it doesn't affect document flow */
-            height: auto;
-        }
-        
-        .offline-content {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            max-width: 1200px;
-            margin: 0 auto;
-            position: relative;
-            /* Prevent content from affecting layout */
-            padding: 0;
-        }
-        
-        .offline-notification i {
-            margin-right: 10px;
-        }
-        
-        .offline-notification .close-btn {
-            background: none;
-            border: none;
-            color: #721c24;
-            cursor: pointer;
-            position: absolute;
-            right: 0;
-            padding: 5px;
-        }
-        
-        /* When back online notification */
-        .online-notification {
-            background-color: #d4edda;
-            color: #155724;
-            border-bottom: 1px solid #c3e6cb;
-        }
-
-        /* Additional styles to ensure container isn't affected */
-        .container {
-            position: relative;
-            z-index: 1; /* Lower than offline banner */
-        }
-        
-        /* Main content shouldn't scroll behind the banner */
-        .main-content {
-            position: relative;
-            height: 100%;
-            overflow-y: auto;
-        }
-
-        /* Fix layout issues - ensure sidebar and content are side-by-side */
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden; /* Prevent double scroll bars */
-            height: 100vh;
-        }
-        
-        .container {
-            display: flex;
-            height: 100vh;
-            width: 100%;
-            overflow: hidden;
-        }
-        
-        .sidebar {
-            flex: 0 0 260px; /* Fixed width sidebar */
-            height: 100%;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-            z-index: 100;
-        }
-        
-        .main-content {
-            flex: 1;
-            height: 100vh;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .content-container {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-        }
-        
-        /* When sidebar is collapsed */
-        body.sidebar-collapsed .sidebar {
-            flex: 0 0 70px;
-        }
-
-        /* Fix user menu text contrast in dark mode */
-        html[data-theme="dark"] {
-            /* Global text color for dark mode */
-            --text-color: #e1e1e1;
-            --secondary-text-color: #b0b0b0;
-            color: var(--text-color);
-        }
-        
-        /* Main container text in dark mode */
-        html[data-theme="dark"] .main-content {
-            color: var(--text-color);
-        }
-        
-        /* Header elements in dark mode */
-        html[data-theme="dark"] .page-title,
-        html[data-theme="dark"] h1,
-        html[data-theme="dark"] h2,
-        html[data-theme="dark"] h3,
-        html[data-theme="dark"] h4,
-        html[data-theme="dark"] h5,
-        html[data-theme="dark"] h6 {
-            color: var(--text-color);
-        }
-        
-        /* Form labels and inputs in dark mode */
-        html[data-theme="dark"] .form-label,
-        html[data-theme="dark"] label {
-            color: var(--text-color);
-        }
-        
-        /* User dropdown specific styling */
-        html[data-theme="dark"] .user-menu-trigger {
-            color: var(--text-color);
-        }
-        
-        html[data-theme="dark"] .user-menu-trigger .username {
-            color: var (--text-color);
-        }
-        
-        html[data-theme="dark"] .user-dropdown {
-            background-color: #2c2c2c;
-            color: var(--text-color);
-            border-color: #444;
-        }
-        
-        html[data-theme="dark"] .user-info .full-name,
-        html[data-theme="dark"] .user-info .email {
-            color: var(--text-color);
-        }
-        
-        html[data-theme="dark"] .user-dropdown ul li a {
-            color: var(--text-color);
-        }
-        
-        html[data-theme="dark"] .user-dropdown ul li a:hover {
-            background-color: #444;
-        }
-        
-        /* Card and table content in dark mode */
-        html[data-theme="dark"] .card-body,
-        html[data-theme="dark"] .card-header,
-        html[data-theme="dark"] .table {
-            color: var(--text-color);
-        }
-        
-        /* Small text and form help text */
-        html[data-theme="dark"] small,
-        html[data-theme="dark"] .form-text {
-            color: var(--secondary-text-color);
-        }
-
-        /* Sidebar header styling improvements */
-        .sidebar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 15px;
-        }
-        
-        .sidebar-header h2 {
-            margin: 0;
-            transition: opacity 0.3s ease;
-            white-space: normal; /* Allow text to wrap */
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-size: 1.1rem; /* Slightly smaller font size */
-            max-width: 180px; /* Limit width to prevent overlap with toggle button */
-            line-height: 1.2; /* Tighter line spacing for wrapped text */
-        }
-        
-        .sidebar-toggle {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 30px;
-            min-height: 30px;
-            border-radius: 4px;
-            /* Lighter color for light mode */
-            color: #666;
-        }
-        
-        /* Dark mode toggle button color */
-        html[data-theme="dark"] .sidebar-toggle {
-            color: var(--text-color);
-        }
-        
-        .sidebar-toggle:hover {
-            background: rgba(0,0,0,0.1);
-        }
-        
-        /* When sidebar is collapsed */
-        body.sidebar-collapsed .sidebar {
-            flex: 0 0 70px;
-        }
-        
-        body.sidebar-collapsed .sidebar-header h2 {
-            opacity: 0;
-            width: 0;
-            position: absolute;
-        }
-        
-        body.sidebar-collapsed .sidebar .nav-list span,
-        body.sidebar-collapsed .sidebar .nav-group-title,
-        body.sidebar-collapsed .sidebar-footer span {
-            display: none;
-        }
-        
-        body.sidebar-collapsed .sidebar-toggle {
-            margin-left: auto;  /* Push to right when collapsed */
-        }
-        
-        /* Ensure icons remain visible and centered when collapsed */
-        body.sidebar-collapsed .sidebar .nav-list a,
-        body.sidebar-collapsed .sidebar-footer a {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 10px 0;
-        }
-        
-        body.sidebar-collapsed .sidebar .nav-list i,
-        body.sidebar-collapsed .sidebar-footer i {
-            margin-right: 0;
-        }
-
-        /* Responsive design improvements */
-        @media screen and (max-width: 991px) {
-            .sidebar {
-                position: fixed;
-                left: -260px;
-                top: 0;
-                bottom: 0;
-                transition: left 0.3s ease;
-                box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-                z-index: 1050;
-            }
-            
-            body.sidebar-open .sidebar {
-                left: 0;
-            }
-            
-            .main-content {
-                margin-left: 0;
-                width: 100%;
-            }
-            
-            .content-container {
-                padding: 15px; /* Smaller padding on mobile */
-            }
-            
-            /* Add overlay when sidebar is open on mobile */
-            .sidebar-backdrop {
-                position: fixed;
-                top: 0;
-                right: 0;
-                bottom: 0;
-                left: 0;
-                background-color: rgba(0,0,0,0.5);
-                z-index: 1040;
-                display: none;
-            }
-            
-            body.sidebar-open .sidebar-backdrop {
-                display: block;
-            }
-            
-            /* Mobile header adjustments */
-            .top-header {
-                flex-direction: column;
-                padding: 10px;
-            }
-            
-            .header-left, .header-right {
-                width: 100%;
-                margin-bottom: 10px;
-            }
-            
-            .header-right {
-                justify-content: space-between;
-            }
-            
-            .user-menu .username {
-                max-width: 120px;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                overflow: hidden;
-            }
-            
-            /* Show mobile menu button */
-            .mobile-menu-toggle {
-                display: flex;
-                margin-right: 10px;
-            }
-        }
-        
-        /* Styles for very small screens */
-        @media screen and (max-width: 576px) {
-            .user-menu .username {
-                display: none;
-            }
-            
-            .page-title {
-                font-size: 1.25rem;
-            }
-            
-            /* Adjust form layouts */
-            .row {
-                flex-direction: column;
-            }
-            
-            .col {
-                width: 100%;
-                margin-bottom: 15px;
-            }
-            
-            /* Make tables scrollable horizontally */
-            .table-responsive {
-                display: block;
-                width: 100%;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-            
-            /* Larger touch targets */
-            .btn, .form-control, .dropdown-item {
-                padding: 10px 15px;
-                min-height: 44px; /* Apple's recommended minimum */
-            }
-        }
-        
-        /* Mobile menu toggle button */
-        .mobile-menu-toggle {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 8px;
-            border: none;
-            background: transparent;
-            color: var(--text-color);
-            cursor: pointer;
-            position: fixed;
-            left: 10px;
-            top: 10px;
-            z-index: 1060;
-        }
-        
-        /* When sidebar is collapsed on desktop */
-        @media screen and (min-width: 992px) {
-            body.sidebar-collapsed .sidebar {
-                flex: 0 0 70px;
-            }
-            
-            body.sidebar-collapsed .main-content {
-                margin-left: 70px;
-            }
-        }
-        
-        /* Fix for top header layout */
-        .top-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
-    </style>
-    
-    <!-- Add AJAX loader script -->
-    <script src="{{ url_for('static', filename='js/ajax-loader.js') }}" defer></script>
-    <!-- Add Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Offline sync notification banner - Make sure display:none is working correctly -->
-    <div id="offline-banner" class="offline-notification" style="display: none;">
-        <div class="offline-content">
-            <i class="fas fa-wifi-slash"></i>
-            <span>You are currently working offline. Changes will be synchronized when you reconnect.</span>
-            <button type="button" class="close-btn" onclick="document.getElementById('offline-banner').style.display='none';">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- Mobile sidebar backdrop -->
-    <div class="sidebar-backdrop"></div>
-    
-    <!-- Mobile menu toggle button -->
-    <button class="mobile-menu-toggle" id="mobileMenuToggle">
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <div class="container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>Maintenance Tracker</h2>
-                <button id="sidebarToggle" class="sidebar-toggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-            </div>
-            <nav class="sidebar-nav">
-                <ul class="nav-list">
-                    <li>
-                        <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}">
-                            <i class="fas fa-tachometer-alt"></i>
-                            <span>Dashboard</span>
-                        </a>
-                    </li>
-                    {% if current_user.is_authenticated and current_user.is_admin %}
-                    <li>
-                        <a href="{{ url_for('admin') }}" class="{{ 'active' if request.endpoint == 'admin' else '' }}">
-                            <i class="fas fa-cogs"></i>
-                            <span>Administration</span>
-                        </a>
-                    </li>
-                    <li class="nav-group">
-                        <span class="nav-group-title">Manage</span>
-                        <ul>
-                            <li>
-                                <a href="{{ url_for('manage_sites') }}" class="{{ 'active' if request.endpoint == 'manage_sites' else '' }}">
-                                    <i class="fas fa-building"></i>
-                                    <span>Sites</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ url_for('manage_machines') }}" class="{{ 'active' if request.endpoint == 'manage_machines' else '' }}">
-                                    <i class="fas fa-industry"></i>
-                                    <span>Machines</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ url_for('manage_parts') }}" class="{{ 'active' if request.endpoint == 'manage_parts' else '' }}">
-                                    <i class="fas fa-cog"></i>
-                                    <span>Parts</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ url_for('manage_users') }}" class="{{ 'active' if request.endpoint == 'manage_users' else '' }}">
-                                    <i class="fas fa-users"></i>
-                                    <span>Users</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ url_for('manage_roles') }}" class="{{ 'active' if request.endpoint == 'manage_roles' else '' }}">
-                                    <i class="fas fa-user-tag"></i>
-                                    <span>Roles</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                    <li class="nav-group">
-                        <span class="nav-group-title">System</span>
-                        <ul>
-                            <li>
-                                <a href="{{ url_for('admin_backups') }}" class="{{ 'active' if request.endpoint == 'admin_backups' else '' }}">
-                                    <i class="fas fa-database"></i>
-                                    <span>Backups</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ url_for('test_email') }}" class="{{ 'active' if request.endpoint == 'test_email' else '' }}">
-                                    <i class="fas fa-envelope"></i>
-                                    <span>Email Settings</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
-            <div class="sidebar-footer">
-                <a href="{{ url_for('logout') }}">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
+    <header>
+        <!-- Navigation Bar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                    <i class="fas fa-tools me-2"></i> AMRS Maintenance
                 </a>
-            </div>
-        </aside>
-
-        <main class="main-content">
-            <header class="page-header">
-                <div class="container-fluid">
-                    <div class="content-wrapper">
-                        <h1 class="page-title">{% block header_title %}{% endblock %}</h1>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                        aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    {% if current_user.is_authenticated %}
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-1"></i> Dashboard
+                            </a>
+                        </li>
+                        
+                        {% if current_user.is_admin or current_user.has_permission('admin.access') %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}" href="{{ url_for('admin') }}">
+                                <i class="fas fa-cogs me-1"></i> Administration
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                    
+                    <!-- User Menu -->
+                    <div class="navbar-nav">
+                        <div class="nav-item dropdown user-dropdown">
+                            <a class="nav-link dropdown-toggle user-dropdown-toggle" href="#" id="userDropdown" 
+                               role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="user-avatar">
+                                    <i class="fas fa-user-circle"></i>
+                                </div>
+                                <div class="user-info d-none d-md-block">
+                                    <div class="user-name">{{ current_user.username }}</div>
+                                    <div class="user-role small">
+                                        {% if current_user.is_admin %}
+                                            Administrator
+                                        {% elif current_user.role %}
+                                            {{ current_user.role.name }}
+                                        {% else %}
+                                            User
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu shadow" aria-labelledby="userDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-lg me-3">
+                                            <i class="fas fa-user-circle fa-2x text-primary"></i>
+                                        </div>
+                                        <div class="user-info">
+                                            <div class="user-name fw-bold">{{ current_user.username }}</div>
+                                            <div class="user-role small text-muted">
+                                                {% if current_user.is_admin %}Administrator{% elif current_user.role %}{{ current_user.role.name }}{% else %}User{% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% if current_user.email %}
+                                <li>
+                                    <div class="dropdown-item user-email-item">
+                                        <i class="fas fa-envelope fa-fw text-muted"></i>{{ current_user.email }}
+                                    </div>
+                                </li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center" href="{{ url_for('user_profile') }}">
+                                        <i class="fas fa-user-cog fa-fw me-2 text-muted"></i> My Profile
+                                    </a>
+                                </li>
+                                {% if current_user.is_admin or current_user.has_permission('admin.access') %}
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center" href="{{ url_for('admin') }}">
+                                        <i class="fas fa-cogs fa-fw me-2 text-muted"></i> Administration
+                                    </a>
+                                </li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center" href="{{ url_for('logout') }}">
+                                        <i class="fas fa-sign-out-alt fa-fw me-2 text-muted"></i> Logout
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
+                    {% endif %}
                 </div>
-            </header>
+            </div>
+        </nav>
+    </header>
 
-            <div class="content-container">
-                <div class="content-wrapper">
-                    {% block flash_messages %}
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-auto px-0">
+                <div class="sidebar">
+                    <ul class="sidebar-nav">
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-tachometer-alt"></i>
+                                <span class="sidebar-link-text">Dashboard</span>
+                            </a>
+                        </li>
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-building"></i>
+                                <span class="sidebar-link-text">Sites</span>
+                            </a>
+                        </li>
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-industry"></i>
+                                <span class="sidebar-link-text">Machines</span>
+                            </a>
+                        </li>
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-cogs"></i>
+                                <span class="sidebar-link-text">Parts</span>
+                            </a>
+                        </li>
+                        {% if current_user.is_admin %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-user-shield"></i>
+                                <span class="sidebar-link-text">Admin</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col px-0">
+                <div class="content-container">
+                    <div class="container-fluid py-4 px-3">
+                        <!-- Page Header -->
+                        {% if current_user.is_authenticated %}
+                        <div class="page-header mb-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
+                                {% block header_actions %}{% endblock %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Flash Messages -->
                         {% with messages = get_flashed_messages(with_categories=true) %}
                             {% if messages %}
                                 {% for category, message in messages %}
-                                    <div class="alert {{ 'alert-' + category if category else 'alert-info' }}">
+                                    {% set alert_class = "success" if category == "success" else "danger" if category == "error" else category %}
+                                    <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+                                        <i class="fas fa-{% if alert_class == 'success' %}check-circle{% elif alert_class == 'danger' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
                                         {{ message }}
-                                        <button type="button" class="close-alert">&times;</button>
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                     </div>
                                 {% endfor %}
                             {% endif %}
                         {% endwith %}
-                    {% endblock %}
-                    
-                    {% block content %}{% endblock %}
+                        
+                        <!-- Page Content -->
+                        <div class="page-content">
+                            {% block content %}{% endblock %}
+                        </div>
+                    </div>
                 </div>
             </div>
-        </main>
+        </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Ensure Bootstrap modals work correctly
-            var modals = document.querySelectorAll('.modal');
-            if (typeof bootstrap !== 'undefined') {
-                modals.forEach(function(modal) {
-                    new bootstrap.Modal(modal, {
-                        backdrop: true,
-                        keyboard: true,
-                        focus: true
-                    });
-                });
-            }
-            // Sidebar toggle functionality
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            if (sidebarToggle) {
-                sidebarToggle.addEventListener('click', function(e) {
-                    e.preventDefault(); // Prevent any default behavior
-                    document.body.classList.toggle('sidebar-collapsed');
-                    localStorage.setItem('sidebar-collapsed', document.body.classList.contains('sidebar-collapsed'));
-                    
-                    // Update toggle icon to indicate expand/collapse action
-                    const icon = sidebarToggle.querySelector('i');
-                    if (document.body.classList.contains('sidebar-collapsed')) {
-                        icon.className = 'fas fa-expand';  // Show expand icon when collapsed
-                    } else {
-                        icon.className = 'fas fa-bars';    // Show collapse icon when expanded
-                    }
-                });
-                
-                // Initialize icon based on current state
-                const icon = sidebarToggle.querySelector('i');
-                if (localStorage.getItem('sidebar-collapsed') === 'true') {
-                    icon.className = 'fas fa-expand';
-                } else {
-                    icon.className = 'fas fa-bars';
-                }
-            }
-            
-            // Check saved sidebar state
-            if (localStorage.getItem('sidebar-collapsed') === 'true') {
-                document.body.classList.add('sidebar-collapsed');
-            }
-            
-            // Theme toggle functionality
-            const themeToggle = document.getElementById('theme-toggle');
-            
-            // Check for saved theme preference or respect OS preference
-            const savedTheme = localStorage.getItem('theme');
-            const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            
-            // Apply the theme to the HTML element
-            function applyTheme(theme) {
-                document.documentElement.setAttribute('data-theme', theme);
-                themeToggle.checked = (theme === 'dark');
-            }
-            
-            // Initialize theme
-            if (savedTheme) {
-                applyTheme(savedTheme);
-            } else if (prefersDarkScheme) {
-                applyTheme('dark');
-            } else {
-                applyTheme('light');
-            }
-            
-            // Handle toggle click
-            themeToggle.addEventListener('change', function() {
-                const newTheme = this.checked ? 'dark' : 'light';
-                applyTheme(newTheme);
-                localStorage.setItem('theme', newTheme);
-            });
-            
-            // User dropdown menu toggle
-            const userMenuTrigger = document.querySelector('.user-menu-trigger');
-            if (userMenuTrigger) {
-                userMenuTrigger.addEventListener('click', function() {
-                    this.parentElement.classList.toggle('open');
-                });
-                
-                // Close the dropdown when clicking outside
-                document.addEventListener('click', function(event) {
-                    const userMenu = document.querySelector('.user-menu');
-                    if (userMenu && !userMenu.contains(event.target)) {
-                        userMenu.classList.remove('open');
-                    }
-                });
-            }
-            
-            // Alert close buttons
-            document.querySelectorAll('.close-alert').forEach(button => {
-                button.addEventListener('click', function() {
-                    this.parentElement.remove();
-                });
-            });
-            
-            // Auto-dismiss alerts after 5 seconds
-            setTimeout(function() {
-                document.querySelectorAll('.alert').forEach(alert => {
-                    alert.style.opacity = '0';
-                    setTimeout(() => alert.remove(), 500);
-                });
-            }, 5000);
-            
-            // Offline detection functionality
-            const offlineBanner = document.getElementById('offline-banner');
-            
-            // Check initial online status
-            if (!navigator.onLine) {
-                showOfflineBanner();
-            }
-            
-            // Listen for online status changes
-            window.addEventListener('online', function() {
-                // Show temporarily that we're back online
-                offlineBanner.classList.add('online-notification');
-                offlineBanner.querySelector('i').className = 'fas fa-wifi';
-                offlineBanner.querySelector('span').textContent = 'You are back online. Your changes are being synchronized.';
-                offlineBanner.style.display = 'block';
-                
-                // Hide after 3 seconds
-                setTimeout(function() {
-                    offlineBanner.style.display = 'none';
-                    // Reset to offline style for next time
-                    setTimeout(function() {
-                        offlineBanner.classList.remove('online-notification');
-                        offlineBanner.querySelector('i').className = 'fas fa-wifi-slash';
-                        offlineBanner.querySelector('span').textContent = 'You are currently working offline. Changes will be synchronized when you reconnect.';
-                    }, 500);
-                }, 3000);
-            });
-            
-            window.addEventListener('offline', showOfflineBanner);
-            
-            // Improved offline banner function to prevent layout shifts
-            function showOfflineBanner() {
-                offlineBanner.style.display = 'block';
-                // Don't add any extra padding or margins that might affect layout
-            }
-            
-            // For Windows app, check connection status periodically
-            setInterval(function() {
-                // This uses the browser's navigator.onLine property
-                // For a Windows app, you might need to use a custom API instead
-                if (!navigator.onLine && offlineBanner.style.display === 'none') {
-                    showOfflineBanner();
-                }
-            }, 30000); // Check every 30 seconds
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 bg-light">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
+                </div>
+                <div>
+                    <span class="text-muted">Version 1.0</span>
+                </div>
+            </div>
+        </div>
+    </footer>
 
-            // Add mobile menu functionality
-            const mobileMenuToggle = document.getElementById('mobileMenuToggle');
-            const sidebarBackdrop = document.querySelector('.sidebar-backdrop');
-            
-            if (mobileMenuToggle) {
-                mobileMenuToggle.addEventListener('click', function() {
-                    document.body.classList.toggle('sidebar-open');
-                });
-            }
-            
-            if (sidebarBackdrop) {
-                sidebarBackdrop.addEventListener('click', function() {
-                    document.body.classList.remove('sidebar-open');
-                });
-            }
-            
-            // Auto-collapse sidebar on mobile
-            function handleResponsiveLayout() {
-                const isMobile = window.innerWidth < 992;
-                if (isMobile) {
-                    document.body.classList.remove('sidebar-collapsed');
-                    // For mobile devices, we'll use the sidebar-open class instead
-                } else {
-                    document.body.classList.remove('sidebar-open');
-                    // Restore saved sidebar state for desktop
-                    if (localStorage.getItem('sidebar-collapsed') === 'true') {
-                        document.body.classList.add('sidebar-collapsed');
-                    }
-                }
-            }
-            
-            // Call on page load
-            handleResponsiveLayout();
-            
-            // Call on window resize
-            window.addEventListener('resize', handleResponsiveLayout);
-        });
-    </script>
-    
-    <!-- Add Bootstrap JavaScript before the closing body tag -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Main application scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Page specific scripts -->
     {% block scripts %}{% endblock %}
+    <!-- Sidebar Toggle Script -->
+    <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
 </body>
 </html>

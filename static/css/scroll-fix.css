@@ -1,0 +1,63 @@
+/*
+ * CRITICAL SCROLL FIX
+ * This fixes the scrolling issues that prevent page scrolling
+ * Must be included AFTER all other CSS files
+ */
+
+/* Reset the most critical scroll-breaking properties */
+html, body {
+    height: 100% !important; /* Use percentage not vh which can cause issues on mobile */
+    min-height: 100% !important; 
+    max-height: none !important;
+    overflow-y: scroll !important; /* Force scrolling capability */
+    overflow-x: hidden !important; /* Prevent horizontal scroll */
+    position: static !important; /* Prevent positioning issues */
+}
+
+/* Reset any conflicting positions that might be affecting scrolling */
+.navbar, .content-wrapper, main, .container-fluid, .page-content {
+    position: static !important;
+}
+
+/* Ensure the page wrapper expands with content */
+.wrapper, #wrapper, #page-wrapper, .page-wrapper, #content, .content {
+    min-height: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+/* Make sure footer doesn't have fixed position */
+.footer, footer {
+    position: relative !important;
+}
+
+/* Remove any max height constraints */
+.container, .container-fluid, .row, .col, [class*="col-"] {
+    max-height: none !important;
+    height: auto !important;
+}
+
+/* Reset flexbox settings that might be constraining content */
+body {
+    display: block !important; /* Override flex display that might be breaking scrolling */
+}
+
+/* Fix common layouts with sidebar */
+.sidebar-and-content {
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* Ensure modal dialogs can be scrolled */
+.modal {
+    overflow-y: auto !important;
+}
+
+/* Fix for iOS Safari */
+@supports (-webkit-overflow-scrolling: touch) {
+    body {
+        -webkit-overflow-scrolling: touch;
+        position: relative !important;
+    }
+}

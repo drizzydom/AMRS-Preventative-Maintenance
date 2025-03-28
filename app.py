@@ -193,6 +193,19 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Custom decorator to require admin access
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            flash('Please log in to access this page.', 'error')
+            return redirect(url_for('login', next=request.url))
+        if not current_user.is_admin:
+            flash('You do not have permission to access this page.', 'error')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Utility function for permission checking
 def require_permission(permission):
     def decorator(func):
@@ -634,64 +647,29 @@ def edit_machine(machine_id):
     return render_template('admin/edit_machine.html', machine=machine, sites=sites)  # Changed from admin_edit_machine_modern.html
 
 # CRUD routes for Parts
-@app.route('/admin/parts', methods=['GET', 'POST'])
+@app.route('/parts')
 @login_required
 def manage_parts():
-    if not current_user.is_admin and not current_user.has_permission(Permissions.PARTS_VIEW):
-        flash("You don't have permission to access this page", "danger")
-        return redirect(url_for('dashboard'))
-    if request.method == 'POST':
-        name = request.form.get('name')
-        description = request.form.get('description')
-        machine_id = request.form.get('machine_id')
+    # Get list of machines for part assignment dropdown
+    if current_user.is_admin:
+        # Admins can see all machines
+        machines = Machine.query.join(Site).order_by(Site.name, Machine.name).all()
+        # Get all parts
+        parts = Part.query.join(Machine).join(Site).order_by(Site.name, Machine.name, Part.name).all()
+    else:
+        # Regular users only see machines from their assigned sites
+        user_sites = current_user.sites
+        site_ids = [site.id for site in user_sites]
         
-        # Get frequency and unit from form
-        maintenance_frequency = int(request.form.get('maintenance_frequency', 7))
-        maintenance_unit = request.form.get('maintenance_unit', 'day')
+        machines = Machine.query.filter(Machine.site_id.in_(site_ids)).join(Site).order_by(Site.name, Machine.name).all()
         
-        # Check if maintenance_unit column exists before using it
-        try:
-            # Convert to days based on unit
-            days = Part.convert_to_days(maintenance_frequency, maintenance_unit)
-            # Create new part with maintenance_unit
-            new_part = Part(
-                name=name, 
-                description=description, 
-                machine_id=machine_id,
-                maintenance_frequency=days,
-                maintenance_unit=maintenance_unit,
-                last_maintenance=datetime.utcnow()
-            )
-        except Exception as e:
-            # Fallback if maintenance_unit column doesn't exist
-            app.logger.error(f"Error using maintenance_unit: {str(e)}")
-            # Create part without maintenance_unit, using direct days value
-            if maintenance_unit == 'week':
-                maintenance_frequency *= 7
-            elif maintenance_unit == 'month':
-                maintenance_frequency *= 30
-            elif maintenance_unit == 'year':
-                maintenance_frequency *= 365
-            new_part = Part(
-                name=name, 
-                description=description, 
-                machine_id=machine_id,
-                maintenance_frequency=maintenance_frequency,
-                last_maintenance=datetime.utcnow()
-            )
-        db.session.add(new_part)
-        db.session.commit()
-        flash('Part added successfully')
-    try:
-        parts = Part.query.all()
-    except Exception as e:
-        # Handle the case when the column doesn't exist
-        app.logger.error(f"Error querying parts: {str(e)}")
-        flash("Database schema needs to be updated. Please run the add_maintenance_unit.py script.")
-        parts = []
-    machines = Machine.query.all()
-    now = datetime.utcnow()
-    return render_template('admin/parts.html', parts=parts, machines=machines, now=now)  # Changed from admin_parts_modern.html
+        # Filter parts based on user's assigned sites
+        parts = Part.query.join(Machine).join(Site).filter(
+            Site.id.in_(site_ids)
+        ).order_by(Site.name, Machine.name, Part.name).all()
+    
+    now = datetime.now()
+    return render_template('admin/parts.html', parts=parts, machines=machines, now=now)
 
 @app.route('/admin/parts/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
@@ -1488,52 +1466,92 @@ from backup_utils import backup_database, restore_database, list_backups, delete
 
 @app.route('/admin/backups', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def admin_backups():
-    if not current_user.is_admin and not current_user.has_permission(Permissions.BACKUP_VIEW):
-        flash("You don't have permission to access this page", "danger")
-        return redirect(url_for('dashboard'))
+    # Check if backup directory exists
+    from backup_utils import list_backups, backup_database, restore_database, delete_backup
     
     if request.method == 'POST':
         action = request.form.get('action')
+        
         if action == 'create':
-            if not current_user.has_permission(Permissions.BACKUP_CREATE):
-                flash("You don't have permission to create backups", "danger")
-                return redirect(url_for('admin_backups'))
-            
-            backup_name = request.form.get('backup_name')
+            backup_name = request.form.get('backup_name', '').strip()
             include_users = 'include_users' in request.form
+            
+            # Make sure backup_name is a string, not a boolean
+            if not backup_name:
+                backup_name = None  # Let the backup function use the default timestamp
+                
             filename = backup_database(backup_name, include_users)
+            flash(f'Backup created successfully: {filename}', 'success')
+            return redirect(url_for('admin_backups'))
             
-            if filename:
-                flash(f'Backup created successfully: {filename}')
-            else:
-                flash('Error creating backup', 'error')
         elif action == 'restore':
-            if not current_user.has_permission(Permissions.BACKUP_RESTORE):
-                flash("You don't have permission to restore backups", "danger")
-                return redirect(url_for('admin_backups'))
-            
-            filename = request.form.get('backup_file')
+            backup_file = request.form.get('backup_file')
             restore_users = 'restore_users' in request.form
             
-            if restore_database(filename, restore_users):
-                flash(f'Backup restored successfully: {filename}')
-            else:
-                flash(f'Error restoring backup: {filename}', 'error')
-        elif action == 'delete':
-            if not current_user.has_permission(Permissions.BACKUP_DELETE):
-                flash("You don't have permission to delete backups", "danger")
-                return redirect(url_for('admin_backups'))
+            from backup_utils import BACKUP_DIR
+            backup_path = os.path.join(BACKUP_DIR, backup_file)
             
+            try:
+                stats = restore_database(backup_path, restore_users)
+                if stats['errors']:
+                    flash(f'Backup restored with {len(stats["errors"])} errors. See logs for details.', 'warning')
+                else:
+                    flash('Backup restored successfully!', 'success')
+                return redirect(url_for('admin_backups'))
+            except Exception as e:
+                flash(f'Error restoring backup: {str(e)}', 'error')
+                return redirect(url_for('admin_backups'))
+                
+        elif action == 'delete':
             filename = request.form.get('filename')
             if delete_backup(filename):
-                flash(f'Backup "{filename}" deleted successfully')
+                flash(f'Backup deleted: {filename}', 'success')
             else:
-                flash(f'Error deleting backup "{filename}"', 'error')
-        return redirect(url_for('admin_backups'))
+                flash(f'Error deleting backup: {filename}', 'error')
+            return redirect(url_for('admin_backups'))
     
+    # Gather information about available backups
     backups = list_backups()
-    return render_template('admin/backups.html', backups=backups)  # Changed from admin_backups_modern.html
+    
+    # Prepare the display info for each backup
+    for backup in backups:
+        # Format the size to MB
+        size_mb = round(backup['size'] / (1024 * 1024), 2)
+        backup['size_mb'] = size_mb
+        
+        # Create a more readable display name
+        if '_' in backup['filename']:
+            parts = backup['filename'].split('_')
+            if len(parts) >= 3:
+                # Extract date and time from filename
+                date_part = parts[0]
+                time_part = parts[1]
+                name_part = '_'.join(parts[2:])
+                
+                # Format the date
+                try:
+                    formatted_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:]}"
+                    formatted_time = f"{time_part[:2]}:{time_part[2:4]}"
+                    display_name = f"{formatted_date} {formatted_time}"
+                    
+                    # Add custom name part if it exists
+                    if name_part.endswith('.json'):
+                        name_part = name_part[:-5]  # Remove .json extension
+                    if name_part:
+                        display_name += f" - {name_part}"
+                except:
+                    display_name = backup['filename']
+            else:
+                display_name = backup['filename']
+        else:
+            display_name = backup['filename']
+        
+        backup['display_name'] = display_name
+    
+    # Add this return statement to fix the error
+    return render_template('admin/backups.html', backups=backups)
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
@@ -1645,123 +1663,127 @@ def add_reset_columns_cmd():
 @app.route('/user/profile', methods=['GET'])
 @login_required
 def user_profile():
-    """Display the user profile page"""
-    # Get notification preferences using the new method
-    try:
-        preferences = current_user.get_notification_preferences()
-        if not isinstance(preferences, dict):
-            print(f"Warning: preferences is not a dictionary: {type(preferences)}")
-            preferences = {
-                'enable_email': True,
-                'email_frequency': 'weekly',
-                'notification_types': ['overdue', 'due_soon']
-            }
-        # Debug output - see what values are actually stored
-        print(f"Current user preferences: {preferences}")
-    except Exception as e:
-        print(f"Error getting preferences: {str(e)}")
-        preferences = {
-            'enable_email': True,
-            'email_frequency': 'weekly',
-            'notification_types': ['overdue', 'due_soon']
-        }
+    """Display the user profile page."""
+    # IMPROVED: Better handling of notification preferences with defaults
+    notification_preferences = {
+        'enable_email': False,
+        'email_format': 'html', 
+        'notification_frequency': 'daily'
+    }
     
-    # Pass individual preference values to avoid potential template issues
-    enable_email = preferences.get('enable_email', True)
-    email_frequency = preferences.get('email_frequency', 'weekly')
-    notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
+    if current_user.notification_preferences:
+        if isinstance(current_user.notification_preferences, str):
+            try:
+                import json
+                saved_prefs = json.loads(current_user.notification_preferences)
+                # Update defaults with saved values
+                notification_preferences.update(saved_prefs)
+                app.logger.debug(f"Loaded preferences: {notification_preferences}")
+            except (json.JSONDecodeError, TypeError) as e:
+                app.logger.error(f"Error loading preferences: {str(e)}")
+        else:
+            # It's already a dictionary
+            notification_preferences.update(current_user.notification_preferences)
     
-    return render_template('user_profile.html',
-                           preferences=preferences,
-                           enable_email=enable_email,
-                           email_frequency=email_frequency,
-                           notification_types=notification_types)
+    return render_template('user_profile.html', 
+                          notification_preferences=notification_preferences)
 
-@app.route('/profile/update', methods=['POST'])
+@app.route('/user/profile/update', methods=['POST'])
 @login_required
 def update_profile():
-    username = request.form.get('username')
-    email = request.form.get('email')
-    full_name = request.form.get('full_name')
-    
-    # Check for duplicate username (if changed)
-    if username != current_user.username and User.query.filter_by(username=username).first():
-        flash('Username already in use. Please choose a different one.', 'danger')
+    """Update user profile information."""
+    if request.method == 'POST':
+        # Get form data
+        full_name = request.form.get('full_name')
+        email = request.form.get('email')
+        
+        # Update user information
+        current_user.full_name = full_name
+        current_user.email = email
+        db.session.commit()
+        
+        flash('Profile updated successfully', 'success')
         return redirect(url_for('user_profile'))
-    
-    # Check for duplicate email (if changed)
-    if email != current_user.email and User.query.filter_by(email=email).first():
-        flash('Email already in use. Please choose a different one.', 'danger')
-        return redirect(url_for('user_profile'))
-    
-    # Update user details
-    current_user.username = username
-    current_user.email = email
-    current_user.full_name = full_name
-    db.session.commit()
-    
-    flash('Profile updated successfully!', 'success')
-    return redirect(url_for('user_profile'))
 
-@app.route('/profile/change-password', methods=['POST'])
+@app.route('/user/profile/change-password', methods=['POST'])
 @login_required
 def change_password():
-    current_password = request.form.get('current_password')
-    new_password = request.form.get('new_password')
-    confirm_password = request.form.get('confirm_password')
-    
-    # Verify current password
-    if not current_user.check_password(current_password):
-        flash('Current password is incorrect.', 'danger')
+    """Change user password."""
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Verify current password
+        if not check_password_hash(current_user.password_hash, current_password):
+            flash('Current password is incorrect', 'error')
+            return redirect(url_for('user_profile'))
+        
+        # Verify new passwords match
+        if new_password != confirm_password:
+            flash('New passwords do not match', 'error')
+            return redirect(url_for('user_profile'))
+        
+        # Update password
+        current_user.password_hash = generate_password_hash(new_password)
+        db.session.commit()
+        
+        flash('Password changed successfully', 'success')
         return redirect(url_for('user_profile'))
-    
-    # Check password requirements
-    if len(new_password) < 8 or not any(c.isupper() for c in new_password) or not any(c.isdigit() for c in new_password):
-        flash('Password must be at least 8 characters long, contain an uppercase letter and a number.', 'danger')
-        return redirect(url_for('user_profile'))
-    
-    # Confirm passwords match
-    if new_password != confirm_password:
-        flash('New passwords do not match.', 'danger')
-        return redirect(url_for('user_profile'))
-    
-    # Update password
-    current_user.set_password(new_password)
-    db.session.commit()
-    flash('Password updated successfully!', 'success')
-    return redirect(url_for('user_profile'))
 
-@app.route('/profile/notification-preferences', methods=['POST'])
+@app.route('/user/notification_preferences', methods=['POST'])
 @login_required
 def update_notification_preferences():
     """Update user notification preferences"""
-    import json
     try:
-        # Get form data
+        # Get form data - ensure all fields are correctly retrieved
         enable_email = 'enable_email' in request.form
-        email_frequency = request.form.get('email_frequency')
-        notification_types = request.form.getlist('notification_types')
+        email_format = request.form.get('email_format', 'html')
+        notification_frequency = request.form.get('notification_frequency', 'immediate')
         
-        print(f"Form data: enable_email={enable_email}, email_frequency={email_frequency}, types={notification_types}")
+        app.logger.debug(f"Form data: enable_email={enable_email}, email_format={email_format}, notification_frequency={notification_frequency}")
         
-        # Update preferences as JSON string
-        preferences = {
-            'enable_email': enable_email,
-            'email_frequency': email_frequency if email_frequency else 'weekly',
-            'notification_types': notification_types
-        }
+        # Initialize preferences dictionary
+        notification_prefs = {}
         
-        # Store as JSON string
-        current_user.notification_preferences = json.dumps(preferences)
+        # Convert string to dictionary if necessary
+        if isinstance(current_user.notification_preferences, str) and current_user.notification_preferences:
+            try:
+                import json
+                notification_prefs = json.loads(current_user.notification_preferences)
+            except (json.JSONDecodeError, TypeError) as e:
+                app.logger.error(f"Error parsing preferences JSON: {str(e)}")
+                notification_prefs = {}
+        elif current_user.notification_preferences is None or current_user.notification_preferences == '':
+            notification_prefs = {}
+        else:
+            # If it's already a dictionary
+            notification_prefs = current_user.notification_preferences
+        
+        # Update the preferences - explicitly set each field
+        notification_prefs['enable_email'] = enable_email
+        notification_prefs['email_format'] = email_format
+        notification_prefs['notification_frequency'] = notification_frequency
+        
+        app.logger.debug(f"Updated preferences: {notification_prefs}")
+        
+        # Save back to user object (always as a JSON string)
+        import json
+        serialized_prefs = json.dumps(notification_prefs)
+        app.logger.debug(f"Serialized preferences: {serialized_prefs}")
+        current_user.notification_preferences = serialized_prefs
+        
+        # Verify database column can accommodate the serialized data
+        if len(serialized_prefs) > 500:  # Assuming your db column has reasonable size
+            app.logger.warning(f"Notification preferences JSON exceeds 500 chars: {len(serialized_prefs)}")
+        
+        # Save to database
         db.session.commit()
-        
-        print(f"Saved preferences: {current_user.notification_preferences}")
         flash('Notification preferences updated successfully', 'success')
-            
     except Exception as e:
-        print(f"General error: {str(e)}")
         db.session.rollback()
-        flash(f'Error updating preferences: {str(e)}', 'danger')
+        app.logger.error(f"Error updating preferences: {str(e)}")
+        flash(f'Error updating notification preferences: {str(e)}', 'error')
     
     return redirect(url_for('user_profile'))
 
