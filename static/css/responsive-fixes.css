@@ -1,9 +1,132 @@
 /* Additional responsive fixes to prevent horizontal scrolling */
 
-/* Core layout fixes */
-html, body {
-    overflow-x: hidden;
-    max-width: 100%;
+/* Core layout fixes - FIXED SCROLLING */
+html {
+    height: 100%;
+    overflow-y: auto; /* Allow natural scrolling */
+    margin: 0;
+    padding: 0;
+    scrollbar-width: auto; /* "auto" instead of "thin" for better usability */
+    scroll-behavior: smooth; /* Enhanced scroll behavior for all browsers */
+}
+
+body {
+    min-height: 100%;
+    height: auto; /* Allow body to expand with content */
+    margin: 0 !important;
+    padding: 0 !important;
+    padding-bottom: 0 !important; /* Override any earlier padding */
+    position: relative; /* Needed for proper scrolling */
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+    overflow-y: auto !important; /* Critical: Allow vertical scrolling */
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0; /* Remove bottom padding that could cause issues */
+}
+
+/* CRITICAL FIX: Make sure the whole page is scrollable */
+#root-container, .container-fluid, .main-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Allow container to shrink if needed */
+    max-height: none !important; /* Remove any maximum height constraints */
+    height: auto !important; /* Allow natural height based on content */
+    overflow-y: visible !important; /* Allow content to overflow and be scrollable */
+    flex: 1 0 auto; /* Grow but don't shrink */
+    width: 100%;
+}
+
+/* Fix main container to allow content to expand */
+.container-fluid {
+    max-width: none !important; /* Remove any max-width limitation */
+    width: 100%;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-top: 1rem; /* Add some breathing room at the top */
+    margin: 0; /* Remove any automatic margins */
+}
+
+/* Page layout improvements - critical for scrolling */
+.page-content {
+    width: 100%;
+    flex: 1 0 auto; /* Grow but don't shrink */
+    overflow-y: visible !important; /* Ensure content can scroll */
+    height: auto !important; /* Allow natural height */
+    min-height: 0 !important; /* Remove minimum height restrictions */
+    margin-bottom: 60px; /* Ensure space for footer */
+}
+
+/* Ensure the footer is properly positioned */
+.footer {
+    width: 100%;
+    height: auto;
+    position: relative !important; /* Not fixed or absolute */
+    bottom: auto; /* Let the footer flow naturally */
+    left: 0;
+    margin-top: auto; /* Push to bottom of flex container */
+    flex-shrink: 0; /* Prevent footer from shrinking */
+    clear: both; /* Clear any floats */
+    padding: 20px 0;
+}
+
+/* Fix sticky sidebar */
+.sidebar {
+    position: sticky !important;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto; /* Allow sidebar to scroll independently */
+}
+
+/* Ensure content is not hidden under fixed elements */
+.main-content {
+    padding-bottom: 20px; /* Extra space at bottom of main content */
+}
+
+/* Fix row and section heights */
+.row, section, .card, .dashboard {
+    height: auto !important; /* Allow natural height */
+    min-height: unset !important;
+    max-height: none !important;
+    width: 100%;
+}
+
+/* Remove fixed height from all content wrappers */
+.wrapper, .content-wrapper, .dashboard, .row {
+    height: auto !important;
+    min-height: unset !important;
+    overflow: visible !important;
+    width: 100%;
+}
+
+/* Fix for browsers with problematic flexbox implementation */
+@supports (-webkit-touch-callout: none) {
+    /* iOS-specific fix */
+    body, #root-container {
+        height: -webkit-fill-available;
+    }
+    
+    body {
+        min-height: -webkit-fill-available;
+    }
+    
+    .page-content {
+        margin-bottom: 80px; /* Extra margin on iOS */
+    }
+}
+
+/* Better responsive handling for large screens */
+@media (min-width: 1400px) {
+    .container-fluid {
+        padding-left: 2.5rem;
+        padding-right: 2.5rem;
+    }
+}
+
+/* Improved card container sizing */
+.row {
+    width: 100%;
+    margin-right: 0;
+    margin-left: 0;
 }
 
 /* Tighter margins and padding on mobile */
@@ -113,4 +236,11 @@ html, body {
 
 .modal-footer {
     flex-wrap: wrap;
+}
+
+/* Navbar positioning fix */
+.navbar {
+    position: relative !important; /* Prevent fixed positioning issues */
+    width: 100%;
+    z-index: 1030;
 }

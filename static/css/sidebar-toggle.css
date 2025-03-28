@@ -1,0 +1,112 @@
+/*
+ * SIDEBAR TOGGLE FUNCTIONALITY
+ * Adds collapse/expand functionality to the sidebar
+ */
+
+/* Sidebar toggle button styling */
+.sidebar-toggle {
+    position: fixed;
+    top: 70px;
+    left: 180px; /* Match your sidebar width */
+    width: 24px;
+    height: 24px;
+    background-color: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    border: none;
+    cursor: pointer;
+    z-index: 1025;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    color: #333;
+}
+
+.sidebar-toggle:hover {
+    background-color: #f8f9fa;
+}
+
+/* Adjust button position when sidebar is collapsed */
+body.sidebar-collapsed .sidebar-toggle {
+    left: 50px; /* Match your collapsed sidebar width */
+}
+
+/* Rotate icon when sidebar is collapsed */
+body.sidebar-collapsed .sidebar-toggle i {
+    transform: rotate(180deg);
+}
+
+/* Collapsed sidebar styles */
+body.sidebar-collapsed .sidebar {
+    width: 50px !important;
+    min-width: 50px !important;
+    max-width: 50px !important;
+}
+
+/* Hide text and adjust icons in collapsed mode */
+body.sidebar-collapsed .sidebar .sidebar-link {
+    padding: 0.75rem 0 !important;
+    display: flex;
+    justify-content: center;
+}
+
+body.sidebar-collapsed .sidebar .sidebar-icon {
+    margin-right: 0 !important;
+    font-size: 1.2rem;
+}
+
+body.sidebar-collapsed .sidebar .sidebar-link-text {
+    display: none;
+}
+
+/* Adjust main content area when sidebar is collapsed */
+body.sidebar-collapsed .content-container,
+body.sidebar-collapsed .main-content,
+body.sidebar-collapsed .col-content,
+body.sidebar-collapsed .page-content,
+body.sidebar-collapsed .footer {
+    margin-left: 50px !important; /* Match collapsed sidebar width */
+    width: calc(100% - 50px) !important;
+    max-width: calc(100% - 50px) !important;
+}
+
+/* Show sidebar on hover in collapsed mode (optional) */
+body.sidebar-collapsed .sidebar:hover {
+    width: 180px !important; /* Match your expanded sidebar width */
+    min-width: 180px !important;
+    max-width: 180px !important;
+}
+
+body.sidebar-collapsed .sidebar:hover .sidebar-link {
+    padding: 0.75rem 1.25rem !important;
+    display: flex;
+    justify-content: flex-start;
+}
+
+body.sidebar-collapsed .sidebar:hover .sidebar-icon {
+    margin-right: 0.75rem !important;
+    font-size: 1rem;
+}
+
+body.sidebar-collapsed .sidebar:hover .sidebar-link-text {
+    display: inline;
+}
+
+/* Dark mode support */
+html[data-theme="dark"] .sidebar-toggle {
+    background-color: #2d3748;
+    color: #e2e8f0;
+    border: 1px solid #4a5568;
+}
+
+html[data-theme="dark"] .sidebar-toggle:hover {
+    background-color: #4a5568;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+    .sidebar-toggle {
+        display: none !important; /* Hide on mobile, use navbar toggler instead */
+    }
+}

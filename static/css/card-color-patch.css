@@ -1,0 +1,110 @@
+/*
+ * MINIMAL CARD COLOR FIX
+ * Only fixes the card color cutoff issue without affecting other UI styles
+ */
+
+/* IMPROVED: Target only the specific stats cards and add the colored background to the entire card */
+.card.stats-danger {
+    background-color: #fff !important; /* Force white background */
+    border-left: 5px solid #dc3545 !important;
+}
+.card.stats-danger .card-body {
+    background-color: rgba(220, 53, 69, 0.08) !important;
+}
+
+.card.stats-warning {
+    background-color: #fff !important;
+    border-left: 5px solid #ffc107 !important;
+}
+.card.stats-warning .card-body {
+    background-color: rgba(255, 193, 7, 0.08) !important;
+}
+
+.card.stats-success {
+    background-color: #fff !important;
+    border-left: 5px solid #198754 !important;
+}
+.card.stats-success .card-body {
+    background-color: rgba(25, 135, 84, 0.08) !important;
+}
+
+.card.stats-primary {
+    background-color: #fff !important;
+    border-left: 5px solid #0d6efd !important;
+}
+.card.stats-primary .card-body {
+    background-color: rgba(13, 110, 253, 0.08) !important;
+}
+
+.card.stats-info {
+    background-color: #fff !important;
+    border-left: 5px solid #0dcaf0 !important;
+}
+.card.stats-info .card-body {
+    background-color: rgba(13, 202, 240, 0.08) !important;
+}
+
+.card.stats-secondary {
+    background-color: #fff !important;
+    border-left: 5px solid #6c757d !important;
+}
+.card.stats-secondary .card-body {
+    background-color: rgba(108, 117, 125, 0.08) !important;
+}
+
+/* FIXED: Make sure the card header remains visible */
+.card.stats-danger .card-header,
+.card.stats-warning .card-header,
+.card.stats-success .card-header,
+.card.stats-primary .card-header,
+.card.stats-info .card-header,
+.card.stats-secondary .card-header {
+    background-color: #fff !important;
+    border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+}
+
+/* FIXED: Ensure text is visible in all cards */
+.card .card-title,
+.card .card-text,
+.card .stats-value,
+.card .stats-label {
+    color: #212529 !important; /* Dark text for better readability */
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+    html[data-theme="dark"] .card.stats-danger,
+    html[data-theme="dark"] .card.stats-warning,
+    html[data-theme="dark"] .card.stats-success,
+    html[data-theme="dark"] .card.stats-primary,
+    html[data-theme="dark"] .card.stats-info,
+    html[data-theme="dark"] .card.stats-secondary {
+        background-color: var(--card-bg) !important;
+    }
+
+    html[data-theme="dark"] .card.stats-danger .card-body,
+    html[data-theme="dark"] .card.stats-warning .card-body,
+    html[data-theme="dark"] .card.stats-success .card-body,
+    html[data-theme="dark"] .card.stats-primary .card-body,
+    html[data-theme="dark"] .card.stats-info .card-body,
+    html[data-theme="dark"] .card.stats-secondary .card-body {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    html[data-theme="dark"] .card .card-title,
+    html[data-theme="dark"] .card .card-text,
+    html[data-theme="dark"] .card .stats-value,
+    html[data-theme="dark"] .card .stats-label {
+        color: #e2e8f0 !important; /* Light text for dark mode */
+    }
+    
+    html[data-theme="dark"] .card.stats-danger .card-header,
+    html[data-theme="dark"] .card.stats-warning .card-header,
+    html[data-theme="dark"] .card.stats-success .card-header,
+    html[data-theme="dark"] .card.stats-primary .card-header,
+    html[data-theme="dark"] .card.stats-info .card-header,
+    html[data-theme="dark"] .card.stats-secondary .card-header {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+}
