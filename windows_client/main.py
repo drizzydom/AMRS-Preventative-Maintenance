@@ -5,6 +5,11 @@ import requests
 import platform
 import webbrowser
 import configparser
+import sqlite3
+import keyring
+import threading
+import time
+import uuid
 from pathlib import Path
 from datetime import datetime
 from functools import partial
@@ -15,9 +20,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QSplashScreen, QSizePolicy, QDialog, QFormLayout, QSpinBox, 
                             QTextEdit, QScrollArea, QGroupBox, QHeaderView, 
                             QStackedWidget, QSystemTrayIcon, QMenu, QStatusBar, QStyle,
-                            QPlainTextEdit)
+                            QPlainTextEdit, QProgressBar)
+
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer, QUrl, QSettings
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QDesktopServices, QAction, QColor, QFontDatabase
+
+from logger_config import setup_logging, get_logger
 
 # App version
 APP_VERSION = "1.0.0"
@@ -25,6 +33,10 @@ APP_NAME = "Maintenance Tracker Client"
 CONFIG_FILE = "config.ini"
 DEFAULT_API_URL = "http://localhost:9000"  # Default to Docker container port
 TOKEN_FILE = "session.token"
+
+# Set up logging
+log_file = setup_logging(APP_NAME)
+logger = get_logger(__name__)
 
 # Custom theme colors
 THEME = {
@@ -39,9 +51,37 @@ THEME = {
     "warning": "#f1c40f"
 }
 
-# Paths
-app_data_path = Path.home() / "AppData" / "Local" / "MaintenanceTrackerClient"
-os.makedirs(app_data_path, exist_ok=True)
+# Determine if running in portable mode
+def is_portable_mode():
+    """Check if the application is running in portable mode"""
+    # Check if portable.txt exists in the same directory as the executable
+    exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    portable_marker = os.path.join(exe_dir, "portable.txt")
+    return os.path.exists(portable_marker)
+
+# Paths - updated to support portable mode
+IS_PORTABLE = is_portable_mode()
+logger.info(f"Running in portable mode: {IS_PORTABLE}")
+
+if IS_PORTABLE:
+    # In portable mode, store data relative to the executable
+    exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    app_data_path = Path(exe_dir) / "data"
+    os.makedirs(app_data_path, exist_ok=True)
+    DB_PATH = os.path.join(app_data_path, "offline_cache.db")
+    CONFIG_PATH = os.path.join(app_data_path, "config.json")
+    logger.info(f"Using portable data path: {app_data_path}")
+else:
+    # In installed mode, use user's home directory
+    app_data_path = Path.home() / "AppData" / "Local" / "MaintenanceTrackerClient"
+    os.makedirs(app_data_path, exist_ok=True)
+    DB_PATH = os.path.join(os.path.expanduser("~"), ".amrs", "offline_cache.db")
+    CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".amrs", "config.json")
+    # Ensure offline data directory exists
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+# Constants for offline sync
+SYNC_INTERVAL = 300  # 5 minutes
 
 class WorkerThread(QThread):
     """Background worker thread for network operations"""
@@ -67,6 +107,66 @@ class ApiClient:
         self.base_url = base_url
         self.token = None
         self.load_token()
+        self.initialize_offline_db()
+    
+    def initialize_offline_db(self):
+        """Initialize the offline database"""
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Create tables for offline storage
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pending_operations (
+            id TEXT PRIMARY KEY,
+            endpoint TEXT NOT NULL,
+            method TEXT NOT NULL,
+            data TEXT,
+            timestamp TEXT,
+            synced INTEGER DEFAULT 0
+        )
+        ''')
+        
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cached_data (
+            endpoint TEXT PRIMARY KEY,
+            data TEXT,
+            timestamp TEXT
+        )
+        ''')
+        
+        conn.commit()
+        conn.close()
+    
+    def save_credentials(self, username, password):
+        """Securely save user credentials"""
+        try:
+            keyring.set_password("AMRS-Client", username, password)
+            
+            # Save username to config file
+            os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+            with open(CONFIG_PATH, 'w') as f:
+                json.dump({"last_username": username, "server_url": self.base_url}, f)
+                
+            return True
+        except Exception as e:
+            print(f"Error saving credentials: {e}")
+            return False
+
+    def get_saved_credentials(self):
+        """Retrieve saved credentials if available"""
+        try:
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH, 'r') as f:
+                    config = json.load(f)
+                    username = config.get("last_username")
+                    if username:
+                        password = keyring.get_password("AMRS-Client", username)
+                        if password:
+                            return username, password
+        except Exception as e:
+            print(f"Error retrieving credentials: {e}")
+        
+        return None, None
     
     def load_token(self):
         """Load saved authentication token if it exists"""
@@ -90,7 +190,7 @@ class ApiClient:
             os.remove(token_path)
     
     def make_request(self, method, endpoint, data=None, params=None, json_data=None):
-        """Make API request with retry and error handling"""
+        """Enhanced request method with offline support"""
         url = f"{self.base_url}{endpoint}"
         headers = {}
         
@@ -120,7 +220,128 @@ class ApiClient:
             return response.text
             
         except requests.RequestException as e:
+            if method == 'GET':
+                # For GET requests, try to return cached data
+                cached_data = self.get_cached_data(endpoint)
+                if cached_data:
+                    return cached_data
+            else:
+                # For other requests, store for later sync
+                if json_data:
+                    self.store_pending_operation(method, endpoint, json_data)
+                    return {"success": True, "offline": True, 
+                           "message": "Operation stored for later synchronization"}
+                    
+            # If we got here, we failed
             raise Exception(f"Network error: {str(e)}")
+    
+    def cache_data(self, endpoint, data):
+        """Cache data for offline use"""
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            
+            timestamp = datetime.now().isoformat()
+            data_json = json.dumps(data)
+            
+            cursor.execute('''
+            INSERT OR REPLACE INTO cached_data (endpoint, data, timestamp)
+            VALUES (?, ?, ?)
+            ''', (endpoint, data_json, timestamp))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error caching data: {e}")
+    
+    def get_cached_data(self, endpoint):
+        """Retrieve cached data for endpoint"""
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT data FROM cached_data WHERE endpoint = ?', (endpoint,))
+            result = cursor.fetchone()
+            
+            conn.close()
+            
+            if result:
+                return json.loads(result[0])
+        except Exception as e:
+            print(f"Error retrieving cached data: {e}")
+        
+        return None
+    
+    def store_pending_operation(self, method, endpoint, data):
+        """Store an operation to be performed when back online"""
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            
+            op_id = str(uuid.uuid4())
+            timestamp = datetime.now().isoformat()
+            data_json = json.dumps(data)
+            
+            cursor.execute('''
+            INSERT INTO pending_operations (id, endpoint, method, data, timestamp, synced)
+            VALUES (?, ?, ?, ?, ?, 0)
+            ''', (op_id, endpoint, method, data_json, timestamp))
+            
+            conn.commit()
+            conn.close()
+            
+            return True
+        except Exception as e:
+            print(f"Error storing operation: {e}")
+            return False
+    
+    def sync_pending_operations(self):
+        """Synchronize pending operations with the server"""
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT id, endpoint, method, data FROM pending_operations WHERE synced = 0')
+            operations = cursor.fetchall()
+            
+            for op_id, endpoint, method, data_json in operations:
+                try:
+                    data = json.loads(data_json)
+                    response = requests.request(
+                        method, 
+                        f"{self.base_url}{endpoint}", 
+                        json=data,
+                        timeout=10
+                    )
+                    
+                    if response.ok:
+                        # Mark as synced
+                        cursor.execute('UPDATE pending_operations SET synced = 1 WHERE id = ?', (op_id,))
+                        conn.commit()
+                except Exception as e:
+                    print(f"Failed to sync operation {op_id}: {e}")
+                    continue
+            
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error during sync: {e}")
+            return False
+            
+    def start_sync_thread(self):
+        """Start a background thread for periodic synchronization"""
+        def sync_worker():
+            while True:
+                try:
+                    self.sync_pending_operations()
+                except Exception as e:
+                    print(f"Error in sync thread: {e}")
+                
+                time.sleep(SYNC_INTERVAL)
+        
+        thread = threading.Thread(target=sync_worker, daemon=True)
+        thread.start()
+        return thread
     
     def login(self, username, password):
         """Authenticate with the API"""
@@ -232,6 +453,10 @@ class LoginWindow(QWidget):
         
         layout.addSpacing(20)
         
+        # Remember me checkbox
+        self.remember_checkbox = QCheckBox("Remember my credentials")
+        layout.addWidget(self.remember_checkbox)
+        
         # Login button
         self.login_button = QPushButton("Login")
         self.login_button.clicked.connect(self.attempt_login)
@@ -268,6 +493,10 @@ class LoginWindow(QWidget):
         if not username or not password:
             self.show_error("Please enter both username and password.")
             return
+        
+        # If remember me is checked, save credentials
+        if self.remember_checkbox.isChecked():
+            self.api_client.save_credentials(username, password)
         
         # Disable login button and show loading state
         self.login_button.setEnabled(False)
@@ -679,14 +908,15 @@ class Dashboard(QWidget):
 
 class MainWindow(QMainWindow):
     """Main application window"""
-    def __init__(self):
+    def __init__(self, server_url=None):
         super().__init__()
         self.api_client = ApiClient()
-        self.load_config()
+        self.load_config(server_url)
         self.setup_ui()
+        self.sync_thread = self.api_client.start_sync_thread()
         self.try_auto_login()
     
-    def load_config(self):
+    def load_config(self, server_url):
         """Load configuration from file"""
         config_path = app_data_path / CONFIG_FILE
         if config_path.exists():
@@ -694,6 +924,8 @@ class MainWindow(QMainWindow):
             config.read(config_path)
             if 'API' in config and 'url' in config['API']:
                 self.api_client.base_url = config['API']['url']
+        elif server_url:
+            self.api_client.base_url = server_url
     
     def setup_ui(self):
         """Set up the main UI"""
@@ -740,12 +972,10 @@ class MainWindow(QMainWindow):
         
         # Status bar showing connection info
         status_layout = QHBoxLayout()
-        
         server_label = QLabel(f"Connected to: {self.api_client.base_url}")
         status_layout.addWidget(server_label)
         
         status_layout.addStretch()
-        
         logout_button = QPushButton("Logout")
         logout_button.clicked.connect(self.logout)
         status_layout.addWidget(logout_button)
@@ -775,15 +1005,22 @@ class MainWindow(QMainWindow):
         self.tray_icon.show()
     
     def try_auto_login(self):
-        """Attempt to login automatically if token exists"""
-        if self.api_client.token:
-            # Try to get dashboard data to test token validity
-            self.worker = WorkerThread(self.api_client.get_dashboard_data)
+        """Attempt to login automatically using saved credentials"""
+        username, password = self.api_client.get_saved_credentials()
+        if username and password:
+            self.show_status_message("Attempting automatic login...")
+            
+            # Create a worker thread for login
+            self.worker = WorkerThread(self.api_client.login, username, password)
             self.worker.finished.connect(lambda _: self.on_auto_login_success())
             self.worker.error.connect(lambda _: self.show_login())
             self.worker.start()
         else:
             self.show_login()
+    
+    def show_status_message(self, message):
+        """Show a status message in the status bar"""
+        self.status_bar.showMessage(message, 5000)
     
     def on_auto_login_success(self):
         """Handle successful automatic login"""
@@ -853,8 +1090,23 @@ def main():
     splash = QSplashScreen(splash_pixmap)
     splash.show()
     
-    # Create and show main window
-    window = MainWindow()
+    # Setup application directory
+    app_dir = Path(os.path.expanduser("~"), ".amrs")
+    app_dir.mkdir(exist_ok=True)
+    
+    # Load config if exists
+    server_url = None
+    config_path = Path(app_dir, "config.json")
+    if config_path.exists():
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                server_url = config.get("server_url")
+        except:
+            pass
+    
+    # Create and show the main window
+    window = MainWindow(server_url)
     window.show()
     
     # Close splash screen
