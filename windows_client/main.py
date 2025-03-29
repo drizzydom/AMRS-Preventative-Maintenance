@@ -6,13 +6,20 @@ import platform
 import webbrowser
 import configparser
 import sqlite3
-import keyring
 import threading
 import time
 import uuid
 from pathlib import Path
 from datetime import datetime
 from functools import partial
+
+# Try to import optional modules with fallbacks
+try:
+    import keyring
+    HAS_KEYRING = True
+except ImportError:
+    HAS_KEYRING = False
+    print("Warning: keyring module not available. Password saving disabled.")
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QPushButton, QLineEdit, QMessageBox, QTableWidget, 
@@ -168,8 +175,13 @@ class ApiClient:
     def save_credentials(self, username, password):
         """Securely save user credentials"""
         try:
-            keyring.set_password("AMRS-Client", username, password)
-            
+            if HAS_KEYRING:
+                keyring.set_password("AMRS-Client", username, password)
+            else:
+                # Fallback to simple encryption or warn user
+                logger.warning("Cannot securely store password - keyring module not available")
+                # Just save username without password
+                
             # Save username to config file
             os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
             with open(CONFIG_PATH, 'w') as f:
@@ -177,7 +189,7 @@ class ApiClient:
                 
             return True
         except Exception as e:
-            print(f"Error saving credentials: {e}")
+            logger.error(f"Error saving credentials: {e}")
             return False
 
     def get_saved_credentials(self):
@@ -187,12 +199,12 @@ class ApiClient:
                 with open(CONFIG_PATH, 'r') as f:
                     config = json.load(f)
                     username = config.get("last_username")
-                    if username:
+                    if username and HAS_KEYRING:
                         password = keyring.get_password("AMRS-Client", username)
                         if password:
                             return username, password
         except Exception as e:
-            print(f"Error retrieving credentials: {e}")
+            logger.error(f"Error retrieving credentials: {e}")
         
         return None, None
     

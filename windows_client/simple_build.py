@@ -13,6 +13,14 @@ def main():
     if len(sys.argv) > 1:
         server_url = sys.argv[1]
     
+    # Check if required modules are installed
+    print("Checking and installing required dependencies...")
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
+                       check=True)
+    except:
+        print("Warning: Could not install dependencies automatically.")
+    
     # Create server config if provided
     if server_url:
         import json
@@ -26,6 +34,9 @@ def main():
         "--onefile",
         "--windowed",
         "--name", "MaintenanceTracker",
+        # Include hidden imports
+        "--hidden-import=keyring",
+        "--hidden-import=keyring.backends",
     ]
     
     # Add data files
