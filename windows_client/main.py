@@ -31,7 +31,6 @@ from logger_config import setup_logging, get_logger
 APP_VERSION = "1.0.0"
 APP_NAME = "Maintenance Tracker Client"
 CONFIG_FILE = "config.ini"
-DEFAULT_API_URL = "http://localhost:9000"  # Default to Docker container port
 TOKEN_FILE = "session.token"
 
 # Set up logging
@@ -50,6 +49,33 @@ THEME = {
     "danger": "#e74c3c",
     "warning": "#f1c40f"
 }
+
+# Function to get the pre-configured server URL if it exists
+def get_preconfigured_server_url():
+    """Get the server URL that was configured during build"""
+    try:
+        # Look for server_config.json in the same directory as the executable
+        exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        config_path = os.path.join(exe_dir, "server_config.json")
+        
+        # Try the package resources if not found (when running as a bundled app)
+        if not os.path.exists(config_path):
+            try:
+                # When packaged with PyInstaller
+                config_path = os.path.join(sys._MEIPASS, "server_config.json")
+            except:
+                pass
+        
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                if config.get("preconfigured") and config.get("server_url"):
+                    logger.info(f"Using pre-configured server URL: {config['server_url']}")
+                    return config["server_url"]
+    except Exception as e:
+        logger.error(f"Error reading pre-configured server URL: {e}")
+    
+    return None
 
 # Determine if running in portable mode
 def is_portable_mode():
@@ -82,6 +108,8 @@ else:
 
 # Constants for offline sync
 SYNC_INTERVAL = 300  # 5 minutes
+
+DEFAULT_API_URL = get_preconfigured_server_url() or "http://localhost:9000"
 
 class WorkerThread(QThread):
     """Background worker thread for network operations"""
@@ -426,12 +454,20 @@ class LoginWindow(QWidget):
         
         layout.addSpacing(20)
         
-        # Server URL
+        # Server URL - make it read-only if pre-configured
         server_layout = QHBoxLayout()
         server_label = QLabel("Server:")
         self.server_input = QLineEdit()
         self.server_input.setText(self.api_client.base_url)
         self.server_input.setPlaceholderText("http://localhost:9000")
+        
+        # If using a pre-configured URL, disable the field
+        preconfigured_url = get_preconfigured_server_url()
+        if preconfigured_url:
+            self.server_input.setReadOnly(True)
+            self.server_input.setStyleSheet("background-color: #f0f0f0;")
+            self.server_input.setToolTip("This server URL is pre-configured and cannot be changed")
+        
         server_layout.addWidget(server_label)
         server_layout.addWidget(self.server_input)
         layout.addLayout(server_layout)
@@ -476,9 +512,11 @@ class LoginWindow(QWidget):
     
     def attempt_login(self):
         """Handle login button click"""
-        # Update API URL if changed
+        # Only update API URL if changed and not pre-configured
         server_url = self.server_input.text().strip()
-        if server_url and server_url != self.api_client.base_url:
+        preconfigured_url = get_preconfigured_server_url()
+        
+        if not preconfigured_url and server_url and server_url != self.api_client.base_url:
             self.api_client.base_url = server_url
             
             # Save to config
