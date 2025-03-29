@@ -1,114 +1,91 @@
-# Maintenance Tracking System
+# AMRS Preventative Maintenance System
 
-A simple web-based system for tracking maintenance schedules for equipment at different sites.
+A comprehensive solution for tracking, scheduling, and managing preventative maintenance tasks for industrial equipment and machinery.
 
-## Features
+## Overview
 
-- User authentication with admin privileges
-- Track sites, machines, and parts
-- Maintenance scheduling and tracking
-- Admin panel for managing entities
-- Dashboard view with maintenance status indicators
+The AMRS Preventative Maintenance System provides organizations with a robust platform for ensuring all maintenance tasks are performed on schedule, reducing equipment downtime and extending asset lifespan. The system supports both online and offline operations, making it suitable for environments with limited connectivity.
 
-## Setup Instructions
+## Key Features
 
-### Prerequisites
+- **Maintenance Scheduling**: Schedule and track regular maintenance tasks by machine, part, or site
+- **Status Monitoring**: Dashboard with visual indicators showing overdue, upcoming, and completed maintenance tasks
+- **Multi-Platform Support**: Server application with web, desktop, and mobile clients
+- **Offline Capability**: Windows client with full offline support and automatic data synchronization
+- **Credential Management**: Secure storage of user credentials for seamless authentication
+- **Site and Machine Organization**: Hierarchical organization of maintenance assets
+- **Maintenance History**: Complete historical records of all maintenance activities
 
-- Python 3.9, 3.10, or 3.11 installed
-  - **Note:** Python 3.13 is not currently compatible with some of the dependencies
-  - For macOS: `brew install python@3.11` 
-  - For Windows: Download from [python.org](https://www.python.org/downloads/)
-- pip package manager (included with Python)
+## System Architecture
 
-### Easy Setup
+The AMRS Preventative Maintenance System consists of:
 
-1. Clone this repository:
-```
-git clone https://github.com/yourusername/maintenance-tracker.git
-cd maintenance-tracker
-```
+1. **Server Application**: Central API server for data storage, authentication, and business logic
+2. **Web Client**: Browser-based interface for administrators and office-based users
+3. **Windows Client**: Desktop application for technicians, with offline support
+4. **Mobile Client**: Smartphone application for on-the-go maintenance recording (coming soon)
 
-2. Run the setup script:
+## Installation Options
 
-**For macOS/Linux:**
-```
-chmod +x setup.sh
-./setup.sh
-```
+### Server Installation
 
-**For Windows:**
-```
-setup.bat
+The server application can be deployed using Docker for easy setup:
+
+```bash
+docker-compose up -d
 ```
 
-3. Run the application:
-```
-# Activate virtual environment if not already active
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+Or installed directly on a server with:
 
-# Run the application
-python app.py
-```
-
-4. Open your browser and navigate to:
-```
-http://localhost:8000
-```
-
-### Manual Setup
-
-If the setup script doesn't work for your environment, you can manually set up:
-
-1. Create and activate a virtual environment:
-```
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-2. Install required packages:
-```
+```bash
+cd server
 pip install -r requirements.txt
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver 0.0.0.0:9000
 ```
 
-3. Initialize the database and run the application:
-```
-flask --app app init-db
-python app.py
-```
+### Windows Client Installation
 
-### Default Login
+The Windows client can be used in two ways:
 
-- Username: admin
-- Password: admin
+1. **Portable Application**: Simply download and run the executable without installation
+2. **Standard Installation**: Run the installer for full system integration
+
+See the [Windows Client README](windows_client/README.md) for detailed instructions.
 
 ## Usage
 
-1. After logging in, you'll see the dashboard with all sites, machines and parts
-2. Use the admin panel to add/remove sites, machines, and parts
-3. Parts with upcoming maintenance will be highlighted on the dashboard
-4. Use the "Update Maintenance" button on the Admin Parts page to record completed maintenance
+1. **Login**: Access the system using your provided credentials
+2. **Dashboard**: View overall maintenance status and statistics
+3. **Maintenance Tasks**: Browse and filter maintenance tasks by status, machine, or site
+4. **Record Maintenance**: Document completed maintenance with notes and timestamps
+5. **Reports**: Generate maintenance reports for compliance and planning (admin only)
 
-## Troubleshooting
+## Development Setup
 
-- **Python version compatibility:** This application works best with Python 3.9-3.11
-- **SQLAlchemy errors:** If you see SQLAlchemy errors, they're likely due to Python version incompatibility
-- **Database schema errors:** If you see "no such column" errors after updating the code, reset the database:
-  ```
-  ./reset_db.sh
-  ```
-  Or manually:
-  ```
-  rm instance/maintenance.db
-  flask --app app init-db
-  ```
-- **Database errors:** If the database doesn't initialize properly, delete the `instance` folder and try again
-- **Virtual environment issues:** Make sure to activate the virtual environment before running any commands
+To set up a development environment:
 
-## Email Notifications
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
+   cd AMRS-Preventative-Maintenance
+   ```
 
-The system can send automatic email notifications when maintenance is due or overdue.
+2. Set up the server:
+   ```bash
+   cd server
+   pip install -r requirements.txt
+   python manage.py migrate
+   python manage.py runserver
+   ```
 
-### Setting Up Email
+3. Set up the client (see client-specific README files for details)
 
-1. Configure your email server settings by setting environment variables:
-```
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
