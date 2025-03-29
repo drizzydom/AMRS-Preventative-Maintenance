@@ -11,15 +11,41 @@ import zipfile
 import argparse
 import datetime
 import json
+import platform
 
 APP_NAME = "Maintenance Tracker"
 APP_VERSION = "1.0.0"
 
-def run_command(command):
+def run_command(command, verbose=True):
     """Run a shell command and print output"""
     print(f"Running: {command}")
-    result = subprocess.run(command, shell=True, check=True)
-    return result
+    
+    # For PyInstaller, we want to see all output for diagnostics
+    if verbose:
+        # Use Popen to capture output in real-time
+        process = subprocess.Popen(
+            command, 
+            shell=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT,
+            universal_newlines=True
+        )
+        
+        # Print output in real-time
+        for line in process.stdout:
+            print(line, end='')
+            
+        # Wait for process to complete
+        process.wait()
+        
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, command)
+        
+        return process
+    else:
+        # For other commands, just run and check result
+        result = subprocess.run(command, shell=True, check=True)
+        return result
 
 def create_server_config(server_url):
     """Create a server configuration file that will be included in the build"""
@@ -47,6 +73,7 @@ def create_executable(server_url=None):
     # Ensure PyInstaller is installed
     try:
         import PyInstaller
+        print(f"Using PyInstaller version: {PyInstaller.__version__}")
     except ImportError:
         print("PyInstaller not found. Installing...")
         run_command("pip install pyinstaller")
@@ -59,6 +86,12 @@ def create_executable(server_url=None):
     if build_dir.exists():
         shutil.rmtree(build_dir)
     
+    # Use the correct path separator for the platform
+    if platform.system() == "Windows":
+        path_sep = ";"
+    else:
+        path_sep = ":"
+    
     # Create executable
     cmd = [
         "pyinstaller",
@@ -66,23 +99,48 @@ def create_executable(server_url=None):
         "--onefile",  # Create a single executable
         "--windowed", # Don't show console window
         "--clean",    # Clean PyInstaller cache before building
-        "--add-data", "LICENSE;.", # Add license file
+        "--log-level=DEBUG",  # More verbose logging
     ]
+    
+    # Add data files with platform-specific separator
+    license_path = os.path.abspath("LICENSE")
+    if os.path.exists(license_path):
+        cmd.extend(["--add-data", f"{license_path}{path_sep}."]) 
+    else:
+        print("Warning: LICENSE file not found. Continuing without it.")
     
     # Add server config if created
     if has_server_config:
-        cmd.append("--add-data")
-        cmd.append("server_config.json;.")
+        config_path = os.path.abspath("server_config.json")
+        cmd.extend(["--add-data", f"{config_path}{path_sep}."])
     
     # Check for icon file and add it if it exists
     icon_path = Path("app_icon.ico")
     if icon_path.exists():
-        cmd.extend(["--icon", str(icon_path)])
+        icon_abs_path = os.path.abspath(icon_path)
+        cmd.extend(["--icon", icon_abs_path])
     
-    # Add main.py
-    cmd.append("main.py")
+    # Add main.py with absolute path
+    main_path = os.path.abspath("main.py")
+    cmd.append(main_path)
     
-    run_command(" ".join(cmd))
+    # Run PyInstaller with command arguments
+    try:
+        print("Starting PyInstaller build with arguments:")
+        for arg in cmd:
+            print(f"  {arg}")
+        
+        # On Windows, it's better to use subprocess with a list of arguments
+        # rather than a joined string
+        if platform.system() == "Windows":
+            run_command(cmd, verbose=True)
+        else:
+            run_command(" ".join(cmd), verbose=True)
+            
+    except subprocess.CalledProcessError as e:
+        print(f"PyInstaller build failed with exit code {e.returncode}")
+        print("Please check the output above for specific error messages.")
+        sys.exit(1)
     
     # Clean up temporary config file
     if has_server_config and os.path.exists("server_config.json"):
