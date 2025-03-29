@@ -70,13 +70,18 @@ def create_executable(server_url=None):
     # Create server config if URL provided
     has_server_config = create_server_config(server_url)
     
-    # Ensure PyInstaller is installed
+    # Ensure dependencies are installed
     try:
+        print("Checking and installing required dependencies...")
+        run_command("pip install -U pyinstaller", verbose=False)
+        run_command("pip install -U keyring", verbose=False)
+        
         import PyInstaller
         print(f"Using PyInstaller version: {PyInstaller.__version__}")
-    except ImportError:
-        print("PyInstaller not found. Installing...")
-        run_command("pip install pyinstaller")
+    except ImportError as e:
+        print(f"Error importing required module: {e}")
+        print("Installing missing dependencies...")
+        run_command("pip install pyinstaller keyring", verbose=False)
     
     # Clean previous build
     dist_dir = Path("dist")
@@ -100,6 +105,9 @@ def create_executable(server_url=None):
         "--windowed", # Don't show console window
         "--clean",    # Clean PyInstaller cache before building
         "--log-level=DEBUG",  # More verbose logging
+        # Add hidden imports that PyInstaller might miss
+        "--hidden-import=keyring",
+        "--hidden-import=keyring.backends",
     ]
     
     # Add data files with platform-specific separator
