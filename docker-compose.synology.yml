@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  app:
+    build: ./server
+    ports:
+      - "9000:9000"
+    environment:
+      - DATABASE_URL=sqlite:///instance/app.db
+      - SECRET_KEY=use_a_strong_secret_key_here
+      - DEBUG=False
+      - PYTHONUNBUFFERED=1
+      - HOST=0.0.0.0
+    volumes:
+      - ./server/instance:/app/instance
+    restart: "unless-stopped"  # Important for Synology to ensure restart

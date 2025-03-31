@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  app:
+    environment:
+      - DEBUG=True
+      - PYTHONUNBUFFERED=1
+      - FLASK_DEBUG=1
+    command: >
+      sh -c "
+        python -c 'import sys; print(\"Python path:\", sys.path)' &&
+        python -c 'import os; print(\"Working directory:\", os.getcwd())' &&
+        python -c 'import os; print(\"Environment:\", dict(os.environ))' &&
+        gunicorn --bind 0.0.0.0:9000 --workers 1 --threads 2 --timeout 120 --reload --log-level debug app_standalone:app
+      "
+    volumes:
+      - ./server:/app:ro
+    restart: "always"

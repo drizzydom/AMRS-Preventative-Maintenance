@@ -1,38 +1,42 @@
 version: '3'
 
 services:
-  maintenance-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: "no"  # Temporarily change from "always" to "no" for debugging
+  app:
+    build: ./server
     ports:
-      - "9000:5000"  # Using port 9000 for host
-    volumes:
-      - ./:/app  # Mount the entire application directory
-      - ./instance:/app/instance
-      - ./backups:/app/backups
+      - "9000:9000"
     environment:
-      - FLASK_APP=app.py
-      - FLASK_ENV=development  # Change to development for auto-reloading
-      - SECRET_KEY=change_this_to_a_secure_random_string
-      # Performance tuning for gunicorn
-      - GUNICORN_WORKERS=2  # Fewer workers in development mode
-      - GUNICORN_THREADS=2
-      - GUNICORN_TIMEOUT=120
-      - GUNICORN_KEEPALIVE=5
-      # Enable auto-reloading
-      - GUNICORN_RELOAD=True
+      - DATABASE_URL=sqlite:///data/app.db
+      - SECRET_KEY=your_secure_production_key_here
+      - DEBUG=False  # Set to False in production
+      - PYTHONUNBUFFERED=1
+      - HOST=0.0.0.0
+      - SERVER_NAME=your-ddns-hostname.synology.me  # Your DDNS hostname
+      - PREFERRED_URL_SCHEME=https
+    volumes:
+      - /volume1/docker/data:/app/data  # Change this line to point to an existing directory on your Synology
+    restart: "unless-stopped"  # Better for production than "on-failure"
     container_name: amrs-maintenance-tracker
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-    networks:
-      - app-network
+
+  # Use different ports for Nginx
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"   # Map container port 80 to host port 8080
+      - "8443:443"  # Map container port 443 to host port 8443
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro  # Use local directory for certificates
+    depends_on:
+      - app
+    restart: unless-stopped
 
 networks:
-  app-network:
+  default:
     driver: bridge
