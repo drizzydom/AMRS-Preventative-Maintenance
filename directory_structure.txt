@@ -1,0 +1,11 @@
+AMRS-Preventative-Maintenance/
+├── master_setup.sh           # The main setup script
+├── server/                   # Contains the Flask application code
+│   ├── app/                  # Application code
+│   ├── requirements.txt      # Python dependencies
+│   └── Dockerfile            # For building the container
+├── nginx/                    # Optional, created by script if missing
+│   └── conf.d/               # Created by script
+├── windows_client/           # Optional client application
+│   └── ...
+└── docker-compose.yml        # Created/modified by the script
