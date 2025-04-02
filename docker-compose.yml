@@ -4,39 +4,41 @@ services:
   app:
     build: ./server
     ports:
-      - "9000:9000"
+      - "$CONTAINER_PORT:$CONTAINER_PORT"
     environment:
-      - DATABASE_URL=sqlite:///data/app.db
-      - SECRET_KEY=your_secure_production_key_here
-      - DEBUG=False  # Set to False in production
+      - DATABASE_URL=sqlite:////app/data/app.db
+      - SECRET_KEY=secure_$(date +%s)_key
+      - DEBUG=True  # Enable debugging temporarily to help identify issues
       - PYTHONUNBUFFERED=1
       - HOST=0.0.0.0
-      - SERVER_NAME=your-ddns-hostname.synology.me  # Your DDNS hostname
+      - PORT=$CONTAINER_PORT
+      # Remove SERVER_NAME to avoid routing issues initially
+      # - SERVER_NAME=$DDNS_HOSTNAME
       - PREFERRED_URL_SCHEME=https
     volumes:
-      - /volume1/docker/data:/app/data  # Change this line to point to an existing directory on your Synology
-    restart: "unless-stopped"  # Better for production than "on-failure"
+      - $DATA_DIR:/app/data
+    restart: "unless-stopped"
     container_name: amrs-maintenance-tracker
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:$CONTAINER_PORT/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
-  # Use different ports for Nginx
   nginx:
     image: nginx:alpine
     ports:
-      - "8080:80"   # Map container port 80 to host port 8080
-      - "8443:443"  # Map container port 443 to host port 8443
+      - "$EXTERNAL_PORT_HTTP:80"
+      - "$EXTERNAL_PORT_HTTPS:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro  # Use local directory for certificates
+      - $DATA_DIR/nginx/conf.d:/etc/nginx/conf.d
+      - $DATA_DIR/ssl:/etc/nginx/ssl
     depends_on:
       - app
     restart: unless-stopped
 
 networks:
   default:
-    driver: bridge
+    name: amrs_network
+    external: true  # Mark the network as external

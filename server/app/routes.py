@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify, current_app, render_template
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import db, User
 
@@ -43,3 +43,8 @@ def debug_db():
             'secret_key_set': bool(current_app.config.get('SECRET_KEY'))
         }
     })
+
+@app.route('/ssl_info')
+def ssl_info():
+    """Information page about SSL certificate warnings"""
+    return render_template('ssl_info.html')
