@@ -4,6 +4,14 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Remove any old toggle buttons that might be created by legacy code
+    const oldToggles = document.querySelectorAll('.sidebar-toggle-container, .sidebar-toggle');
+    oldToggles.forEach(toggle => {
+        if (toggle.parentNode) {
+            toggle.parentNode.removeChild(toggle);
+        }
+    });
+    
     // Add data-title attributes to all sidebar links for tooltips
     addTooltipAttributes();
     
