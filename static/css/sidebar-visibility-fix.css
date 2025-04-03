@@ -1,0 +1,54 @@
+/*
+ * EMERGENCY SIDEBAR VISIBILITY FIX
+ * This ensures the sidebar is always visible regardless of other CSS
+ */
+
+/* Force sidebar to be visible */
+.sidebar {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    top: 60px !important; /* Match navbar height */
+    left: 0 !important;
+    transform: none !important; /* Reset any transforms that might hide it */
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    height: calc(100vh - 60px) !important;
+    z-index: 1000 !important;
+    background-color: var(--sidebar-bg, #1a2234) !important;
+    color: var(--sidebar-text, #e2e8f0) !important;
+    overflow-y: auto !important;
+    padding: 1rem 0 !important;
+    border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Adjust content area to account for sidebar */
+.content-container,
+.main-content,
+.col-content,
+.page-content {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+}
+
+/* Fix footer positioning */
+.footer {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+    .content-container,
+    .main-content,
+    .col-content,
+    .page-content,
+    .footer {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}

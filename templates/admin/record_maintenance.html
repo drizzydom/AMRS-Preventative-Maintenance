@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Record Maintenance - {{ part.name }}{% endblock %}
+
+{% block header_title %}Record Maintenance{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title h5 mb-0">Record Maintenance for {{ part.name }}</h2>
+    </div>
+    <div class="card-body">
+        <div class="mb-4">
+            <h3 class="h6">Part Information</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Part:</strong> {{ part.name }}</p>
+                    <p><strong>Machine:</strong> {{ part.machine.name }}</p>
+                    <p><strong>Site:</strong> {{ part.machine.site.name }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Last Maintenance:</strong> {{ part.last_maintenance.strftime('%Y-%m-%d') }}</p>
+                    <p><strong>Next Due:</strong> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</p>
+                    <p><strong>Maintenance Frequency:</strong> {{ part.get_frequency_display() }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="post">
+            <div class="mb-3">
+                <label for="maintained_by" class="form-label">Maintained By</label>
+                <input type="text" class="form-control" id="maintained_by" name="maintained_by" 
+                       placeholder="{{ current_user.full_name or current_user.username }}">
+                <small class="form-text">Leave blank to use your name</small>
+            </div>
+            <div class="mb-3">
+                <label for="invoice_number" class="form-label">Invoice Number</label>
+                <input type="text" class="form-control" id="invoice_number" name="invoice_number">
+            </div>
+            <div class="mb-3">
+                <label for="notes" class="form-label">Notes</label>
+                <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Enter any notes about the maintenance performed"></textarea>
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Recording maintenance will update the last maintenance date to today and automatically calculate the next due date based on the part's maintenance frequency.
+            </div>
+            
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('manage_parts') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-check"></i> Record Maintenance
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if part.maintenance_logs %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h2 class="card-title h5 mb-0">Recent Maintenance History</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Performed By</th>
+                        <th>Invoice #</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in part.maintenance_logs[:5] %}
+                    <tr>
+                        <td>{{ log.maintenance_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ log.performed_by }}</td>
+                        <td>{{ log.invoice_number or 'N/A' }}</td>
+                        <td>{{ log.notes or 'No notes' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if part.maintenance_logs|length > 5 %}
+            <div class="text-center mt-3">
+                <a href="{{ url_for('machine_history', machine_id=part.machine.id) }}" class="btn btn-sm btn-outline-secondary">
+                    View Full History
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

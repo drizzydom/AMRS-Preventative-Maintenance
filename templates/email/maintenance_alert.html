@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maintenance Alert</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #F4F4F4; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; }
+        h1 { color: #FE7900; } /* AMRS primary orange */
+        h2 { color: #FE7900; } /* AMRS primary orange for urgency */
+        .overdue { background-color: #fff0f0; border-left: 4px solid #FE7900; padding: 10px 15px; margin-bottom: 20px; }
+        .due-soon { background-color: #fffaf0; border-left: 4px solid #5E5E5E; padding: 10px 15px; margin-bottom: 20px; }
+        .due-soon h2 { color: #5E5E5E; } /* Gray for due soon */
+        ul { padding-left: 20px; }
+        li { margin-bottom: 5px; }
+        .footer { margin-top: 30px; font-size: 12px; color: #5E5E5E; border-top: 1px solid #eee; padding-top: 15px; }
+        .header-img { background-color: #FE7900; padding: 15px; text-align: center; }
+        .header-img h1 { color: #ffffff; margin: 0; }
+        .btn { background-color: #FE7900; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-img">
+            <h1>Maintenance Alert</h1>
+        </div>
+        <p>You are receiving this email because our service has detected that the following machines at <strong>{{ site.name }}</strong> ({{ site.location }}) are due for maintenance soon.</p>
+        {% if overdue_parts %}
+        <div class="overdue">
+            <h2>⚠️ Overdue Maintenance Items</h2>
+            <ul>
+                {% for part in overdue_parts %}
+                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if due_soon_parts %}
+        <div class="due-soon">
+            <h2>🔔 Maintenance Due Soon ({{ threshold }} days)</h2>
+            <ul>
+                {% for part in due_soon_parts %}
+                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days ({{ part.due_date }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        <p>Please schedule maintenance as soon as possible.</p>
+        <p><a href="#" class="btn">Schedule Service</a></p>
+        
+        <div class="footer">
+            <p>This is an automated notification from the Preventative Maintenance System.</p>
+        </div>
+    </div>
+</body>
+</html>
