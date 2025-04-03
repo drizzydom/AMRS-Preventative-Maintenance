@@ -13,15 +13,21 @@ def configure_database(app: Flask):
         db_path = '/var/data/maintenance.db'
         app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
         
-        # Check if we need to initialize the database
-        if not os.path.exists(db_path):
-            print(f"Database not found at {db_path}, will be created")
-            # But we don't want to lose data by recreating tables
-            # The actual schema creation is done in the app.py file
+        print(f"Using persistent database at {db_path}")
+        
+        # Print whether the database file exists for debugging
+        if os.path.exists(db_path):
+            print(f"Database file exists with size: {os.path.getsize(db_path)} bytes")
+        else:
+            print(f"Database does not exist yet at {db_path}, will be created")
     else:
         # Local development setup
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
     
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    # Make sure SQLAlchemy doesn't create tables automatically
+    # This prevents the database from being recreated on startup
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     return app
