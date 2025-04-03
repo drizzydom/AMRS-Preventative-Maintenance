@@ -1,0 +1,134 @@
+/**
+ * CENTERED LAYOUT FIX
+ * Ensures content is properly centered in the viewport despite sidebar
+ */
+
+/* Container for centered layout */
+.centered-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 1920px; /* Set max width for very wide screens */
+    margin: 0 auto; /* Center the entire layout */
+}
+
+/* Ensure content column fills available space */
+.centered-content-col {
+    flex: 1;
+    max-width: calc(100% - 200px); /* Account for sidebar width */
+    margin: 0 auto;
+}
+
+/* Make sure sidebar width is fixed */
+.sidebar-container {
+    width: 200px !important;
+    flex: 0 0 200px; /* Don't grow or shrink */
+}
+
+/* Fix for sidebar's fixed position relative to centered layout */
+.sidebar {
+    width: 200px !important;
+}
+
+/* Ensure content fills available space */
+.content-container {
+    width: 100%;
+    max-width: 1600px; /* Comfortable content width */
+    margin: 0 auto; /* Center content within the column */
+    padding: 0 15px;
+}
+
+/* Added compact navbar styling */
+.compact-navbar {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    min-height: 48px !important; /* Reduced navbar height */
+}
+
+.compact-navbar .navbar-brand {
+    font-size: 1.1rem; /* Slightly smaller brand name */
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.compact-navbar .nav-link {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+/* Adjust sidebar position for smaller navbar */
+.sidebar {
+    top: 48px !important; /* Match navbar height */
+    height: calc(100vh - 48px) !important; /* Viewport minus compact navbar */
+}
+
+/* Ensure body padding accommodates smaller navbar */
+body {
+    padding-top: 48px !important;
+}
+
+/* Fix page content to start below navbar */
+.page-content {
+    min-height: calc(100vh - 48px - 60px) !important; /* Viewport minus navbar minus footer */
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+    .sidebar-container {
+        position: fixed;
+        left: -200px; /* Hide sidebar by default on mobile */
+        transition: left 0.3s ease;
+        z-index: 1040;
+    }
+    
+    .sidebar-container.show {
+        left: 0;
+    }
+    
+    .centered-content-col {
+        max-width: 100%;
+    }
+    
+    /* Overlay when sidebar is shown */
+    body.sidebar-active::after {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1030;
+    }
+}
+
+/* Adjust layout for different screen sizes */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+    .centered-content-col {
+        max-width: calc(100% - 200px);
+    }
+    
+    .content-container {
+        max-width: 960px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .centered-content-col {
+        max-width: calc(100% - 200px);
+    }
+    
+    .content-container {
+        max-width: 1140px;
+    }
+}
+
+@media (min-width: 1400px) {
+    .centered-content-col {
+        max-width: calc(100% - 200px);
+    }
+    
+    .content-container {
+        max-width: 1320px;
+    }
+}

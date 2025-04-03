@@ -1,62 +1,69 @@
 /*
  * NAVBAR-SIDEBAR OVERLAP FIX
  * Ensures proper positioning of navbar and sidebar without overlap
- * This file must be loaded LAST after all other CSS files
  */
 
 /* Fix navbar positioning to be fixed at the top */
 .navbar {
     position: fixed !important;
     top: 0 !important;
-    left: 0 !important;
     right: 0 !important;
-    width: 100% !important;
+    left: 0 !important;
     z-index: 1050 !important; /* Higher z-index than sidebar */
-    height: 56px !important; /* Explicit height for calculations */
+    height: 48px !important; /* Fixed height for compact navbar */
+    min-height: 48px !important;
 }
 
 /* Adjust main content to account for fixed navbar */
 body {
-    padding-top: 56px !important; /* Height of navbar */
+    padding-top: 48px !important; /* Height of navbar */
 }
 
 /* Fix sidebar positioning to account for fixed navbar */
 .sidebar {
     position: fixed !important;
-    top: 56px !important; /* Exactly match navbar height */
-    left: 0 !important;
+    top: 48px !important; /* Exactly match navbar height */
     bottom: 0 !important;
-    height: calc(100vh - 56px) !important; /* Viewport minus navbar height */
+    left: 0 !important;
+    height: calc(100vh - 48px) !important; /* Viewport minus navbar height */
     z-index: 1020 !important; /* Below navbar */
+    overflow-y: auto;
 }
 
 /* Adjust content area to account for fixed navbar and sidebar */
 .content-container,
 .main-content,
-.col-content,
-.page-content {
-    min-height: calc(100vh - 56px) !important; /* Ensure content fills space */
-    margin-top: 0 !important; /* Remove any top margin */
+.content-wrapper {
+    margin-left: 200px !important; /* Width of sidebar */
+    padding-top: 1rem !important;
 }
 
 /* Ensure main container starts below navbar */
-main, .main-container {
+.container-fluid {
     margin-top: 0 !important;
-    padding-top: 0 !important;
 }
 
 /* Mobile adjustments */
 @media (max-width: 991.98px) {
     /* Keep the same navbar behavior on mobile */
     .navbar {
-        position: fixed !important;
+        height: 48px !important;
     }
     
-    /* Content takes full width on mobile */
+    /* Content takes full width on mobile since sidebar is hidden/in overlay mode */
     .content-container,
     .main-content,
-    .col-content,
-    .page-content {
+    .content-wrapper {
         margin-left: 0 !important;
+    }
+    
+    /* Sidebar should be over content on mobile, not pushing it */
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .sidebar.show {
+        transform: translateX(0);
     }
 }

@@ -29,6 +29,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-element-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-toggle.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-visibility-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/centered-layout-fix.css') }}">
     <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
@@ -36,8 +37,8 @@
 </head>
 <body>
     <header>
-        <!-- Navigation Bar -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <!-- Navigation Bar - Simplified with reduced height -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
             <div class="container-fluid">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">
                     <i class="fas fa-tools me-2"></i> AMRS Maintenance
@@ -49,20 +50,9 @@
                 
                 <div class="collapse navbar-collapse" id="navbarNav">
                     {% if current_user.is_authenticated %}
+                    <!-- Removed Dashboard and Administration Links -->
                     <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
-                                <i class="fas fa-tachometer-alt me-1"></i> Dashboard
-                            </a>
-                        </li>
-                        
-                        {% if current_user.is_admin or current_user.has_permission('admin.access') %}
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}" href="{{ url_for('admin') }}">
-                                <i class="fas fa-cogs me-1"></i> Administration
-                            </a>
-                        </li>
-                        {% endif %}
+                        <!-- Empty but kept for mobile menu structure -->
                     </ul>
                     
                     <!-- User Menu -->
@@ -110,19 +100,6 @@
                                 {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
-                                    <a class="dropdown-item d-flex align-items-center" href="{{ url_for('user_profile') }}">
-                                        <i class="fas fa-user-cog fa-fw me-2 text-muted"></i> My Profile
-                                    </a>
-                                </li>
-                                {% if current_user.is_admin or current_user.has_permission('admin.access') %}
-                                <li>
-                                    <a class="dropdown-item d-flex align-items-center" href="{{ url_for('admin') }}">
-                                        <i class="fas fa-cogs fa-fw me-2 text-muted"></i> Administration
-                                    </a>
-                                </li>
-                                {% endif %}
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
                                     <a class="dropdown-item d-flex align-items-center" href="{{ url_for('logout') }}">
                                         <i class="fas fa-sign-out-alt fa-fw me-2 text-muted"></i> Logout
                                     </a>
@@ -136,10 +113,10 @@
         </nav>
     </header>
 
-    <div class="container-fluid">
+    <div class="container-fluid centered-layout">
         <div class="row">
             <!-- Sidebar -->
-            <div class="col-md-auto px-0">
+            <div class="col-md-auto px-0 sidebar-container">
                 <div class="sidebar">
                     <ul class="sidebar-nav">
                         <li class="sidebar-nav-item">
@@ -166,6 +143,13 @@
                                 <span class="sidebar-link-text">Parts</span>
                             </a>
                         </li>
+                        <!-- Added User Profile Link to Sidebar -->
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-user"></i>
+                                <span class="sidebar-link-text">User Profile</span>
+                            </a>
+                        </li>
                         {% if current_user.is_admin %}
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
@@ -179,7 +163,7 @@
             </div>
             
             <!-- Main Content -->
-            <div class="col px-0">
+            <div class="col px-0 centered-content-col">
                 <div class="content-container">
                     <div class="container-fluid py-4 px-3">
                         <!-- Page Header -->

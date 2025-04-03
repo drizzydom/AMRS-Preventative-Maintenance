@@ -4,81 +4,67 @@
  * Load this file after all other navbar-related CSS
  */
 
-/* Increase navbar height to accommodate elements */
+/* Reduce navbar height to accommodate elements */
 .navbar {
-    min-height: 60px !important; /* Increased from 56px */
-    height: auto !important; /* Allow height to expand if needed */
-    padding: 0.5rem 1rem !important; /* Ensure consistent padding */
+    min-height: 48px !important;
+    height: 48px !important; /* Fixed height for compact navbar */
 }
 
 /* Adjust body padding to match new navbar height */
 body {
-    padding-top: 60px !important; /* Match the new navbar height */
+    padding-top: 48px !important; /* Match the new navbar height */
 }
 
 /* Also adjust sidebar top position */
 .sidebar {
-    top: 60px !important; /* Match the new navbar height */
-    height: calc(100vh - 60px) !important; /* Adjust height calculation */
+    top: 48px !important; /* Match the new navbar height */
+    height: calc(100vh - 48px) !important; /* Viewport minus navbar height */
+    z-index: 1020;
 }
 
-/* Adjust content area calculation */
-.content-container,
-.main-content,
-.col-content,
-.page-content {
-    min-height: calc(100vh - 60px) !important; /* Match new navbar height */
+/* Ensure main content starts below navbar */
+.content-wrapper,
+.main-content {
+    min-height: calc(100vh - 48px) !important; /* Match new navbar height */
 }
 
 /* Better element spacing within navbar */
 .navbar-brand {
-    margin-right: 1.5rem !important;
-    font-size: 1.25rem !important;
-    white-space: nowrap !important;
+    padding: 0.25rem 0 !important;
+    margin-right: 1rem !important;
+    font-size: 1.1rem !important; /* Slightly smaller for compact navbar */
 }
 
 .navbar-nav {
-    flex-wrap: nowrap !important; /* Prevent wrapping */
     align-items: center !important;
 }
 
 .navbar-nav .nav-item {
-    margin: 0 2px !important; /* Add spacing between items */
+    padding: 0 0.25rem !important;
 }
 
-.nav-link {
-    padding: 0.4rem 0.8rem !important; /* More compact padding */
-    font-size: 0.95rem !important; /* Slightly smaller font */
-    white-space: nowrap !important;
-}
-
-/* Ensure dropdown toggle fits */
+/* Simplified dropdown menu */
 .user-dropdown-toggle {
-    padding: 0.25rem 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
 }
 
 /* Mobile adjustments */
 @media (max-width: 991.98px) {
     .navbar-collapse {
-        max-height: calc(100vh - 60px) !important;
-        overflow-y: auto !important;
-    }
-    
-    .user-dropdown-toggle {
-        padding: 0.4rem !important;
+        padding: 0.5rem 0;
     }
     
     .navbar-brand {
-        max-width: 200px !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
+        max-width: 70%; /* Prevent brand from getting too wide */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 }
 
-/* Very small screens */
-@media (max-width: 359px) {
+/* Extra small screens */
+@media (max-width: 575.98px) {
     .navbar-brand {
-        max-width: 160px !important;
-        font-size: 1.1rem !important;
+        font-size: 0.95rem !important; /* Even smaller on tiny screens */
     }
 }
