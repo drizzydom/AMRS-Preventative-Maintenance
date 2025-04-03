@@ -30,11 +30,11 @@ body {
     overflow-y: auto;
 }
 
-/* Adjust content area to account for fixed navbar and sidebar */
+/* Adjust content area to account for fixed navbar and sidebar - reset X offset */
 .content-container,
 .main-content,
 .content-wrapper {
-    margin-left: 205px !important; /* Reduced margin - closer to sidebar */
+    margin-left: 200px !important; /* Exactly sidebar width - no gap */
     padding-top: 1rem !important;
 }
 

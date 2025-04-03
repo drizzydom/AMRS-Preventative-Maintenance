@@ -34,12 +34,12 @@
     height: calc(100vh - 48px) !important; /* Viewport minus navbar height */
 }
 
-/* Ensure content fills available space but doesn't push right */
+/* Ensure content fills available space but doesn't push right - reset X offsets */
 .content-container {
     width: 100%;
     max-width: 1400px; /* Maximum width of content */
     margin-left: 0; /* Start from left edge (don't center) */
-    padding: 0 5px 0 5px; /* Minimal padding on both sides */
+    padding: 0; /* Remove all padding to reset X offsets */
 }
 
 /* Added compact navbar styling */
@@ -76,7 +76,7 @@ body {
     min-height: calc(100vh - 48px - 60px) !important; /* Viewport minus navbar minus footer */
 }
 
-/* User info section at bottom of sidebar - fix text cutoff */
+/* Simplified sidebar footer with just logout button */
 .sidebar-footer {
     margin-top: auto; /* Push to bottom of sidebar */
     padding: 0; /* Remove padding to match sidebar links */
@@ -179,25 +179,25 @@ body {
     }
 }
 
-/* Adjust layout for different screen sizes - keep content left aligned */
+/* Adjust layout for different screen sizes - reset X offsets */
 @media (min-width: 992px) {
     .content-container {
-        padding-left: 5px; /* Minimal left padding on larger screens */
-        margin-left: 205px !important; /* Position content closer to sidebar */
+        padding-left: 0; /* Remove left padding */
+        margin-left: 200px !important; /* Exactly sidebar width - no extra gap */
     }
     
     /* Push content close to sidebar */
     .content-wrapper,
     .main-content,
     .content-container {
-        margin-left: 205px !important; /* Sidebar width plus minimal gap */
+        margin-left: 200px !important; /* Exactly sidebar width - no extra gap */
     }
 }
 
 @media (min-width: 1200px) {
     /* Even on larger screens, keep content close to sidebar */
     .content-container {
-        padding-left: 5px; /* Minimal padding */
-        max-width: calc(100% - 210px); /* Account for sidebar with minimal gap */
+        padding-left: 0; /* Remove padding */
+        max-width: calc(100% - 200px); /* Account for sidebar with no extra gap */
     }
 }
