@@ -77,15 +77,14 @@
             <!-- Sidebar -->
             <div class="col-md-auto px-0 sidebar-container">
                 <div class="sidebar">
-                    <!-- Sidebar toggle container - Add this to give a proper place for the toggle button -->
-                    <div class="sidebar-toggle-container">
-                        <button class="sidebar-toggle" aria-label="Toggle Sidebar" title="Toggle Sidebar" onclick="toggleSidebar()">
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                    </div>
-                    
-                    <!-- Sidebar navigation links -->
                     <ul class="sidebar-nav">
+                        <!-- Add hamburger toggle button as first item in the sidebar -->
+                        <li class="sidebar-nav-item sidebar-toggle-item">
+                            <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">
+                                <i class="fas fa-bars"></i>
+                            </button>
+                        </li>
+                        
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-tachometer-alt"></i>

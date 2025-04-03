@@ -3,50 +3,37 @@
  * Adds collapse/expand functionality to the sidebar
  */
 
-/* Sidebar Toggle Button and Container Styling */
-
-/* Container for the toggle button */
-.sidebar-toggle-container {
-    display: flex;
-    justify-content: flex-end;
-    padding: 0.5rem 0.75rem;
+/* Hamburger toggle button styling */
+.sidebar-toggle-item {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background-color: rgba(0, 0, 0, 0.1);
+    margin-bottom: 0 !important;
+}
+
+.sidebar-toggle-btn {
     width: 100%;
-}
-
-/* The toggle button itself */
-.sidebar-toggle {
-    background-color: rgba(254, 121, 0, 0.2);
+    background-color: transparent;
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    width: 24px;
-    height: 24px;
+    border: none;
     display: flex;
-    align-items: center;
     justify-content: center;
-    padding: 0;
-    border-radius: 4px;
+    align-items: center;
+    padding: 0.75rem;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s;
 }
 
-.sidebar-toggle:hover {
+.sidebar-toggle-btn:hover {
     background-color: rgba(254, 121, 0, 0.5);
 }
 
-.sidebar-toggle i {
-    font-size: 14px;
+.sidebar-toggle-btn i {
+    font-size: 1.2rem;
 }
 
-/* Adjust toggle position in collapsed state */
-body.sidebar-collapsed .sidebar-toggle-container {
-    justify-content: center;
-    padding: 0.5rem 0;
-}
-
-body.sidebar-collapsed .sidebar-toggle i {
-    transform: rotate(180deg);
+/* Adjust icon in collapsed state */
+body.sidebar-collapsed .sidebar-toggle-btn i {
+    transform: rotate(90deg);
 }
 
 /* Clear any floats/absolute positioning causing issues */
@@ -96,42 +83,10 @@ body.sidebar-collapsed .footer {
     max-width: calc(100% - 50px) !important;
 }
 
-/* Show sidebar on hover in collapsed mode (optional) */
-body.sidebar-collapsed .sidebar:hover {
-    width: 180px !important; /* Match your expanded sidebar width */
-    min-width: 180px !important;
-    max-width: 180px !important;
-}
-
-body.sidebar-collapsed .sidebar:hover .sidebar-link {
-    padding: 0.75rem 1.25rem !important;
-    display: flex;
-    justify-content: flex-start;
-}
-
-body.sidebar-collapsed .sidebar:hover .sidebar-icon {
-    margin-right: 0.75rem !important;
-    font-size: 1rem;
-}
-
-body.sidebar-collapsed .sidebar:hover .sidebar-link-text {
-    display: inline;
-}
-
-/* Dark mode support */
-html[data-theme="dark"] .sidebar-toggle {
-    background-color: #2d3748;
-    color: #e2e8f0;
-    border: 1px solid #4a5568;
-}
-
-html[data-theme="dark"] .sidebar-toggle:hover {
-    background-color: #4a5568;
-}
-
 /* Mobile adjustments */
 @media (max-width: 991.98px) {
-    .sidebar-toggle-container {
-        display: none;
+    /* Keep hamburger button visible on mobile */
+    .sidebar-toggle-item {
+        display: none; /* Hide in mobile mode since the navbar toggle handles it */
     }
 }
