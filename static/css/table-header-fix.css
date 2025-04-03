@@ -1,0 +1,50 @@
+/**
+ * TABLE HEADER STYLING FIX
+ * Improves contrast and readability of table headers
+ */
+
+/* Override Bootstrap's default table header styling */
+.table thead th,
+.table > :not(caption) > * > th,
+.table-striped > thead > tr > th {
+  background-color: #444 !important; /* Dark background for contrast */
+  color: white !important; /* White text for readability */
+  font-weight: 600 !important; /* Bold text */
+  border-bottom: 2px solid #333 !important; /* Stronger border for visual separation */
+  padding: 0.75rem 0.5rem !important; /* Maintain compact but readable padding */
+  vertical-align: middle !important; /* Center vertical alignment */
+  text-align: left !important; /* Left align text */
+}
+
+/* Hover effect for header cells */
+.table thead th:hover {
+  background-color: #333 !important; /* Slightly darker on hover */
+}
+
+/* Style for sortable headers if you use them */
+.table th.sortable {
+  cursor: pointer;
+  position: relative;
+}
+
+/* Add small indicator icon for sortable columns */
+.table th.sortable::after {
+  content: '↕';
+  position: absolute;
+  right: 8px;
+  opacity: 0.5;
+}
+
+/* Prevent Bootstrap theme from overriding our styles */
+.table-dark th,
+.table-primary th,
+.table-secondary th {
+  background-color: #444 !important;
+  color: white !important;
+}
+
+/* Fix AMRS theme clash with headers */
+table thead tr:first-child th {
+  background-color: #444 !important;
+  color: white !important;
+}

@@ -22,6 +22,7 @@
 /* Reduce top margin for tables */
 .table-responsive {
   margin-top: 0 !important;
+  margin-bottom: 0 !important; /* Prevent extra bottom margin */
 }
 
 /* Reduce cells padding to make tables more compact */
@@ -44,6 +45,7 @@
 /* Reduce top padding in the main content container */
 .container-fluid.py-4 {
   padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important; /* Reduce bottom padding too */
 }
 
 /* Decrease row margins */
@@ -60,5 +62,51 @@
 /* Adjust header spacing */
 .h3, h3 {
   margin-bottom: 0.5rem !important;
+  margin-top: 0 !important;
+}
+
+/* Fix admin page specific spacing issues */
+.card {
+  margin-bottom: 1rem !important; /* Reduce card bottom margin */
+}
+
+/* Reduce spacing between elements in forms */
+.mb-3 {
+  margin-bottom: 0.75rem !important;
+}
+
+/* Improve table header styling for better contrast */
+thead, th {
+  background-color: #444 !important; /* Darker background */
+  color: #fff !important; /* White text */
+  font-weight: 600 !important;
+}
+
+/* Fix admin pages vertical positioning */
+#content {
+  padding-top: 0 !important;
+}
+
+/* Eliminate unnecessary vertical space in the page layout */
+.page-content {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* Admin user table specific fix */
+#admin-users-container,
+#admin-roles-container {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Add visual separation between rows without adding space */
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0,0,0,0.03) !important;
+}
+
+/* Fix extra spacing in admin pages */
+.admin-content-wrapper {
+  padding-top: 0 !important;
   margin-top: 0 !important;
 }
