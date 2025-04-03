@@ -27,4 +27,3 @@ services:
       name: maintenance-data
       mountPath: /var/data
       sizeGB: 1
-    initialDiskSize: 1024 # Ensure disk is properly initialized
