@@ -524,7 +524,7 @@ def dashboard():
         current_user=current_user,
     )
 
-@app.route('/sites') methods=['GET', 'POST'])
+@app.route('/sites', methods=['GET', 'POST'])
 @login_required
 def manage_sites():
     """Display and manage all sites"""
@@ -540,106 +540,145 @@ def manage_sites():
         # Admin or users with view permission can see all sites
         sites = Site.query.all()
     
-    return render_template('sites.html',  new site
+    # Handle form submission for adding a new site
+    if request.method == 'POST':
+        if not current_user.has_permission(Permissions.SITES_CREATE) and not current_user.is_admin:
+            flash("You don't have permission to create sites", "error")
+            return redirect(url_for('manage_sites'))
+        
+        name = request.form.get('name')
+        location = request.form.get('location')
+        contact_email = request.form.get('contact_email')
+        notification_threshold = request.form.get('notification_threshold', 30)
+        enable_notifications = 'enable_notifications' in request.form
+        
+        if not name:
+            flash("Site name is required", "error")
+        else:
+            # Create new site
+            new_site = Site(
+                name=name,
+                location=location,
+                contact_email=contact_email,
+                notification_threshold=notification_threshold,
+                enable_notifications=enable_notifications
+            )
+            db.session.add(new_site)
+            
+            # Assign users if provided
+            user_ids = request.form.getlist('user_ids')
+            if user_ids:
+                for user_id in user_ids:
+                    user = User.query.get(user_id)
+                    if user:
+                        new_site.users.append(user)
+            
+            db.session.commit()
+            flash(f"Site '{name}' has been added successfully", "success")
+            return redirect(url_for('manage_sites'))
+    
+    # Get users for site assignment
+    users = User.query.all() if current_user.is_admin else []
+    
+    return render_template('sites.html', 
                           sites=sites, 
-                          now=datetime.utcnow(),ssions.SITES_CREATE) and not current_user.is_admin:
-                          is_admin=current_user.is_admin,tes", "error")
+                          users=users,
+                          now=datetime.utcnow(),
+                          is_admin=current_user.is_admin,
                           can_create=current_user.has_permission(Permissions.SITES_CREATE) or current_user.is_admin,
                           can_edit=current_user.has_permission(Permissions.SITES_EDIT) or current_user.is_admin,
                           can_delete=current_user.has_permission(Permissions.SITES_DELETE) or current_user.is_admin)
-        location = request.form.get('location')
-@app.route('/machines') request.form.get('contact_email')
-@login_requiredation_threshold = request.form.get('notification_threshold', 30)
-def manage_machines():ations = 'enable_notifications' in request.form
+
+@app.route('/machines')
+@login_required
+def manage_machines():
     """Display and manage all machines"""
     # Similar permission check as sites
     if current_user.is_admin or current_user.has_permission(Permissions.MACHINES_VIEW):
         # Get all machines, optionally filtered by site
         site_id = request.args.get('site_id', type=int)
-        if site_id:e = Site(
+        if site_id:
             machines = Machine.query.filter_by(site_id=site_id).all()
             site = Site.query.get_or_404(site_id)
             title = f"Machines at {site.name}"
-        else:   notification_threshold=notification_threshold,
-            machines = Machine.query.all()e_notifications
+        else:
+            machines = Machine.query.all()
             title = "All Machines"
-    else:   db.session.add(new_site)
+    else:
         flash("You don't have permission to view machines", "error")
         return redirect(url_for('dashboard'))
-            user_ids = request.form.getlist('user_ids')
     return render_template('machines.html', 
                           machines=machines,
-                          title=title,get(user_id)
+                          title=title,
                           is_admin=current_user.is_admin,
                           can_create=current_user.has_permission(Permissions.MACHINES_CREATE) or current_user.is_admin,
                           can_edit=current_user.has_permission(Permissions.MACHINES_EDIT) or current_user.is_admin,
                           can_delete=current_user.has_permission(Permissions.MACHINES_DELETE) or current_user.is_admin)
-            flash(f"Site '{name}' has been added successfully", "success")
-@app.route('/parts')edirect(url_for('manage_sites'))
+
+@app.route('/parts')
 @login_required
-def manage_parts(): site assignment
-    """Display and manage all parts"""t_user.is_admin else []
+def manage_parts():
+    """Display and manage all parts"""
     # Similar permission check as machines
     if current_user.is_admin or current_user.has_permission(Permissions.PARTS_VIEW):
         # Get all parts, optionally filtered by machine
         machine_id = request.args.get('machine_id', type=int)
-        if machine_id:    now=datetime.utcnow(),
+        if machine_id:
             parts = Part.query.filter_by(machine_id=machine_id).all()
-            machine = Machine.query.get_or_404(machine_id)ission(Permissions.SITES_CREATE) or current_user.is_admin,
-            title = f"Parts for {machine.name}".has_permission(Permissions.SITES_EDIT) or current_user.is_admin,
-        else:             can_delete=current_user.has_permission(Permissions.SITES_DELETE) or current_user.is_admin)
+            machine = Machine.query.get_or_404(machine_id)
+            title = f"Parts for {machine.name}"
+        else:
             parts = Part.query.all()
-            title = "All Parts">/edit', methods=['GET', 'POST'])
-    else:quired
+            title = "All Parts"
+    else:
         flash("You don't have permission to view parts", "error")
         return redirect(url_for('dashboard'))
-    site = Site.query.get_or_404(site_id)
     return render_template('parts.html', 
                           parts=parts,
-                          title=title,(Permissions.SITES_EDIT) and not current_user.is_admin:
-                          now=datetime.utcnow(), sites", "error")
+                          title=title,
+                          now=datetime.utcnow(),
                           is_admin=current_user.is_admin,
                           can_create=current_user.has_permission(Permissions.PARTS_CREATE) or current_user.is_admin,
                           can_edit=current_user.has_permission(Permissions.PARTS_EDIT) or current_user.is_admin,
                           can_delete=current_user.has_permission(Permissions.PARTS_DELETE) or current_user.is_admin)
-        site.location = request.form.get('location')
-@app.route('/profile')mail = request.form.get('contact_email')
-@login_requiredtification_threshold = request.form.get('notification_threshold', 30)
-def user_profile():_notifications = 'enable_notifications' in request.form
+
+@app.route('/profile')
+@login_required
+def user_profile():
     """User profile page"""
     return render_template('profile.html', 
                           user=current_user)
-            site.users = []  # Clear existing associations
-@app.route('/admin') = request.form.getlist('user_ids')
-@login_required user_id in user_ids:
-@admin_required user = User.query.get(user_id)
-def admin():    if user:
-    """Admin dashboard page""".append(user)
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin():
+    """Admin dashboard page"""
     # Get counts for admin dashboard
     user_count = User.query.count()
-    site_count = Site.query.count()has been updated", "success")
-    machine_count = Machine.query.count()ites'))
+    site_count = Site.query.count()
+    machine_count = Machine.query.count()
     part_count = Part.query.count()
     users = User.query.all() if current_user.is_admin else []
-    return render_template('admin.html', l', site=site, users=users)
+    return render_template('admin.html', 
                           user_count=user_count,
-                          site_count=site_count,s=['POST'])
+                          site_count=site_count,
                           machine_count=machine_count,
                           part_count=part_count)
-    """Delete a site"""
-@app.route('/admin/users')S_DELETE) and not current_user.is_admin:
-@login_required't have permission to delete sites", "error")
-@admin_requiredge_sites'))
+
+@app.route('/admin/users')
+@login_required
+@admin_required
 def manage_users():
-    """User management page for admins"""(site_id)
+    """User management page for admins"""
     users = User.query.all()
     roles = Role.query.all()
-    sites = Site.query.all()e
-    return render_template('admin_users.html', users=users, roles=roles, sites=sites)ession.delete(site)
-ommit()
+    sites = Site.query.all()
+    return render_template('admin_users.html', users=users, roles=roles, sites=sites)
+
 @app.route('/admin/users/add', methods=['POST'])
-@login_required", "success")
-@admin_requiredmanage_sites'))
+@login_required
+@admin_required
 def add_user():
     """Add a new user"""
     username = request.form.get('username')
@@ -648,209 +687,113 @@ def add_user():
     role_id = request.form.get('role_id')
     is_admin = 'is_admin' in request.form
     password = secrets.token_urlsafe(8)  # Generate random initial password
-    )
-    # Validate input
-    if User.query.filter_by(username=username).first():hines = Machine.query.filter_by(site_id=site_id).all()
-        flash(f"Username '{username}' already exists", "error") = Site.query.get_or_404(site_id)
-        return redirect(url_for('manage_users'))es at {site.name}"
     
-    if not username or not email:.all()
+    # Validate input
+    if User.query.filter_by(username=username).first():
+        flash(f"Username '{username}' already exists", "error")
+        return redirect(url_for('manage_users'))
+    
+    if not username or not email:
         flash("Username and email are required", "error")
         return redirect(url_for('manage_users'))
-    u don't have permission to view machines", "error")
-    # Create new userr('dashboard'))
+    
+    # Create new user
     user = User(
-        username=username,es.html', 
+        username=username,
         email=email,
         full_name=full_name,
-        role_id=role_id,             is_admin=current_user.is_admin,
-        is_admin=is_admin(Permissions.MACHINES_CREATE) or current_user.is_admin,
-    )permission(Permissions.MACHINES_EDIT) or current_user.is_admin,
-    user.set_password(password)rrent_user.is_admin)
+        role_id=role_id,
+        is_admin=is_admin,
+    )
+    user.set_password(password)
     
     # Add user to selected sites
-    site_ids = request.form.getlist('site_ids')@login_required
+    site_ids = request.form.getlist('site_ids')
     for site_id in site_ids:
-        site = Site.query.get(site_id)"""
-        if site:hines
-            user.sites.append(site)has_permission(Permissions.PARTS_VIEW):
-    ll parts, optionally filtered by machine
-    db.session.add(user)get('machine_id', type=int)
+        site = Site.query.get(site_id)
+        if site:
+            user.sites.append(site)
+    
+    db.session.add(user)
     db.session.commit()
-    chine_id).all()
     flash(f"User '{username}' has been created with temporary password: {password}", "success")
     return redirect(url_for('manage_users'))
-    else:
-@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])ll()
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
 @admin_required
-def edit_user(user_id):ve permission to view parts", "error")
+def edit_user(user_id):
     """Edit a user"""
     user = User.query.get_or_404(user_id)
     
-    if request.method == 'POST':                  parts=parts,
+    if request.method == 'POST':
         user.username = request.form.get('username')
         user.email = request.form.get('email')
         user.full_name = request.form.get('full_name')
-        user.role_id = request.form.get('role_id')                  can_create=current_user.has_permission(Permissions.PARTS_CREATE) or current_user.is_admin,
-        user.is_admin = 'is_admin' in request.form can_edit=current_user.has_permission(Permissions.PARTS_EDIT) or current_user.is_admin,
-        e=current_user.has_permission(Permissions.PARTS_DELETE) or current_user.is_admin)
+        user.role_id = request.form.get('role_id')
+        user.is_admin = 'is_admin' in request.form
+        
         # Reset password if requested
         if 'reset_password' in request.form:
-            new_password = secrets.token_urlsafe(8)equired
+            new_password = secrets.token_urlsafe(8)
             user.set_password(new_password)
             flash(f"Password has been reset to: {new_password}", "success")
-        return render_template('profile.html', 
+        
         # Update site assignments
         user.sites = []  # Clear existing associations
         site_ids = request.form.getlist('site_ids')
-        for site_id in site_ids:d
+        for site_id in site_ids:
             site = Site.query.get(site_id)
             if site:
                 user.sites.append(site)
-        for admin dashboard
-        db.session.commit()count()
+        
+        db.session.commit()
         flash(f"User '{user.username}' has been updated", "success")
         return redirect(url_for('manage_users'))
     
     roles = Role.query.all()
     sites = Site.query.all()
     return render_template('edit_user.html', user=user, roles=roles, sites=sites)
-ite_count=site_count,
-@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])                  machine_count=machine_count,
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
 @login_required
 @admin_required
 def delete_user(user_id):
     """Delete a user"""
     user = User.query.get_or_404(user_id)
-    or('dashboard'))
-    # Prevent deleting selfOST':
+    
+    # Prevent deleting self
     if user.id == current_user.id:
         flash("You cannot delete your own account", "error")
-        return redirect(url_for('manage_users'))ail=email).first()
+        return redirect(url_for('manage_users'))
     
     username = user.username
-    db.session.delete(user)reset token
+    db.session.delete(user)
     db.session.commit()
-        # Build reset URL
-    flash(f"User '{username}' has been deleted", "success")ssword', user_id=user.id, token=token, _external=True)
+    flash(f"User '{username}' has been deleted", "success")
     return redirect(url_for('manage_users'))
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        email = request.form.get('email')
+        # Find user by email
+        user = User.query.filter_by(email=email).first()
+        if user:
+            # Generate reset token
+            token = user.generate_reset_token()
+            # Build reset URL
+            reset_url = url_for('reset_password', user_id=user.id, token=token, _external=True)
+            # Create email
             subject = "Password Reset Request"
-@app.route('/forgot-password', methods=['GET', 'POST'])""
-def forgot_password():ord Reset Request</h1>
-    if current_user.is_authenticated:ull_name or user.username},</p>
-        return redirect(url_for('dashboard'))assword. Please click the link below to reset your password:</p>
-    if request.method == 'POST':reset_url}</a></p>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    app.run(host='0.0.0.0', port=port)    port = int(os.environ.get('PORT', 5050))    ensure_email_templates()    ensure_env_file()if __name__ == '__main__':        # ...existing code...        # Continue with other sample data                print("\nIMPORTANT: Please change this password immediately after first login!\n")        print("=" * 40)        print(f"Password: {admin_password}")        print(f"Username: admin")        print("ADMIN ACCOUNT CREATED")        print("\n" + "=" * 40)        # Display the generated password to console only during initialization        db.session.commit()        db.session.add(admin)        admin.set_password(admin_password)        admin = User(username='admin', full_name='Administrator', email='admin@example.com', is_admin=True, role_id=admin_role.id)        admin_password = secrets.token_urlsafe(12)  # Generate secure random password        import secrets        # Create admin user with randomly generated password                db.session.commit()        db.session.add_all([admin_role, manager_role, technician_role])        # ...existing code for other roles...                          ]))                              # ...existing permissions...                          permissions=','.join([        admin_role = Role(name='Administrator', description='Full system access',        # Create roles first    if not admin:    admin = User.query.filter_by(username='admin').first()    db.create_all()    """Initialize the database with sample data."""def init_db():@app.cli.command("init-db")    return render_template('reset_password.html', user_id=user_id, token=token)            return redirect(url_for('login'))        flash("Your password has been successfully reset. You can now log in with your new password.", "success")                user.clear_reset_token()        # Clear reset token        user.set_password(password)        # Update password                    return render_template('reset_password.html', user_id=user_id, token=token)            flash("Passwords do not match.", "error")        if password != confirm_password:                    return render_template('reset_password.html', user_id=user_id, token=token)            flash("Password must be at least 8 characters long.", "error")        if not password or len(password) < 8:        # Validate password        confirm_password = request.form.get('confirm_password')        password = request.form.get('password')    if request.method == 'POST':            return redirect(url_for('forgot_password'))        flash("The password reset link is invalid or has expired.", "error")    if not user or not user.verify_reset_token(token):    # Verify user and token    user = User.query.get(user_id)    # Find user        return redirect(url_for('dashboard'))    if current_user.is_authenticated:def reset_password(user_id, token):@app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])    return render_template('forgot_password.html')        return redirect(url_for('login'))            flash("If that email is in our system, a password reset link has been sent", "success")            # This prevents user enumeration attacks            # Still show success message even if email not found        else:                flash("Failed to send password reset email. Please try again later.", "error")                app.logger.error(f"Failed to send password reset email: {str(e)}")            except Exception as e:                flash("Password reset link has been sent to your email", "success")                mail.send(msg)                )                    html=html_body                    recipients=[email],                    subject=subject,                msg = Message(                # Send email            try:            """            <p>If you did not request a password reset, please ignore this email.</p>            <p>This link is only valid for 1 hour.</p>            <p><a href="{reset_url}">{reset_url}</a></p>            <p>You requested to reset your password. Please click the link below to reset your password:</p>            <p>Hello {user.full_name or user.username},</p>            <h1>Password Reset Request</h1>            html_body = f"""            subject = "Password Reset Request"            # Create email            reset_url = url_for('reset_password', user_id=user.id, token=token, _external=True)            # Build reset URL            token = user.generate_reset_token()            # Generate reset token        if user:                user = User.query.filter_by(email=email).first()        # Find user by email        email = request.form.get('email')            <p>This link is only valid for 1 hour.</p>
+            html_body = f"""
+            <h1>Password Reset Request</h1>
+            <p>Hello {user.full_name or user.username},</p>
+            <p>You requested to reset your password. Please click the link below to reset your password:</p>
+            <p><a href="{reset_url}">{reset_url}</a></p>
+            <p>This link is only valid for 1 hour.</p>
             <p>If you did not request a password reset, please ignore this email.</p>
             """
             try:
