@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - Maintenance Tracker{% endblock %}
+
+{% block header_title %}Edit User: {{ user.username }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('manage_users') }}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left"></i> Back to Users
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Edit User Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('edit_user', user_id=user.id) }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="username" name="username" value="{{ user.username }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name" value="{{ user.full_name }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="role_id" class="form-label">Role</label>
+                        <select class="form-select" id="role_id" name="role_id">
+                            <option value="">No Role</option>
+                            {% for role in roles %}
+                            <option value="{{ role.id }}" {% if role.id == user.role_id %}selected{% endif %}>{{ role.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_admin" name="is_admin" 
+                               {% if user.is_admin %}checked{% endif %}>
+                        <label class="form-check-label" for="is_admin">Administrator Access</label>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="site_ids" class="form-label">Assigned Sites</label>
+                        <select multiple class="form-select" id="site_ids" name="site_ids">
+                            {% for site in sites %}
+                            <option value="{{ site.id }}" {% if site in user.sites %}selected{% endif %}>
+                                {{ site.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Hold Ctrl/Cmd to select multiple sites</div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="reset_password" name="reset_password">
+                        <label class="form-check-label" for="reset_password">Reset password</label>
+                        <div class="form-text">If checked, a new random password will be generated</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('manage_users') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
