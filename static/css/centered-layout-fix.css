@@ -18,6 +18,7 @@
     max-width: 100%; /* Use full width of the available space */
     margin-left: 0; /* Left align content */
     padding-left: 0; /* Remove padding that might cause rightward shift */
+    padding-right: 0; /* Remove right padding as well */
 }
 
 /* Make sure sidebar width is fixed */
@@ -36,10 +37,30 @@
 
 /* Ensure content fills available space but doesn't push right - reset X offsets */
 .content-container {
-    width: 100%;
-    max-width: 1400px; /* Maximum width of content */
-    margin-left: 0; /* Start from left edge (don't center) */
-    padding: 0; /* Remove all padding to reset X offsets */
+    width: 100% !important;
+    max-width: none !important; /* Remove max-width constraint */
+    margin-left: 0 !important; /* No automatic margins */
+    margin-right: 0 !important;
+    padding: 0 !important; /* No padding at container level */
+}
+
+/* Inner container padding - this is where we control horizontal spacing */
+.container-fluid.py-4.px-3 {
+    padding: 1rem !important; /* Simplified padding - same on all sides */
+    max-width: 100% !important;
+}
+
+/* Align page header with content */
+.page-header {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Fix content alignment */
+.page-content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    min-height: calc(100vh - 48px - 60px) !important; /* Viewport minus navbar minus footer */
 }
 
 /* Added compact navbar styling */
@@ -69,11 +90,6 @@
 /* Ensure body padding accommodates smaller navbar */
 body {
     padding-top: 48px !important;
-}
-
-/* Fix page content to start below navbar */
-.page-content {
-    min-height: calc(100vh - 48px - 60px) !important; /* Viewport minus navbar minus footer */
 }
 
 /* Simplified sidebar footer with just logout button */
@@ -181,23 +197,23 @@ body {
 
 /* Adjust layout for different screen sizes - reset X offsets */
 @media (min-width: 992px) {
+    /* Content container takes full width after sidebar */
     .content-container {
-        padding-left: 0; /* Remove left padding */
-        margin-left: 200px !important; /* Exactly sidebar width - no extra gap */
+        width: calc(100% - 200px) !important;
+        margin-left: 200px !important; /* Exactly sidebar width */
+        padding: 0 !important;
     }
     
-    /* Push content close to sidebar */
-    .content-wrapper,
-    .main-content,
-    .content-container {
-        margin-left: 200px !important; /* Exactly sidebar width - no extra gap */
+    /* Inner container gets more padding on larger screens */
+    .container-fluid.py-4.px-3 {
+        padding: 1.25rem !important;
+        max-width: 100% !important;
     }
 }
 
 @media (min-width: 1200px) {
-    /* Even on larger screens, keep content close to sidebar */
-    .content-container {
-        padding-left: 0; /* Remove padding */
-        max-width: calc(100% - 200px); /* Account for sidebar with no extra gap */
+    /* Inner container gets even more padding on very large screens */
+    .container-fluid.py-4.px-3 {
+        padding: 1.5rem !important; 
     }
 }
