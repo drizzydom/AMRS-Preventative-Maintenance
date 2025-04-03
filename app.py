@@ -706,7 +706,64 @@ def manage_machines():
 @login_required
 def manage_parts():
     """Display and manage all parts"""
-    # ...existing code...
+    # Check permissions
+    if not current_user.has_permission(Permissions.PARTS_VIEW) and not current_user.is_admin:
+        flash("You don't have permission to view parts", "error")
+        return redirect(url_for('dashboard'))
+        
+    # Get all parts, optionally filtered by machine
+    machine_id = request.args.get('machine_id', type=int)
+    if machine_id:
+        parts = Part.query.filter_by(machine_id=machine_id).all()
+        machine = Machine.query.get_or_404(machine_id)
+        title = f"Parts for {machine.name}"
+    else:
+        parts = Part.query.all()
+        title = "All Parts"
+    
+    # Handle form submission for adding a new part
+    if request.method == 'POST':
+        if not current_user.has_permission(Permissions.PARTS_CREATE) and not current_user.is_admin:
+            flash("You don't have permission to create parts", "error")
+            return redirect(url_for('manage_parts'))
+        
+        name = request.form.get('name')
+        description = request.form.get('description')
+        machine_id = request.form.get('machine_id')
+        maintenance_frequency = request.form.get('maintenance_frequency')
+        maintenance_unit = request.form.get('maintenance_unit')
+        
+        if not name or not machine_id:
+            flash("Part name and machine are required", "error")
+        else:
+            # Create new part
+            new_part = Part(
+                name=name,
+                description=description,
+                machine_id=machine_id,
+                maintenance_frequency=maintenance_frequency,
+                maintenance_unit=maintenance_unit,
+                last_maintenance=datetime.utcnow()
+            )
+            db.session.add(new_part)
+            db.session.commit()
+            
+            flash(f"Part '{name}' has been added successfully", "success")
+            return redirect(url_for('manage_parts', machine_id=machine_id))
+    
+    # Get all machines for dropdown menu
+    machines = Machine.query.all()
+    
+    return render_template('parts.html', 
+                          parts=parts,
+                          machines=machines,
+                          title=title,
+                          now=datetime.utcnow(),
+                          machine_id=machine_id if machine_id else None,
+                          is_admin=current_user.is_admin,
+                          can_create=current_user.has_permission(Permissions.PARTS_CREATE) or current_user.is_admin,
+                          can_edit=current_user.has_permission(Permissions.PARTS_EDIT) or current_user.is_admin,
+                          can_delete=current_user.has_permission(Permissions.PARTS_DELETE) or current_user.is_admin)
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
@@ -884,4 +941,91 @@ def edit_user(user_id):
         db.session.commit()
         flash(f"User '{user.username}' has been updated", "success")
         return redirect(url_for('manage_users'))
-    roles
+    roles = Role.query.all()
+    sites = Site.query.all()
+    return render_template('edit_user.html', user=user, roles=roles, sites=sites)
+
+@app.route('/admin/roles')
+@login_required
+@admin_required
+def manage_roles():
+    """Role management page for admins"""
+    roles = Role.query.all()
+    all_permissions = Permissions.get_all_permissions()
+    return render_template('admin_roles.html', roles=roles, all_permissions=all_permissions)
+
+@app.route('/admin/roles/add', methods=['POST'])
+@login_required
+@admin_required
+def add_role():
+    """Add a new role"""
+    name = request.form.get('name')
+    description = request.form.get('description')
+    permissions = ','.join(request.form.getlist('permissions'))
+    
+    # Validate input
+    if Role.query.filter_by(name=name).first():
+        flash(f"Role '{name}' already exists", "error")
+        return redirect(url_for('manage_roles'))
+    
+    if not name:
+        flash("Role name is required", "error")
+        return redirect(url_for('manage_roles'))
+    
+    # Create new role
+    role = Role(
+        name=name,
+        description=description,
+        permissions=permissions
+    )
+    
+    db.session.add(role)
+    db.session.commit()
+    flash(f"Role '{name}' has been created", "success")
+    return redirect(url_for('manage_roles'))
+
+@app.route('/admin/roles/<int:role_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_role(role_id):
+    """Edit a role"""
+    role = Role.query.get_or_404(role_id)
+    
+    if request.method == 'POST':
+        role.name = request.form.get('name')
+        role.description = request.form.get('description')
+        role.permissions = ','.join(request.form.getlist('permissions'))
+        
+        db.session.commit()
+        flash(f"Role '{role.name}' has been updated", "success")
+        return redirect(url_for('manage_roles'))
+    
+    all_permissions = Permissions.get_all_permissions()
+    role_permissions = role.get_permissions_list()
+    return render_template('edit_role.html', role=role, all_permissions=all_permissions, role_permissions=role_permissions)
+
+@app.route('/admin/roles/<int:role_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_role(role_id):
+    """Delete a role"""
+    role = Role.query.get_or_404(role_id)
+    
+    # Check if role is in use
+    if User.query.filter_by(role_id=role.id).first():
+        flash(f"Cannot delete role '{role.name}' because it is assigned to users", "error")
+        return redirect(url_for('manage_roles'))
+    
+    role_name = role.name
+    db.session.delete(role)
+    db.session.commit()
+    
+    flash(f"Role '{role_name}' has been deleted", "success")
+    return redirect(url_for('manage_roles'))
+
+@app.route('/admin/backup')
+@login_required
+@admin_required
+def manage_backups():
+    """Backup management page for admins"""
+    # ...existing code...
