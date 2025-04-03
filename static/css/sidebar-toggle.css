@@ -3,11 +3,18 @@
  * Adds collapse/expand functionality to the sidebar
  */
 
-/* Hamburger toggle button styling */
+/* Remove the old toggle container completely */
+.sidebar-toggle-container {
+    display: none !important; /* Hide the old container that has the arrow */
+}
+
+/* Hamburger toggle button styling - improve visibility and positioning */
 .sidebar-toggle-item {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background-color: rgba(0, 0, 0, 0.1);
     margin-bottom: 0 !important;
+    width: 100%;
+    padding: 0 !important;
 }
 
 .sidebar-toggle-btn {
@@ -18,7 +25,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 0.75rem;
+    padding: 0.75rem 0;
     cursor: pointer;
     transition: background-color 0.2s;
 }
@@ -31,7 +38,7 @@
     font-size: 1.2rem;
 }
 
-/* Adjust icon in collapsed state */
+/* Make sure the button icon changes appropriately in collapsed state */
 body.sidebar-collapsed .sidebar-toggle-btn i {
     transform: rotate(90deg);
 }
@@ -47,6 +54,7 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
     width: 200px;
     overflow-y: auto;
     transition: width 0.3s ease;
+    overflow-x: hidden; /* Prevent sidebar content from extending beyond its width */
 }
 
 /* Collapsed sidebar styles */
@@ -81,6 +89,11 @@ body.sidebar-collapsed .footer {
     margin-left: 50px !important; /* Match collapsed sidebar width */
     width: calc(100% - 50px) !important;
     max-width: calc(100% - 50px) !important;
+}
+
+/* Remove any legacy toggle button styling */
+.sidebar-toggle {
+    display: none !important; /* Hide the old floating toggle button */
 }
 
 /* Mobile adjustments */
