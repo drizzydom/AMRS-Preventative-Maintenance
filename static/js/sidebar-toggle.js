@@ -15,6 +15,33 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle initial window size
     handleWindowResize();
+
+    // Toggle sidebar on mobile
+    const sidebarToggle = document.querySelector('.navbar-toggler');
+    const sidebar = document.querySelector('.sidebar-container');
+    const body = document.body;
+    
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('show');
+            body.classList.toggle('sidebar-active');
+            
+            // Toggle collapsed class for icon-only display
+            document.querySelector('.sidebar').classList.toggle('collapsed');
+        });
+    }
+    
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', function(event) {
+        const isClickInside = sidebar?.contains(event.target) || 
+                             sidebarToggle?.contains(event.target);
+        
+        if (!isClickInside && sidebar?.classList.contains('show')) {
+            sidebar.classList.remove('show');
+            body.classList.remove('sidebar-active');
+            document.querySelector('.sidebar').classList.remove('collapsed');
+        }
+    });
 });
 
 // Create sidebar toggle button dynamically
