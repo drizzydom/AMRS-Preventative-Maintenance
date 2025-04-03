@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Parts - Maintenance Tracker{% endblock %}
+
+{% block header_title %}{{ title }}{% endblock %}
+
+{% block header_actions %}
+{% if can_create %}
+<a href="#" class="btn btn-primary">
+    <i class="fas fa-plus"></i> Add Part
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Parts</h5>
+            </div>
+            <div class="card-body">
+                <p>Parts management interface will be implemented here.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
