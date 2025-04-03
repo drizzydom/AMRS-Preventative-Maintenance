@@ -34,7 +34,7 @@ body {
 .content-container,
 .main-content,
 .content-wrapper {
-    margin-left: 210px !important; /* Sidebar width plus small gap */
+    margin-left: 205px !important; /* Reduced margin - closer to sidebar */
     padding-top: 1rem !important;
 }
 
