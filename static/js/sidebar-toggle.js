@@ -4,8 +4,10 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Create sidebar toggle button inside the sidebar
-    createSidebarToggle();
+    // Look for existing toggle container - don't create one if it already exists
+    if (!document.querySelector('.sidebar-toggle-container')) {
+        createSidebarToggle();
+    }
     
     // Add data-title attributes to all sidebar links for tooltips
     addTooltipAttributes();
@@ -88,8 +90,8 @@ function createSidebarToggle() {
     // Add the button to the container
     toggleContainer.appendChild(toggleBtn);
     
-    // Insert at the beginning of the sidebar
-    sidebar.insertBefore(toggleContainer, sidebar.firstChild);
+    // Insert immediately after the .sidebar element starts, before any children
+    sidebar.insertAdjacentElement('afterbegin', toggleContainer);
 }
 
 // Toggle sidebar expanded/collapsed state
