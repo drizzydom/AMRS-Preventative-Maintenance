@@ -23,3 +23,7 @@ services:
         sync: false
       - key: MAIL_DEFAULT_SENDER
         sync: false
+    disk:
+      name: maintenance-data
+      mountPath: /var/data
+      sizeGB: 1
