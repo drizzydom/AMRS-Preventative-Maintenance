@@ -702,6 +702,49 @@ def manage_machines():
                           can_edit=current_user.has_permission(Permissions.MACHINES_EDIT) or current_user.is_admin,
                           can_delete=current_user.has_permission(Permissions.MACHINES_DELETE) or current_user.is_admin)
 
+@app.route('/machines/<int:machine_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_machine(machine_id):
+    """Edit an existing machine"""
+    machine = Machine.query.get_or_404(machine_id)
+    
+    # Check permissions
+    if not current_user.has_permission(Permissions.MACHINES_EDIT) and not current_user.is_admin:
+        flash("You don't have permission to edit machines", "error")
+        return redirect(url_for('manage_machines'))
+    
+    if request.method == 'POST':
+        machine.name = request.form.get('name')
+        machine.model = request.form.get('model')
+        machine.machine_number = request.form.get('machine_number')
+        machine.serial_number = request.form.get('serial_number')
+        machine.site_id = request.form.get('site_id')
+        
+        db.session.commit()
+        flash(f"Machine '{machine.name}' has been updated", "success")
+        return redirect(url_for('manage_machines', site_id=machine.site_id))
+    
+    sites = Site.query.all()
+    return render_template('edit_machine.html', machine=machine, sites=sites, is_admin=current_user.is_admin)
+
+@app.route('/machines/<int:machine_id>/delete', methods=['POST'])
+@login_required
+def delete_machine(machine_id):
+    """Delete a machine"""
+    if not current_user.has_permission(Permissions.MACHINES_DELETE) and not current_user.is_admin:
+        flash("You don't have permission to delete machines", "error")
+        return redirect(url_for('manage_machines'))
+    
+    machine = Machine.query.get_or_404(machine_id)
+    site_id = machine.site_id
+    machine_name = machine.name
+    
+    db.session.delete(machine)
+    db.session.commit()
+    
+    flash(f"Machine '{machine_name}' has been deleted", "success")
+    return redirect(url_for('manage_machines', site_id=site_id))
+
 @app.route('/parts', methods=['GET', 'POST'])
 @login_required
 def manage_parts():
@@ -751,7 +794,7 @@ def manage_parts():
             flash(f"Part '{name}' has been added successfully", "success")
             return redirect(url_for('manage_parts', machine_id=machine_id))
     
-    # Get all machines for dropdown menu
+    # Get all machines for dropdown menus
     machines = Machine.query.all()
     
     return render_template('parts.html', 
@@ -764,6 +807,55 @@ def manage_parts():
                           can_create=current_user.has_permission(Permissions.PARTS_CREATE) or current_user.is_admin,
                           can_edit=current_user.has_permission(Permissions.PARTS_EDIT) or current_user.is_admin,
                           can_delete=current_user.has_permission(Permissions.PARTS_DELETE) or current_user.is_admin)
+
+@app.route('/parts/<int:part_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_part(part_id):
+    """Edit an existing part"""
+    part = Part.query.get_or_404(part_id)
+    
+    # Check permissions
+    if not current_user.has_permission(Permissions.PARTS_EDIT) and not current_user.is_admin:
+        flash("You don't have permission to edit parts", "error")
+        return redirect(url_for('manage_parts'))
+    
+    if request.method == 'POST':
+        part.name = request.form.get('name')
+        part.description = request.form.get('description')
+        part.machine_id = request.form.get('machine_id')
+        
+        # Update maintenance frequency if changed
+        new_frequency = request.form.get('maintenance_frequency')
+        new_unit = request.form.get('maintenance_unit')
+        if new_frequency and new_unit:
+            days = Part.convert_to_days(new_frequency, new_unit)
+            part.maintenance_frequency = days
+            part.update_next_maintenance()
+        
+        db.session.commit()
+        flash(f"Part '{part.name}' has been updated", "success")
+        return redirect(url_for('manage_parts', machine_id=part.machine_id))
+    
+    machines = Machine.query.all()
+    return render_template('edit_part.html', part=part, machines=machines, is_admin=current_user.is_admin)
+
+@app.route('/parts/<int:part_id>/delete', methods=['POST'])
+@login_required
+def delete_part(part_id):
+    """Delete a part"""
+    if not current_user.has_permission(Permissions.PARTS_DELETE) and not current_user.is_admin:
+        flash("You don't have permission to delete parts", "error")
+        return redirect(url_for('manage_parts'))
+    
+    part = Part.query.get_or_404(part_id)
+    machine_id = part.machine_id
+    part_name = part.name
+    
+    db.session.delete(part)
+    db.session.commit()
+    
+    flash(f"Part '{part_name}' has been deleted", "success")
+    return redirect(url_for('manage_parts', machine_id=machine_id))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
