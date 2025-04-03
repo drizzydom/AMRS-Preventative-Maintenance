@@ -48,112 +48,26 @@ def ensure_email_templates():
     if not os.path.exists(email_dir):
         os.makedirs(email_dir, exist_ok=True)
         print(f"Created email templates directory: {email_dir}")
-        # Create example template files
-        with open(os.path.join(email_dir, 'maintenance_alert.html'), 'w') as f:
-            f.write("""<!DOCTYPE html>
-<html>
-<head>
-    <title>Maintenance Alert</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        h1 { color: #2c3e50; }
-        h2 { color: #c0392b; }
-        .due-soon h2 { color: #d35400; }
-        ul { padding-left: 20px; }
-        li { margin-bottom: 5px; }
-        .footer { margin-top: 30px; font-size: 12px; color: #7f8c8d; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Maintenance Alert</h1>
-        <p>You are receiving this email because our service has detected that the following machines at <strong>{{ site.name }}</strong> ({{ site.location }}) are due for maintenance soon.</p>
-        {% if overdue_parts %}
-        <div class="overdue">
-            <h2>⚠️ Overdue Maintenance Items</h2>
-            <ul>
-                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date }})</li>
-                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date }})</li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-        {% if due_soon_parts %}
-        <div class="due-soon">
-            <ul>🔔 Maintenance Due Soon ({{ threshold }} days)</h2>
-                {% for part in due_soon_parts %}
-                {% for part in due_soon_parts %}
-                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days ({{ part.due_date }})</li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
         
-        <p>Please schedule maintenance as soon as possible.</p>
+    # Check if template files exist, no need to create them
+    # since they're now part of the repository
+    alert_path = os.path.join(email_dir, 'maintenance_alert.html')
+    test_path = os.path.join(email_dir, 'test_email.html')
+    notif_path = os.path.join(email_dir, 'maintenance_notification.html')
+    
+    missing_templates = []
+    if not os.path.exists(alert_path):
+        missing_templates.append('maintenance_alert.html')
+    if not os.path.exists(test_path):
+        missing_templates.append('test_email.html')
+    if not os.path.exists(notif_path):
+        missing_templates.append('maintenance_notification.html')
         
-        <div class="footer">
-            <p>This is an automated notification from the Preventative Maintenance System.</p>
-        </div>
-    </div>
-</body>
-</html>""")
-            
-        with open(os.path.join(email_dir, 'test_email.html'), 'w') as f:
-            f.write("""<!DOCTYPE html>
-<html>
-<head>
-    <title>Test Email</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        h1 { color: #2c3e50; }
-        h2 { color: #2980b9; }
-        h3 { color: #c0392b; }
-        ul { padding-left: 20px; }
-        li { margin-bottom: 5px; }
-        .footer { margin-top: 30px; font-size: 12px; color: #7f8c8d; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Test Email from Maintenance System</h1>
-        <p>This is a test email sent at {{ now.strftime('%Y-%m-%d %H:%M:%S') }}</p>
-        
-        <p>{{ message }}</p>
-        
-        {% if site %}
-        <h2>Sample Site Information</h2>
-        <p>You are receiving this email because our service has detected that the following machines at <strong>{{ site.name }}</strong> ({{ site.location }}) are due for maintenance soon.</p>
-        
-        {% if overdue_parts %}
-        <h3>Sample Overdue Parts</h3>
-        <ul>
-            {% for part in overdue_parts %}
-            <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-        
-        {% if due_soon_parts %}
-        <h3>Sample Parts Due Soon</h3>
-        <ul>
-            {% for part in due_soon_parts %}
-            <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-        {% endif %}
-        
-        <p>Email configuration appears to be working!</p>
-        
-        <div class="footer">
-            <p>This is a test email from the Preventative Maintenance System.</p>
-        </div>
-    </div>
-</body>
-</html>""")
-        print("Created template email HTML files")
+    if missing_templates:
+        print(f"Warning: Missing email templates: {', '.join(missing_templates)}")
+        print("Please ensure these files exist in the templates/email directory")
+    else:
+        print("Email templates verified.")
 
 # Import cache configuration
 from cache_config import configure_caching
@@ -1231,6 +1145,15 @@ def test_email():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.')
         return redirect(url_for('dashboard'))
+    
+    # Check if email templates exist before attempting to send
+    templates_dir = os.path.join(BASE_DIR, 'templates')
+    test_email_path = os.path.join(templates_dir, 'email', 'test_email.html')
+    
+    if not os.path.exists(test_email_path):
+        flash(f'Email template not found: email/test_email.html', 'error')
+        return redirect(url_for('admin'))
+        
     if request.method == 'POST':
         recipient = request.form.get('email')
         subject = request.form.get('subject', 'Maintenance Tracker - Test Email')
@@ -1285,17 +1208,29 @@ def test_email():
             }
             sample_data['threshold'] = notification_threshold
         try:
+            # Add detailed logging
+            app.logger.info(f"Attempting to render email template: email/test_email.html")
+            
+            # Render the template with error handling
+            try:
+                html_content = render_template('email/test_email.html', 
+                                   message=message,
+                                   now=datetime.utcnow(),
+                                   **sample_data)
+            except Exception as template_error:
+                app.logger.error(f"Template rendering error: {str(template_error)}")
+                flash(f'Template error: {str(template_error)}', 'error')
+                return redirect(url_for('test_email'))
+                
             msg = Message(
                 subject=subject,
                 recipients=[recipient],
-                html=render_template('email/test_email.html', 
-                                     message=message,
-                                     now=datetime.utcnow(),
-                                     **sample_data)
+                html=html_content
             )
             mail.send(msg)
             flash(f'Test email sent to {recipient} successfully!')
         except Exception as e:
+            app.logger.error(f"Email sending error: {str(e)}")
             flash(f'Failed to send test email: {str(e)}')
         return redirect(url_for('test_email'))
     else:
@@ -1307,7 +1242,7 @@ def test_email():
             'MAIL_USERNAME': app.config['MAIL_USERNAME'],
             'MAIL_DEFAULT_SENDER': app.config['MAIL_DEFAULT_SENDER']
         }
-        return render_template('admin/test_email.html', config=email_config)  # Changed from test_email_modern.html
+        return render_template('admin/test_email.html', config=email_config)
 
 @app.cli.command("update-db-schema")
 def update_db_schema():

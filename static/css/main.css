@@ -24,10 +24,10 @@
   /* Light mode UI colors */
   --body-bg: #f9fafb;
   --card-bg: #ffffff;
-  --sidebar-bg: #1a2234; /* Darker blue for better contrast */
-  --sidebar-hover: #2c3344; /* Slightly lighter color for hover states */
-  --sidebar-active: #2563eb; /* Primary blue for active items */
-  --sidebar-text: #e2e8f0; /* Light text for contrast */
+  --sidebar-bg: #5E5E5E; /* AMRS secondary gray */
+  --sidebar-hover: #4D4D4D; /* Slightly darker gray */
+  --sidebar-active: #FE7900; /* AMRS primary orange */
+  --sidebar-text: #FFFFFF; /* Light text for contrast */
   --sidebar-border: rgba(255, 255, 255, 0.1); /* Subtle border for elements */
   --header-bg: #ffffff;
   --header-text: #1e293b;
@@ -37,6 +37,16 @@
   --text-dark: var(--gray-900);
   --overlay-bg: rgba(255, 255, 255, 0.8);
   --shadow-color: rgba(0, 0, 0, 0.1);
+
+  /* Update the root variables with AMRS colors */
+  --primary: #FE7900; /* AMRS primary orange */
+  --secondary: #5E5E5E; /* AMRS secondary gray */
+  --success: #28a745;
+  --info: #17a2b8;
+  --warning: #ffc107; 
+  --danger: #dc3545;
+  --light: #F4F4F4; /* AMRS light gray background */
+  --dark: #343a40;
 }
 
 /* Dark mode colors */
@@ -56,9 +66,9 @@
   /* Dark mode UI colors */
   --body-bg: #0f172a;
   --card-bg: #1e293b;
-  --sidebar-bg: #0d1423; /* Darker than the body background */
-  --sidebar-hover: #1a2234; /* Slightly lighter for hover states */
-  --sidebar-active: #3b82f6; /* Brighter blue for active items in dark mode */
+  --sidebar-bg: #4D4D4D; /* Darker than the light mode sidebar */
+  --sidebar-hover: #3D3D3D; /* Even darker for hover */
+  --sidebar-active: #FE7900; /* Keep orange for active items in dark mode */
   --sidebar-border: rgba(255, 255, 255, 0.1);
   --sidebar-text: #e2e8f0;
   --header-bg: #1e293b;
@@ -69,6 +79,9 @@
   --text-dark: #f8fafc;
   --overlay-bg: rgba(15, 23, 42, 0.8);
   --shadow-color: rgba(0, 0, 0, 0.5);
+
+  /* Dark theme overrides */
+  --primary: #FE7900; /* Keep AMRS orange in dark mode too */
 }
 
 /* Base styles */
