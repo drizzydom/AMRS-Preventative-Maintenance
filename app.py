@@ -78,25 +78,13 @@ from db_config import configure_database
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 
 # Configure the database
 configure_database(app)
 
-# Initialize database tables
-with app.app_context():
-    # Create database tables if they don't exist
-    db.create_all()
-    print("Database tables created/verified")
-    # Check if there are any users, if not this is a fresh install
-    try:
-        user_count = db.session.query(db.func.count(User.id)).scalar()
-        print(f"Found {user_count} users in database")
-        if user_count == 0:
-            print("No users found - this appears to be a fresh installation")
-    except Exception as e:
-        print(f"Error checking users: {str(e)}")
-        # This may mean tables don't exist yet, which is fine as we just created them
+# Initialize database
+db = SQLAlchemy(app)
 
 # Add session configuration to work across networks
 app.config['SESSION_COOKIE_SECURE'] = False  # Set to True only if using HTTPS
@@ -117,9 +105,6 @@ app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'maintenance@example.com')
 # Initialize Flask-Mail
 mail = Mail(app)
-
-# Initialize database
-db = SQLAlchemy(app)
 
 # Initialize login manager
 login_manager = LoginManager()
@@ -412,6 +397,15 @@ class MaintenanceLog(db.Model):
     notes = db.Column(db.Text)
     # Reference to the part to track which part was maintained
     part = db.relationship('Part', backref='maintenance_logs')
+
+# AFTER all models are defined, THEN create tables
+if os.environ.get('RENDER', False):
+    with app.app_context():
+        try:
+            db.create_all()
+            print("Database tables created/verified")
+        except Exception as e:
+            print(f"Error creating database tables: {str(e)}")
 
 @login_manager.user_loader
 def load_user(user_id):
