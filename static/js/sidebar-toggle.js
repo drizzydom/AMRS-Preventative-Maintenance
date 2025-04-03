@@ -4,11 +4,6 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Look for existing toggle container - don't create one if it already exists
-    if (!document.querySelector('.sidebar-toggle-container')) {
-        createSidebarToggle();
-    }
-    
     // Add data-title attributes to all sidebar links for tooltips
     addTooltipAttributes();
     
@@ -70,52 +65,12 @@ function addTooltipAttributes() {
     }
 }
 
-// Create sidebar toggle button dynamically and place in sidebar
-function createSidebarToggle() {
-    const sidebar = document.querySelector('.sidebar');
-    if (!sidebar) return;
-    
-    // Create toggle button
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'sidebar-toggle';
-    toggleBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
-    toggleBtn.setAttribute('aria-label', 'Toggle Sidebar');
-    toggleBtn.setAttribute('title', 'Toggle Sidebar');
-    toggleBtn.addEventListener('click', toggleSidebar);
-    
-    // Create container at the top of sidebar for the toggle
-    const toggleContainer = document.createElement('div');
-    toggleContainer.className = 'sidebar-toggle-container';
-    
-    // Add the button to the container
-    toggleContainer.appendChild(toggleBtn);
-    
-    // Insert immediately after the .sidebar element starts, before any children
-    sidebar.insertAdjacentElement('afterbegin', toggleContainer);
-}
-
 // Toggle sidebar expanded/collapsed state
 function toggleSidebar() {
     const body = document.body;
     
     // Toggle collapsed class
     body.classList.toggle('sidebar-collapsed');
-    
-    // Apply collapsed class to sidebar element as well for consistent styling
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) {
-        if (body.classList.contains('sidebar-collapsed')) {
-            sidebar.classList.add('collapsed');
-            // Rotate icon to point right when collapsed
-            const icon = document.querySelector('.sidebar-toggle i');
-            if (icon) icon.className = 'fas fa-chevron-right';
-        } else {
-            sidebar.classList.remove('collapsed');
-            // Rotate icon to point left when expanded
-            const icon = document.querySelector('.sidebar-toggle i');
-            if (icon) icon.className = 'fas fa-chevron-left';
-        }
-    }
     
     // Store preference in localStorage
     if (body.classList.contains('sidebar-collapsed')) {
