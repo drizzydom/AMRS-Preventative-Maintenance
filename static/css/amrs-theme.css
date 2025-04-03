@@ -64,6 +64,49 @@ body {
   background-color: var(--amrs-orange) !important;
 }
 
+/* Sidebar footer with user info */
+.sidebar-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+  padding: 1rem;
+}
+
+.sidebar-user-info {
+  color: #ffffff;
+  text-align: center;
+}
+
+.sidebar-username {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.sidebar-role {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.sidebar-logout-btn {
+  background-color: var(--amrs-orange);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  display: block;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.sidebar-logout-btn:hover {
+  background-color: #E56C00;
+  color: white;
+  text-decoration: none;
+}
+
 /* Buttons */
 .btn-primary {
   background-color: var(--amrs-orange) !important;

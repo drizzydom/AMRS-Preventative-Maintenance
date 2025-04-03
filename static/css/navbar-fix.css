@@ -29,16 +29,6 @@
     border-radius: 4px;
 }
 
-/* Better user dropdown contrast */
-.navbar-dark .user-dropdown-toggle {
-    background-color: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
-.navbar-dark .user-dropdown-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.25);
-}
-
 /* Compact navbar styling */
 .navbar {
     padding: 0.25rem 1rem !important;
