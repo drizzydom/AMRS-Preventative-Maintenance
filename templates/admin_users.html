@@ -172,17 +172,31 @@
 
 {% block extra_css %}
 <style>
-    /* Only keep essential table cell styling, remove positioning hacks */
+    /* URGENT FIX FOR POSITIONING */
+    /* Force the page-content container to the very top */
+    .page-content {
+        margin-top: -60px !important;
+        padding-top: 0 !important;
+    }
+    
+    /* Ensure card is at the top with no extra margins */
+    .page-content > .card {
+        margin-top: 0 !important;
+        margin-bottom: 1rem !important;
+        border-top: 0;
+    }
+    
+    /* Remove min-height from table that could be causing issues */
+    .table-responsive {
+        min-height: 0 !important;
+    }
+    
+    /* Essential styling for table cells */
     .text-cell {
         max-width: 200px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-    
-    /* Table styling only - no positioning modifications */
-    .table-responsive {
-        min-height: 300px;
     }
     
     td .btn {
