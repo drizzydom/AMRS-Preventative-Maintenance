@@ -50,63 +50,10 @@
                 
                 <div class="collapse navbar-collapse" id="navbarNav">
                     {% if current_user.is_authenticated %}
-                    <!-- Removed Dashboard and Administration Links -->
+                    <!-- Completely empty navbar menu - all navigation moved to sidebar -->
                     <ul class="navbar-nav me-auto">
                         <!-- Empty but kept for mobile menu structure -->
                     </ul>
-                    
-                    <!-- User Menu -->
-                    <div class="navbar-nav">
-                        <div class="nav-item dropdown user-dropdown">
-                            <a class="nav-link dropdown-toggle user-dropdown-toggle" href="#" id="userDropdown" 
-                               role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <div class="user-avatar">
-                                    <i class="fas fa-user-circle"></i>
-                                </div>
-                                <div class="user-info d-none d-md-block">
-                                    <div class="user-name">{{ current_user.username }}</div>
-                                    <div class="user-role small">
-                                        {% if current_user.is_admin %}
-                                            Administrator
-                                        {% elif current_user.role %}
-                                            {{ current_user.role.name }}
-                                        {% else %}
-                                            User
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu shadow" aria-labelledby="userDropdown">
-                                <li class="dropdown-header">
-                                    <div class="d-flex align-items-center">
-                                        <div class="avatar-lg me-3">
-                                            <i class="fas fa-user-circle fa-2x text-primary"></i>
-                                        </div>
-                                        <div class="user-info">
-                                            <div class="user-name fw-bold">{{ current_user.username }}</div>
-                                            <div class="user-role small text-muted">
-                                                {% if current_user.is_admin %}Administrator{% elif current_user.role %}{{ current_user.role.name }}{% else %}User{% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                {% if current_user.email %}
-                                <li>
-                                    <div class="dropdown-item user-email-item">
-                                        <i class="fas fa-envelope fa-fw text-muted"></i>{{ current_user.email }}
-                                    </div>
-                                </li>
-                                {% endif %}
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <a class="dropdown-item d-flex align-items-center" href="{{ url_for('logout') }}">
-                                        <i class="fas fa-sign-out-alt fa-fw me-2 text-muted"></i> Logout
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -118,6 +65,7 @@
             <!-- Sidebar -->
             <div class="col-md-auto px-0 sidebar-container">
                 <div class="sidebar">
+                    <!-- Sidebar navigation links -->
                     <ul class="sidebar-nav">
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
@@ -159,6 +107,27 @@
                         </li>
                         {% endif %}
                     </ul>
+                    
+                    <!-- User information and logout at bottom of sidebar -->
+                    {% if current_user.is_authenticated %}
+                    <div class="sidebar-footer">
+                        <div class="sidebar-user-info">
+                            <div class="sidebar-username">{{ current_user.username }}</div>
+                            <div class="sidebar-role">
+                                {% if current_user.is_admin %}
+                                    Administrator
+                                {% elif current_user.role %}
+                                    {{ current_user.role.name }}
+                                {% else %}
+                                    User
+                                {% endif %}
+                            </div>
+                            <a href="{{ url_for('logout') }}" class="sidebar-logout-btn">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             
