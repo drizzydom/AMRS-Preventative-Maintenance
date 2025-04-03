@@ -1,0 +1,169 @@
+/*
+ * LAYOUT AND SCROLLING FIX
+ * Fixes scrolling while maintaining proper layout structure
+ * This should be loaded AFTER all other CSS files
+ */
+
+/* Core layout fix - restores proper flex behavior while maintaining scroll */
+html {
+    height: 100%;
+    overflow-y: auto;
+}
+
+body {
+    min-height: 100%;
+    height: auto;
+    display: flex !important; /* Restore flex display for proper layout */
+    flex-direction: column !important;
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    position: relative !important; /* Not static, to allow proper positioning */
+}
+
+/* Restore flex layout for main container while allowing scroll */
+.container-fluid {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-width: none !important; /* Full width */
+    overflow: visible !important;
+}
+
+/* Fix container spacing to remove excess left padding */
+body > .container-fluid {
+    padding-left: 0 !important; /* Remove padding on the main container */
+    padding-right: 0 !important;
+}
+
+/* Page content fix */
+.page-content {
+    flex: 1 0 auto !important; /* This is essential - grow but don't shrink */
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+/* Row fix - restore flex layout for Bootstrap rows */
+.row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    width: 100% !important;
+    height: auto !important;
+}
+
+.row.g-0 {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* Column fix - restore flex properties */
+[class*="col-"] {
+    display: block !important;
+    height: auto !important;
+    position: relative !important;
+    min-height: 0 !important;
+}
+
+/* Fix sidebar positioning to prevent overlap */
+.sidebar {
+    position: sticky !important; /* Restore sticky positioning */
+    top: 0 !important;
+    height: 100vh !important;
+    overflow-y: auto !important;
+    z-index: 100 !important;
+    padding-left: 0 !important; /* Remove left padding */
+    margin-left: 0 !important; /* Remove left margin */
+    left: 0 !important; /* Align to left edge */
+}
+
+/* Main content area fix - prevent overlap with sidebar */
+main, .main-content, .content-wrapper {
+    flex: 1 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+/* Adjust content area to maintain proper spacing */
+.content-container {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+}
+
+/* Footer positioning fix */
+.footer {
+    position: relative !important;
+    width: 100% !important;
+    flex-shrink: 0 !important;
+    margin-top: auto !important;
+}
+
+/* Navbar fix - restore proper positioning */
+.navbar {
+    position: relative !important;
+    z-index: 1030 !important;
+    width: 100% !important;
+}
+
+/* Fix layouts with sidebar and content side by side */
+@media (min-width: 992px) {
+    .sidebar-and-content,
+    .layout-with-sidebar,
+    .dashboard-layout {
+        display: flex !important;
+        width: 100% !important;
+    }
+    
+    .sidebar-container {
+        position: sticky !important;
+        top: 0 !important;
+        height: 100vh !important;
+        z-index: 100 !important;
+    }
+    
+    .content-container {
+        flex: 1 !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+}
+
+/* Prevent specific element classes from receiving block display */
+.d-flex {
+    display: flex !important;
+}
+
+.d-inline-flex {
+    display: inline-flex !important;
+}
+
+.d-inline-block {
+    display: inline-block !important;
+}
+
+/* Card layout fixes */
+.card {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+.card-body {
+    flex: 1 0 auto !important;
+}
+
+/* Fix for iOS viewport height issues */
+@supports (-webkit-touch-callout: none) {
+    .sidebar {
+        height: -webkit-fill-available !important;
+    }
+}
+
+/* UPDATED: Row spacing fix for dashboard layout */
+.dashboard .row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}

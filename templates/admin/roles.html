@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Roles{% endblock %}
+
+{% block header_title %}Manage Roles{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="card-title h5 mb-0">User Roles</h2>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addRoleModal">
+            <i class="fas fa-plus"></i> Add Role
+        </button>
+    </div>
+    <div class="card-body">
+        {% if roles %}
+        <div class="admin-table-container">
+            <table class="table table-hover table-fixed table-compact">
+                <thead>
+                    <tr>
+                        <th style="width: 40%">Role Details</th>
+                        <th style="width: 40%">Permissions</th>
+                        <th style="width: 20%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for role in roles %}
+                    <tr>
+                        <td>
+                            <div class="role-info">
+                                <div class="role-name fw-bold">{{ role.name }}</div>
+                                {% if role.description %}
+                                <div class="text-muted small">{{ role.description }}</div>
+                                {% endif %}
+                                <div class="text-muted small">
+                                    <span class="fw-medium">Users:</span> <span class="badge bg-secondary">{{ role.users|length }}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="permission-summary">
+                                {% set permission_list = role.get_permissions_list() %}
+                                {% if permission_list|length > 0 %}
+                                    <div class="permission-badges">
+                                        {% set max_display = 3 %}
+                                        {% for permission in permission_list[:max_display] %}
+                                        <span class="badge bg-info text-dark mb-1">{{ permission }}</span>
+                                        {% endfor %}
+                                        {% if permission_list|length > max_display %}
+                                        <span class="badge bg-secondary">+{{ permission_list|length - max_display }} more</span>
+                                        {% endif %}
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary mt-1" type="button" 
+                                            onclick="togglePermissionsById('permissions-{{ role.id }}', this)">
+                                        <i class="fas fa-list-ul me-1"></i> <span class="toggle-text">View All</span>
+                                    </button>
+                                    <div class="permission-list-container mt-2" id="permissions-{{ role.id }}" style="display: none;">
+                                        <div class="card card-body p-2">
+                                            <div class="permission-list" style="max-height: 150px; overflow-y: auto;">
+                                                <ul class="list-unstyled mb-0 small">
+                                                    {% for permission in permission_list %}
+                                                    <li><small>{{ all_permissions.get(permission, permission) }}</small></li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <small class="text-muted">No permissions assigned</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('edit_role', role_id=role.id) }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <button type="button" class="btn btn-danger btn-sm" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#deleteRoleModal{{ role.id }}"
+                                        {% if role.users|length > 0 %}disabled{% endif %}>
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Delete Role Modal -->
+                    <div class="modal fade" id="deleteRoleModal{{ role.id }}" tabindex="-1" role="dialog" aria-labelledby="deleteRoleModalLabel{{ role.id }}" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="deleteRoleModalLabel{{ role.id }}">Confirm Delete</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p>Are you sure you want to delete the role "{{ role.name }}"?</p>
+                                    {% if role.users|length > 0 %}
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle"></i> This role has {{ role.users|length }} assigned users. You cannot delete a role that has users assigned to it.
+                                    </div>
+                                    {% else %}
+                                    <p><strong>Warning:</strong> This action cannot be undone.</p>
+                                    {% endif %}
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <form action="{{ url_for('delete_role', role_id=role.id) }}" method="post">
+                                        <button type="submit" class="btn btn-danger" {% if role.users|length > 0 %}disabled{% endif %}>Delete Role</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> No roles have been created yet. Click the "Add Role" button to create your first role.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Role Modal -->
+<div class="modal fade" id="addRoleModal" tabindex="-1" role="dialog" aria-labelledby="addRoleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addRoleModalLabel">Add New Role</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('manage_roles') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Role Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Permissions</label>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row">
+                                    {% set perm_groups = {} %}
+                                    {% for key, value in all_permissions.items() %}
+                                        {% set category = key.split('.')[0] %}
+                                        {% if category not in perm_groups %}
+                                            {% set _ = perm_groups.update({category: []}) %}
+                                        {% endif %}
+                                        {% set _ = perm_groups[category].append({'key': key, 'value': value}) %}
+                                    {% endfor %}
+                                    
+                                    {% for category, perms in perm_groups.items() %}
+                                    <div class="col-md-6 mb-3">
+                                        <h6 class="text-capitalize">{{ category }} Permissions</h6>
+                                        <div class="permission-group">
+                                            {% for perm in perms %}
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="permissions" id="perm-{{ perm.key }}" value="{{ perm.key }}">
+                                                <label class="form-check-label" for="perm-{{ perm.key }}">
+                                                    {{ perm.value }}
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Role</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+<script>
+function togglePermissionsById(id, button) {
+    // Get the permissions container - using getElementById for reliability
+    const container = document.getElementById(id);
+    if (!container) return; // Safety check
+    
+    const textSpan = button.querySelector('.toggle-text');
+    
+    // Toggle visibility with explicit check for display none
+    if (container.style.display === 'none') {
+        // Show the permissions
+        container.style.display = 'block';
+        textSpan.textContent = 'Hide All';
+        button.classList.add('active');
+    } else {
+        // Hide the permissions
+        container.style.display = 'none';
+        textSpan.textContent = 'View All';
+        button.classList.remove('active');
+    }
+}
+
+// Ensure all permissions containers start hidden when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Hide all permissions containers
+    document.querySelectorAll('.permissions-container').forEach(function(container) {
+        container.style.display = 'none';
+    });
+    
+    // Ensure all toggle buttons say "View All"
+    document.querySelectorAll('.toggle-text').forEach(function(span) {
+        span.textContent = 'View All';
+    });
+    
+    // Remove any active class from toggle buttons
+    document.querySelectorAll('.btn-outline-secondary').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+});
+</script>

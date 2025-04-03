@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - {{ current_user.username }}{% endblock %}
+
+{% block header_title %}My Profile{% endblock %}
+
+{% block content %}
+<!-- Set default preferences at the beginning of the template using Jinja's built-in tests -->
+{% if current_user.notification_preferences is defined and current_user.notification_preferences is not none %}
+    {% set preferences = current_user.notification_preferences %}
+{% else %}
+    {% set preferences = {'enable_email': True, 'email_frequency': 'weekly', 'notification_types': ['overdue', 'due_soon']} %}
+{% endif %}
+
+<div class="row">
+    <!-- Personal Information -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-circle me-2 text-primary"></i>
+                    Personal Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_profile') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" value="{{ current_user.username }}" readonly disabled>
+                        <small class="form-text text-muted">Username cannot be changed</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name" value="{{ current_user.full_name or '' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ current_user.email or '' }}">
+                        <small class="form-text text-muted">Used for notifications and password recovery</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Save Changes
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Security Settings -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-shield-alt me-2 text-danger"></i>
+                    Security
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('change_password') }}" id="passwordForm">
+                    <div class="mb-3">
+                        <label for="current_password" class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="current_password" name="current_password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                    </div>
+                    
+                    <div class="password-requirements mb-4 p-3 bg-light border rounded">
+                        <div class="requirement" id="length-requirement">
+                            <i class="fas fa-circle fa-xs me-2"></i> At least 8 characters
+                        </div>
+                        <div class="requirement" id="uppercase-requirement">
+                            <i class="fas fa-circle fa-xs me-2"></i> At least one uppercase letter
+                        </div>
+                        <div class="requirement" id="number-requirement">
+                            <i class="fas fa-circle fa-xs me-2"></i> At least one number
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-key me-1"></i> Change Password
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification Preferences -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-bell me-2 text-warning"></i>
+                    Notification Preferences
+                </h5>
+            </div>
+            <form action="{{ url_for('update_notification_preferences') }}" method="post" class="mb-3">
+                <div class="card-body">
+                    <h5 class="mb-3">Email Notifications</h5>
+                    
+                    <!-- Main toggle switch -->
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="enable_email" name="enable_email"
+                               {% if notification_preferences.enable_email %}checked{% endif %}
+                               onchange="toggleNotificationOptions(this.checked)">
+                        <label class="form-check-label" for="enable_email">Enable email notifications</label>
+                    </div>
+                    
+                    <!-- Options section - hidden/shown based on toggle -->
+                    <div id="notification-options" class="ps-4 pt-2 pb-2 border-start" 
+                         {% if not notification_preferences.enable_email %}style="display: none;"{% endif %}>
+                        
+                        <!-- FIXED: Ensure radio buttons use proper name attributes -->
+                        <div class="mb-3">
+                            <label class="form-label">Notification Frequency</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notification_frequency" 
+                                       id="freq_immediate" value="immediate"
+                                       {% if notification_preferences.notification_frequency == 'immediate' %}checked{% endif %}>
+                                <label class="form-check-label" for="freq_immediate">
+                                    Immediate (send as soon as maintenance is due)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notification_frequency" 
+                                       id="freq_daily" value="daily"
+                                       {% if notification_preferences.notification_frequency == 'daily' %}checked{% endif %}>
+                                <label class="form-check-label" for="freq_daily">
+                                    Daily summary
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notification_frequency" 
+                                       id="freq_weekly" value="weekly"
+                                       {% if notification_preferences.notification_frequency == 'weekly' %}checked{% endif %}>
+                                <label class="form-check-label" for="freq_weekly">
+                                    Weekly summary
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- FIXED: Ensure radio buttons use proper name attributes -->
+                        <div class="mb-3">
+                            <label class="form-label">Email Format</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="email_format" 
+                                       id="format_html" value="html"
+                                       {% if notification_preferences.email_format == 'html' %}checked{% endif %}>
+                                <label class="form-check-label" for="format_html">
+                                    HTML (formatted with colors)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="email_format" 
+                                       id="format_text" value="text"
+                                       {% if notification_preferences.email_format == 'text' %}checked{% endif %}>
+                                <label class="form-check-label" for="format_text">
+                                    Plain text
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Save Preferences
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Debug info is now always included but hidden by default -->
+                <div class="card-footer bg-light">
+                    <details>
+                        <summary class="text-muted small">Debug information</summary>
+                        <pre class="small">{{ notification_preferences|tojson(indent=2) }}</pre>
+                    </details>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Password validation
+        const passwordField = document.getElementById('new_password');
+        const confirmField = document.getElementById('confirm_password');
+        const lengthReq = document.getElementById('length-requirement');
+        const uppercaseReq = document.getElementById('uppercase-requirement');
+        const numberReq = document.getElementById('number-requirement');
+        
+        passwordField.addEventListener('input', function() {
+            const password = this.value;
+            
+            // Check length requirement
+            if (password.length >= 8) {
+                lengthReq.classList.add('valid');
+                lengthReq.classList.remove('invalid');
+                lengthReq.querySelector('i').className = 'fas fa-check-circle fa-xs me-2 text-success';
+            } else {
+                lengthReq.classList.add('invalid');
+                lengthReq.classList.remove('valid');
+                lengthReq.querySelector('i').className = 'fas fa-circle fa-xs me-2 text-muted';
+            }
+            
+            // Check uppercase requirement
+            if (/[A-Z]/.test(password)) {
+                uppercaseReq.classList.add('valid');
+                uppercaseReq.classList.remove('invalid');
+                uppercaseReq.querySelector('i').className = 'fas fa-check-circle fa-xs me-2 text-success';
+            } else {
+                uppercaseReq.classList.add('invalid');
+                uppercaseReq.classList.remove('valid');
+                uppercaseReq.querySelector('i').className = 'fas fa-circle fa-xs me-2 text-muted';
+            }
+            
+            // Check number requirement
+            if (/[0-9]/.test(password)) {
+                numberReq.classList.add('valid');
+                numberReq.classList.remove('invalid');
+                numberReq.querySelector('i').className = 'fas fa-check-circle fa-xs me-2 text-success';
+            } else {
+                numberReq.classList.add('invalid');
+                numberReq.classList.remove('valid');
+                numberReq.querySelector('i').className = 'fas fa-circle fa-xs me-2 text-muted';
+            }
+        });
+        
+        // Toggle email frequency visibility based on enable email checkbox
+        const enableEmailCheckbox = document.getElementById('enable_email');
+        const emailFrequencyGroup = document.getElementById('emailFrequencyGroup');
+        
+        enableEmailCheckbox.addEventListener('change', function() {
+            emailFrequencyGroup.style.display = this.checked ? 'block' : 'none';
+        });
+        
+        // Set initial visibility
+        emailFrequencyGroup.style.display = enableEmailCheckbox.checked ? 'block' : 'none';
+    });
+
+    function toggleNotificationOptions(enabled) {
+        const optionsDiv = document.getElementById('notification-options');
+        optionsDiv.style.display = enabled ? 'block' : 'none';
+    }
+</script>
+
+<style>
+    .requirement {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+    
+    .requirement.valid {
+        color: #198754;
+    }
+    
+    .requirement.invalid {
+        color: #6c757d;
+    }
+    
+    .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    /* Switch toggle styling */
+    .form-switch .form-check-input {
+        width: 2em;
+    }
+</style>
+{% endblock %}

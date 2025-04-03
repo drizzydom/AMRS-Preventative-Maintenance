@@ -1,0 +1,66 @@
+/*
+ * NAVBAR APPEARANCE FIX
+ * Improves navbar contrast and readability
+ */
+
+/* Better navbar contrast */
+.navbar-dark {
+    background-color: #FE7900 !important; /* AMRS primary orange */
+}
+
+/* Ensure navbar text is white for contrast */
+.navbar-dark .navbar-brand,
+.navbar-dark .nav-link,
+.navbar-dark .navbar-text {
+    color: white !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); /* Add subtle text shadow */
+}
+
+/* Improve hover states */
+.navbar-dark .nav-link:hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Active/current page indicator */
+.navbar-dark .nav-link.active {
+    color: white !important;
+    font-weight: 600;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+/* Compact navbar styling */
+.navbar {
+    padding: 0.25rem 1rem !important;
+}
+
+/* Mobile menu toggle button */
+.navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    padding: 0.25rem 0.5rem !important; /* Smaller toggle button */
+}
+
+/* Dark mode adjustments */
+html[data-theme="dark"] .navbar-dark {
+    background-color: #FE7900 !important; /* Keep AMRS orange in dark mode */
+}
+
+/* Fix navbar height for top positioning of sidebar */
+.navbar-fixed-height {
+    height: 48px !important;
+}
+
+/* Center the navbar brand on mobile */
+@media (max-width: 991.98px) {
+    .navbar-brand {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        margin: 0;
+    }
+    
+    .navbar-toggler {
+        order: -1; /* Move toggler to the left */
+    }
+}

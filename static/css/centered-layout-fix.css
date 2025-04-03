@@ -1,0 +1,200 @@
+/**
+ * LEFT-ALIGNED LAYOUT FIX
+ * Ensures content is properly positioned with left alignment directly against sidebar
+ */
+
+/* Container for layout */
+.centered-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 0;
+}
+
+/* Ensure content column fills available space */
+.centered-content-col {
+    flex: 1;
+    max-width: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* Make sure sidebar width is fixed */
+.sidebar-container {
+    width: 200px !important;
+    flex: 0 0 200px;
+}
+
+/* Fix for sidebar's fixed position */
+.sidebar {
+    width: 200px !important;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 48px) !important;
+}
+
+/* Ensure content fills available space and aligns LEFT against sidebar */
+.content-container {
+    width: 100% !important;
+    margin-left: 200px !important; /* Exactly match sidebar width - no gap */
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Added compact navbar styling */
+.compact-navbar {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    min-height: 48px !important;
+}
+
+.compact-navbar .navbar-brand {
+    font-size: 1.1rem; /* Slightly smaller brand name */
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.compact-navbar .nav-link {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+/* Adjust sidebar position for smaller navbar */
+.sidebar {
+    top: 48px !important; /* Match navbar height */
+    height: calc(100vh - 48px) !important; /* Viewport minus compact navbar */
+}
+
+/* Ensure body padding accommodates smaller navbar */
+body {
+    padding-top: 48px !important;
+}
+
+/* Simplified sidebar footer with just logout button */
+.sidebar-footer {
+    margin-top: auto;
+    padding: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100%;
+}
+
+/* Make user info styling consistent with sidebar links */
+.sidebar-user-info {
+    display: flex;
+    flex-direction: column;
+    color: #fff;
+    padding: 0; /* Remove padding to use link padding instead */
+    width: 100%; /* Ensure it takes full width */
+}
+
+.sidebar-username {
+    font-weight: 500;
+    padding: 0.75rem 1rem 0.25rem;
+    font-size: 0.9rem;
+    text-align: left; /* Left align like other sidebar items */
+    line-height: 1.2;
+    word-break: break-all; /* Break words to prevent overflow */
+    white-space: normal; /* Allow text to wrap */
+    overflow: hidden; /* Hide overflow text */
+    text-overflow: ellipsis; /* Show ellipsis for overflow */
+    max-width: 100%; /* Constrain to container width */
+}
+
+.sidebar-role {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 0 1rem 0.75rem;
+    text-align: left; /* Left align like other sidebar items */
+    word-break: normal;
+    white-space: normal; /* Allow text to wrap */
+}
+
+/* Style logout button like other sidebar links */
+.sidebar-logout-btn {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-left: 3px solid transparent;
+    color: #fff;
+    background-color: transparent; /* Match sidebar background */
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.sidebar-logout-btn:hover {
+    background-color: #4D4D4D;
+    color: #fff;
+    text-decoration: none;
+    border-left-color: rgba(254, 121, 0, 0.5);
+}
+
+.sidebar-logout-btn i {
+    width: 20px;
+    text-align: center;
+    margin-right: 0.75rem;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+    .content-container {
+        margin-left: 0 !important;
+    }
+    
+    .sidebar-container {
+        position: fixed;
+        left: -200px;
+    }
+    
+    .sidebar-container.show {
+        left: 0;
+    }
+    
+    .centered-content-col {
+        max-width: 100%;
+    }
+    
+    /* Content needs full width on mobile */
+    .content-container {
+        margin-left: 0;
+        padding: 0 10px; /* Reduced padding on mobile */
+    }
+    
+    /* Overlay when sidebar is shown */
+    body.sidebar-active::after {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1030;
+    }
+}
+
+/* Adjust layout for different screen sizes - reset X offsets */
+@media (min-width: 992px) {
+    /* Content container takes full width after sidebar */
+    .content-container {
+        width: calc(100% - 200px) !important;
+        margin-left: 200px !important; /* Exactly sidebar width */
+        padding: 0 !important;
+    }
+    
+    /* Inner container gets more padding on larger screens */
+    .container-fluid.py-4.px-3 {
+        padding: 1.25rem !important;
+        max-width: 100% !important;
+    }
+}
+
+@media (min-width: 1200px) {
+    /* Inner container gets even more padding on very large screens */
+    .container-fluid.py-4.px-3 {
+        padding: 1.5rem !important; 
+    }
+}

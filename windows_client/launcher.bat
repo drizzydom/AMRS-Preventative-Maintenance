@@ -1,0 +1,3 @@
+@echo off
+echo Starting Maintenance Tracker Client...
+start "" "MaintenanceTracker.exe"

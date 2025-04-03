@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Parts{% endblock %}
+
+{% block header_title %}Manage Parts{% endblock %}
+
+{% block content %}
+<!-- Search and Filter Row -->
+<div class="row g-2 mb-3 align-items-center">
+    <div class="col-md-6 col-lg-4 mb-2 mb-md-0">
+        <div class="input-group">
+            <span class="input-group-text bg-light border-end-0">
+                <i class="fas fa-search"></i>
+            </span>
+            <input type="text" class="form-control border-start-0" id="search-pparts" placeholder="Search parts...">
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-4 mb-2 mb-lg-0">
+        <div class="btn-group w-100">
+            <button type="button" class="btn btn-outline-secondary active" onclick="filterParts('all')">All</button>
+            <button type="button" class="btn btn-outline-danger" onclick="filterParts('overdue')">Overdue</button>
+            <button type="button" class="btn btn-outline-warning" onclick="filterParts('due-soon')">Due Soon</button>
+            <button type="button" class="btn btn-outline-success" onclick="filterParts('ok')">OK</button>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 text-lg-end">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPartModal">
+            <i class="fas fa-plus me-1"></i> Add Part
+        </button>
+    </div>
+</div>
+
+<!-- Parts Table Card -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Parts Inventory</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if parts %}
+        <div class="admin-table-container">
+            <table class="table table-hover align-middle table-fixed table-compact">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 45%">Part Details</th>
+                        <th style="width: 20%">Status</th>
+                        <th style="width: 35%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for part in parts %}
+                    {% set days_until = (part.next_maintenance - now).days %}
+                    <tr class="part-row {% if days_until < 0 %}part-overdue{% elif days_until <= part.machine.site.notification_threshold %}part-due-soon{% else %}part-ok{% endif %}">
+                        <td>
+                            <div class="part-info">
+                                <div class="part-name fw-bold">{{ part.name }}</div>
+                                <div class="text-muted small">
+                                    <div><span class="fw-medium">Machine:</span> {{ part.machine.name }}</div>
+                                    <div><span class="fw-medium">Site:</span> {{ part.machine.site.name }}</div>
+                                    <div><span class="fw-medium">Last:</span> {{ part.last_maintenance.strftime('%Y-%m-%d') }}</div>
+                                    <div><span class="fw-medium">Next:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if days_until < 0 %}
+                                <span class="badge bg-danger">{{ -days_until }} days overdue</span>
+                            {% elif days_until <= part.machine.site.notification_threshold %}
+                                <span class="badge bg-warning">Due in {{ days_until }} days</span>
+                            {% else %}
+                                <span class="badge bg-success">OK</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="btn btn-success btn-sm">
+                                    <i class="fas fa-tools"></i> Maintain
+                                </a>
+                                <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deletePartModal{{ part.id }}">
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Delete Part Modal -->
+                    <div class="modal fade" id="deletePartModal{{ part.id }}" tabindex="-1" role="dialog" aria-labelledby="deletePartModalLabel{{ part.id }}" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="deletePartModalLabel{{ part.id }}">Confirm Delete</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p>Are you sure you want to delete the part "{{ part.name }}"?</p>
+                                    <p><strong>Warning:</strong> This will also delete all maintenance records associated with this part. This action cannot be undone.</p>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <form action="{{ url_for('delete_part', part_id=part.id) }}" method="post">
+                                        <button type="submit" class="btn btn-danger">Delete Part</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info m-4">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-info-circle fa-2x me-3"></i>
+                <div>
+                    <h5 class="mb-1">No Parts Available</h5>
+                    <p class="mb-0">No parts have been added yet. Click the "Add New Part" button to create your first part.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Part Modal -->
+<div class="modal fade" id="addPartModal" tabindex="-1" aria-labelledby="addPartModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addPartModalLabel">Add New Part</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('manage_parts') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Part Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="machine_id" class="form-label">Machine *</label>
+                        <select class="form-select" id="machine_id" name="machine_id" required>
+                            <option value="" selected disabled>Select a machine</option>
+                            {% for machine in machines %}
+                                <option value="{{ machine.id }}">{{ machine.name }} ({{ machine.site.name }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="card mb-3">
+                        <div class="card-header bg-light py-2">
+                            <h6 class="mb-0">Maintenance Schedule</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-7">
+                                    <div class="mb-3 mb-md-0">
+                                        <label for="maintenance_frequency" class="form-label">Frequency *</label>
+                                        <input type="number" class="form-control" id="maintenance_frequency" name="maintenance_frequency" min="1" value="7" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
+                                    <div>
+                                        <label for="maintenance_unit" class="form-label">Unit</label>
+                                        <select class="form-select" id="maintenance_unit" name="maintenance_unit">
+                                            <option value="day">Days</option>
+                                            <option value="week">Weeks</option>
+                                            <option value="month">Months</option>
+                                            <option value="year">Years</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Part</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Search functionality
+        const searchInput = document.getElementById('search-parts');
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const rows = document.querySelectorAll('.part-row');
+            
+            rows.forEach(row => {
+                let shouldShow = false;
+                // Check all cell title attributes which contain the full text
+                row.querySelectorAll('td[title]').forEach(cell => {
+                    if (cell.getAttribute('title').toLowerCase().includes(searchTerm)) {
+                        shouldShow = true;
+                    }
+                });
+                // Also check visible text
+                if (row.textContent.toLowerCase().includes(searchTerm)) {
+                    shouldShow = true;
+                }
+                
+                row.style.display = shouldShow ? '' : 'none';
+            });
+        });
+    });
+    
+    // Filter parts by status
+    function filterParts(status) {
+        const rows = document.querySelectorAll('.part-row');
+        
+        rows.forEach(row => {
+            if (status === 'all') {
+                row.style.display = '';
+            } else if (status === 'overdue' && row.classList.contains('part-overdue')) {
+                row.style.display = '';
+            } else if (status === 'due-soon' && row.classList.contains('part-due-soon')) {
+                row.style.display = '';
+            } else if (status === 'ok' && row.classList.contains('part-ok')) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Update active button state
+        document.querySelectorAll('.btn-group .btn').forEach(btn => {
+            btn.classList.remove('active');
+            btn.classList.remove('btn-danger', 'btn-warning', 'btn-success', 'btn-secondary');
+            
+            // Add outline classes back
+            if (btn.classList.contains('btn-outline-danger')) {
+                btn.classList.add('btn-outline-danger');
+            } else if (btn.classList.contains('btn-outline-warning')) {
+                btn.classList.add('btn-outline-warning');
+            } else if (btn.classList.contains('btn-outline-success')) {
+                btn.classList.add('btn-outline-success');
+            } else {
+                btn.classList.add('btn-outline-secondary');
+            }
+        });
+        
+        // Set active button
+        if (status === 'overdue') {
+            const btn = document.querySelector('.btn-outline-danger');
+            btn.classList.add('active', 'btn-danger');
+            btn.classList.remove('btn-outline-danger');
+        } else if (status === 'due-soon') {
+            const btn = document.querySelector('.btn-outline-warning');
+            btn.classList.add('active', 'btn-warning');
+            btn.classList.remove('btn-outline-warning');
+        } else if (status === 'ok') {
+            const btn = document.querySelector('.btn-outline-success');
+            btn.classList.add('active', 'btn-success');
+            btn.classList.remove('btn-outline-success');
+        } else {
+            const btn = document.querySelector('.btn-outline-secondary');
+            btn.classList.add('active', 'btn-secondary');
+            btn.classList.remove('btn-outline-secondary');
+        }
+    }
+</script>
+
+<style>
+/* Hide less important columns on small screens */
+@media (max-width: 768px) {
+    .hide-sm {
+        display: none;
+    }
+}
+
+/* Custom action button styling */
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.actions-menu {
+    display: flex;
+    justify-content: center;
+}
+</style>
+{% endblock %}

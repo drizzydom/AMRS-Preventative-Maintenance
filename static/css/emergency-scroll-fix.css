@@ -1,0 +1,91 @@
+/*
+ * EMERGENCY SCROLLING FIX 
+ * This stylesheet contains critical overrides to fix scrolling issues
+ * This must be loaded LAST in the head section
+ */
+
+/* Critical Scroll Fixes - Using maximum specificity */
+html {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: relative !important;
+}
+
+body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    position: static !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Reset flex container behavior that might be causing problems */
+.container, 
+.container-fluid, 
+.page-content, 
+.row, 
+.col, 
+[class*="col-"],
+#root-container,
+.main-container {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: none !important;
+    position: static !important;
+}
+
+/* Ensure the footer doesn't use fixed positioning */
+.footer, footer {
+    position: relative !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    margin-top: 2rem !important;
+}
+
+/* Fix sidebar to not interfere with scrolling */
+.sidebar, aside, nav.sidebar {
+    position: absolute !important;
+    min-height: 0 !important;
+    height: auto !important;
+}
+
+/* Prevent any element from using fixed or sticky positioning which can interfere with scrolling */
+.sticky-top, 
+.fixed-top, 
+.fixed-bottom, 
+.position-fixed, 
+.position-sticky {
+    position: relative !important;
+}
+
+/* Make sure all cards expand to fit content */
+.card {
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* Force content wrappers to allow scrolling */
+.content-wrapper, .page-wrapper, .dashboard, main {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+    html, body {
+        -webkit-overflow-scrolling: touch !important;
+    }
+}
