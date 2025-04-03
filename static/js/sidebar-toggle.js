@@ -7,6 +7,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Create sidebar toggle button inside the sidebar
     createSidebarToggle();
     
+    // Add data-title attributes to all sidebar links for tooltips
+    addTooltipAttributes();
+    
     // Check for saved sidebar state
     loadSidebarState();
     
@@ -44,6 +47,27 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Add data-title attributes to sidebar links for tooltips
+function addTooltipAttributes() {
+    // Add tooltip data to regular sidebar links
+    const sidebarLinks = document.querySelectorAll('.sidebar-link');
+    sidebarLinks.forEach(link => {
+        const text = link.querySelector('.sidebar-link-text')?.textContent.trim();
+        if (text) {
+            link.setAttribute('data-title', text);
+        }
+    });
+    
+    // Add tooltip data to logout button
+    const logoutBtn = document.querySelector('.sidebar-logout-btn');
+    if (logoutBtn) {
+        const text = logoutBtn.querySelector('span')?.textContent.trim();
+        if (text) {
+            logoutBtn.setAttribute('data-title', text);
+        }
+    }
+}
+
 // Create sidebar toggle button dynamically and place in sidebar
 function createSidebarToggle() {
     const sidebar = document.querySelector('.sidebar');
@@ -54,6 +78,7 @@ function createSidebarToggle() {
     toggleBtn.className = 'sidebar-toggle';
     toggleBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
     toggleBtn.setAttribute('aria-label', 'Toggle Sidebar');
+    toggleBtn.setAttribute('title', 'Toggle Sidebar');
     toggleBtn.addEventListener('click', toggleSidebar);
     
     // Create container at the top of sidebar for the toggle
@@ -122,9 +147,17 @@ function handleWindowResize() {
     // Auto-collapse on medium screens
     if (width < 1200 && width >= 992) {
         body.classList.add('sidebar-collapsed');
+        
+        // Make sure the toggle button shows the correct icon
+        const icon = document.querySelector('.sidebar-toggle i');
+        if (icon) icon.className = 'fas fa-chevron-right';
     } 
     // Only restore if user hasn't manually set a preference
     else if (width >= 1200 && !localStorage.getItem('sidebar-collapsed')) {
         body.classList.remove('sidebar-collapsed');
+        
+        // Make sure the toggle button shows the correct icon
+        const icon = document.querySelector('.sidebar-toggle i');
+        if (icon) icon.className = 'fas fa-chevron-left';
     }
 }
