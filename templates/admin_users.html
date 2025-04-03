@@ -150,7 +150,7 @@
 
 {% block scripts %}
 <script>
-    // Set up the delete modal
+    // Set up the delete modal - keep only this essential part
     document.addEventListener('DOMContentLoaded', function() {
         const deleteUserModal = document.getElementById('deleteUserModal');
         if (deleteUserModal) {
@@ -166,89 +166,28 @@
                 deleteUsername.textContent = username;
             });
         }
-
-        // Force a reflow to ensure proper positioning
-        document.body.offsetHeight;
-        
-        // Make sure the card is at the top of the content area
-        const card = document.querySelector('.card');
-        if (card) {
-            card.style.marginTop = '0px';
-            card.style.position = 'relative';
-            card.style.top = '0px';
-        }
-        
-        // Force the page content container to proper position
-        const pageContent = document.querySelector('.page-content');
-        if (pageContent) {
-            pageContent.style.marginTop = '0px';
-            pageContent.style.paddingTop = '0px';
-        }
     });
 </script>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    /* Force table positioning from the very start of page load */
-    body {
-        min-height: auto !important;
-        height: auto !important;
-    }
-    
-    /* Prevent any movement of content after load */
-    .page-content {
-        position: relative !important;
-        top: 0 !important;
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-        transition: none !important;
-        animation: none !important;
-    }
-    
-    /* Ensure card appears immediately at the top */
-    .card {
-        margin-top: 0 !important;
-        position: relative !important;
-        top: 0 !important;
-    }
-    
-    /* Prevent any animations or transitions that could cause movement */
-    * {
-        animation-duration: 0s !important;
-        transition-duration: 0s !important;
-    }
-    
-    /* Table cell text handling */
+    /* Only keep essential table cell styling, remove positioning hacks */
     .text-cell {
         max-width: 200px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        position: relative;
     }
     
-    /* Improve table responsiveness */
+    /* Table styling only - no positioning modifications */
     .table-responsive {
         min-height: 300px;
     }
     
-    /* Ensure buttons don't wrap and stay on same line */
     td .btn {
         margin-bottom: 0;
         white-space: nowrap;
-    }
-    
-    /* Add striping that works better with text overflow */
-    .table-striped > tbody > tr:nth-of-type(odd) > * {
-        background-color: rgba(0, 0, 0, 0.02);
-    }
-    
-    /* Fix modal width to ensure it's not too small */
-    @media (min-width: 576px) {
-        .modal-dialog {
-            max-width: 500px;
-        }
     }
 </style>
 {% endblock %}
