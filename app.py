@@ -660,13 +660,128 @@ def manage_machines():
         machines = Machine.query.all()
         title = "All Machines"
     
-    # ...existing code...
+    # Handle form submission for adding a new machine
+    if request.method == 'POST':
+        if not current_user.has_permission(Permissions.MACHINES_CREATE) and not current_user.is_admin:
+            flash("You don't have permission to create machines", "error")
+            return redirect(url_for('manage_machines'))
+        
+        name = request.form.get('name')
+        model = request.form.get('model')
+        machine_number = request.form.get('machine_number')
+        serial_number = request.form.get('serial_number')
+        site_id = request.form.get('site_id')
+        
+        if not name or not site_id:
+            flash("Machine name and site are required", "error")
+        else:
+            # Create new machine
+            new_machine = Machine(
+                name=name,
+                model=model,
+                machine_number=machine_number,
+                serial_number=serial_number,
+                site_id=site_id
+            )
+            db.session.add(new_machine)
+            db.session.commit()
+            
+            flash(f"Machine '{name}' has been added successfully", "success")
+            return redirect(url_for('manage_machines', site_id=site_id))
+    
+    # Get all sites for dropdown menus
+    sites = Site.query.all()
+    
+    return render_template('machines.html', 
+                          machines=machines,
+                          sites=sites,
+                          title=title,
+                          site_id=site_id if site_id else None,
+                          is_admin=current_user.is_admin,
+                          can_create=current_user.has_permission(Permissions.MACHINES_CREATE) or current_user.is_admin,
+                          can_edit=current_user.has_permission(Permissions.MACHINES_EDIT) or current_user.is_admin,
+                          can_delete=current_user.has_permission(Permissions.MACHINES_DELETE) or current_user.is_admin)
 
 @app.route('/parts', methods=['GET', 'POST'])
 @login_required
 def manage_parts():
     """Display and manage all parts"""
     # ...existing code...
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        email = request.form.get('email')
+        # Find user by email
+        user = User.query.filter_by(email=email).first()
+        if user:
+            # Generate reset token
+            token = user.generate_reset_token()
+            # Build reset URL
+            reset_url = url_for('reset_password', user_id=user.id, token=token, _external=True)
+            # Create email
+            subject = "Password Reset Request"
+            html_body = f"""
+            <h1>Password Reset Request</h1>
+            <p>Hello {user.full_name or user.username},</p>
+            <p>You requested to reset your password. Please click the link below to reset your password:</p>
+            <p><a href="{reset_url}">{reset_url}</a></p>
+            <p>This link is only valid for 1 hour.</p>
+            <p>If you did not request a password reset, please ignore this email.</p>
+            """
+            try:
+                # Send email
+                msg = Message(
+                    subject=subject,
+                    recipients=[email],
+                    html=html_body
+                )
+                mail.send(msg)
+                flash("Password reset link has been sent to your email", "success")
+            except Exception as e:
+                app.logger.error(f"Failed to send password reset email: {str(e)}")
+                flash("Failed to send password reset email. Please try again later.", "error")
+        else:
+            # Still show success message even if email not found
+            # This prevents user enumeration attacks
+            flash("If that email is in our system, a password reset link has been sent", "success")
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])
+def reset_password(user_id, token):
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    # Find user
+    user = User.query.get(user_id)
+    # Verify user and token
+    if not user or not user.verify_reset_token(token):
+        flash("The password reset link is invalid or has expired.", "error")
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        # Validate password
+        if not password or len(password) < 8:
+            flash("Password must be at least 8 characters long.", "error")
+            return render_template('reset_password.html', user_id=user_id, token=token)
+        
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return render_template('reset_password.html', user_id=user_id, token=token)
+        
+        # Update password
+        user.set_password(password)
+        # Clear reset token
+        user.clear_reset_token()
+        
+        flash("Your password has been successfully reset. You can now log in with your new password.", "success")
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password.html', user_id=user_id, token=token)
 
 @app.route('/profile')
 @login_required
