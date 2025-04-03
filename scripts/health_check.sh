@@ -29,6 +29,7 @@ check_service() {
     local url="$2"
     local expected="$3"
     local max_attempts=${4:-3}
+    local insecure=${5:-false}
     local attempt=1
     
     echo -e "${BOLD}Checking $name...${NC}"
@@ -36,11 +37,15 @@ check_service() {
     while [ $attempt -le $max_attempts ]; do
         echo -n "Attempt $attempt/$max_attempts: "
         
-        # Use curl to check the service
-        response=$(curl -s "$url")
+        # Use curl to check the service, with or without SSL verification
+        if [ "$insecure" = true ]; then
+            response=$(curl -k -s "$url")
+        else
+            response=$(curl -s "$url")
+        fi
         
-        # Check if response contains expected string
-        if [ $? -eq 0 ] && [ -n "$response" ] && [[ "$response" == *"$expected"* ]]; then
+        # Check if curl was successful and if response contains expected string
+        if [ $? -eq 0 ] && [ -n "$response" ] && echo "$response" | grep -q "$expected"; then
             echo -e "${GREEN}OK${NC}"
             return 0
         else
@@ -79,13 +84,13 @@ echo
 echo -e "${BOLD}2. Checking service endpoints...${NC}"
 
 # Check direct access to Flask app
-check_service "Flask API" "http://localhost:$APP_PORT/api/health" "status"
+check_service "Flask API" "http://localhost:$APP_PORT/api/health" "status" 3
 
 # Check access through Nginx (HTTP)
-check_service "Nginx HTTP" "http://localhost:$HTTP_PORT/api/health" "status"
+check_service "Nginx HTTP" "http://localhost:$HTTP_PORT/api/health" "status" 3
 
 # Check access through Nginx (HTTPS) - Allow self-signed cert
-check_service "Nginx HTTPS" "https://localhost:$HTTPS_PORT/api/health" "status" "-k"
+check_service "Nginx HTTPS" "https://localhost:$HTTPS_PORT/api/health" "status" 3 true
 echo
 
 # Check database status
@@ -95,6 +100,20 @@ db_check=$(docker exec amrs-maintenance-tracker bash -c 'sqlite3 /app/data/app.d
 if [ "$db_check" == "Failed" ]; then
     echo -e "${RED}✗ Database check failed${NC}"
     HEALTH_STATUS=false
+    
+    # Check alternative database location
+    alt_db_check=$(docker exec amrs-maintenance-tracker bash -c 'sqlite3 /app/app.db ".tables" 2>/dev/null || echo "Failed"')
+    if [ "$alt_db_check" != "Failed" ]; then
+        echo -e "${YELLOW}! Found database at alternate location: /app/app.db${NC}"
+        echo "   $alt_db_check"
+    else
+        # Try to identify where the database might be
+        db_find=$(docker exec amrs-maintenance-tracker find /app -name "*.db" 2>/dev/null)
+        if [ -n "$db_find" ]; then
+            echo -e "${YELLOW}! Found database files at:${NC}"
+            echo "   $db_find"
+        fi
+    fi
 else
     echo -e "${GREEN}✓ Database exists and contains tables:${NC}"
     echo "   $db_check"
@@ -116,8 +135,14 @@ echo -e "${BOLD}4. Checking file permissions...${NC}"
 data_perms=$(docker exec amrs-maintenance-tracker bash -c 'ls -l /app/data/app.db 2>/dev/null | awk "{print \$1}" || echo "Not found"')
 
 if [ "$data_perms" == "Not found" ]; then
-    echo -e "${RED}✗ Database file not found${NC}"
-    HEALTH_STATUS=false
+    echo -e "${RED}✗ Database file not found at expected location${NC}"
+    # Check if it exists at alternate location
+    alt_data_perms=$(docker exec amrs-maintenance-tracker bash -c 'ls -l /app/app.db 2>/dev/null | awk "{print \$1}" || echo "Not found"')
+    if [ "$alt_data_perms" != "Not found" ]; then
+        echo -e "${YELLOW}! Database found at alternate location with permissions: $alt_data_perms${NC}"
+    else
+        HEALTH_STATUS=false
+    fi
 else
     if [[ "$data_perms" == *"rw"* ]]; then
         echo -e "${GREEN}✓ Database file has proper permissions${NC}"
@@ -127,28 +152,59 @@ else
         HEALTH_STATUS=false
     fi
 fi
+
+# Check template directory permissions
+template_perms=$(docker exec amrs-maintenance-tracker bash -c 'ls -ld /app/templates 2>/dev/null | awk "{print \$1}" || echo "Not found"')
+if [ "$template_perms" == "Not found" ]; then
+    echo -e "${RED}✗ Templates directory not found${NC}"
+    HEALTH_STATUS=false
+else
+    if [[ "$template_perms" == *"rwx"* ]]; then
+        echo -e "${GREEN}✓ Templates directory has proper permissions${NC}"
+    else
+        echo -e "${YELLOW}! Templates directory has restricted permissions: $template_perms${NC}"
+        HEALTH_STATUS=false
+    fi
+fi
 echo
 
 # Check for template files
 echo -e "${BOLD}5. Checking template files...${NC}"
-template_check=$(docker exec amrs-maintenance-tracker bash -c 'ls -A /app/templates/ | wc -l || echo "0"')
+template_check=$(docker exec amrs-maintenance-tracker bash -c 'ls -la /app/templates/ 2>/dev/null | wc -l || echo "0"')
 
-if [ "$template_check" -eq "0" ]; then
-    echo -e "${RED}✗ No template files found${NC}"
+if [ "$template_check" -le 2 ]; then
+    echo -e "${RED}✗ No template files found in container${NC}"
+    
+    # Check data directory for templates
+    data_templates=$(docker exec amrs-maintenance-tracker bash -c 'ls -la /app/data/templates/ 2>/dev/null | wc -l || echo "0"')
+    if [ "$data_templates" -gt 2 ]; then
+        echo -e "${YELLOW}! Templates found in data directory but not copied to app${NC}"
+        echo "   Run: ./scripts/fix_template_permissions.sh"
+    else
+        echo -e "${RED}✗ No templates found in data directory either${NC}"
+        echo "   Run: ./scripts/setup_templates.sh"
+    fi
     HEALTH_STATUS=false
 else
-    echo -e "${GREEN}✓ Found $template_check template files${NC}"
+    echo -e "${GREEN}✓ Found $(($template_check - 2)) template files${NC}"
+    # Check for critical templates
+    for template in "base.html" "login.html" "index.html"; do
+        if ! docker exec amrs-maintenance-tracker bash -c "[ -f /app/templates/$template ]"; then
+            echo -e "${RED}✗ Critical template missing: $template${NC}"
+            HEALTH_STATUS=false
+        fi
+    done
 fi
 echo
 
 # Check for error messages in logs
 echo -e "${BOLD}6. Checking for errors in logs...${NC}"
-app_errors=$(docker logs amrs-maintenance-tracker 2>&1 | grep -i "error\|exception\|failed" | wc -l)
+app_errors=$(docker logs --since=1h amrs-maintenance-tracker 2>&1 | grep -i "error\|exception\|failed" | grep -v "DEBUG" | wc -l)
 nginx_errors=$(docker logs amrs-nginx 2>&1 | grep -i "error\|failed" | grep -v "worker_connections" | wc -l)
 
 if [ "$app_errors" -gt 0 ]; then
     echo -e "${YELLOW}! Found $app_errors errors/exceptions in app logs${NC}"
-    docker logs amrs-maintenance-tracker 2>&1 | grep -i "error\|exception\|failed" | tail -5
+    docker logs --since=1h amrs-maintenance-tracker 2>&1 | grep -i "error\|exception\|failed" | grep -v "DEBUG" | head -5
     HEALTH_STATUS=false
 else
     echo -e "${GREEN}✓ No obvious errors in app logs${NC}"
@@ -156,10 +212,27 @@ fi
 
 if [ "$nginx_errors" -gt 0 ]; then
     echo -e "${YELLOW}! Found $nginx_errors errors in Nginx logs${NC}"
-    docker logs amrs-nginx 2>&1 | grep -i "error\|failed" | grep -v "worker_connections" | tail -5
+    docker logs amrs-nginx 2>&1 | grep -i "error\|failed" | grep -v "worker_connections" | head -5
     HEALTH_STATUS=false
 else
     echo -e "${GREEN}✓ No obvious errors in Nginx logs${NC}"
+fi
+
+# Check Flask app binding
+echo -e "${BOLD}7. Checking Flask binding and port configuration...${NC}"
+binding_check=$(docker exec amrs-maintenance-tracker bash -c 'netstat -tuln 2>/dev/null | grep 9000 || ss -tuln 2>/dev/null | grep 9000 || echo "No binding found"')
+
+if echo "$binding_check" | grep -q "0.0.0.0:9000"; then
+    echo -e "${GREEN}✓ Flask app is correctly bound to 0.0.0.0:9000${NC}"
+else
+    echo -e "${RED}✗ Flask app is not correctly bound to port 9000${NC}"
+    echo "   Current binding: $binding_check"
+    
+    # Check for port conflicts
+    ports_in_use=$(docker exec amrs-maintenance-tracker bash -c 'netstat -tuln 2>/dev/null || ss -tuln 2>/dev/null')
+    echo -e "${YELLOW}! Ports in use inside container:${NC}"
+    echo "$ports_in_use"
+    HEALTH_STATUS=false
 fi
 echo
 
@@ -173,17 +246,20 @@ if [ "$HEALTH_STATUS" = true ]; then
     echo "Your AMRS system is running correctly and can be accessed at:"
     echo "- HTTP: http://localhost:$HTTP_PORT"
     echo "- HTTPS: https://localhost:$HTTPS_PORT"
+    echo "- Direct API: http://localhost:$APP_PORT"
     echo 
     echo "Login with: techsupport / Sm@rty123"
     exit 0
 else
     echo -e "${RED}${BOLD}✗ Some issues were detected!${NC}"
     echo
-    echo "Please review the warnings and errors above."
+    echo "Please run these commands to fix common issues:"
     echo
-    echo "For troubleshooting help:"
-    echo "1. Check logs: docker logs amrs-maintenance-tracker"
-    echo "2. Enter container: docker exec -it amrs-maintenance-tracker bash"
-    echo "3. Restart services: docker-compose restart"
+    echo "1. Fix template issues: ./scripts/fix_template_permissions.sh"
+    echo "2. Fix database issues: ./scripts/database_fix.sh"
+    echo "3. Fix binding issues: ./scripts/fix_502_error.sh"
+    echo
+    echo "For detailed troubleshooting, check app logs:"
+    echo "docker logs amrs-maintenance-tracker"
     exit 1
 fi

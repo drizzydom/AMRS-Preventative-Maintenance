@@ -2,43 +2,53 @@ version: '3'
 
 services:
   app:
-    build: ./server
+    build: 
+      context: ./server
     ports:
-      - "$CONTAINER_PORT:$CONTAINER_PORT"
+      - "${APP_PORT:-9000}:9000"
     environment:
-      - DATABASE_URL=sqlite:////app/data/app.db
-      - SECRET_KEY=secure_$(date +%s)_key
-      - DEBUG=True  # Enable debugging temporarily to help identify issues
+      - SECRET_KEY=secure_${TIMESTAMP:-$(date +%s)}_key
+      - DEBUG=false
       - PYTHONUNBUFFERED=1
       - HOST=0.0.0.0
-      - PORT=$CONTAINER_PORT
-      # Remove SERVER_NAME to avoid routing issues initially
-      # - SERVER_NAME=$DDNS_HOSTNAME
-      - PREFERRED_URL_SCHEME=https
+      - PORT=9000
+      - DATABASE_PATH=/app/data/app.db
+      - FLASK_APP=app.py
     volumes:
-      - $DATA_DIR:/app/data
-    restart: "unless-stopped"
+      - ${DATA_DIR:-./data}/data:/app/data:rw
+      - ${DATA_DIR:-./data}/templates:/app/templates:ro
+      - ${DATA_DIR:-./data}/static:/app/static:ro
+    restart: unless-stopped
+    # Use root during troubleshooting, change to 1000:1000 for production
+    user: "root"
     container_name: amrs-maintenance-tracker
+    hostname: app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:$CONTAINER_PORT/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
+    networks:
+      - amrs-network
 
   nginx:
     image: nginx:alpine
     ports:
-      - "$EXTERNAL_PORT_HTTP:80"
-      - "$EXTERNAL_PORT_HTTPS:443"
+      - "${HTTP_PORT:-8080}:80"
+      - "${HTTPS_PORT:-8443}:443"
     volumes:
-      - $DATA_DIR/nginx/conf.d:/etc/nginx/conf.d
-      - $DATA_DIR/ssl:/etc/nginx/ssl
+      - ${DATA_DIR:-./data}/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ${DATA_DIR:-./data}/ssl:/etc/nginx/ssl:ro
+      - ${DATA_DIR:-./data}/nginx/html:/usr/share/nginx/html:ro
     depends_on:
       - app
     restart: unless-stopped
+    container_name: amrs-nginx
+    hostname: nginx
+    networks:
+      - amrs-network
 
 networks:
-  default:
+  amrs-network:
     name: amrs_network
-    external: true  # Mark the network as external

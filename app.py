@@ -1994,4 +1994,5 @@ def api_health():
 if __name__ == '__main__':
     ensure_env_file()
     ensure_email_templates()
-    app.run(debug=True, host='0.0.0.0', port=5050)
+    port = int(os.environ.get('PORT', 5050))
+    app.run(host='0.0.0.0', port=port)
