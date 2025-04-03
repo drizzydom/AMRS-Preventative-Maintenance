@@ -1,0 +1,144 @@
+/**
+ * CONTENT ALIGNMENT FIX
+ * Ensures all content elements align properly with consistent spacing
+ */
+
+/* Reset all container fluid elements to have consistent padding */
+.container-fluid {
+    padding: 1rem !important;
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* Special adjustment for the main content container */
+.content-container > .container-fluid {
+    padding: 1rem !important;
+}
+
+/* Remove excess margins and padding from all common elements */
+.row,
+.col,
+.col-md,
+.col-lg,
+[class*="col-"] {
+    padding-right: 0.75rem !important;
+    padding-left: 0.75rem !important;
+}
+
+/* All cards should align consistently */
+.card {
+    margin-bottom: 1.25rem !important;
+    border-radius: 0.375rem !important;
+    height: 100% !important; /* Make all cards take full height of their container */
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Fixed height for card headers */
+.card-header {
+    flex: 0 0 auto !important; /* Don't grow or shrink */
+    min-height: 3.5rem !important; /* Minimum height for headers */
+}
+
+/* Card body should take available space but not force growth */
+.card-body {
+    flex: 1 0 auto !important; /* Grow but don't shrink */
+    overflow: hidden !important; /* Contain overflowing content */
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Card title with consistent height and overflow handling */
+.card-title {
+    margin-bottom: 0.75rem !important;
+    min-height: 1.5rem !important;
+    font-weight: 600 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important; /* Limit to 2 lines */
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* Card text with better overflow handling */
+.card-text {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 3 !important; /* Limit to 3 lines by default */
+    -webkit-box-orient: vertical !important;
+}
+
+/* Fixed height for card footers */
+.card-footer {
+    flex: 0 0 auto !important; /* Don't grow or shrink */
+    background-color: rgba(0,0,0,.03) !important;
+}
+
+/* Ensure card groups have equal height cards */
+.card-group, .card-deck, .row > [class*="col"] {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Card columns for equal height cards */
+.row.row-cols-1 > .col,
+.row.row-cols-md-2 > .col,
+.row.row-cols-md-3 > .col,
+.row.row-cols-lg-4 > .col {
+    margin-bottom: 1.25rem !important;
+}
+
+/* Forms should align with container edges */
+form {
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Tables should use full width */
+.table-responsive {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+}
+
+/* All headings should align with content */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    margin-top: 0 !important;
+    margin-bottom: 1rem !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Ensure all modal content aligns consistently */
+.modal-content {
+    padding: 0 !important;
+}
+
+.modal-body {
+    padding: 1rem !important;
+}
+
+/* Responsive adjustments */
+@media (min-width: 992px) {
+    .content-container > .container-fluid {
+        padding: 1.25rem !important;
+    }
+    
+    /* Adjusted line clamp for larger screens */
+    .card-title {
+        -webkit-line-clamp: 1 !important; /* Only 1 line on larger screens */
+    }
+    
+    .card-text {
+        -webkit-line-clamp: 4 !important; /* 4 lines on larger screens */
+    }
+}
+
+@media (min-width: 1200px) {
+    .content-container > .container-fluid {
+        padding: 1.5rem !important;
+    }
+}
