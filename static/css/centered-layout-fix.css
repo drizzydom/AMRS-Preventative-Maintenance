@@ -39,7 +39,7 @@
     width: 100%;
     max-width: 1400px; /* Maximum width of content */
     margin-left: 0; /* Start from left edge (don't center) */
-    padding: 0 5px 0 15px; /* Reduced left padding to move content left */
+    padding: 0 5px 0 5px; /* Minimal padding on both sides */
 }
 
 /* Added compact navbar styling */
@@ -76,11 +76,12 @@ body {
     min-height: calc(100vh - 48px - 60px) !important; /* Viewport minus navbar minus footer */
 }
 
-/* User info section at bottom of sidebar */
+/* User info section at bottom of sidebar - fix text cutoff */
 .sidebar-footer {
     margin-top: auto; /* Push to bottom of sidebar */
     padding: 0; /* Remove padding to match sidebar links */
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100%; /* Ensure footer takes full width */
 }
 
 /* Make user info styling consistent with sidebar links */
@@ -89,22 +90,29 @@ body {
     flex-direction: column;
     color: #fff;
     padding: 0; /* Remove padding to use link padding instead */
+    width: 100%; /* Ensure it takes full width */
 }
 
 .sidebar-username {
     font-weight: 500;
-    padding: 0.5rem 1.25rem 0.25rem;
+    padding: 0.75rem 1rem 0.25rem;
     font-size: 0.9rem;
     text-align: left; /* Left align like other sidebar items */
     line-height: 1.2;
-    word-break: break-word;
+    word-break: break-all; /* Break words to prevent overflow */
+    white-space: normal; /* Allow text to wrap */
+    overflow: hidden; /* Hide overflow text */
+    text-overflow: ellipsis; /* Show ellipsis for overflow */
+    max-width: 100%; /* Constrain to container width */
 }
 
 .sidebar-role {
     font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.7);
-    padding: 0 1.25rem 0.5rem;
+    padding: 0 1rem 0.75rem;
     text-align: left; /* Left align like other sidebar items */
+    word-break: normal;
+    white-space: normal; /* Allow text to wrap */
 }
 
 /* Style logout button like other sidebar links */
@@ -112,7 +120,7 @@ body {
     display: flex;
     align-items: center;
     width: 100%;
-    padding: 0.75rem 1.25rem;
+    padding: 0.75rem 1rem;
     border: none;
     border-left: 3px solid transparent;
     color: #fff;
@@ -174,21 +182,22 @@ body {
 /* Adjust layout for different screen sizes - keep content left aligned */
 @media (min-width: 992px) {
     .content-container {
-        padding-left: 15px; /* Reduced left padding on larger screens */
+        padding-left: 5px; /* Minimal left padding on larger screens */
+        margin-left: 205px !important; /* Position content closer to sidebar */
     }
     
     /* Push content close to sidebar */
     .content-wrapper,
     .main-content,
     .content-container {
-        margin-left: 210px !important; /* Sidebar width plus small gap */
+        margin-left: 205px !important; /* Sidebar width plus minimal gap */
     }
 }
 
 @media (min-width: 1200px) {
     /* Even on larger screens, keep content close to sidebar */
     .content-container {
-        padding-left: 15px;
-        max-width: calc(100% - 220px); /* Account for sidebar and a bit of space */
+        padding-left: 5px; /* Minimal padding */
+        max-width: calc(100% - 210px); /* Account for sidebar with minimal gap */
     }
 }
