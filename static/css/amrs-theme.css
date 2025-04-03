@@ -1,0 +1,146 @@
+/**
+ * AMRS Custom Theme Colors
+ * This file overrides the default Bootstrap theme with AMRS brand colors
+ */
+
+:root {
+  /* Define AMRS colors */
+  --amrs-orange: #FE7900;
+  --amrs-gray: #5E5E5E;
+  --amrs-light-gray: #F4F4F4;
+  --amrs-text-dark: #333333;
+  --amrs-text-light: #FFFFFF;
+  
+  /* Override Bootstrap variables */
+  --bs-primary: var(--amrs-orange) !important;
+  --bs-secondary: var(--amrs-gray) !important;
+  --bs-light: var(--amrs-light-gray) !important;
+  
+  /* Override default theme colors */
+  --body-bg: var(--amrs-light-gray);
+  --sidebar-bg: var(--amrs-gray);
+  --sidebar-hover: #4D4D4D;  /* Slightly darker than sidebar */
+  --sidebar-active: var(--amrs-orange);
+  --sidebar-text: var(--amrs-light-gray);
+}
+
+/* Background colors */
+body {
+  background-color: var(--amrs-light-gray);
+}
+
+/* Navbar styling */
+.navbar-dark {
+  background-color: var(--amrs-orange) !important;
+}
+
+.bg-primary {
+  background-color: var(--amrs-orange) !important;
+}
+
+/* Sidebar styling */
+.sidebar {
+  background-color: var(--amrs-gray) !important;
+  color: #ffffff !important;
+}
+
+.sidebar-link {
+  color: #ffffff !important;
+}
+
+.sidebar-link:hover {
+  background-color: #4D4D4D !important; /* Darker gray */
+}
+
+.sidebar-link.active {
+  background-color: var(--amrs-orange) !important;
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--amrs-orange) !important;
+  border-color: var(--amrs-orange) !important;
+}
+
+.btn-primary:hover {
+  background-color: #E56C00 !important; /* Darker orange */
+  border-color: #E56C00 !important;
+}
+
+.btn-secondary {
+  background-color: var(--amrs-gray) !important;
+  border-color: var(--amrs-gray) !important;
+}
+
+.btn-secondary:hover {
+  background-color: #4D4D4D !important; /* Darker gray */
+  border-color: #4D4D4D !important;
+}
+
+/* Cards */
+.card {
+  background-color: #ffffff;
+  border-color: #e0e0e0;
+}
+
+/* Links */
+a {
+  color: var(--amrs-orange);
+}
+
+a:hover {
+  color: #E56C00; /* Darker orange */
+}
+
+/* Alerts and notifications */
+.alert-primary {
+  background-color: #FFF1E5; /* Light orange */
+  color: var(--amrs-orange);
+  border-color: var(--amrs-orange);
+}
+
+.alert-danger {
+  background-color: #FEE5E5;
+}
+
+/* Form controls */
+.form-control:focus {
+  border-color: var(--amrs-orange);
+  box-shadow: 0 0 0 0.25rem rgba(254, 121, 0, 0.25);
+}
+
+/* Table headers */
+.table-header, 
+thead, 
+.table-primary {
+  background-color: var(--amrs-orange) !important;
+  color: white !important;
+}
+
+/* Status indicators */
+.status-overdue {
+  color: var(--amrs-orange);
+}
+
+/* Colored badges */
+.badge-primary {
+  background-color: var(--amrs-orange);
+}
+
+.badge-secondary {
+  background-color: var(--amrs-gray);
+}
+
+/* Dark mode adjustments */
+html[data-theme="dark"] .navbar-dark {
+  background-color: var(--amrs-orange) !important;
+}
+
+html[data-theme="dark"] .sidebar {
+  background-color: var(--amrs-gray) !important;
+}
+
+html[data-theme="dark"] .card {
+  background-color: #2D3748;
+  border-color: #4A5568;
+}
