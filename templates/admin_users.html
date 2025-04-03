@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="card">
+<div class="card user-management-card">
     <div class="card-header">
         <h5 class="card-title mb-0">Users</h5>
     </div>
@@ -172,6 +172,16 @@
 
 {% block extra_css %}
 <style>
+    /* Fix specific to this page - force content to the top */
+    .page-content {
+        padding-top: 0 !important;
+        margin-top: -60px !important; /* Pull content up aggressively */
+    }
+    
+    .card {
+        margin-top: 0 !important;
+    }
+    
     /* Table cell text handling */
     .text-cell {
         max-width: 200px;

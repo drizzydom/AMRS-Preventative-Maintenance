@@ -1,0 +1,50 @@
+/**
+ * USER MANAGEMENT PAGE SPECIFIC FIX 
+ * Force user management page content to top of page
+ * This must be loaded after all other CSS files
+ */
+
+/* Target the user management page specifically */
+body:has(#deleteUserModal) .page-content,
+body:has(#addUserModal) .page-content {
+  margin-top: -60px !important; /* Pull content up to counteract excessive spacing */
+}
+
+/* Alternative approach with class-based targeting */
+.page-content:has(.admin-users-card),
+.page-content:has(form[action*="user"]) {
+  margin-top: -60px !important;
+}
+
+/* Force zero margins for all cards on user management page */
+#deleteUserModal ~ .card,
+.admin-users-card,
+.page-content:has(#deleteUserModal) .card {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Override any potential inline styles */
+.page-content > .card {
+  margin-top: 0 !important;
+  margin-bottom: 1rem !important;
+}
+
+/* Reduce container padding specifically on this page */
+body:has(#deleteUserModal) .container-fluid.py-4 {
+  padding-top: 0 !important;
+  padding-bottom: 0.5rem !important;
+}
+
+/* Reduce extra space in page header */
+body:has(#deleteUserModal) .page-header {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Reset inline styles from the admin_users.html template */
+body:has(#deleteUserModal) .text-cell,
+body:has(#addUserModal) .text-cell {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
