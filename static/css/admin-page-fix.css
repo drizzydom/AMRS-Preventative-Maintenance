@@ -1,0 +1,48 @@
+/**
+ * ADMIN PAGE SPACING FIX
+ * Places content at the top of admin pages without excessive spacing
+ */
+
+/* Aggressively reduce top spacing on admin pages */
+.page-content {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* Reduce all padding in container */
+.container-fluid.py-4 {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+/* Target admin pages specifically */
+body .card:first-of-type {
+  margin-top: 0 !important;
+}
+
+/* Force content to top of page with negative margins if needed */
+.page-header + .card,
+.page-header + .row,
+.page-header + div > .card,
+.page-header + div > .row {
+  margin-top: 0 !important;
+}
+
+/* Ensure header is compact */
+.page-header {
+  margin-bottom: 0.5rem !important;
+  padding-bottom: 0 !important;
+}
+
+/* Ensure flash messages don't add unnecessary space */
+.alert {
+  padding: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Fix specific admin pages */
+.admin_users .card,
+#admin-users-container .card,
+.admin-content .card:first-child {
+  margin-top: 0 !important;
+}
