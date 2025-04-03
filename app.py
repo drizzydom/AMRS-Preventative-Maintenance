@@ -524,6 +524,109 @@ def dashboard():
         current_user=current_user,
     )
 
+@app.route('/sites')
+@login_required
+def manage_sites():
+    """Display and manage all sites"""
+    # Check permissions
+    if not current_user.has_permission(Permissions.SITES_VIEW) and not current_user.is_admin:
+        if current_user.has_permission(Permissions.SITES_VIEW_ASSIGNED):
+            # User can only view their assigned sites
+            sites = current_user.sites
+        else:
+            flash("You don't have permission to view sites", "error")
+            return redirect(url_for('dashboard'))
+    else:
+        # Admin or users with view permission can see all sites
+        sites = Site.query.all()
+    
+    return render_template('sites.html', 
+                          sites=sites, 
+                          now=datetime.utcnow(),
+                          is_admin=current_user.is_admin,
+                          can_create=current_user.has_permission(Permissions.SITES_CREATE) or current_user.is_admin,
+                          can_edit=current_user.has_permission(Permissions.SITES_EDIT) or current_user.is_admin,
+                          can_delete=current_user.has_permission(Permissions.SITES_DELETE) or current_user.is_admin)
+
+@app.route('/machines')
+@login_required
+def manage_machines():
+    """Display and manage all machines"""
+    # Similar permission check as sites
+    if current_user.is_admin or current_user.has_permission(Permissions.MACHINES_VIEW):
+        # Get all machines, optionally filtered by site
+        site_id = request.args.get('site_id', type=int)
+        if site_id:
+            machines = Machine.query.filter_by(site_id=site_id).all()
+            site = Site.query.get_or_404(site_id)
+            title = f"Machines at {site.name}"
+        else:
+            machines = Machine.query.all()
+            title = "All Machines"
+    else:
+        flash("You don't have permission to view machines", "error")
+        return redirect(url_for('dashboard'))
+    
+    return render_template('machines.html', 
+                          machines=machines,
+                          title=title,
+                          is_admin=current_user.is_admin,
+                          can_create=current_user.has_permission(Permissions.MACHINES_CREATE) or current_user.is_admin,
+                          can_edit=current_user.has_permission(Permissions.MACHINES_EDIT) or current_user.is_admin,
+                          can_delete=current_user.has_permission(Permissions.MACHINES_DELETE) or current_user.is_admin)
+
+@app.route('/parts')
+@login_required
+def manage_parts():
+    """Display and manage all parts"""
+    # Similar permission check as machines
+    if current_user.is_admin or current_user.has_permission(Permissions.PARTS_VIEW):
+        # Get all parts, optionally filtered by machine
+        machine_id = request.args.get('machine_id', type=int)
+        if machine_id:
+            parts = Part.query.filter_by(machine_id=machine_id).all()
+            machine = Machine.query.get_or_404(machine_id)
+            title = f"Parts for {machine.name}"
+        else:
+            parts = Part.query.all()
+            title = "All Parts"
+    else:
+        flash("You don't have permission to view parts", "error")
+        return redirect(url_for('dashboard'))
+    
+    return render_template('parts.html', 
+                          parts=parts,
+                          title=title,
+                          now=datetime.utcnow(),
+                          is_admin=current_user.is_admin,
+                          can_create=current_user.has_permission(Permissions.PARTS_CREATE) or current_user.is_admin,
+                          can_edit=current_user.has_permission(Permissions.PARTS_EDIT) or current_user.is_admin,
+                          can_delete=current_user.has_permission(Permissions.PARTS_DELETE) or current_user.is_admin)
+
+@app.route('/profile')
+@login_required
+def user_profile():
+    """User profile page"""
+    return render_template('profile.html', 
+                          user=current_user)
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin():
+    """Admin dashboard page"""
+    # Get counts for admin dashboard
+    user_count = User.query.count()
+    site_count = Site.query.count()
+    machine_count = Machine.query.count()
+    part_count = Part.query.count()
+    
+    return render_template('admin.html', 
+                          user_count=user_count,
+                          site_count=site_count,
+                          machine_count=machine_count,
+                          part_count=part_count)
+
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if current_user.is_authenticated:
