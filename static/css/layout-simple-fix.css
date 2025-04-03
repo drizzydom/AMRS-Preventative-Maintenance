@@ -136,6 +136,50 @@ body.sidebar-collapsed .sidebar-logout-btn {
   padding: 0.75rem !important; /* Balanced padding */
 }
 
+/* ========= SIDEBAR TOGGLE BUTTON ========= */
+.sidebar-toggle-container {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-toggle {
+  background-color: transparent;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sidebar-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-toggle i {
+  font-size: 14px;
+}
+
+/* Adjust toggle button position in collapsed state */
+body.sidebar-collapsed .sidebar-toggle-container {
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+/* Hide sidebar toggle on mobile */
+@media (max-width: 991.98px) {
+  .sidebar-toggle-container {
+    display: none; /* Hidden on mobile as we use hamburger menu instead */
+  }
+}
+
 /* Mobile adjustments */
 @media (max-width: 991.98px) {
   .content-container {
