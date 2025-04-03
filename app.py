@@ -1139,4 +1139,144 @@ def delete_role(role_id):
 @admin_required
 def manage_backups():
     """Backup management page for admins"""
-    # ...existing code...
+    import os
+    from datetime import datetime
+    
+    # Directory where backups are stored
+    backup_dir = os.path.join(BASE_DIR, 'backups')
+    
+    # Create directory if it doesn't exist
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir, exist_ok=True)
+    
+    # List existing backups
+    backups = []
+    if os.path.exists(backup_dir):
+        for filename in os.listdir(backup_dir):
+            if filename.endswith('.db') or filename.endswith('.sql'):
+                filepath = os.path.join(backup_dir, filename)
+                creation_time = datetime.fromtimestamp(os.path.getctime(filepath))
+                size = os.path.getsize(filepath) / (1024 * 1024)  # Convert to MB
+                backups.append({
+                    'filename': filename,
+                    'created': creation_time,
+                    'size': f"{size:.2f} MB"
+                })
+    
+    # Sort backups by creation date, newest first
+    backups.sort(key=lambda x: x['created'], reverse=True)
+    
+    return render_template('admin_backups.html', backups=backups)
+
+@app.route('/admin/backup/create', methods=['POST'])
+@login_required
+@admin_required
+def create_backup():
+    """Create a database backup"""
+    import os
+    import shutil
+    from datetime import datetime
+    
+    # Backup directory
+    backup_dir = os.path.join(BASE_DIR, 'backups')
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir, exist_ok=True)
+    
+    # Get database path
+    if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite:///'):
+        # For SQLite, extract file path from URI
+        db_path = app.config['SQLALCHEMY_DATABASE_URI'][10:]
+        if db_path.startswith('/'):
+            # Absolute path
+            database_path = db_path
+        else:
+            # Relative path
+            database_path = os.path.join(BASE_DIR, db_path)
+        
+        # Generate backup filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"backup_{timestamp}.db"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        try:
+            # Close database connection first
+            db.session.close()
+            # Copy database file
+            shutil.copy2(database_path, backup_path)
+            flash(f"Backup created successfully: {backup_filename}", "success")
+        except Exception as e:
+            flash(f"Backup failed: {str(e)}", "error")
+    else:
+        flash("Backups are only supported for SQLite databases", "error")
+    
+    return redirect(url_for('manage_backups'))
+
+@app.route('/admin/backup/<filename>/restore', methods=['POST'])
+@login_required
+@admin_required
+def restore_backup(filename):
+    """Restore from a backup file"""
+    import os
+    import shutil
+    
+    # Validate filename to prevent path traversal
+    if '../' in filename or '/' in filename:
+        flash("Invalid backup filename", "error")
+        return redirect(url_for('manage_backups'))
+    
+    backup_dir = os.path.join(BASE_DIR, 'backups')
+    backup_path = os.path.join(backup_dir, filename)
+    
+    if not os.path.exists(backup_path):
+        flash(f"Backup file not found: {filename}", "error")
+        return redirect(url_for('manage_backups'))
+    
+    if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite:///'):
+        # Extract database path from URI
+        db_path = app.config['SQLALCHEMY_DATABASE_URI'][10:]
+        if db_path.startswith('/'):
+            database_path = db_path
+        else:
+            database_path = os.path.join(BASE_DIR, db_path)
+        
+        try:
+            # Close database connection
+            db.session.close()
+            # Backup current database before restoring
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            current_backup = os.path.join(backup_dir, f"pre_restore_{timestamp}.db")
+            shutil.copy2(database_path, current_backup)
+            # Restore from backup
+            shutil.copy2(backup_path, database_path)
+            flash(f"Database restored successfully from: {filename}", "success")
+        except Exception as e:
+            flash(f"Restore failed: {str(e)}", "error")
+    else:
+        flash("Restores are only supported for SQLite databases", "error")
+    
+    return redirect(url_for('manage_backups'))
+
+@app.route('/admin/backup/<filename>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_backup(filename):
+    """Delete a backup file"""
+    import os
+    
+    # Validate filename to prevent path traversal
+    if '../' in filename or '/' in filename:
+        flash("Invalid backup filename", "error")
+        return redirect(url_for('manage_backups'))
+    
+    backup_path = os.path.join(BASE_DIR, 'backups', filename)
+    
+    if os.path.exists(backup_path):
+        try:
+            os.remove(backup_path)
+            flash(f"Backup deleted: {filename}", "success")
+        except Exception as e:
+            flash(f"Failed to delete backup: {str(e)}", "error")
+    else:
+        flash(f"Backup file not found: {filename}", "error")
+    
+    return redirect(url_for('manage_backups'))
