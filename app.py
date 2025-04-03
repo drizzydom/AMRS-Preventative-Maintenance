@@ -607,6 +607,40 @@ def delete_site(site_id):
     flash(f"Site '{site_name}' has been deleted", "success")
     return redirect(url_for('manage_sites'))
 
+@app.route('/sites/<int:site_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_site(site_id):
+    """Edit an existing site"""
+    site = Site.query.get_or_404(site_id)
+    
+    # Check permissions
+    if not current_user.has_permission(Permissions.SITES_EDIT) and not current_user.is_admin:
+        flash("You don't have permission to edit sites", "error")
+        return redirect(url_for('manage_sites'))
+    
+    if request.method == 'POST':
+        site.name = request.form.get('name')
+        site.location = request.form.get('location')
+        site.contact_email = request.form.get('contact_email')
+        site.notification_threshold = request.form.get('notification_threshold', 30)
+        site.enable_notifications = 'enable_notifications' in request.form
+        
+        # Update assigned users if admin
+        if current_user.is_admin:
+            site.users = []  # Clear existing associations
+            user_ids = request.form.getlist('user_ids')
+            for user_id in user_ids:
+                user = User.query.get(user_id)
+                if user:
+                    site.users.append(user)
+        
+        db.session.commit()
+        flash(f"Site '{site.name}' has been updated", "success")
+        return redirect(url_for('manage_sites'))
+    
+    users = User.query.all() if current_user.is_admin else []
+    return render_template('edit_site.html', site=site, users=users, is_admin=current_user.is_admin)
+
 @app.route('/machines')
 @login_required
 def manage_machines():
