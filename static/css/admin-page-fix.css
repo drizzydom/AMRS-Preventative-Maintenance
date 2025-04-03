@@ -3,46 +3,61 @@
  * Places content at the top of admin pages without excessive spacing
  */
 
-/* Aggressively reduce top spacing on admin pages */
-.page-content {
+/* Force content to start at top on all pages */
+.container-fluid > .page-content {
   padding-top: 0 !important;
   margin-top: 0 !important;
 }
 
-/* Reduce all padding in container */
-.container-fluid.py-4 {
+/* Aggressively reduce padding in all content containers */
+.container-fluid {
   padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
 }
 
-/* Target admin pages specifically */
-body .card:first-of-type {
+/* Remove specific classes that may cause the user management page to behave differently */
+.admin-users-card,
+.admin_users_card {
   margin-top: 0 !important;
 }
 
-/* Force content to top of page with negative margins if needed */
-.page-header + .card,
-.page-header + .row,
-.page-header + div > .card,
-.page-header + div > .row {
+/* Remove extra space above all cards */
+.card {
   margin-top: 0 !important;
 }
 
-/* Ensure header is compact */
+/* Fix for admin pages specifically */
+body[data-url*="admin"] .card:first-of-type,
+[id*="admin"] .card:first-of-type {
+  margin-top: 0 !important;
+}
+
+/* Ensure page header is compact */
 .page-header {
   margin-bottom: 0.5rem !important;
   padding-bottom: 0 !important;
 }
 
-/* Ensure flash messages don't add unnecessary space */
+/* Make sure flash messages don't add extra space */
 .alert {
-  padding: 0.5rem !important;
   margin-bottom: 0.5rem !important;
 }
 
-/* Fix specific admin pages */
-.admin_users .card,
-#admin-users-container .card,
-.admin-content .card:first-child {
+/* Fix spacing between header and first card - critical fix */
+.page-header + * {
   margin-top: 0 !important;
+}
+
+/* Target all admin pages specifically */
+[id*="admin"] .card,
+[class*="admin"] .card,
+.admin_users .card,
+.admin-users .card,
+#admin-users-container .card,
+.admin-content .card {
+  margin-top: 0 !important;
+}
+
+/* Force container to start content at top */
+.container-fluid.py-4 {
+  padding-top: 0.25rem !important;
 }
