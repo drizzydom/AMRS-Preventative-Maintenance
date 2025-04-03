@@ -1,6 +1,6 @@
 /**
  * LEFT-ALIGNED LAYOUT FIX
- * Ensures content is properly positioned with left alignment to compensate for sidebar
+ * Ensures content is properly positioned with left alignment directly against sidebar
  */
 
 /* Container for layout */
@@ -8,66 +8,45 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: 100%; /* Use full width */
-    margin: 0; /* Remove auto margins */
+    margin: 0;
 }
 
 /* Ensure content column fills available space */
 .centered-content-col {
     flex: 1;
-    max-width: 100%; /* Use full width of the available space */
-    margin-left: 0; /* Left align content */
-    padding-left: 0; /* Remove padding that might cause rightward shift */
-    padding-right: 0; /* Remove right padding as well */
+    max-width: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 /* Make sure sidebar width is fixed */
 .sidebar-container {
     width: 200px !important;
-    flex: 0 0 200px; /* Don't grow or shrink */
+    flex: 0 0 200px;
 }
 
 /* Fix for sidebar's fixed position */
 .sidebar {
     width: 200px !important;
-    display: flex; /* Allow for flex layout in sidebar */
-    flex-direction: column; /* Stack items vertically */
-    height: calc(100vh - 48px) !important; /* Viewport minus navbar height */
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 48px) !important;
 }
 
-/* Ensure content fills available space but doesn't push right - reset X offsets */
+/* Ensure content fills available space and aligns LEFT against sidebar */
 .content-container {
     width: 100% !important;
-    max-width: none !important; /* Remove max-width constraint */
-    margin-left: 0 !important; /* No automatic margins */
-    margin-right: 0 !important;
-    padding: 0 !important; /* No padding at container level */
-}
-
-/* Inner container padding - this is where we control horizontal spacing */
-.container-fluid.py-4.px-3 {
-    padding: 1rem !important; /* Simplified padding - same on all sides */
-    max-width: 100% !important;
-}
-
-/* Align page header with content */
-.page-header {
+    margin-left: 200px !important; /* Exactly match sidebar width - no gap */
     padding-left: 0 !important;
     padding-right: 0 !important;
-}
-
-/* Fix content alignment */
-.page-content {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    min-height: calc(100vh - 48px - 60px) !important; /* Viewport minus navbar minus footer */
 }
 
 /* Added compact navbar styling */
 .compact-navbar {
     padding-top: 0.25rem !important;
     padding-bottom: 0.25rem !important;
-    min-height: 48px !important; /* Reduced navbar height */
+    min-height: 48px !important;
 }
 
 .compact-navbar .navbar-brand {
@@ -94,10 +73,10 @@ body {
 
 /* Simplified sidebar footer with just logout button */
 .sidebar-footer {
-    margin-top: auto; /* Push to bottom of sidebar */
-    padding: 0; /* Remove padding to match sidebar links */
+    margin-top: auto;
+    padding: 0;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
-    width: 100%; /* Ensure footer takes full width */
+    width: 100%;
 }
 
 /* Make user info styling consistent with sidebar links */
@@ -147,25 +126,27 @@ body {
 }
 
 .sidebar-logout-btn:hover {
-    background-color: #4D4D4D; /* Same hover as sidebar links */
+    background-color: #4D4D4D;
     color: #fff;
     text-decoration: none;
-    border-left-color: rgba(254, 121, 0, 0.5); /* Subtle highlight */
+    border-left-color: rgba(254, 121, 0, 0.5);
 }
 
 .sidebar-logout-btn i {
-    width: 20px; /* Match icon width in sidebar links */
+    width: 20px;
     text-align: center;
     margin-right: 0.75rem;
 }
 
 /* Mobile adjustments */
 @media (max-width: 991.98px) {
+    .content-container {
+        margin-left: 0 !important;
+    }
+    
     .sidebar-container {
         position: fixed;
-        left: -200px; /* Hide sidebar by default on mobile */
-        transition: left 0.3s ease;
-        z-index: 1040;
+        left: -200px;
     }
     
     .sidebar-container.show {

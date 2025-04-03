@@ -33,155 +33,157 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/content-alignment-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/card-layout-fix.css') }}">
     <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
-    
-    {% block extra_css %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">">
+    <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
+    {% block extra_css %}{% endblock %}_for('static', filename='css/amrs-theme.css') }}">
 </head>
-<body>
+<body> block extra_css %}{% endblock %}
     <header>
         <!-- Navigation Bar - Simplified with reduced height -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+            <div class="container-fluid">with reduced height -->
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}">-navbar">
                     <i class="fas fa-tools me-2"></i> AMRS Maintenance
-                </a>
+                </a>lass="navbar-brand" href="{{ url_for('dashboard') }}">
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
                         aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                </button>ria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
-                </button>
-                
                 <div class="collapse navbar-collapse" id="navbarNav">
                     {% if current_user.is_authenticated %}
                     <!-- Completely empty navbar menu - all navigation moved to sidebar -->
-                    <ul class="navbar-nav me-auto">
-                        <!-- Empty but kept for mobile menu structure -->
-                    </ul>
-                    {% endif %}
-                </div>
-            </div>
+                    <ul class="navbar-nav me-auto">ated %}
+                        <!-- Empty but kept for mobile menu structure -->ved to sidebar -->
+                    </ul>lass="navbar-nav me-auto">
+                    {% endif %}pty but kept for mobile menu structure -->
+                </div>ul>
+            </div>  {% endif %}
+        </nav>  </div>
+    </header>/div>
         </nav>
-    </header>
-
     <div class="container-fluid centered-layout">
         <div class="row">
-            <!-- Sidebar -->
+            <!-- Sidebar -->uid centered-layout">
             <div class="col-md-auto px-0 sidebar-container">
                 <div class="sidebar">
-                    <!-- Sidebar navigation links -->
+                    <!-- Sidebar navigation links -->ainer">
                     <ul class="sidebar-nav">
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-tachometer-alt"></i>
-                                <span class="sidebar-link-text">Dashboard</span>
-                            </a>
-                        </li>
+                                <span class="sidebar-link-text">Dashboard</span>link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                            </a><i class="sidebar-icon fas fa-tachometer-alt"></i>
+                        </li>   <span class="sidebar-link-text">Dashboard</span>
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-building"></i>
-                                <span class="sidebar-link-text">Sites</span>
-                            </a>
-                        </li>
+                                <span class="sidebar-link-text">Sites</span>idebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
+                            </a><i class="sidebar-icon fas fa-building"></i>
+                        </li>   <span class="sidebar-link-text">Sites</span>
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-industry"></i>
-                                <span class="sidebar-link-text">Machines</span>
-                            </a>
-                        </li>
+                                <span class="sidebar-link-text">Machines</span>idebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                            </a><i class="sidebar-icon fas fa-industry"></i>
+                        </li>   <span class="sidebar-link-text">Machines</span>
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-cogs"></i>
-                                <span class="sidebar-link-text">Parts</span>
-                            </a>
-                        </li>
+                                <span class="sidebar-link-text">Parts</span>idebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                            </a><i class="sidebar-icon fas fa-cogs"></i>
+                        </li>   <span class="sidebar-link-text">Parts</span>
                         <!-- Added User Profile Link to Sidebar -->
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-user"></i>
-                                <span class="sidebar-link-text">User Profile</span>
-                            </a>
-                        </li>
+                                <span class="sidebar-link-text">User Profile</span>link {% if request.endpoint == 'user_profile' %}active{% endif %}">
+                            </a><i class="sidebar-icon fas fa-user"></i>
+                        </li>   <span class="sidebar-link-text">User Profile</span>
                         {% if current_user.is_admin %}
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-user-shield"></i>
-                                <span class="sidebar-link-text">Admin</span>
-                            </a>
-                        </li>
+                                <span class="sidebar-link-text">Admin</span>link {% if request.endpoint == 'admin' %}active{% endif %}">
+                            </a><i class="sidebar-icon fas fa-user-shield"></i>
+                        </li>   <span class="sidebar-link-text">Admin</span>
                         {% endif %}
-                    </ul>
-                    
+                    </ul>/li>
+                        {% endif %}
                     <!-- User information and logout at bottom of sidebar -->
                     {% if current_user.is_authenticated %}
-                    <div class="sidebar-footer">
+                    <div class="sidebar-footer">gout at bottom of sidebar -->
                         <!-- Removed username and role display, keeping only logout button -->
                         <a href="{{ url_for('logout') }}" class="sidebar-logout-btn">
-                            <i class="sidebar-icon fas fa-sign-out-alt"></i>
-                            <span>Logout</span>
-                        </a>
-                    </div>
+                            <i class="sidebar-icon fas fa-sign-out-alt"></i> logout button -->
+                            <span>Logout</span>gout') }}" class="sidebar-logout-btn">
+                        </a><i class="sidebar-icon fas fa-sign-out-alt"></i>
+                    </div>  <span>Logout</span>
                     {% endif %}
+                </div>div>
+            </div>  {% endif %}
                 </div>
-            </div>
-            
             <!-- Main Content -->
             <div class="col px-0 centered-content-col">
                 <div class="content-container">
-                    <div class="container-fluid py-4 px-3">
-                        <!-- Page Header -->
+                    <div class="container-fluid py-4">
+                        <!-- Page Header -->r">
                         {% if current_user.is_authenticated %}
                         <div class="page-header mb-4">
                             <div class="d-flex justify-content-between align-items-center">
                                 <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
-                                {% block header_actions %}{% endblock %}
-                            </div>
-                        </div>
+                                {% block header_actions %}{% endblock %}lign-items-center">
+                            </div>1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
+                        </div>  {% block header_actions %}{% endblock %}
                         {% endif %}
-                        
+                        </div>
                         <!-- Flash Messages -->
                         {% with messages = get_flashed_messages(with_categories=true) %}
-                            {% if messages %}
-                                {% for category, message in messages %}
+                            {% if messages %}->
+                                {% for category, message in messages %}tegories=true) %}
                                     {% set alert_class = "success" if category == "success" else "danger" if category == "error" else category %}
                                     <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
                                         <i class="fas fa-{% if alert_class == 'success' %}check-circle{% elif alert_class == 'danger' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
-                                        {{ message }}
-                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                    </div>
-                                {% endfor %}
+                                        {{ message }} alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                                    </div> message }}
+                                {% endfor %}ton type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            {% endif %}iv>
+                        {% endwith %}dfor %}
                             {% endif %}
-                        {% endwith %}
-                        
                         <!-- Page Content -->
                         <div class="page-content">
                             {% block content %}{% endblock %}
-                        </div>
-                    </div>
-                </div>
-            </div>
+                        </div>lass="page-content">
+                    </div>  {% block content %}{% endblock %}
+                </div>  </div>
+            </div>  </div>
+        </div>  </div>
+    </div>  </div>
         </div>
-    </div>
-
     <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light">
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
-                <div>
+                <div>ontainer-fluid">
                     <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
                 </div>
-                <div>
+                <div>span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
                     <span class="text-muted">Version 1.0</span>
                 </div>
-            </div>
+            </div>  <span class="text-muted">Version 1.0</span>
+        </div>  </div>
+    </footer>/div>
         </div>
-    </footer>
-
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Main application scripts -->
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <!-- Page specific scripts -->
-    {% block scripts %}{% endblock %}
+    <!-- Main application scripts --> -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>tstrap.bundle.min.js"></script>
+    <!-- Page specific scripts -->-->
+    {% block scripts %}{% endblock %} filename='js/app.js') }}"></script>
     <!-- Sidebar Toggle Script -->
     <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
+</body>- Sidebar Toggle Script -->
+</html>ript src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
 </body>
 </html>
