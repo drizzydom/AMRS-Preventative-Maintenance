@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}User Management Diagnostic - Maintenance Tracker{% endblock %}
+
+{% block header_title %}User Management Diagnostic{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">CSS Diagnostic</h5>
+    </div>
+    <div class="card-body">
+        <p>This is a diagnostic page to test CSS issues with the User Management page.</p>
+        <div id="css-info"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Function to diagnose CSS issues
+document.addEventListener('DOMContentLoaded', function() {
+    const cssInfo = document.getElementById('css-info');
+    
+    // Get all loaded stylesheets
+    const sheets = document.styleSheets;
+    let html = '<h4>Loaded Stylesheets:</h4><ul>';
+    
+    for (let i = 0; i < sheets.length; i++) {
+        try {
+            const sheet = sheets[i];
+            html += `<li>${sheet.href || 'Inline stylesheet'}</li>`;
+        } catch (e) {
+            html += `<li>Unable to access stylesheet (possibly CORS restricted)</li>`;
+        }
+    }
+    
+    html += '</ul>';
+    
+    // Check computed styles for key elements
+    html += '<h4>Computed Styles:</h4><ul>';
+    
+    const pageContent = document.querySelector('.page-content');
+    const computedStyle = window.getComputedStyle(pageContent);
+    
+    html += `<li>page-content margins: top=${computedStyle.marginTop}, bottom=${computedStyle.marginBottom}</li>`;
+    html += `<li>page-content padding: top=${computedStyle.paddingTop}, bottom=${computedStyle.paddingBottom}</li>`;
+    
+    const card = document.querySelector('.card');
+    const cardStyle = window.getComputedStyle(card);
+    
+    html += `<li>card margins: top=${cardStyle.marginTop}, bottom=${cardStyle.marginBottom}</li>`;
+    html += `<li>card padding: top=${cardStyle.paddingTop}, bottom=${cardStyle.paddingBottom}</li>`;
+    
+    html += '</ul>';
+    
+    cssInfo.innerHTML = html;
+});
+</script>
+{% endblock %}
