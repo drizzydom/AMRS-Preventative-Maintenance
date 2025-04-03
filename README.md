@@ -76,13 +76,6 @@ For Docker-related problems:
    ./restart_containers.sh
    ```
 
-## Access and Login
-
-- **Web Interface**: http://your-synology-ip:9000
-- **Default Admin Account**: 
-  - Username: `techsupport`
-  - Password: `Sm@rty123`
-
 ## Advanced Configuration
 
 For HTTPS, DDNS, and other advanced configurations, see the documentation in the [`docs`](./docs) directory.
