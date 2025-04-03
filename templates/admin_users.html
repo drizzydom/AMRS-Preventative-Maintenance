@@ -167,41 +167,43 @@
             });
         }
     });
+
+    // Direct fix to prevent the jumping table
+    window.addEventListener('load', function() {
+        // Force the page content to the top of the container
+        document.querySelector('.page-content').style.marginTop = '-200px';
+    });
 </script>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    /* URGENT FIX FOR POSITIONING */
-    /* Force the page-content container to the very top */
+    /* Hard override to force table to top */
     .page-content {
-        margin-top: -60px !important;
+        position: relative !important;
+        margin-top: -200px !important; /* Extreme negative margin to counteract whatever is pushing it down */
         padding-top: 0 !important;
+        z-index: 1 !important; /* Ensure it stays above other elements */
     }
     
-    /* Ensure card is at the top with no extra margins */
-    .page-content > .card {
+    /* Fix specific to this page - margin is only added to this page */
+    body .card {
         margin-top: 0 !important;
-        margin-bottom: 1rem !important;
-        border-top: 0;
     }
     
-    /* Remove min-height from table that could be causing issues */
-    .table-responsive {
-        min-height: 0 !important;
+    /* Fix table header contrast */
+    .table thead th, 
+    .table > :not(caption) > * > th {
+        background-color: #444 !important;
+        color: white !important;
     }
     
-    /* Essential styling for table cells */
+    /* Text cell handling */
     .text-cell {
         max-width: 200px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-    
-    td .btn {
-        margin-bottom: 0;
-        white-space: nowrap;
     }
 </style>
 {% endblock %}
