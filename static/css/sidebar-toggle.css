@@ -3,38 +3,63 @@
  * Adds collapse/expand functionality to the sidebar
  */
 
-/* Sidebar toggle button styling */
+/* Sidebar Toggle Button and Container Styling */
+
+/* Container for the toggle button */
+.sidebar-toggle-container {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.1);
+    width: 100%;
+}
+
+/* The toggle button itself */
 .sidebar-toggle {
-    position: fixed;
-    top: 70px;
-    left: 180px; /* Match your sidebar width */
+    background-color: rgba(254, 121, 0, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     width: 24px;
     height: 24px;
-    background-color: #fff;
-    border-radius: 50%;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    border: none;
-    cursor: pointer;
-    z-index: 1025;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
-    color: #333;
+    padding: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
 .sidebar-toggle:hover {
-    background-color: #f8f9fa;
+    background-color: rgba(254, 121, 0, 0.5);
 }
 
-/* Adjust button position when sidebar is collapsed */
-body.sidebar-collapsed .sidebar-toggle {
-    left: 50px; /* Match your collapsed sidebar width */
+.sidebar-toggle i {
+    font-size: 14px;
 }
 
-/* Rotate icon when sidebar is collapsed */
+/* Adjust toggle position in collapsed state */
+body.sidebar-collapsed .sidebar-toggle-container {
+    justify-content: center;
+    padding: 0.5rem 0;
+}
+
 body.sidebar-collapsed .sidebar-toggle i {
     transform: rotate(180deg);
+}
+
+/* Clear any floats/absolute positioning causing issues */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 48px;
+    bottom: 0;
+    left: 0;
+    width: 200px;
+    overflow-y: auto;
+    transition: width 0.3s ease;
 }
 
 /* Collapsed sidebar styles */
@@ -106,7 +131,7 @@ html[data-theme="dark"] .sidebar-toggle:hover {
 
 /* Mobile adjustments */
 @media (max-width: 991.98px) {
-    .sidebar-toggle {
-        display: none !important; /* Hide on mobile, use navbar toggler instead */
+    .sidebar-toggle-container {
+        display: none;
     }
 }
