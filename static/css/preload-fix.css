@@ -1,0 +1,41 @@
+/**
+ * PRELOAD FIX
+ * Prevents content jumping during page load
+ * This file should be loaded as early as possible
+ */
+
+/* Prevent content jumps by setting explicit heights early */
+html, body {
+  scroll-behavior: auto !important; /* Disable smooth scrolling which can cause jumps */
+}
+
+/* Ensure the admin user page doesn't jump */
+body {
+  min-height: auto !important;
+  height: auto !important;
+}
+
+/* Force content to stay at the top */
+.container-fluid > .page-content,
+.page-content,
+.content-container {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  position: relative !important;
+  top: 0 !important;
+}
+
+/* Prevent movement after DOM is loaded */
+.card {
+  margin-top: 0 !important;
+  position: relative !important;
+  top: 0 !important;
+}
+
+/* Disable ALL animations and transitions during page load */
+.preload * {
+  animation-duration: 0s !important;
+  transition-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-delay: 0s !important;
+}
