@@ -743,7 +743,7 @@ def delete_machine(machine_id):
     db.session.commit()
     
     flash(f"Machine '{machine_name}' has been deleted", "success")
-    return redirect(url_for('manage_machines', site_id=site_id)
+    return redirect(url_for('manage_machines', site_id=site_id))
 
 @app.route('/machines/<int:machine_id>/history')
 @login_required
