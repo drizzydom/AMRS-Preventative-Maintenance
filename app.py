@@ -589,6 +589,24 @@ def manage_sites():
                           can_edit=current_user.has_permission(Permissions.SITES_EDIT) or current_user.is_admin,
                           can_delete=current_user.has_permission(Permissions.SITES_DELETE) or current_user.is_admin)
 
+@app.route('/sites/<int:site_id>/delete', methods=['POST'])
+@login_required
+def delete_site(site_id):
+    """Delete a site"""
+    if not current_user.has_permission(Permissions.SITES_DELETE) and not current_user.is_admin:
+        flash("You don't have permission to delete sites", "error")
+        return redirect(url_for('manage_sites'))
+    
+    site = Site.query.get_or_404(site_id)
+    site_name = site.name
+    
+    # Delete the site and all related data due to cascade
+    db.session.delete(site)
+    db.session.commit()
+    
+    flash(f"Site '{site_name}' has been deleted", "success")
+    return redirect(url_for('manage_sites'))
+
 @app.route('/machines')
 @login_required
 def manage_machines():
