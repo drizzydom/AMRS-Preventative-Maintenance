@@ -22,16 +22,22 @@
   --sidebar-hover: #4D4D4D;  /* Slightly darker than sidebar */
   --sidebar-active: var(--amrs-orange);
   --sidebar-text: var(--amrs-light-gray);
+  
+  /* Navbar heights */
+  --navbar-height: 48px;
 }
 
 /* Background colors */
 body {
   background-color: var(--amrs-light-gray);
+  padding-top: var(--navbar-height) !important;
 }
 
-/* Navbar styling */
+/* Navbar styling - compact and branded */
 .navbar-dark {
   background-color: var(--amrs-orange) !important;
+  height: var(--navbar-height) !important;
+  min-height: var(--navbar-height) !important;
 }
 
 .bg-primary {
@@ -42,6 +48,8 @@ body {
 .sidebar {
   background-color: var(--amrs-gray) !important;
   color: #ffffff !important;
+  top: var(--navbar-height) !important;
+  height: calc(100vh - var(--navbar-height)) !important;
 }
 
 .sidebar-link {
@@ -143,4 +151,21 @@ html[data-theme="dark"] .sidebar {
 html[data-theme="dark"] .card {
   background-color: #2D3748;
   border-color: #4A5568;
+}
+
+/* Centering adjustments */
+.centered-layout {
+  margin: 0 auto;
+}
+
+.content-container {
+  max-width: calc(100% - 30px);
+  margin: 0 auto;
+}
+
+/* Compact navbar specific adjustments */
+.compact-navbar .navbar-brand,
+.compact-navbar .nav-link {
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
 }
