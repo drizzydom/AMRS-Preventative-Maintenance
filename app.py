@@ -1037,6 +1037,25 @@ def edit_user(user_id):
     sites = Site.query.all()
     return render_template('edit_user.html', user=user, roles=roles, sites=sites)
 
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_user(user_id):
+    """Delete a user"""
+    user = User.query.get_or_404(user_id)
+    
+    # Prevent deleting self
+    if user.id == current_user.id:
+        flash("You cannot delete your own account", "error")
+        return redirect(url_for('manage_users'))
+    
+    username = user.username
+    db.session.delete(user)
+    db.session.commit()
+    
+    flash(f"User '{username}' has been deleted", "success")
+    return redirect(url_for('manage_users'))
+
 @app.route('/admin/roles')
 @login_required
 @admin_required
