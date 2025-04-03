@@ -34,9 +34,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/card-layout-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-reset.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
-    <!-- Add simple layout fix CSS as the very last CSS file before theme -->ition-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-position-fix.css') }}">
+    <!-- Add simple layout fix CSS as the very last CSS file before theme -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-simple-fix.css') }}">
-    <!-- Add the AMRS theme CSS file after all other CSS files to override them -->ix.css') }}">
     <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
@@ -133,63 +133,62 @@
                 <div class="content-container">
                     <div class="container-fluid py-4 px-3">
                         <!-- Page Header -->
-                        <div class="page-header mb-2">cated %}
+                        {% if current_user.is_authenticated %}
+                        <div class="page-header mb-2">
                             <div class="d-flex justify-content-between align-items-center">
                                 <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
-                                <div class="header_actions">e %}{% endblock %}</h1>
-                                    {% block header_actions %}{% endblock %} block header_actions %}{% endblock %}
-                                </div>div>
+                                <div class="header_actions">
+                                    {% block header_actions %}{% endblock %}
+                                </div>
                             </div>
-                        </div>{% endif %}
+                        </div>
                         {% endif %}
                         
-                        <!-- Flash Messages -->t_flashed_messages(with_categories=true) %}
+                        <!-- Flash Messages -->
                         {% with messages = get_flashed_messages(with_categories=true) %}
                             {% if messages %}
-                                {% for category, message in messages %} "error" else category %}
+                                {% for category, message in messages %}
                                     {% set alert_class = "success" if category == "success" else "danger" if category == "error" else category %}
-                                    <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert"> fa-{% if alert_class == 'success' %}check-circle{% elif alert_class == 'danger' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                                    <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
                                         <i class="fas fa-{% if alert_class == 'success' %}check-circle{% elif alert_class == 'danger' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
-                                        {{ message }}utton type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        {{ message }}
                                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                    </div>or %}
-                                {% endfor %}%}
-                            {% endif %}{% endwith %}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
                         {% endwith %}
                         
                         <!-- Page Content -->
-                        <div class="page-content"> block content %}{% endblock %}
-                            {% block content %}{% endblock %}div>
-                        </div>div>
-                    </div>div>
-                </div>div>
-            </div>div>
-        </div>    </div>
+                        <div class="page-content">
+                            {% block content %}{% endblock %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Footer -->3 bg-light">
+    <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light">
-        <div class="container-fluid">s="d-flex justify-content-between align-items-center">
+        <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
-                <div>pan class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
-                    <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>>
+                <div>
+                    <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
                 </div>
-                <div>pan class="text-muted">Version 1.0</span>
-                    <span class="text-muted">Version 1.0</span>div>
-                </div>div>
-            </div>>
-        </div>    </footer>
+                <div>
+                    <span class="text-muted">Version 1.0</span>
+                </div>
+            </div>
+        </div>
     </footer>
 
-    <!-- Bootstrap Bundle with Popper -->.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Main application scripts -->c', filename='js/app.js') }}"></script>
+    <!-- Main application scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <!-- Page specific scripts --> %}
+    <!-- Page specific scripts -->
     {% block scripts %}{% endblock %}
-    <!-- Sidebar Toggle Script -->ript src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
+    <!-- Sidebar Toggle Script -->
     <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
-</body></html>
-
-
+</body>
 </html>
