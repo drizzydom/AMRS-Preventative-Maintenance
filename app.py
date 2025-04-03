@@ -743,7 +743,28 @@ def delete_machine(machine_id):
     db.session.commit()
     
     flash(f"Machine '{machine_name}' has been deleted", "success")
-    return redirect(url_for('manage_machines', site_id=site_id))
+    return redirect(url_for('manage_machines', site_id=site_id)
+
+@app.route('/machines/<int:machine_id>/history')
+@login_required
+def machine_history(machine_id):
+    """View maintenance history for a specific machine"""
+    machine = Machine.query.get_or_404(machine_id)
+    
+    # Check permissions - only show if user has access to the site
+    if not current_user.is_admin and not machine.site in current_user.sites:
+        flash('You do not have permission to view this machine', 'error')
+        return redirect(url_for('dashboard'))
+        
+    # Get all maintenance logs for parts in this machine
+    maintenance_logs = MaintenanceLog.query.join(Part).filter(
+        Part.machine_id == machine_id
+    ).order_by(MaintenanceLog.maintenance_date.desc()).all()
+    
+    return render_template('machine_history.html', 
+                          machine=machine,
+                          maintenance_logs=maintenance_logs, 
+                          now=datetime.utcnow())
 
 @app.route('/parts', methods=['GET', 'POST'])
 @login_required
