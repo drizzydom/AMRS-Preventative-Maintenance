@@ -97,13 +97,19 @@
 }
 
 /* ========= SIDEBAR LOGOUT FIXES ========= */
-.sidebar-logout-btn {
+.sidebar-logout-btn,
+.sidebar-logout-btn:link,
+.sidebar-logout-btn:visited,
+.sidebar-logout-btn:hover,
+.sidebar-logout-btn:active {
   color: white !important; /* Force white text color */
+  text-decoration: none !important; /* No underline */
   display: flex !important;
   align-items: center !important;
 }
 
-.sidebar-logout-btn i {
+.sidebar-logout-btn i,
+.sidebar-logout-btn .sidebar-icon {
   width: 20px !important;
   text-align: center !important;
   color: white !important; /* Explicitly make icon white */
