@@ -34,13 +34,37 @@ body {
 .content-container,
 .main-content,
 .content-wrapper {
-    margin-left: 200px !important; /* Exactly sidebar width - no gap */
-    padding-top: 1rem !important;
+    margin-left: 200px !important; /* Exactly sidebar width */
+    padding-left: 0 !important;  /* Reset padding to allow inner containers to control spacing */
+    padding-right: 0 !important;
+    padding-top: 0.5rem !important; /* Reduce top padding for more content space */
 }
 
-/* Ensure main container starts below navbar */
+/* Reset inner container padding for consistent alignment */
 .container-fluid {
     margin-top: 0 !important;
+    padding-right: 1rem !important;
+    padding-left: 1rem !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+}
+
+/* Clean up page header alignment */
+.page-header {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* Clean up page content alignment */
+.page-content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
 }
 
 /* Mobile adjustments */
