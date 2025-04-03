@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isClickInside && sidebar?.classList.contains('show')) {
             sidebar.classList.remove('show');
             body.classList.remove('sidebar-active');
-            document.querySelector('.sidebar').classList.remove('collapsed');
+            document.querySelector('.sidebar')?.classList.remove('collapsed');
         }
     });
 });
@@ -65,6 +65,16 @@ function toggleSidebar() {
     // Toggle collapsed class
     body.classList.toggle('sidebar-collapsed');
     
+    // Apply collapsed class to sidebar element as well for consistent styling
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        if (body.classList.contains('sidebar-collapsed')) {
+            sidebar.classList.add('collapsed');
+        } else {
+            sidebar.classList.remove('collapsed');
+        }
+    }
+    
     // Store preference in localStorage
     if (body.classList.contains('sidebar-collapsed')) {
         localStorage.setItem('sidebar-collapsed', 'true');
@@ -76,8 +86,11 @@ function toggleSidebar() {
 // Load saved sidebar state from localStorage
 function loadSidebarState() {
     const body = document.body;
+    const sidebar = document.querySelector('.sidebar');
+    
     if (localStorage.getItem('sidebar-collapsed') === 'true') {
         body.classList.add('sidebar-collapsed');
+        if (sidebar) sidebar.classList.add('collapsed');
     }
 }
 
