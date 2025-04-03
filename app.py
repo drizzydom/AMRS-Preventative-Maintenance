@@ -83,6 +83,21 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
 # Configure the database
 configure_database(app)
 
+# Initialize database tables
+with app.app_context():
+    # Create database tables if they don't exist
+    db.create_all()
+    print("Database tables created/verified")
+    # Check if there are any users, if not this is a fresh install
+    try:
+        user_count = db.session.query(db.func.count(User.id)).scalar()
+        print(f"Found {user_count} users in database")
+        if user_count == 0:
+            print("No users found - this appears to be a fresh installation")
+    except Exception as e:
+        print(f"Error checking users: {str(e)}")
+        # This may mean tables don't exist yet, which is fine as we just created them
+
 # Add session configuration to work across networks
 app.config['SESSION_COOKIE_SECURE'] = False  # Set to True only if using HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -453,6 +468,82 @@ def dashboard():
         is_admin=current_user.is_admin,
         current_user=current_user,
     )
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        email = request.form.get('email')
+        # Find user by email
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            # Generate reset token
+            token = user.generate_reset_token()
+            # Build reset URL
+            reset_url = url_for('reset_password', user_id=user.id, token=token, _external=True)
+            # Create email
+            subject = "Password Reset Request"
+            html_body = f"""
+            <h1>Password Reset Request</h1>
+            <p>Hello {user.full_name or user.username},</p>
+            <p>You requested to reset your password. Please click the link below to reset your password:</p>
+            <p><a href="{reset_url}">{reset_url}</a></p>
+            <p>This link is only valid for 1 hour.</p>
+            <p>If you did not request a password reset, please ignore this email.</p>
+            """
+            try:
+                # Send email
+                msg = Message(
+                    subject=subject,
+                    recipients=[email],
+                    html=html_body
+                )
+                mail.send(msg)
+                flash("Password reset link has been sent to your email", "success")
+            except Exception as e:
+                app.logger.error(f"Failed to send password reset email: {str(e)}")
+                flash("Failed to send password reset email. Please try again later.", "error")
+        else:
+            # Still show success message even if email not found
+            # This prevents user enumeration attacks
+            flash("If that email is in our system, a password reset link has been sent", "success")
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])
+def reset_password(user_id, token):
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    # Find user
+    user = User.query.get(user_id)
+    # Verify user and token
+    if not user or not user.verify_reset_token(token):
+        flash("The password reset link is invalid or has expired.", "error")
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        # Validate password
+        if not password or len(password) < 8:
+            flash("Password must be at least 8 characters long.", "error")
+            return render_template('reset_password.html', user_id=user_id, token=token)
+        
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return render_template('reset_password.html', user_id=user_id, token=token)
+        
+        # Update password
+        user.set_password(password)
+        # Clear reset token
+        user.clear_reset_token()
+        
+        flash("Your password has been successfully reset. You can now log in with your new password.", "success")
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password.html', user_id=user_id, token=token)
 
 @app.cli.command("init-db")
 def init_db():
