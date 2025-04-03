@@ -25,5 +25,5 @@ services:
         sync: false
     disk:
       name: maintenance-data
-      mountPath: /var/data
+      mountPath: /opt/render/project/src/instance
       sizeGB: 1

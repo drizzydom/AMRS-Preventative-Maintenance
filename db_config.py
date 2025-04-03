@@ -7,10 +7,18 @@ def configure_database(app: Flask):
     
     # For Render deployment
     if os.environ.get('RENDER'):
-        # Use Render's persistent disk instead of /tmp
-        # Render provides /var/data as persistent storage
-        os.makedirs('/var/data', exist_ok=True)
-        db_path = '/var/data/maintenance.db'
+        # Use Render's mount path environment variable, or fall back to app directory
+        if os.environ.get('RENDER_MOUNT_PATH'):
+            # Use the mount path specified by Render
+            data_dir = os.environ.get('RENDER_MOUNT_PATH')
+            print(f"Using Render mount path: {data_dir}")
+        else:
+            # Fall back to a directory in the project that we can write to
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+            print(f"Using fallback data directory: {data_dir}")
+        
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, 'maintenance.db')
         app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
         
         print(f"Using persistent database at {db_path}")
@@ -24,10 +32,6 @@ def configure_database(app: Flask):
         # Local development setup
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
     
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-    # Make sure SQLAlchemy doesn't create tables automatically
-    # This prevents the database from being recreated on startup
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     return app
