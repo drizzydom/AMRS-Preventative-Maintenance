@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Machine{% endblock %}
+
+{% block header_title %}Edit Machine{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title h5 mb-0">Edit Machine: {{ machine.name }}</h2>
+    </div>
+    <div class="card-body">
+        <form action="{{ url_for('edit_machine', machine_id=machine.id) }}" method="post">
+            <div class="mb-3">
+                <label for="name" class="form-label">Machine Name *</label>
+                <input type="text" class="form-control" id="name" name="name" value="{{ machine.name }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="model" class="form-label">Model</label>
+                <input type="text" class="form-control" id="model" name="model" value="{{ machine.model }}">
+            </div>
+            <div class="mb-3">
+                <label for="machine_number" class="form-label">Machine Number</label>
+                <input type="text" class="form-control" id="machine_number" name="machine_number" value="{{ machine.machine_number or '' }}">
+            </div>
+            <div class="mb-3">
+                <label for="serial_number" class="form-label">Serial Number</label>
+                <input type="text" class="form-control" id="serial_number" name="serial_number" value="{{ machine.serial_number or '' }}">
+            </div>
+            <div class="mb-3">
+                <label for="site_id" class="form-label">Site *</label>
+                <select class="form-select" id="site_id" name="site_id" required>
+                    {% for site in sites %}
+                        <option value="{{ site.id }}" {% if site.id == machine.site_id %}selected{% endif %}>
+                            {{ site.name }} ({{ site.location }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('manage_machines') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Machine Parts Section -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h2 class="card-title h5 mb-0">Machine Parts</h2>
+    </div>
+    <div class="card-body">
+        {% if machine.parts %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Part Name</th>
+                        <th>Description</th>
+                        <th>Maintenance Frequency</th>
+                        <th>Last Maintenance</th>
+                        <th>Next Due</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for part in machine.parts %}
+                    <tr>
+                        <td>{{ part.name }}</td>
+                        <td>{{ part.description }}</td>
+                        <td>{{ part.get_frequency_display() }}</td>
+                        <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="btn btn-outline-success">
+                                    <i class="fas fa-tools"></i> Maintain
+                                </a>
+                                <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> No parts have been added to this machine yet. You can add parts from the <a href="{{ url_for('manage_parts') }}">Manage Parts</a> page.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

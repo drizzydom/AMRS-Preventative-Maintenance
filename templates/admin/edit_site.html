@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Site{% endblock %}
+
+{% block header_title %}Edit Site{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title h5 mb-0">Edit Site: {{ site.name }}</h2>
+    </div>
+    <div class="card-body">
+        <form action="{{ url_for('edit_site', site_id=site.id) }}" method="post">
+            <div class="mb-3">
+                <label for="name" class="form-label">Site Name *</label>
+                <input type="text" class="form-control" id="name" name="name" value="{{ site.name }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="location" class="form-label">Location</label>
+                <input type="text" class="form-control" id="location" name="location" value="{{ site.location }}">
+            </div>
+            <div class="mb-3">
+                <label for="contact_email" class="form-label">Contact Email</label>
+                <input type="email" class="form-control" id="contact_email" name="contact_email" value="{{ site.contact_email or '' }}">
+                <small class="form-text text-muted">Required if you want to enable email notifications</small>
+            </div>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="enable_notifications" name="enable_notifications" {% if site.enable_notifications %}checked{% endif %}>
+                    <label class="form-check-label" for="enable_notifications">
+                        Enable email notifications for this site
+                    </label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="notification_threshold" class="form-label">Notification Threshold (days)</label>
+                <input type="number" class="form-control" id="notification_threshold" name="notification_threshold" value="{{ site.notification_threshold }}" min="1" max="365">
+                <small class="form-text text-muted">Number of days before due date to send notifications</small>
+            </div>
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('manage_sites') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

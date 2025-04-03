@@ -1,0 +1,214 @@
+/**
+ * SIMPLE LAYOUT FIX
+ * A minimal CSS file to override problematic layout styles
+ * This must be loaded AFTER all other CSS files
+ */
+
+/* ========= CORE LAYOUT FIXES ========= */
+
+/* Fix sidebar positioning */
+.sidebar {
+  width: 200px !important;
+  position: fixed !important;
+  left: 0 !important;
+  top: 48px !important;
+  height: calc(100vh - 48px) !important;
+}
+
+/* Fix content positioning */
+.content-container {
+  margin-left: 200px !important; /* Exactly sidebar width - no gap */
+  padding-left: 0 !important;
+  width: calc(100% - 200px) !important;
+  max-width: calc(100% - 200px) !important;
+}
+
+/* Remove excess indentation - this is key to cleaning up the layout */
+.container-fluid {
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+}
+
+.page-header,
+.page-content {
+  padding-left: 0 !important; 
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* ========= CARD LAYOUT FIXES ========= */
+
+/* Make cards consistent size regardless of content */
+.card {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin-bottom: 1rem !important;
+}
+
+.card-body {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Fix card text overflow */
+.card-title {
+  margin-bottom: 0.75rem !important;
+  font-weight: 600 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important; /* Keep titles on one line */
+}
+
+.card-text {
+  overflow: hidden !important;
+}
+
+/* Make card rows behave consistently */
+.row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  margin-right: -0.5rem !important;
+  margin-left: -0.5rem !important;
+}
+
+.col, [class*="col-"] {
+  padding-right: 0.5rem !important;
+  padding-left: 0.5rem !important;
+}
+
+/* ========= MOBILE ADJUSTMENTS ========= */
+
+@media (max-width: 991.98px) {
+  .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Hide sidebar by default on mobile */
+  .sidebar-container {
+    position: fixed;
+    left: -200px;
+    z-index: 1040;
+  }
+}
+
+/* ========= SIDEBAR LOGOUT FIXES ========= */
+.sidebar-logout-btn,
+.sidebar-logout-btn:link,
+.sidebar-logout-btn:visited,
+.sidebar-logout-btn:hover,
+.sidebar-logout-btn:active {
+  color: white !important; /* Force white text color */
+  text-decoration: none !important; /* No underline */
+  display: flex !important;
+  align-items: center !important;
+}
+
+.sidebar-logout-btn i,
+.sidebar-logout-btn .sidebar-icon {
+  width: 20px !important;
+  text-align: center !important;
+  color: white !important; /* Explicitly make icon white */
+}
+
+.sidebar-logout-btn span {
+  color: white !important; /* Explicitly make text white */
+}
+
+/* Show only icons on collapsed sidebar */
+body.sidebar-collapsed .sidebar-link-text,
+body.sidebar-collapsed .sidebar-logout-btn span {
+  display: none !important; /* Hide text in collapsed mode */
+}
+
+body.sidebar-collapsed .sidebar-icon,
+body.sidebar-collapsed .sidebar-logout-btn i {
+  margin-right: 0 !important; /* No margin when no text */
+}
+
+body.sidebar-collapsed .sidebar-link,
+body.sidebar-collapsed .sidebar-logout-btn {
+  justify-content: center !important; /* Center icon when collapsed */
+  padding: 0.75rem !important; /* Balanced padding */
+}
+
+/* ========= SIDEBAR TOGGLE BUTTON ========= */
+.sidebar-toggle-container {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-toggle {
+  background-color: transparent;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sidebar-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-toggle i {
+  font-size: 14px;
+}
+
+/* Adjust toggle button position in collapsed state */
+body.sidebar-collapsed .sidebar-toggle-container {
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+/* Hide sidebar toggle on mobile */
+@media (max-width: 991.98px) {
+  .sidebar-toggle-container {
+    display: none; /* Hidden on mobile as we use hamburger menu instead */
+  }
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+  .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Hide sidebar by default on mobile */
+  .sidebar-container {
+    position: fixed;
+    left: -200px;
+    z-index: 1040;
+  }
+  
+  .sidebar.collapsed .sidebar-link-text,
+  .sidebar.collapsed .sidebar-logout-btn span {
+    display: none !important; /* Hide text but keep icon on mobile */
+  }
+  
+  .sidebar.collapsed .sidebar-icon,
+  .sidebar.collapsed .sidebar-logout-btn i {
+    margin-right: 0 !important; /* No margin when no text */
+    color: white !important; /* Keep icon white */
+  }
+  
+  .sidebar.collapsed .sidebar-link,
+  .sidebar.collapsed .sidebar-logout-btn {
+    justify-content: center !important; /* Center icon */
+    padding: 0.75rem !important; /* Balanced padding */
+  }
+}
