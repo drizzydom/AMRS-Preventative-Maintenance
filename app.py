@@ -89,16 +89,40 @@ app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'htt
 # Ensure URLs work with and without trailing slashes
 app.url_map.strict_slashes = False
 
-# Add error handlers to diagnose issues
+# Add error handlers with fallbacks
 @app.errorhandler(404)
 def page_not_found(e):
-    logger.error(f"404 error: {request.path} - referrer: {request.referrer}")
-    return render_template('errors/404.html'), 404
+    try:
+        return render_template('errors/404.html'), 404
+    except:
+        # Fallback to simple HTML response if template is missing
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Page Not Found</title></head>
+        <body style="font-family:Arial; text-align:center; padding:50px;">
+            <h1 style="color:#FE7900;">Page Not Found</h1>
+            <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
+        </body>
+        </html>
+        ''', 404
 
 @app.errorhandler(500)
 def server_error(e):
-    logger.error(f"500 error: {str(e)}")
-    return render_template('errors/500.html'), 500
+    try:
+        return render_template('errors/500.html'), 500
+    except:
+        # Fallback to simple HTML response if template is missing
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Server Error</title></head>
+        <body style="font-family:Arial; text-align:center; padding:50px;">
+            <h1 style="color:#FE7900;">Server Error</h1>
+            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
+        </body>
+        </html>
+        ''', 500
 
 # Add health check route for diagnostics
 @app.route('/health')
