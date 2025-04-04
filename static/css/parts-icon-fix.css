@@ -1,0 +1,54 @@
+/**
+ * PARTS ICON SIZE FIX
+ * Ensures the Total Parts icon matches other icons in size
+ */
+
+/* Super-specific targeting for the parts icon size */
+.row > .col-md-3:nth-child(4) .card-body i,
+.row > .col-md-3:nth-child(4) .card-body .fa,
+.row > .col-md-3:nth-child(4) .card-body .fas,
+#parts-panel i,
+#parts-card i,
+html body .row > .col-md-3:nth-child(4) .card i,
+html body .row > .col-md-3:nth-child(4) .card .fa,
+html body .row > .col-md-3:nth-child(4) .card .fas {
+  /* Match other icons' size */
+  font-size: 1rem !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  
+  /* Set consistent dimensions if it's a background icon */
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+  max-width: 1rem !important;
+  max-height: 1rem !important;
+  
+  /* Match other icons' display */
+  display: inline-block !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  line-height: 1 !important;
+}
+
+/* If the icon is in the link (common pattern), fix it there too */
+.row > .col-md-3:nth-child(4) .card-body a i,
+.row > .col-md-3:nth-child(4) .card-body a .fa,
+.row > .col-md-3:nth-child(4) .card-body a .fas,
+#parts-panel a i,
+#parts-card a i {
+  /* Standard Bootstrap spacing */
+  margin-right: 0.25rem !important;
+}
+
+/* For icons that might be absolutely positioned */
+.row > .col-md-3:nth-child(4) .card-body .position-relative i,
+.row > .col-md-3:nth-child(4) .card-body .position-absolute i,
+#parts-panel .position-relative i,
+#parts-panel .position-absolute i,
+#parts-card .position-relative i,
+#parts-card .position-absolute i {
+  position: static !important;
+  transform: none !important;
+}

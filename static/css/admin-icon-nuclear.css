@@ -1,0 +1,55 @@
+/**
+ * NUCLEAR ICON FIX
+ * The most extreme approach to forcing icon colors
+ */
+
+/* Maximum specificity selector targeting */
+html body .row > .col-md-3:nth-child(4) .card i,
+html body .row > .col-md-3:nth-child(4) .card .fa,
+html body .row > .col-md-3:nth-child(4) .card .fas,
+html body .row > .col-md-3:nth-child(4) .card [class*="fa"],
+html body .row > .col-md-3:nth-child(4) .card *[class*="fa"],
+html body #parts-panel i,
+html body #parts-panel .fa,
+html body #parts-panel .fas,
+html body #parts-panel [class*="fa"],
+html body #parts-panel *[class*="fa"],
+html body #parts-card i,
+html body #parts-card .fa, 
+html body #parts-card .fas,
+html body #parts-card [class*="fa"],
+html body #parts-card *[class*="fa"] {
+    background-color: #5E5E5E !important;
+    color: white !important;
+    border-color: #5E5E5E !important;
+}
+
+/* Target potentially invisible icon elements */
+html body .row > .col-md-3:nth-child(4) .card *[style*="background"],
+html body #parts-panel *[style*="background"],
+html body #parts-card *[style*="background"] {
+    background-color: #5E5E5E !important;
+}
+
+/* Target all possible SVG elements as well */
+html body .row > .col-md-3:nth-child(4) .card svg *,
+html body #parts-panel svg *,
+html body #parts-card svg * {
+    fill: white !important;
+    stroke: white !important;
+    color: white !important;
+}
+
+/* Reverse all unwanted background colors */
+html body .row > .col-md-3:nth-child(4) .card .bg-warning,
+html body .row > .col-md-3:nth-child(4) .card .bg-primary,
+html body .row > .col-md-3:nth-child(4) .card [class*="bg-"],
+html body #parts-panel .bg-warning,
+html body #parts-panel .bg-primary,
+html body #parts-panel [class*="bg-"],
+html body #parts-card .bg-warning,
+html body #parts-card .bg-primary,
+html body #parts-card [class*="bg-"] {
+    background-color: #5E5E5E !important;
+    color: white !important;
+}

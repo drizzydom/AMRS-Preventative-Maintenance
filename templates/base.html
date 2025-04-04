@@ -5,52 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
     <title>{% block title %}Maintenance Tracker{% endblock %}</title>
     
-    <!-- Load critical CSS as early as possible -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/preload-fix.css') }}">
-    
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <!-- App CSS files -->
+    <!-- App CSS files - SIMPLIFIED -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-fixes.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile-dropdown.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/card-color-patch.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/overflow-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-width-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-unified-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-sidebar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-element-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-toggle.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-visibility-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/centered-layout-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-alignment-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/card-layout-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-reset.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-position-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-header-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
-    <!-- Add simple layout fix CSS as the very last CSS file before theme -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-simple-fix.css') }}">
-    <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
+    
+    <!-- Fix CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-sidebar-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/parts-icon-fix.css') }}">
+    
+    <!-- These files should be loaded last to override everything -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/emergency-reset.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/icon-fix-extreme.css') }}">
+    
+    <!-- Styles specifically for the sidebar toggle -->
+    <style>
+        /* Sidebar toggle button styling */
+        .sidebar-toggle-item {
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .sidebar-toggle-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            width: 100%;
+            padding: 0.5rem;
+            text-align: center;
+            cursor: pointer;
+        }
+        .sidebar-toggle-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    </style>
     
     {% block extra_css %}{% endblock %}
 </head>
-<body class="preload">
+<body>
     <header>
-        <!-- Navigation Bar - Simplified with reduced height -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
+        <!-- Navigation Bar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
             <div class="container-fluid">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">
                     <i class="fas fa-tools me-2"></i> AMRS Maintenance
@@ -62,7 +63,6 @@
                 
                 <div class="collapse navbar-collapse" id="navbarNav">
                     {% if current_user.is_authenticated %}
-                    <!-- Completely empty navbar menu - all navigation moved to sidebar -->
                     <ul class="navbar-nav me-auto">
                         <!-- Empty but kept for mobile menu structure -->
                     </ul>
@@ -72,109 +72,89 @@
         </nav>
     </header>
 
-    <div class="container-fluid centered-layout">
+    <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
-            <div class="col-md-auto px-0 sidebar-container">
-                <div class="sidebar">
-                    <ul class="sidebar-nav">
-                        <!-- Add hamburger toggle button as first item in the sidebar with proper padding and positioning -->
-                        <li class="sidebar-nav-item sidebar-toggle-item">
-                            <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">
+            {% if current_user.is_authenticated %}
+            <div class="col-md-3 col-lg-2 d-md-block sidebar">
+                <div class="position-sticky">
+                    <ul class="nav flex-column">
+                        <!-- Add hamburger toggle button as first item -->
+                        <li class="sidebar-toggle-item">
+                            <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
                                 <i class="fas fa-bars"></i>
                             </button>
                         </li>
                         
-                        <li class="sidebar-nav-item">
-                            <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
-                                <i class="sidebar-icon fas fa-tachometer-alt"></i>
-                                <span class="sidebar-link-text">Dashboard</span>
+                        <li class="nav-item">
+                            <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
                             </a>
                         </li>
-                        <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
-                                <i class="sidebar-icon fas fa-building"></i>
-                                <span class="sidebar-link-text">Sites</span>
+                        <li class="nav-item">
+                            <a href="{{ url_for('manage_sites') }}" class="nav-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
+                                <i class="fas fa-building me-2"></i> Sites
                             </a>
                         </li>
-                        <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
-                                <i class="sidebar-icon fas fa-industry"></i>
-                                <span class="sidebar-link-text">Machines</span>
+                        <li class="nav-item">
+                            <a href="{{ url_for('manage_machines') }}" class="nav-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                                <i class="fas fa-industry me-2"></i> Machines
                             </a>
                         </li>
-                        <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
-                                <i class="sidebar-icon fas fa-cogs"></i>
-                                <span class="sidebar-link-text">Parts</span>
+                        <li class="nav-item">
+                            <a href="{{ url_for('manage_parts') }}" class="nav-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                                <i class="fas fa-cogs me-2"></i> Parts
                             </a>
                         </li>
-                        <!-- Added User Profile Link to Sidebar -->
-                        <li class="sidebar-nav-item">
-                            <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
-                                <i class="sidebar-icon fas fa-user"></i>
-                                <span class="sidebar-link-text">User Profile</span>
+                        <li class="nav-item">
+                            <a href="{{ url_for('user_profile') }}" class="nav-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
+                                <i class="fas fa-user me-2"></i> User Profile
                             </a>
                         </li>
                         {% if current_user.is_admin %}
-                        <li class="sidebar-nav-item">
-                            <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
-                                <i class="sidebar-icon fas fa-user-shield"></i>
-                                <span class="sidebar-link-text">Admin</span>
+                        <li class="nav-item">
+                            <a href="{{ url_for('admin') }}" class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                                <i class="fas fa-user-shield me-2"></i> Admin
                             </a>
                         </li>
                         {% endif %}
+                        <li class="nav-item mt-3">
+                            <a href="{{ url_for('logout') }}" class="nav-link text-danger">
+                                <i class="fas fa-sign-out-alt me-2"></i> Logout
+                            </a>
+                        </li>
                     </ul>
-                    
-                    <!-- User information and logout at bottom of sidebar -->
-                    {% if current_user.is_authenticated %}
-                    <div class="sidebar-footer">
-                        <!-- Removed username and role display, keeping only logout button -->
-                        <a href="{{ url_for('logout') }}" class="sidebar-logout-btn">
-                            <i class="sidebar-icon fas fa-sign-out-alt"></i>
-                            <span>Logout</span>
-                        </a>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
+            {% endif %}
             
             <!-- Main Content -->
-            <div class="col px-0 centered-content-col">
-                <div class="content-container">
-                    <div class="container-fluid py-4 px-3">
-                        <!-- Page Header -->
-                        {% if current_user.is_authenticated %}
-                        <div class="page-header mb-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
-                                <div class="header_actions">
-                                    {% block header_actions %}{% endblock %}
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Flash Messages -->
-                        {% with messages = get_flashed_messages(with_categories=true) %}
-                            {% if messages %}
-                                {% for category, message in messages %}
-                                    {% set alert_class = "success" if category == "success" else "danger" if category == "error" else category %}
-                                    <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
-                                        <i class="fas fa-{% if alert_class == 'success' %}check-circle{% elif alert_class == 'danger' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
-                                        {{ message }}
-                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                    </div>
-                                {% endfor %}
-                            {% endif %}
-                        {% endwith %}
-                        
-                        <!-- Page Content -->
-                        <div class="page-content">
-                            {% block content %}{% endblock %}
-                        </div>
+            <div class="col-md-9 ms-sm-auto col-lg-10 px-md-4 content-container">
+                {% if current_user.is_authenticated %}
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h3">{% block header_title %}{% endblock %}</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        {% block header_actions %}{% endblock %}
                     </div>
                 </div>
+                {% endif %}
+                
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            {% set alert_class = "success" if category == "success" else "danger" if category == "error" else category %}
+                            <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+                                <i class="fas fa-{% if alert_class == 'success' %}check-circle{% elif alert_class == 'danger' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <!-- Page Content -->
+                {% block content %}{% endblock %}
             </div>
         </div>
     </div>
@@ -182,13 +162,9 @@
     <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light">
         <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
-                </div>
-                <div>
-                    <span class="text-muted">Version 1.0</span>
-                </div>
+            <div class="d-flex justify-content-between">
+                <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
+                <span class="text-muted">Version 1.0</span>
             </div>
         </div>
     </footer>
@@ -197,18 +173,53 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Main application scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Fixed sidebar toggle script - Load before other scripts -->
+    <script src="{{ url_for('static', filename='js/sidebar-toggle-fix.js') }}"></script>
     
-    <!-- Remove preload class after page load to enable animations -->
+    <!-- Minimal JS fix for dynamic elements -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Remove the preload class to allow animations after page load
-            document.body.classList.remove('preload');
+            // Simple text fix - one time execution, no expensive operations
+            const cardHeaders = document.querySelectorAll('.card-header');
+            cardHeaders.forEach(header => {
+                Array.from(header.childNodes).forEach(node => {
+                    if (node.nodeType === 3 && node.nodeValue && node.nodeValue.trim()) {
+                        node.nodeValue = '';
+                    }
+                });
+            });
+            
+            // Parts icon fix (admin dashboard)
+            const partsIcons = document.querySelectorAll('.row > .col-md-3:nth-child(4) .card i, #parts-panel i, #parts-card i');
+            partsIcons.forEach(icon => {
+                icon.style.backgroundColor = '#5E5E5E';
+                icon.style.color = 'white';
+            });
+        });
+    </script>
+    
+    <!-- Sidebar Toggle Script -->
+    <script>
+        function toggleSidebar() {
+            document.body.classList.toggle('sidebar-collapsed');
+            
+            // Store the state in localStorage
+            if (document.body.classList.contains('sidebar-collapsed')) {
+                localStorage.setItem('sidebar-collapsed', 'true');
+            } else {
+                localStorage.removeItem('sidebar-collapsed');
+            }
+        }
+        
+        // Load saved state on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (localStorage.getItem('sidebar-collapsed') === 'true') {
+                document.body.classList.add('sidebar-collapsed');
+            }
         });
     </script>
     
     <!-- Page specific scripts -->
     {% block scripts %}{% endblock %}
-    <!-- Sidebar Toggle Script -->
-    <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
 </body>
 </html>

@@ -3,8 +3,11 @@
  * Improves navbar contrast and readability
  */
 
-/* Better navbar contrast */
-.navbar-dark {
+/* Better navbar contrast - FORCE ORANGE */
+.navbar-dark,
+.navbar,
+.navbar.bg-primary,
+.navbar-dark.bg-primary {
     background-color: #FE7900 !important; /* AMRS primary orange */
 }
 

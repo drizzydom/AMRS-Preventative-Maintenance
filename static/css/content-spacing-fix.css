@@ -1,0 +1,56 @@
+/**
+ * CONTENT SPACING FIX
+ * Ensures proper spacing between sidebar and main content
+ */
+
+/* Add padding to the left of content container in standard view */
+.content-container,
+.main-content {
+    padding-left: 15px !important;
+}
+
+/* Ensure content isn't cramped against sidebar in expanded state */
+body:not(.sidebar-collapsed) .content-container,
+body:not(.sidebar-collapsed) .main-content {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+    padding-left: 20px !important; /* Extra padding when sidebar is expanded */
+}
+
+/* Ensure content isn't cramped against collapsed sidebar */
+body.sidebar-collapsed .content-container,
+body.sidebar-collapsed .main-content {
+    margin-left: 50px !important;
+    width: calc(100% - 50px) !important;
+    max-width: calc(100% - 50px) !important;
+    padding-left: 15px !important; /* Moderate padding when sidebar is collapsed */
+}
+
+/* Remove possible negative margins */
+.container-fluid,
+.row,
+[class*="col-"],
+.page-content {
+    margin-left: 0 !important;
+}
+
+/* Add extra space at narrow screen sizes */
+@media (max-width: 1199px) and (min-width: 992px) {
+    body:not(.sidebar-collapsed) .content-container,
+    body:not(.sidebar-collapsed) .main-content {
+        padding-left: 25px !important; /* More padding on medium screens */
+    }
+}
+
+/* Mobile view spacing */
+@media (max-width: 991px) {
+    .content-container,
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 15px !important;
+        padding-right: 15px !important;
+    }
+}

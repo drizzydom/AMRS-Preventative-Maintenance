@@ -1,0 +1,83 @@
+/**
+ * AGGRESSIVE TEXT REMOVAL
+ * Uses multiple techniques to completely eliminate unwanted text
+ */
+
+/* Target any element that might contain the text */
+.card-header *::before,
+.card-header::before,
+.d-flex::before,
+.site-filter-dropdown::before,
+.machine-filter-dropdown::before,
+div[class*="filter"]::before,
+div[class*="dropdown"]::before {
+    content: "" !important;
+    display: none !important;
+}
+
+/* Remove all text directly within these containers */
+.card-header > .d-flex,
+.card-header > .d-flex > .d-flex {
+    font-size: 0 !important;
+}
+
+/* Force these elements to use inline blocks to eliminate text nodes */
+.card-header > .d-flex {
+    font-size: 0 !important;
+    letter-spacing: -1px !important;
+}
+
+/* Only display specific elements inside the flex container */
+.card-header > .d-flex > * {
+    font-size: 1rem !important;
+    letter-spacing: normal !important;
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+/* Make absolutely sure no text can be shown with these selectors */
+.card-header span:not([class]),
+.card-header > div > span:not([class]) {
+    display: none !important;
+}
+
+/* Remove any dynamically created text */
+[data-content*="Currently"],
+[data-before*="Currently"],
+[data-text*="Currently"] {
+    display: none !important;
+}
+
+/* Target any text node container */
+.card-header .d-flex[class*="justify-content-between"]:not(:empty)::after {
+    content: "" !important;
+}
+
+/* Make sure these are completely blank text-wise */
+.site-filter-dropdown,
+.machine-filter-dropdown {
+    font-size: 0 !important;
+}
+
+/* Reset font size only for specific elements */
+.site-filter-dropdown select,
+.site-filter-dropdown .form-select,
+.machine-filter-dropdown select,
+.machine-filter-dropdown .form-select {
+    font-size: 0.875rem !important;
+}
+
+/* Further prevention for layout interference */
+.card-header,
+.card-header > .d-flex {
+    position: relative !important;
+}
+
+/* Stop ::after content too */
+.card-header::after,
+.card-header *::after,
+.d-flex::after,
+.d-flex *::after {
+    content: none !important;
+    display: none !important;
+}

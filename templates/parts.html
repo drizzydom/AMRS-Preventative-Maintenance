@@ -2,7 +2,7 @@
 
 {% block title %}Parts - Maintenance Tracker{% endblock %}
 
-{% block header_title %}{{ title }}{% endblock %}
+{% block header_title %}Parts{% endblock %}
 
 {% block header_actions %}
 {% if can_create %}
@@ -16,13 +16,25 @@
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Parts</h5>
-                {% if machine_id %}
-                <a href="{{ url_for('manage_parts') }}" class="btn btn-sm btn-secondary">
-                    <i class="fas fa-list"></i> View All Parts
-                </a>
-                {% endif %}
+            <div class="card-header">
+                <h5 class="card-title m-0">Parts</h5>
+                <div>
+                    <select class="form-select d-inline-block" style="width: auto; min-width: 200px;" 
+                            id="machine-filter" onchange="if(this.value) window.location.href=this.value;">
+                        <option value="{{ url_for('manage_parts') }}">All Machines</option>
+                        {% for machine in machines %}
+                        <option value="{{ url_for('manage_parts', machine_id=machine.id) }}" 
+                                {% if machine_id and machine.id == machine_id|int %}selected{% endif %}>
+                            {{ machine.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if machine_id %}
+                    <a href="{{ url_for('manage_parts') }}" class="btn btn-sm btn-secondary ms-2">
+                        <i class="fas fa-list"></i> View All
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             <div class="card-body">
                 {% if parts %}
@@ -172,20 +184,18 @@
 
 {% block scripts %}
 <script>
-    // Set up the delete modal
+    // Simple, lightweight script to handle delete confirmation
     document.addEventListener('DOMContentLoaded', function() {
-        const deletePartModal = document.getElementById('deletePartModal');
-        if (deletePartModal) {
-            deletePartModal.addEventListener('show.bs.modal', function(event) {
+        const deleteModal = document.getElementById('deletePartModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function(event) {
                 const button = event.relatedTarget;
                 const partId = button.getAttribute('data-part-id');
                 const partName = button.getAttribute('data-part-name');
                 
-                const deletePartForm = document.getElementById('deletePartForm');
-                const deletePartName = document.getElementById('deletePartName');
-                
-                deletePartForm.action = "{{ url_for('delete_part', part_id=0) }}".replace('0', partId);
-                deletePartName.textContent = partName;
+                document.getElementById('deletePartForm').action = 
+                    "{{ url_for('delete_part', part_id=0) }}".replace('0', partId);
+                document.getElementById('deletePartName').textContent = partName;
             });
         }
     });

@@ -1,0 +1,60 @@
+/**
+ * COLOR RESTORATION
+ * Fixes the colors that were unintentionally changed by the aggressive icon fixes
+ */
+
+/* Restore orange navbar */
+.navbar-dark, 
+.navbar,
+.navbar-expand-lg,
+.navbar.bg-primary,
+.navbar-dark.bg-primary {
+    background-color: var(--amrs-orange, #FE7900) !important;
+    color: white !important;
+}
+
+/* Fix card status icons - lighter backgrounds */
+.badge.bg-warning,
+span.badge.bg-warning.text-dark,
+.badge.text-dark {
+    background-color: #ffc107 !important; /* Bootstrap warning yellow */
+    color: #212529 !important; /* Dark text */
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important; /* Bootstrap danger red */
+    color: white !important;
+}
+
+.badge.bg-success {
+    background-color: #198754 !important; /* Bootstrap success green */
+    color: white !important;
+}
+
+/* Only target the parts icon in admin page specifically */
+html body .row > .col-md-3:nth-child(4) .card-body i,
+html body .row > .col-md-3:nth-child(4) .card-body svg,
+html body .row > .col-md-3:nth-child(4) .card-body .fas,
+html body #parts-panel i,
+html body #parts-card i {
+    background-color: #5E5E5E !important;
+    color: white !important;
+}
+
+/* Clean up any mistargeted icons */
+.card .badge i,
+.card .badge .fas,
+.card .badge .fa,
+.btn i,
+.btn .fas,
+.btn .fa {
+    background-color: transparent !important;
+}
+
+/* Extra cleanup for badges with icons */
+span.badge i,
+span.badge .fa,
+span.badge .fas {
+    background-color: transparent !important;
+    color: inherit !important;
+}

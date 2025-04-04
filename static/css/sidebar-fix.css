@@ -20,6 +20,10 @@
     margin-left: 0 !important;
     padding-left: 0 !important;
     left: 0 !important;
+    background-color: var(--sidebar-bg, #5E5E5E) !important;
+    color: white !important;
+    height: 100% !important;
+    z-index: 100 !important;
 }
 
 /* For Bootstrap grid column that contains the sidebar */
@@ -47,9 +51,81 @@ body > .container-fluid > .row > [class*="col-"]:first-child {
     padding-left: 1.5rem !important; /* Add inner padding instead */
 }
 
+/* Sidebar nav items */
+.sidebar .nav-item {
+    width: 100% !important;
+    margin-bottom: 0.25rem !important;
+}
+
+/* Links in sidebar - give proper contrast and hover effect */
+.sidebar .nav-link,
+.sidebar .nav-link:link,
+.sidebar .nav-link:visited {
+    color: white !important;
+    text-decoration: none !important;
+    padding: 0.75rem 1rem !important;
+    border-left: 3px solid transparent !important;
+    transition: all 0.2s !important;
+    text-align: left !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+/* Hover state */
+.sidebar .nav-link:hover {
+    background-color: var(--sidebar-hover, #4D4D4D) !important;
+    border-left-color: rgba(254, 121, 0, 0.5) !important;
+}
+
+/* Active state */
+.sidebar .nav-link.active {
+    background-color: var(--sidebar-active, #FE7900) !important;
+    border-left-color: white !important;
+    color: white !important;
+    font-weight: bold !important;
+}
+
+/* Icon styling */
+.sidebar .nav-link i {
+    font-size: 1rem !important;
+    min-width: 20px !important;
+    text-align: center !important;
+    margin-right: 0.75rem !important;
+    color: white !important;
+}
+
 /* Ensure content doesn't shift when sidebar is flush left */
 @media (min-width: 992px) {
     .content-container {
         padding-left: 2rem !important;
+    }
+}
+
+/* Mobile sidebar adjustments */
+@media (max-width: 991.98px) {
+    .sidebar {
+        position: fixed !important;
+        left: 0 !important;
+        width: 200px !important;
+        height: 100vh !important;
+        z-index: 1030 !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s ease-in-out !important;
+    }
+    
+    .sidebar.show {
+        transform: translateX(0) !important;
+    }
+    
+    /* When sidebar is shown, darken the rest of the page */
+    body.sidebar-active::after {
+        content: '' !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        z-index: 1020 !important;
     }
 }

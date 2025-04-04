@@ -2,7 +2,7 @@
 
 {% block title %}Machines - Maintenance Tracker{% endblock %}
 
-{% block header_title %}{{ title }}{% endblock %}
+{% block header_title %}Machines{% endblock %}
 
 {% block header_actions %}
 {% if can_create %}
@@ -16,13 +16,25 @@
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Machines</h5>
-                {% if site_id %}
-                <a href="{{ url_for('manage_machines') }}" class="btn btn-sm btn-secondary">
-                    <i class="fas fa-list"></i> View All Machines
-                </a>
-                {% endif %}
+            <div class="card-header">
+                <h5 class="card-title m-0">Machines</h5>
+                <div>
+                    <select class="form-select d-inline-block" style="width: auto; min-width: 200px;" 
+                            id="site-filter" onchange="if(this.value) window.location.href=this.value;">
+                        <option value="{{ url_for('manage_machines') }}">All Sites</option>
+                        {% for site in sites %}
+                        <option value="{{ url_for('manage_machines', site_id=site.id) }}" 
+                                {% if site_id and site.id == site_id|int %}selected{% endif %}>
+                            {{ site.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if site_id %}
+                    <a href="{{ url_for('manage_machines') }}" class="btn btn-sm btn-secondary ms-2">
+                        <i class="fas fa-list"></i> View All
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             <div class="card-body">
                 {% if machines %}
@@ -150,20 +162,18 @@
 
 {% block scripts %}
 <script>
-    // Set up the delete modal
+    // Simple, lightweight script to handle delete confirmation
     document.addEventListener('DOMContentLoaded', function() {
-        const deleteMachineModal = document.getElementById('deleteMachineModal');
-        if (deleteMachineModal) {
-            deleteMachineModal.addEventListener('show.bs.modal', function(event) {
+        const deleteModal = document.getElementById('deleteMachineModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function(event) {
                 const button = event.relatedTarget;
                 const machineId = button.getAttribute('data-machine-id');
                 const machineName = button.getAttribute('data-machine-name');
                 
-                const deleteMachineForm = document.getElementById('deleteMachineForm');
-                const deleteMachineName = document.getElementById('deleteMachineName');
-                
-                deleteMachineForm.action = "{{ url_for('delete_machine', machine_id=0) }}".replace('0', machineId);
-                deleteMachineName.textContent = machineName;
+                document.getElementById('deleteMachineForm').action = 
+                    "{{ url_for('delete_machine', machine_id=0) }}".replace('0', machineId);
+                document.getElementById('deleteMachineName').textContent = machineName;
             });
         }
     });

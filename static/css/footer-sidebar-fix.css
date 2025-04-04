@@ -1,0 +1,54 @@
+/**
+ * FOOTER AND SIDEBAR OVERLAP FIX
+ * Ensures the sidebar doesn't overlap the footer and content
+ */
+
+/* Move the footer to the right to match the content margin */
+.footer, footer {
+  margin-left: 200px !important;
+  width: calc(100% - 200px) !important;
+  max-width: calc(100% - 200px) !important;
+  z-index: 1001 !important; /* Above sidebar */
+}
+
+/* On mobile, reset the footer to full width */
+@media (max-width: 991.98px) {
+  .footer, footer {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Make sure the sidebar doesn't go all the way to the bottom */
+.sidebar {
+  max-height: calc(100vh - 48px - 56px) !important; /* Subtract navbar height and footer height */
+  overflow-y: auto !important; /* Allow scrolling if content is too tall */
+  padding-bottom: 1rem !important; /* Add some space at the bottom */
+}
+
+/* Improve the main content container's layout */
+.content-container {
+  min-height: calc(100vh - 48px - 56px) !important; /* Ensure content area fills available space */
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Push footer to the bottom */
+.footer, footer {
+  margin-top: auto !important;
+}
+
+/* Ensure body has proper layout */
+body {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 100vh !important;
+}
+
+/* In sidebar-collapsed mode, adjust footer as well */
+body.sidebar-collapsed .footer, body.sidebar-collapsed footer {
+  margin-left: 50px !important;
+  width: calc(100% - 50px) !important;
+  max-width: calc(100% - 50px) !important;
+}

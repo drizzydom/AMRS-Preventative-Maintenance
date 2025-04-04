@@ -1,0 +1,37 @@
+/**
+ * Simple CSS Fix
+ * A light approach to hide unwanted text without intensive JavaScript
+ */
+
+/* Hide text in dropdown headers */
+.card-header > .d-flex {
+    font-size: 0;
+}
+
+/* Restore font size for essential elements */
+.card-header h5,
+.card-header .card-title,
+.card-header .btn,
+.card-header select,
+.card-header .form-select {
+    font-size: 1rem !important;
+}
+
+/* Ensure text doesn't appear in table headers */
+.card-header td:last-child {
+    font-size: 0;
+}
+
+.card-header td:last-child .btn,
+.card-header td:last-child select,
+.card-header td:last-child .form-select {
+    font-size: 0.875rem !important;
+}
+
+/* Clear any before/after content */
+.card-header::before,
+.card-header::after,
+.card-header *::before,
+.card-header *::after {
+    content: none !important;
+}
