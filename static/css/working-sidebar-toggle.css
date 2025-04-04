@@ -1,0 +1,115 @@
+/**
+ * WORKING SIDEBAR TOGGLE CSS
+ * Clean implementation of sidebar toggle functionality
+ */
+
+/* Sidebar in expanded state */
+.sidebar {
+  width: 200px !important;
+  position: fixed !important;
+  top: 48px !important; /* Match navbar height */
+  bottom: 0 !important;
+  transition: width 0.25s ease !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  background-color: #5E5E5E !important;
+  color: white !important;
+  z-index: 1000 !important;
+}
+
+/* Make room for the toggle button */
+.sidebar {
+  padding-top: 40px !important;
+}
+
+/* Content positioning with expanded sidebar */
+.content-container,
+.main-content,
+.col-md-9,
+.col-lg-10,
+.footer {
+  margin-left: 200px !important;
+  width: calc(100% - 200px) !important;
+  max-width: calc(100% - 200px) !important;
+  transition: margin-left 0.25s ease, width 0.25s ease, max-width 0.25s ease !important;
+}
+
+/* Sidebar in collapsed state */
+body.sidebar-collapsed .sidebar {
+  width: 50px !important;
+}
+
+/* Content positioning with collapsed sidebar */
+body.sidebar-collapsed .content-container,
+body.sidebar-collapsed .main-content,
+body.sidebar-collapsed .col-md-9,
+body.sidebar-collapsed .col-lg-10,
+body.sidebar-collapsed .footer {
+  margin-left: 50px !important;
+  width: calc(100% - 50px) !important;
+  max-width: calc(100% - 50px) !important;
+}
+
+/* Hide text in collapsed sidebar */
+body.sidebar-collapsed .sidebar .nav-link span,
+body.sidebar-collapsed .sidebar .sidebar-link span,
+body.sidebar-collapsed .sidebar a span,
+body.sidebar-collapsed .sidebar .nav-link-text,
+body.sidebar-collapsed .sidebar .sidebar-link-text {
+  display: none !important;
+}
+
+/* Center icons in collapsed sidebar */
+body.sidebar-collapsed .sidebar .nav-link,
+body.sidebar-collapsed .sidebar .sidebar-link,
+body.sidebar-collapsed .sidebar a {
+  text-align: center !important;
+  padding: 0.5rem 0 !important;
+  justify-content: center !important;
+}
+
+/* Our unified toggle button */
+.unified-sidebar-toggle {
+  position: absolute !important;
+  top: 10px !important;
+  left: 10px !important;
+  z-index: 9999 !important;
+  background-color: transparent !important;
+  border: none !important;
+  color: white !important;
+  font-size: 1.2rem !important;
+  cursor: pointer !important;
+  width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border-radius: 4px !important;
+  transition: background-color 0.2s !important;
+}
+
+/* Hover effect */
+.unified-sidebar-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+  .content-container,
+  .main-content,
+  .col-md-9,
+  .col-lg-10,
+  .footer {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  body.sidebar-collapsed .content-container,
+  body.sidebar-collapsed .main-content,
+  body.sidebar-collapsed .col-md-9,
+  body.sidebar-collapsed .col-lg-10,
+  body.sidebar-collapsed .footer {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
