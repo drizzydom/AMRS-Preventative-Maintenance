@@ -212,6 +212,11 @@ if os.environ.get('RENDER', False):
         except Exception as e:
             print(f"[APP] Error creating database tables: {str(e)}", file=sys.stderr)
 
+# Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
-    print("[APP] Starting Flask development server...")
-    app.run(debug=True)
+    # Get port from environment variable or use default
+    port = int(os.environ.get('PORT', 10000))
+    print(f"[APP] Starting Flask server on port {port}")
+    
+    # Use host 0.0.0.0 to bind to all interfaces
+    app.run(host='0.0.0.0', port=port)
