@@ -22,19 +22,61 @@ chmod -R 755 /var/data/backups || echo "[ERROR] Failed to set permissions on bac
 echo "[STARTUP] Data directory contents:"
 ls -la /var/data || echo "[ERROR] Failed to list /var/data contents"
 
-# Set proper environment variables if not already set
-if [ -z "$FLASK_APP" ]; then
-    echo "[STARTUP] Setting FLASK_APP environment variable..."
-    export FLASK_APP=app.py
+# Print environment diagnostics
+echo "[STARTUP] Environment diagnostics:"
+echo "  FLASK_APP: $FLASK_APP"
+echo "  SERVER_NAME: $SERVER_NAME"
+echo "  APPLICATION_ROOT: $APPLICATION_ROOT"
+echo "  PYTHONPATH: $PYTHONPATH"
+echo "  Working directory: $(pwd)"
+
+# Create error templates directory if it doesn't exist
+echo "[STARTUP] Creating error templates directory..."
+mkdir -p templates/errors
+if [ ! -f "templates/errors/404.html" ]; then
+    echo "[STARTUP] Creating 404 error template..."
+    cat > templates/errors/404.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Page Not Found</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #FE7900; }
+        a { color: #FE7900; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Page Not Found</h1>
+    <p>The requested page was not found. Please check the URL or go back to the <a href="/">home page</a>.</p>
+</body>
+</html>
+EOF
 fi
 
-# Check if the database file exists
-if [ -f "/var/data/maintenance.db" ]; then
-    echo "[STARTUP] Database file exists: $(ls -la /var/data/maintenance.db)"
-else
-    echo "[STARTUP] Database file does not exist yet - will be created on first run"
+if [ ! -f "templates/errors/500.html" ]; then
+    echo "[STARTUP] Creating 500 error template..."
+    cat > templates/errors/500.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Server Error</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #FE7900; }
+        a { color: #FE7900; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Server Error</h1>
+    <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/">home page</a>.</p>
+</body>
+</html>
+EOF
 fi
 
 echo "[STARTUP] Starting application server..."
-# Start the application with more verbose logging
-exec gunicorn app:app --log-level debug
+# Start the application with more verbose logging and log access
+exec gunicorn app:app --log-level debug --access-logfile - --error-logfile - --capture-output --bind 0.0.0.0:$PORT
