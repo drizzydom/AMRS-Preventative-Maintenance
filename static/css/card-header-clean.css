@@ -1,0 +1,38 @@
+/**
+ * CARD HEADER CLEAN STYLING
+ * Ensures rebuilt card headers have no text nodes and display properly
+ */
+
+/* Special class for our completely rebuilt card headers */
+.card-header-clean {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    padding: 0 !important;
+}
+
+/* Left side with title */
+.card-header-clean > div:first-child {
+    flex: 1 !important;
+}
+
+/* Right side with controls - zero font size to prevent any text */
+.card-header-clean > div:last-child {
+    text-align: right !important;
+    font-size: 0 !important;
+}
+
+/* Restore font size only for select and buttons */
+.card-header-clean select,
+.card-header-clean .form-select,
+.card-header-clean .btn {
+    font-size: 0.875rem !important;
+    margin-left: 0.5rem !important;
+}
+
+/* First select doesn't need left margin */
+.card-header-clean select:first-child,
+.card-header-clean .form-select:first-child {
+    margin-left: 0 !important;
+}

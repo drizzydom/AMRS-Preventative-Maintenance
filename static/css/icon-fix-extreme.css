@@ -1,0 +1,77 @@
+/**
+ * EXTREME ICON COLOR FIX
+ * Direct attack on the orange icon problem with maximum specificity
+ */
+
+/* Target the 4th card in admin specifically */
+.row > .col-md-3:nth-child(4) .card .card-body i,
+.row > .col-md-3:nth-child(4) .card .card-body .fa,
+.row > .col-md-3:nth-child(4) .card .card-body .fas,
+.row > .col-md-3:nth-child(4) .card-body i,
+.row > .col-md-3:nth-child(4) .card-body .fas,
+#parts-panel i,
+#parts-panel .fa,
+#parts-panel .fas,
+#parts-card i,
+#parts-card .fa,
+#parts-card .fas,
+a[href*="parts"] i.fa-cogs,
+.card:has(.card-title:contains("Parts")) i {
+    background-color: #5E5E5E !important;
+    color: white !important;
+    border-color: #5E5E5E !important;
+}
+
+/* Target based on position with even more specificity */
+html body .row .col-md-3:nth-child(4) .card i,
+html body .row .col-md-3:nth-child(4) .card .fa,
+html body .row .col-md-3:nth-child(4) .card .fas {
+    background-color: #5E5E5E !important;
+    color: white !important;
+    border-color: #5E5E5E !important;
+}
+
+/* Make sure we don't affect other elements */
+.navbar i, 
+.navbar .fa, 
+.navbar .fas,
+.btn i,
+.btn .fa,
+.btn .fas,
+.badge i,
+.badge .fa,
+.badge .fas,
+.sidebar i,
+.sidebar .fa,
+.sidebar .fas {
+    background-color: inherit;
+    color: inherit;
+}
+
+/* Restore badge colors separately */
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+    color: white !important;
+}
+
+.badge.bg-success {
+    background-color: #198754 !important;
+    color: white !important;
+}
+
+/* Force orange navbar */
+.navbar.bg-primary, 
+.navbar-dark.bg-primary {
+    background-color: #FE7900 !important;
+}
+
+/* Also target potential background divs in admin cards */
+.row > .col-md-3:nth-child(4) .card div[style*="background-color"],
+.row > .col-md-3:nth-child(4) .card div[style*="background:"]{
+    background-color: #5E5E5E !important;
+}

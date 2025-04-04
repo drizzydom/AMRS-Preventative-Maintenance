@@ -1,0 +1,73 @@
+/**
+ * LABEL DISPLAY FIX
+ * Nuclear option to completely eliminate "Currently showing" text and site names
+ */
+
+/* Target and eliminate any possible text nodes containing "Currently showing" text */
+body *::before {
+    content: none !important;
+}
+
+/* Use attribute selectors to target specific elements */
+[id*="filter"] *,
+[class*="filter"] *,
+[class*="dropdown"] * {
+    position: relative;
+}
+
+/* Targeting the precise card header elements */
+.card-header.d-flex {
+    position: relative;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+/* Style headings properly */
+.card-header .card-title {
+    margin-bottom: 0 !important; 
+    padding-bottom: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* Fix specific alignment in the card header */
+.card-header.d-flex.justify-content-between.align-items-center {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+/* Hide any text nodes directly in flex containers */
+.d-flex:not(:has(> *)) {
+    font-size: 0 !important;
+}
+
+/* Show important elements */
+select, 
+.btn, 
+h5, 
+.card-title,
+.table {
+    font-size: revert !important;
+}
+
+/* Make dropdown more space-efficient */
+select.form-select {
+    min-width: 160px !important;
+    max-width: 250px !important;
+}
+
+/* Nuclear option: Remove margin between card title and alignment area */
+.card-header > .d-flex > *:first-child {
+    margin-right: auto !important;
+}
+
+/* Extra rule to ensure dropdown has no text before it */
+.card-header > .d-flex > *:last-child {
+    margin-left: auto !important;
+}
+
+/* Remove any possible characters or text BETWEEN navbar elements */
+.card-header > .d-flex,
+.card-header > .d-flex > .d-flex {
+    font-size: 0 !important;
+}

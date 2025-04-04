@@ -1,0 +1,41 @@
+/**
+ * EMERGENCY SIDEBAR FIX
+ * Prevents sidebar from overlapping content with minimal CSS
+ */
+
+/* Force content away from sidebar */
+.content-container,
+.main-content,
+.col-md-9,
+.col-lg-10 {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+    padding-left: 15px !important;
+    transition: none !important; /* Disable transitions which might be causing overlap */
+}
+
+/* Match exact sidebar width */
+.sidebar,
+.sidebar-container {
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    flex: 0 0 200px !important;
+}
+
+/* Mobile view */
+@media (max-width: 991.98px) {
+    .content-container,
+    .main-content,
+    .col-md-9,
+    .col-lg-10 {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    .sidebar-container {
+        width: 0 !important;
+    }
+}

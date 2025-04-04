@@ -1,0 +1,81 @@
+/**
+ * ULTIMATE TEXT REMOVAL FIX
+ * Completely eliminates any unwanted text in card headers
+ */
+
+/* Reset all card headers - nuclear option */
+.card-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+/* Zero out font size for all content to eliminate any text */
+.card-header * {
+  font-size: 0 !important;
+}
+
+/* Restore only essential elements */
+.card-header h5,
+.card-header .card-title,
+.card-header select,
+.card-header .form-select,
+.card-header .btn,
+.card-header button {
+  font-size: 1rem !important;
+}
+
+/* Special handling for table-based layout */
+.card-header table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.card-header table td:first-child h5 {
+  font-size: 1rem !important;
+  margin: 0 !important;
+}
+
+.card-header table td:last-child {
+  text-align: right;
+  font-size: 0 !important;
+}
+
+.card-header table td:last-child select,
+.card-header table td:last-child .form-select,
+.card-header table td:last-child .btn {
+  font-size: 0.875rem !important;
+}
+
+/* Absolutely positioned overlay to block any text */
+.card-header table td:last-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Make sure form controls are above the overlay */
+.card-header table td:last-child select,
+.card-header table td:last-child .form-select,
+.card-header table td:last-child .btn {
+  position: relative;
+  z-index: 2;
+}
+
+/* Reset all pseudo-elements content */
+.card-header *::before,
+.card-header *::after {
+  content: none !important;
+}
+
+/* Handle flex container text */
+.d-flex {
+  white-space: nowrap;
+}
