@@ -15,6 +15,12 @@ services:
         value: "false"
       - key: SECRET_KEY
         generateValue: true
+      # The SERVER_NAME should match your Render URL - critical fix for routing
+      - key: SERVER_NAME
+        sync: false # Let this be manually set to match your Render URL
+      - key: PREFERRED_URL_SCHEME
+        value: "https"
+      # The rest of the existing environment variables
       - key: MAIL_SERVER
         sync: false
       - key: MAIL_PORT
@@ -25,7 +31,6 @@ services:
         sync: false
       - key: MAIL_DEFAULT_SENDER
         sync: false
-      # Add this environment variable to set a custom default admin password
       - key: DEFAULT_ADMIN_PASSWORD
         generateValue: true
     disk:

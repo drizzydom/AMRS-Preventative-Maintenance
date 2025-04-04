@@ -2,6 +2,7 @@ import os
 import sys
 import sqlite3
 import secrets
+import logging
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -12,6 +13,14 @@ from flask_mail import Mail, Message
 from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.orm.attributes import flag_modified
+
+# Set up logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 # Get the directory of this file
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -70,9 +79,36 @@ except ImportError as e:
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         return app
 
-# Initialize Flask app
+# Initialize Flask app with better error handling
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
+app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')
+app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '/')
+app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
+
+# Ensure URLs work with and without trailing slashes
+app.url_map.strict_slashes = False
+
+# Add error handlers to diagnose issues
+@app.errorhandler(404)
+def page_not_found(e):
+    logger.error(f"404 error: {request.path} - referrer: {request.referrer}")
+    return render_template('errors/404.html'), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"500 error: {str(e)}")
+    return render_template('errors/500.html'), 500
+
+# Add health check route for diagnostics
+@app.route('/health')
+def health_check():
+    return jsonify({
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "environment": os.environ.get('FLASK_ENV', 'production'),
+        "render": os.environ.get('RENDER', 'false')
+    })
 
 # Configure the database
 try:
