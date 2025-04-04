@@ -1,0 +1,40 @@
+/**
+ * DROPDOWN MENU FIX
+ * Ensures text in dropdown menus doesn't overlap with the arrow
+ */
+
+/* Add padding to dropdown button to prevent text overlap with arrow */
+.dropdown-toggle {
+    padding-right: 30px !important; /* Increased right padding to make room for the arrow */
+    position: relative !important;
+    text-align: left !important; /* Ensure text aligns left */
+    overflow: hidden !important; 
+    text-overflow: ellipsis !important; /* Show ellipsis for long text */
+    white-space: nowrap !important; /* Prevent text wrapping */
+}
+
+/* Fix specifically for site filter dropdown which might have longer texts */
+.site-filter-dropdown .dropdown-toggle,
+select.form-select[name="site_id"],
+select.form-select[id="site_id"] {
+    padding-right: 35px !important; /* Extra padding for site dropdowns */
+    max-width: 100% !important; /* Ensure dropdown doesn't exceed container */
+    min-width: 150px !important; /* Minimum width for readability */
+}
+
+/* Ensure the text doesn't go under the arrow */
+.form-select option {
+    padding-right: 20px !important;
+}
+
+/* Fix dropdowns in Bootstrap's default styling */
+.form-select {
+    padding-right: 40px !important; /* Bootstrap's default is usually 32px */
+    background-position: right 12px center !important; /* Move the arrow slightly more to the right */
+}
+
+/* For custom dropdowns (non-form-select) */
+.dropdown-menu-end,
+.dropdown-menu-right {
+    min-width: 150px !important; /* Ensure dropdown menu is wide enough */
+}

@@ -1,0 +1,63 @@
+/**
+ * EMERGENCY CSS FIX
+ * Minimal CSS to fix issues without performance impact
+ */
+
+/* Add white text to sidebar links */
+.sidebar {
+    background-color: #5E5E5E;
+}
+
+.sidebar .nav-link {
+    color: white !important;
+}
+
+.sidebar .nav-link.active {
+    background-color: #FE7900;
+    color: white !important;
+}
+
+/* Make parts icon consistent with others in admin panel */
+.col-md-3:nth-child(4) .card i, 
+.col-md-3:nth-child(4) .card .fas {
+    background-color: #5E5E5E !important; 
+    color: white !important;
+}
+
+/* Fix for the text display in card headers with dropdowns */
+.card-header {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Hide the specific problematic text */
+.card-header .dropdown-text,
+.card-header > span:empty,
+.card-header > *:not(h5):not(select):not(.btn):not(.form-select):not(.card-title):empty {
+    display: none !important;
+}
+
+/* Ensure spacing between content and sidebar */
+.ms-sm-auto {
+    margin-left: auto !important;
+}
+
+/* Space between dropdown and buttons */
+.card-header .btn {
+    margin-left: 0.5rem;
+}
+
+/* Ensure proper sidebar appearance on mobile */
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 100;
+        padding: 48px 0 0;
+        box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+    }
+}

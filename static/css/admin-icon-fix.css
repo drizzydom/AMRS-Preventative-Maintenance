@@ -1,0 +1,54 @@
+/**
+ * ADMIN ICON ABSOLUTE OVERRIDE
+ * The most extreme specificity possible to override orange icons in admin page
+ */
+
+/* Target the 4th card specifically - main culprit */
+html body .row > .col-md-3:nth-child(4) .card *,
+html body #parts-panel *,
+html body #parts-card * {
+    --icon-color: #5E5E5E !important;
+    --icon-text-color: white !important;
+}
+
+/* Target EVERY POSSIBLE ICON VERSION */
+html body .row > .col-md-3:nth-child(4) .card i,
+html body .row > .col-md-3:nth-child(4) .card svg,
+html body .row > .col-md-3:nth-child(4) .card [class*="fa"],
+html body .row > .col-md-3:nth-child(4) .card .card-icon,
+html body .row > .col-md-3:nth-child(4) .card .icon,
+html body #parts-panel i,
+html body #parts-panel svg,
+html body #parts-panel [class*="fa"],
+html body #parts-card i,
+html body #parts-card svg,
+html body #parts-card [class*="fa"] {
+    background-color: #5E5E5E !important;
+    color: white !important;
+    border-color: #5E5E5E !important;
+    fill: white !important;
+}
+
+/* Target everything with orange background */
+html body [style*="background-color: rgb(254, 121, 0)"],
+html body [style*="background-color:#fe7900"],
+html body [style*="background-color: #fe7900"],
+html body .bg-warning,
+html body .bg-primary,
+html body [style*="background-color: var(--primary)"],
+html body [style*="background-color:var(--primary)"],
+html body [style*="background-color: var(--warning)"],
+html body [style*="background-color:var(--warning)"] {
+    background-color: #5E5E5E !important;
+    color: white !important;
+}
+
+/* Eliminate color styles added dynamically */
+html body .row > .col-md-3:nth-child(4) .card [style] {
+    background-color: #5E5E5E !important;
+    color: white !important;
+}
+
+/* Ensure this takes effect right when the stylesheet loads */
+@-webkit-keyframes no-op {}
+@keyframes no-op {}

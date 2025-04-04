@@ -1,0 +1,40 @@
+/**
+ * SITE NAME TEXT REMOVAL
+ * Specifically targets and removes site name text from the UI
+ */
+
+/* Clear any text in table cells containing dropdown menus */
+.card-header table tr td {
+    font-size: 0 !important;
+}
+
+/* But allow proper display of elements inside the table cell */
+.card-header table tr td select,
+.card-header table tr td .form-select,
+.card-header table tr td .btn {
+    font-size: 0.875rem !important;
+}
+
+/* Hide any text that might be in between elements */
+.card-header table tr td::before,
+.card-header table tr td::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* Make sure h5 titles display properly */
+.card-header table tr td h5.card-title {
+    font-size: 1rem !important;
+}
+
+/* Target the specific location where site name might appear */
+.card-header table tr td:last-child::before,
+.card-header table tr td:last-child > *:not(select):not(.btn) {
+    display: none !important;
+}
+
+/* Override any page title that might contain site name */
+.page-header .h3 {
+    font-size: 1.25rem !important;
+    content: attr(data-fixed-title) !important;
+}

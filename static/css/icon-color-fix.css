@@ -1,0 +1,26 @@
+/**
+ * ICON COLOR CONSISTENCY FIX - TARGETED VERSION
+ * Only affects the problematic parts icon in admin dashboard
+ */
+
+/* Target specifically the parts icon in the admin dashboard */
+html body .row > .col-md-3:nth-child(4) .card .card-body i,
+html body .row > .col-md-3:nth-child(4) .card .card-body .fa,
+html body .row > .col-md-3:nth-child(4) .card .card-body .fas,
+html body #parts-panel i,
+html body #parts-card i {
+    background-color: #5E5E5E !important;
+    color: white !important;
+    border-color: #5E5E5E !important;
+}
+
+/* Don't affect badges and other status indicators */
+.badge,
+.btn i,
+.btn .fa,
+.btn .fas,
+span.badge i,
+span.badge .fa,
+span.badge .fas {
+    background-color: transparent !important;
+}
