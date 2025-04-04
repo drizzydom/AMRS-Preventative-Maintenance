@@ -5,11 +5,9 @@
 {% block header_title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-<!-- Simple inline style fix for Parts card icon -->
+<!-- ULTRA DIRECT PARTS ICON FIX -->
 <style>
-    /* Direct fix for Parts card icon */
-    .row > .col-md-3:nth-child(4) .card i,
-    .row > .col-md-3:nth-child(4) .card .fas {
+    #parts-card i, #parts-card .fas, #parts-card .fa {
         background-color: #5E5E5E !important;
         color: white !important;
     }
@@ -49,6 +47,49 @@
                 <h5 class="card-title">Parts</h5>
                 <h2 class="display-4">{{ part_count }}</h2>
                 <a href="{{ url_for('manage_parts') }}" class="btn btn-primary">Manage Parts</a>
+                
+                <!-- DIRECT DOM MANIPULATION: Force gray color on all icon elements -->
+                <script>
+                    // Execute immediately
+                    (function() {
+                        // Get all icon elements in this card
+                        var card = document.getElementById('parts-card');
+                        if (!card) return; // Safety check
+                        
+                        // Find ALL possible icon elements
+                        var icons = card.querySelectorAll('i, .fa, .fas, svg');
+                        
+                        // Fix each one
+                        icons.forEach(function(icon) {
+                            // Force direct styling
+                            icon.setAttribute('style', 'background-color: #5E5E5E !important; color: white !important;');
+                            
+                            // Also set a class as backup
+                            icon.classList.add('bg-secondary', 'text-white');
+                            
+                            // Remove any classes that might cause orange
+                            icon.classList.remove('bg-warning', 'bg-primary');
+                        });
+                        
+                        // Also scan for any orange background elements
+                        var allElements = card.querySelectorAll('*');
+                        allElements.forEach(function(el) {
+                            var style = window.getComputedStyle(el);
+                            var bgColor = style.backgroundColor;
+                            
+                            // If it has an orange-ish color
+                            if (bgColor && (
+                                bgColor.includes('254, 121') || 
+                                bgColor.includes('255, 193') ||
+                                bgColor.includes('#fe7900') ||
+                                bgColor.includes('#ffc107')
+                            )) {
+                                el.style.backgroundColor = '#5E5E5E';
+                                el.style.color = 'white';
+                            }
+                        });
+                    })();
+                </script>
             </div>
         </div>
     </div>

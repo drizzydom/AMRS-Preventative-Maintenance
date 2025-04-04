@@ -14,41 +14,21 @@
     <!-- App CSS files - SIMPLIFIED -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/working-sidebar-toggle.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
-    <!-- Fix CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-sidebar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/parts-icon-fix.css') }}">
-    
-    <!-- These files should be loaded last to override everything -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/emergency-reset.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/icon-fix-extreme.css') }}">
-    
-    <!-- Styles specifically for the sidebar toggle -->
-    <style>
-        /* Sidebar toggle button styling */
-        .sidebar-toggle-item {
-            padding: 0.5rem;
-            margin-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .sidebar-toggle-btn {
-            background: transparent;
-            border: none;
-            color: white;
-            width: 100%;
-            padding: 0.5rem;
-            text-align: center;
-            cursor: pointer;
-        }
-        .sidebar-toggle-btn:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-    </style>
-    
     {% block extra_css %}{% endblock %}
+    
+    <!-- Prevent any old scripts from running -->
+    <script>
+        window.sidebarToggle = null;
+        window.toggleSidebar = null;
+    </script>
 </head>
 <body>
+    <!-- Load our single unified toggle script FIRST -->
+    <script src="{{ url_for('static', filename='js/unified-sidebar-toggle.js') }}"></script>
+    
     <header>
         <!-- Navigation Bar -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
@@ -173,8 +153,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Main application scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <!-- Fixed sidebar toggle script - Load before other scripts -->
-    <script src="{{ url_for('static', filename='js/sidebar-toggle-fix.js') }}"></script>
+    
+    <!-- Legacy toggle scripts are disabled to avoid conflicts -->
+    <!-- <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script> -->
+    <!-- <script src="{{ url_for('static', filename='js/simple-toggle.js') }}"></script> -->
     
     <!-- Minimal JS fix for dynamic elements -->
     <script>
