@@ -12,53 +12,75 @@ def configure_database(app: Flask):
     # For Render deployment
     if os.environ.get('RENDER'):
         try:
-            # Render's persistent disk is mounted at /var/data
-            # This is where we should store our database file
-            data_dir = '/var/data'
+            # Try multiple possible data directories
+            possible_paths = [
+                '/var/data',                      # Standard Render persistent storage
+                '/tmp',                           # Fallback to temp directory
+                os.path.dirname(os.path.abspath(__file__)),  # Project directory
+                os.getcwd()                       # Current working directory
+            ]
             
-            # Ensure the directory exists
-            print(f"[DB_CONFIG] Using persistent data directory: {data_dir}")
-            try:
-                os.makedirs(data_dir, exist_ok=True)
-                print(f"[DB_CONFIG] Data directory ready: {os.path.exists(data_dir)}")
-            except Exception as e:
-                print(f"[DB_CONFIG] Error creating data directory: {str(e)}", file=sys.stderr)
+            db_path = None
             
-            # Create the database path
-            db_path = os.path.join(data_dir, 'maintenance.db')
-            
+            for path in possible_paths:
+                try:
+                    print(f"[DB_CONFIG] Trying path: {path}")
+                    # Check if directory exists and is writable
+                    if os.path.exists(path) and os.access(path, os.W_OK):
+                        # Try to create a test file to verify write permissions
+                        test_file = os.path.join(path, 'db_test_file')
+                        with open(test_file, 'w') as f:
+                            f.write('test')
+                        os.remove(test_file)
+                        
+                        db_path = os.path.join(path, 'maintenance.db')
+                        print(f"[DB_CONFIG] Found writable directory: {path}")
+                        break
+                    else:
+                        print(f"[DB_CONFIG] Directory not writable: {path}")
+                except Exception as e:
+                    print(f"[DB_CONFIG] Error with path {path}: {str(e)}")
+                    continue
+                    
+            if db_path is None:
+                print("[DB_CONFIG] No writable directory found. Using in-memory database as fallback.")
+                db_path = ':memory:'
+                
             # Configure Flask app to use this database
             app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
             
-            print(f"[DB_CONFIG] Using persistent database at {db_path}")
+            print(f"[DB_CONFIG] Using database at: {db_path}")
             
             # Check database access
-            MAX_RETRIES = 5
-            retry_count = 0
-            while retry_count < MAX_RETRIES:
-                try:
-                    # Try to connect to and access the database
-                    print(f"[DB_CONFIG] Testing database connection (attempt {retry_count+1}/{MAX_RETRIES})...")
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
-                    tables = cursor.fetchall()
-                    conn.close()
-                    print(f"[DB_CONFIG] Successfully connected to database. Found {len(tables)} tables.")
-                    break
-                except Exception as e:
-                    retry_count += 1
-                    print(f"[DB_CONFIG] Attempt {retry_count}/{MAX_RETRIES} - Error accessing database: {str(e)}", file=sys.stderr)
-                    if retry_count < MAX_RETRIES:
-                        print(f"[DB_CONFIG] Waiting 3 seconds before retry...")
-                        time.sleep(3)
-                    else:
-                        print(f"[DB_CONFIG] Failed to access database after {MAX_RETRIES} attempts. Will continue anyway - tables will be created if needed.", file=sys.stderr)
+            if db_path != ':memory:':
+                MAX_RETRIES = 5
+                retry_count = 0
+                while retry_count < MAX_RETRIES:
+                    try:
+                        # Try to connect to and access the database
+                        print(f"[DB_CONFIG] Testing database connection (attempt {retry_count+1}/{MAX_RETRIES})...")
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
+                        tables = cursor.fetchall()
+                        conn.close()
+                        print(f"[DB_CONFIG] Successfully connected to database. Found {len(tables)} tables.")
+                        break
+                    except Exception as e:
+                        retry_count += 1
+                        print(f"[DB_CONFIG] Attempt {retry_count}/{MAX_RETRIES} - Error accessing database: {str(e)}")
+                        if retry_count < MAX_RETRIES:
+                            print(f"[DB_CONFIG] Waiting 3 seconds before retry...")
+                            time.sleep(3)
+                        else:
+                            print(f"[DB_CONFIG] Failed to access database after {MAX_RETRIES} attempts.")
+                            print(f"[DB_CONFIG] Will create one when tables are created.")
+            
         except Exception as e:
-            print(f"[DB_CONFIG] Error setting up Render database: {str(e)}", file=sys.stderr)
-            # Fallback to a safe configuration
-            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
-            print(f"[DB_CONFIG] Using fallback database: maintenance.db in current working directory", file=sys.stderr)
+            print(f"[DB_CONFIG] Error setting up database: {str(e)}")
+            # Fallback to in-memory database as a last resort
+            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+            print(f"[DB_CONFIG] Using in-memory database as fallback")
     else:
         # Local development setup - store in project directory
         try:
@@ -69,10 +91,10 @@ def configure_database(app: Flask):
             app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
             print(f"[DB_CONFIG] Using local database at {db_path}")
         except Exception as e:
-            print(f"[DB_CONFIG] Error setting up local database: {str(e)}", file=sys.stderr)
+            print(f"[DB_CONFIG] Error setting up local database: {str(e)}")
             # Fallback to a very basic configuration
             app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
-            print(f"[DB_CONFIG] Using fallback database: maintenance.db in current working directory", file=sys.stderr)
+            print(f"[DB_CONFIG] Using fallback database: maintenance.db in current directory")
     
     # Disable SQLAlchemy event system - improves performance
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
