@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+import sys  # Add missing sys import for sys.exit()
 import os
 import click  # Add the missing click import
 import secrets  # Add secrets for generating secure tokens
@@ -1301,3 +1302,16 @@ def delete_backup(filename):
         flash(f"Backup file not found: {filename}", "error")
     
     return redirect(url_for('manage_backups'))
+
+if __name__ == '__main__':
+    with app.app_context():
+        try:
+            # Try to query User table to check if database is initialized
+            user_count = User.query.count()
+        except Exception as e:
+            print("\nERROR: Database is not initialized or tables don't exist.")
+            print("Please run: python initialize_db.py")
+            print(f"Error details: {str(e)}\n")
+            sys.exit(1)
+    
+    app.run(debug=True, host='0.0.0.0', port=5050)
