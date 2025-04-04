@@ -18,6 +18,18 @@ echo "[STARTUP] Creating backups directory..."
 mkdir -p /var/data/backups || echo "[ERROR] Failed to create backups directory"
 chmod -R 755 /var/data/backups || echo "[ERROR] Failed to set permissions on backups directory"
 
+# Ensure the templates/errors directory exists and is writable
+echo "[STARTUP] Ensuring error templates directory exists..."
+mkdir -p templates/errors
+chmod -R 755 templates/ || echo "[ERROR] Failed to set permissions on templates directory"
+
+# Check if the error templates exist
+if [ -f "templates/errors/404.html" ]; then
+    echo "[STARTUP] Error templates verified."
+else
+    echo "[ERROR] Error templates missing. Using fallback error handlers."
+fi
+
 # List contents of data directory
 echo "[STARTUP] Data directory contents:"
 ls -la /var/data || echo "[ERROR] Failed to list /var/data contents"
@@ -29,53 +41,8 @@ echo "  SERVER_NAME: $SERVER_NAME"
 echo "  APPLICATION_ROOT: $APPLICATION_ROOT"
 echo "  PYTHONPATH: $PYTHONPATH"
 echo "  Working directory: $(pwd)"
-
-# Create error templates directory if it doesn't exist
-echo "[STARTUP] Creating error templates directory..."
-mkdir -p templates/errors
-if [ ! -f "templates/errors/404.html" ]; then
-    echo "[STARTUP] Creating 404 error template..."
-    cat > templates/errors/404.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Page Not Found</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        h1 { color: #FE7900; }
-        a { color: #FE7900; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <h1>Page Not Found</h1>
-    <p>The requested page was not found. Please check the URL or go back to the <a href="/">home page</a>.</p>
-</body>
-</html>
-EOF
-fi
-
-if [ ! -f "templates/errors/500.html" ]; then
-    echo "[STARTUP] Creating 500 error template..."
-    cat > templates/errors/500.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Server Error</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        h1 { color: #FE7900; }
-        a { color: #FE7900; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <h1>Server Error</h1>
-    <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/">home page</a>.</p>
-</body>
-</html>
-EOF
-fi
+echo "  Directory structure:"
+find . -type d -maxdepth 2 | sort
 
 echo "[STARTUP] Starting application server..."
 # Start the application with more verbose logging and log access
