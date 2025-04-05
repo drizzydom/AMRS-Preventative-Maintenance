@@ -13,6 +13,8 @@ from flask_mail import Mail, Message
 from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.orm.attributes import flag_modified
+import signal
+import psutil
 
 # Set up logging
 logging.basicConfig(
@@ -127,12 +129,45 @@ def server_error(e):
 # Add health check route for diagnostics
 @app.route('/health')
 def health_check():
+    """Health check endpoint for Render."""
+    from flask import jsonify
+    import datetime
+    import psutil
+    import os
+    
+    # Log the health check to help track shutdowns
+    print(f"[HEALTH] Health check received at {datetime.datetime.now().isoformat()}")
+    
+    # Collect some basic health metrics
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage('/')
+    
     return jsonify({
-        "status": "ok",
-        "timestamp": datetime.now().isoformat(),
-        "environment": os.environ.get('FLASK_ENV', 'production'),
-        "render": os.environ.get('RENDER', 'false')
+        'status': 'healthy',
+        'timestamp': datetime.datetime.now().isoformat(),
+        'uptime': datetime.datetime.now().timestamp() - psutil.boot_time(),
+        'memory': {
+            'total': memory.total,
+            'available': memory.available,
+            'percent': memory.percent
+        },
+        'disk': {
+            'total': disk.total,
+            'free': disk.free,
+            'percent': disk.percent
+        },
+        'environment': os.environ.get('FLASK_ENV', 'production')
     })
+
+# Add signal handlers to gracefully handle shutdown
+def signal_handler(sig, frame):
+    print(f"[SHUTDOWN] Received signal {sig} at {datetime.datetime.now().isoformat()}")
+    print("[SHUTDOWN] Gracefully shutting down...")
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 # Configure the database
 try:
@@ -225,6 +260,7 @@ if os.environ.get('RENDER', False):
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
+    print(f"[STARTUP] Starting Flask application at {datetime.datetime.now().isoformat()}")
     # Get port from environment variable or use default
     port = int(os.environ.get('PORT', 10000))
     print(f"[APP] Starting Flask server on port {port}")

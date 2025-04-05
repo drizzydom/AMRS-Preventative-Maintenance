@@ -3,7 +3,7 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    startCommand: ./startup.sh
     envVars:
       - key: FLASK_APP
         value: app.py
@@ -15,25 +15,17 @@ services:
         value: "false"
       - key: SECRET_KEY
         generateValue: true
-      - key: MAIL_SERVER
-        sync: false
-      - key: MAIL_PORT
-        sync: false
-      - key: MAIL_USERNAME
-        sync: false
-      - key: MAIL_PASSWORD
-        sync: false
-      - key: MAIL_DEFAULT_SENDER
-        sync: false
-      # Add this environment variable to set a custom default admin password
       - key: DEFAULT_ADMIN_PASSWORD
         generateValue: true
-      - key: PORT
+      - key: APP_URL
         fromService:
           type: web
           name: maintenance-tracker
-          envVarKey: RENDER_PORT
+          envVarKey: RENDER_EXTERNAL_URL
     disk:
-      name: data
+      name: maintenance-data
       mountPath: /var/data
       sizeGB: 1
+    healthCheckPath: /health
+    # Auto deploys are off so we avoid deployments interrupting users
+    autoDeploy: false
