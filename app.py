@@ -127,37 +127,29 @@ def server_error(e):
         ''', 500
 
 # Add health check route for diagnostics
+@app.route('/healthz')
 @app.route('/health')
-def health_check():
-    """Health check endpoint for Render."""
-    from flask import jsonify
+def health_plaintext():
+    """Simple plain text health check that requires minimal processing."""
+    import sys
     import datetime
-    import psutil
     import os
     
-    # Log the health check to help track shutdowns
-    print(f"[HEALTH] Health check received at {datetime.datetime.now().isoformat()}")
+    output = f"AMRS Health Check: OK\n\n"
+    output += f"Time: {datetime.datetime.now().isoformat()}\n"
+    output += f"Python: {sys.version}\n"
+    output += f"Working Directory: {os.getcwd()}\n"
     
-    # Collect some basic health metrics
-    memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
+    # Check database connection
+    from sqlalchemy import text
+    try:
+        with app.app_context():
+            result = db.session.execute(text("SELECT 1")).scalar()
+            output += f"Database Connection: OK (result={result})\n"
+    except Exception as e:
+        output += f"Database Connection: ERROR - {str(e)}\n"
     
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.datetime.now().isoformat(),
-        'uptime': datetime.datetime.now().timestamp() - psutil.boot_time(),
-        'memory': {
-            'total': memory.total,
-            'available': memory.available,
-            'percent': memory.percent
-        },
-        'disk': {
-            'total': disk.total,
-            'free': disk.free,
-            'percent': disk.percent
-        },
-        'environment': os.environ.get('FLASK_ENV', 'production')
-    })
+    return output, 200, {'Content-Type': 'text/plain'}
 
 # Add signal handlers to gracefully handle shutdown
 def signal_handler(sig, frame):
