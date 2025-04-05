@@ -1,0 +1,68 @@
+/**
+ * PAGE TRANSITIONS FIX
+ * Prevents unwanted sliding animations when loading new pages
+ * while preserving intentional animations like sidebar toggling
+ */
+
+/* Prevent content containers from having transitions applied on page load */
+.content-container,
+.main-content,
+.centered-content-col,
+.page-content,
+.container-fluid,
+.card,
+.row,
+[class*="col-"] {
+    transition: none !important;
+}
+
+/* Only allow transitions on the sidebar elements */
+.sidebar {
+    transition: width 0.3s ease !important;
+}
+
+body.sidebar-collapsed .sidebar {
+    transition: width 0.3s ease !important;
+}
+
+/* Allow transitions for sidebar visibility on mobile */
+@media (max-width: 991.98px) {
+    .sidebar {
+        transition: transform 0.3s ease !important;
+    }
+}
+
+/* Make sure any transition delays are removed for content */
+.content-container,
+.main-content,
+.centered-content-col,
+.page-content {
+    transition-delay: 0s !important;
+    animation-delay: 0s !important;
+}
+
+/* Ensure page loads with content already in final position */
+body:not(.preload) .content-container {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+}
+
+/* Ensure collapsed sidebar positions content correctly without animation */
+body.sidebar-collapsed:not(.preload) .content-container {
+    margin-left: 50px !important;
+    width: calc(100% - 50px) !important;
+    max-width: calc(100% - 50px) !important;
+    transition: none !important;
+}
+
+/* Style for mobile view (no animation on content) */
+@media (max-width: 991.98px) {
+    .content-container,
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        transition: none !important;
+    }
+}
