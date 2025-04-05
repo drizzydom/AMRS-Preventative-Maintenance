@@ -151,11 +151,16 @@ db = SQLAlchemy(app)
 def add_default_admin_if_needed():
     """Add a default admin user if no users exist in the database"""
     try:
-        print("[APP] Checking for default admin user...")
-        from werkzeug.security import generate_password_hash
+        print("[APP] Checking for existing users...")
         
-        # Check if User model is defined and users table exists
-        if 'User' in globals() and db.engine.has_table('user'):
+        # First make sure tables exist
+        with app.app_context():
+            inspector = db.inspect(db.engine)
+            if 'user' not in inspector.get_table_names():
+                print("[APP] User table doesn't exist yet. Will create tables first.")
+                db.create_all()
+                print("[APP] Tables created.")
+            
             # Check if any users exist
             user_count = User.query.count()
             
@@ -165,39 +170,38 @@ def add_default_admin_if_needed():
                 # Create default admin role if needed
                 admin_role = Role.query.filter_by(name="Administrator").first()
                 if not admin_role:
+                    print("[APP] Creating Administrator role with full permissions.")
                     admin_role = Role(
                         name="Administrator",
                         description="Full system access",
-                        permissions=",".join(Permissions.get_all_permissions())
+                        permissions="admin.full"  # Full administrator access
                     )
                     db.session.add(admin_role)
                     db.session.commit()
                 
-                # Create default admin user
-                default_password = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'admin123')  # Can be set in env vars
+                # Create default admin user with simple password for testing
                 admin_user = User(
                     username="admin",
-                    password_hash=generate_password_hash(default_password),
                     email="admin@example.com",
                     full_name="System Administrator",
                     is_admin=True,
-                    role_id=admin_role.id
+                    role_id=admin_role.id if admin_role else None
                 )
+                admin_user.set_password("admin")  # Simple password for testing
                 
                 db.session.add(admin_user)
                 db.session.commit()
-                print("[APP] Created default admin user 'admin' with provided or default password.")
-                print("[APP] IMPORTANT: Please change this password immediately after first login.")
+                
+                print("[APP] Created default admin user 'admin' with password 'admin'")
+                print("[APP] WARNING: This is intended for testing only.")
+                print("[APP] IMPORTANT: Please change this password immediately after login.")
                 
                 return admin_user
             else:
-                print(f"[APP] Found {user_count} existing users in database.")
+                print(f"[APP] Found {user_count} existing users in database - no default admin needed.")
                 return None
-        else:
-            print("[APP] User model not defined or users table doesn't exist yet.")
-            return None
     except Exception as e:
-        print(f"[APP] Error checking/creating default admin: {str(e)}")
+        print(f"[APP] Error creating default admin: {str(e)}")
         return None
 
 # AFTER all models are defined, THEN create tables
@@ -214,9 +218,14 @@ if os.environ.get('RENDER', False):
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
+    with app.app_context():
+        # Create tables if they don't exist
+        db.create_all()
+        
+        # Add default admin account if no users exist
+        add_default_admin_if_needed()
+    
     # Get port from environment variable or use default
     port = int(os.environ.get('PORT', 10000))
     print(f"[APP] Starting Flask server on port {port}")
-    
-    # Use host 0.0.0.0 to bind to all interfaces
     app.run(host='0.0.0.0', port=port)
