@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm.attributes import flag_modified
 import signal
 import psutil
+from fix_render_routes import apply_render_fixes
 
 # Set up logging
 logging.basicConfig(
@@ -80,6 +81,9 @@ except ImportError as e:
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         return app
+
+# Apply fixes before creating the Flask app
+apply_render_fixes()
 
 # Initialize Flask app with better error handling
 app = Flask(__name__)
@@ -249,6 +253,45 @@ if os.environ.get('RENDER', False):
             add_default_admin_if_needed()
         except Exception as e:
             print(f"[APP] Error setting up database: {str(e)}", file=sys.stderr)
+
+# Add these diagnostic routes at the bottom after all other routes
+@app.route('/ping')
+def ping():
+    """Simple ping endpoint that should always work"""
+    return "pong", 200
+
+@app.route('/routes')
+def list_routes():
+    """List all registered routes for debugging"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            "endpoint": rule.endpoint,
+            "methods": [method for method in rule.methods if method != 'HEAD' and method != 'OPTIONS'],
+            "url": str(rule)
+        })
+    return {"routes": routes, "count": len(routes)}, 200
+
+@app.route('/debug')
+def debug_info():
+    """Return debug info about the application"""
+    import platform
+    info = {
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "working_directory": os.getcwd(),
+        "environment": {k: v for k, v in os.environ.items() if k.startswith(('FLASK_', 'RENDER_', 'PORT', 'PATH'))},
+        "app_name": app.name,
+        "debug_mode": app.debug,
+        "config": {k: str(v) for k, v in app.config.items() if not k.startswith('_')},
+    }
+    return info, 200
+
+# Check if URL rules are properly registered
+if len(list(app.url_map.iter_rules())) == 0:
+    print("[WARNING] No routes registered! Application will return 404 for all requests.")
+else:
+    print(f"[INFO] {len(list(app.url_map.iter_rules()))} routes registered successfully")
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
