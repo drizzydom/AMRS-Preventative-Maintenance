@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask_mail import Mail, Message
 from dotenv import load_dotenv
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from sqlalchemy.orm.attributes import flag_modified
 
 # Set up logging
@@ -124,6 +124,28 @@ def server_error(e):
         </html>
         ''', 500
 
+# Root route handler
+@app.route('/')
+def index():
+    """Root route that redirects to the dashboard or login page."""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    else:
+        return redirect(url_for('login'))
+
+# Add debug route to check application
+@app.route('/debug-info')
+def debug_info():
+    """Debug route to check application status"""
+    output = {
+        "status": "running",
+        "time": datetime.now().isoformat(),
+        "routes": [str(rule) for rule in app.url_map.iter_rules()],
+        "current_user": str(current_user) if 'current_user' in globals() else "Not available",
+        "is_authenticated": current_user.is_authenticated if 'current_user' in globals() else False
+    }
+    return jsonify(output)
+
 # Add health check route for diagnostics
 @app.route('/health')
 def health_check():
@@ -147,58 +169,85 @@ except Exception as e:
 print("[APP] Initializing SQLAlchemy...")
 db = SQLAlchemy(app)
 
-# Add default user if none exist - ensures at least one admin exists after fresh deployments
-def add_default_admin_if_needed():
-    """Add a default admin user if no users exist in the database"""
+# Create admin function
+def create_default_admin():
+    """Create a default admin account if no users exist"""
     try:
-        print("[APP] Checking for default admin user...")
-        from werkzeug.security import generate_password_hash
+        print("[APP] Checking for existing users...")
         
-        # Check if User model is defined and users table exists
-        if 'User' in globals() and db.engine.has_table('user'):
-            # Check if any users exist
-            user_count = User.query.count()
+        # Check if users table exists
+        inspector = inspect(db.engine)
+        if 'user' not in inspector.get_table_names():
+            print("[APP] Users table doesn't exist yet, creating all tables...")
+            db.create_all()
+        
+        # Check for existing users
+        user_count = User.query.count()
+        
+        if user_count == 0:
+            print("[APP] No users found. Creating default admin user...")
             
-            if user_count == 0:
-                print("[APP] No users found in database. Creating default admin user.")
-                
-                # Create default admin role if needed
+            # Check if Roles table exists and has Administrator role
+            admin_role = None
+            if 'role' in inspector.get_table_names():
                 admin_role = Role.query.filter_by(name="Administrator").first()
-                if not admin_role:
-                    admin_role = Role(
-                        name="Administrator",
-                        description="Full system access",
-                        permissions=",".join(Permissions.get_all_permissions())
-                    )
-                    db.session.add(admin_role)
-                    db.session.commit()
                 
-                # Create default admin user
-                default_password = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'admin123')  # Can be set in env vars
-                admin_user = User(
-                    username="admin",
-                    password_hash=generate_password_hash(default_password),
-                    email="admin@example.com",
-                    full_name="System Administrator",
-                    is_admin=True,
-                    role_id=admin_role.id
+            # Create admin role if needed
+            if not admin_role:
+                print("[APP] Creating Administrator role...")
+                
+                # Handle case where get_all_permissions may not exist
+                try:
+                    permissions = Permissions.get_all_permissions() if hasattr(Permissions, 'get_all_permissions') else "admin"
+                    permissions_string = ",".join(permissions)
+                except:
+                    permissions_string = "admin.full"
+                
+                admin_role = Role(
+                    name="Administrator",
+                    description="Full system access",
+                    permissions=permissions_string
                 )
-                
-                db.session.add(admin_user)
+                db.session.add(admin_role)
                 db.session.commit()
-                print("[APP] Created default admin user 'admin' with provided or default password.")
-                print("[APP] IMPORTANT: Please change this password immediately after first login.")
-                
-                return admin_user
+            
+            # Create admin user with username "admin" and password "admin"
+            admin_user = User(
+                username="admin",
+                email="admin@example.com",
+                full_name="System Administrator", 
+                is_admin=True,
+                role_id=admin_role.id if admin_role else None
+            )
+            
+            # Set password - handle different implementations
+            if hasattr(admin_user, 'set_password'):
+                admin_user.set_password("admin")
             else:
-                print(f"[APP] Found {user_count} existing users in database.")
-                return None
+                admin_user.password_hash = generate_password_hash("admin")
+            
+            db.session.add(admin_user)
+            db.session.commit()
+            
+            print("[APP] Created default admin user 'admin' with password 'admin'")
+            print("[APP] WARNING: This is intended for testing only.")
+            print("[APP] IMPORTANT: Change this password when deploying to production!")
+            
+            return True
         else:
-            print("[APP] User model not defined or users table doesn't exist yet.")
-            return None
+            print(f"[APP] {user_count} users already exist, not creating default admin")
+            return False
+            
     except Exception as e:
-        print(f"[APP] Error checking/creating default admin: {str(e)}")
-        return None
+        print(f"[APP] Error creating default admin: {str(e)}")
+        return False
+
+# Call this function when app initializes
+with app.app_context():
+    try:
+        create_default_admin()
+    except Exception as e:
+        print(f"[APP] Error during startup initialization: {str(e)}")
 
 # AFTER all models are defined, THEN create tables
 if os.environ.get('RENDER', False):
@@ -207,8 +256,6 @@ if os.environ.get('RENDER', False):
         try:
             db.create_all()
             print("[APP] Database tables created successfully.")
-            # Add default admin user if needed
-            add_default_admin_if_needed()
         except Exception as e:
             print(f"[APP] Error creating database tables: {str(e)}", file=sys.stderr)
 
