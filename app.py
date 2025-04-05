@@ -89,6 +89,19 @@ app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'htt
 # Ensure URLs work with and without trailing slashes
 app.url_map.strict_slashes = False
 
+# Initialize Flask-Login - CRITICAL: This must be done before using current_user
+print("[APP] Initializing Flask-Login...")
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'  # Specify the login view endpoint for @login_required
+login_manager.login_message_category = 'info'  # Flash message category for login messages
+
+# User loader function for Flask-Login
+@login_manager.user_loader
+def load_user(user_id):
+    # This must return None or a User object
+    return User.query.get(int(user_id)) if user_id else None
+
 # Add error handlers with fallbacks
 @app.errorhandler(404)
 def page_not_found(e):
@@ -141,6 +154,7 @@ def debug_info():
         "status": "running",
         "time": datetime.now().isoformat(),
         "routes": [str(rule) for rule in app.url_map.iter_rules()],
+        "flask_login_initialized": hasattr(app, 'login_manager'),
         "current_user": str(current_user) if 'current_user' in globals() else "Not available",
         "is_authenticated": current_user.is_authenticated if 'current_user' in globals() else False
     }
@@ -242,6 +256,63 @@ def create_default_admin():
         print(f"[APP] Error creating default admin: {str(e)}")
         return False
 
+# Add default user if none exist - ensures at least one admin exists after fresh deployments
+def add_default_admin_if_needed():
+    """Add a default admin user if no users exist in the database"""
+    try:
+        print("[APP] Checking for default admin user...")
+        
+        # First make sure tables exist
+        with app.app_context():
+            inspector = inspect(db.engine)
+            if 'user' not in inspector.get_table_names():
+                print("[APP] User table doesn't exist yet. Will create tables first.")
+                db.create_all()
+                print("[APP] Tables created.")
+            
+            # Check if any users exist
+            user_count = User.query.count()
+            
+            if user_count == 0:
+                print("[APP] No users found in database. Creating default admin user.")
+                
+                # Create default admin role if needed
+                admin_role = Role.query.filter_by(name="Administrator").first()
+                if not admin_role:
+                    print("[APP] Creating Administrator role with full permissions.")
+                    admin_role = Role(
+                        name="Administrator",
+                        description="Full system access",
+                        permissions="admin.full"  # Full administrator access
+                    )
+                    db.session.add(admin_role)
+                    db.session.commit()
+                
+                # Create default admin user with simple password for testing
+                admin_user = User(
+                    username="admin",
+                    email="admin@example.com",
+                    full_name="System Administrator",
+                    is_admin=True,
+                    role_id=admin_role.id if admin_role else None
+                )
+                admin_user.set_password("admin")  # Simple password for testing
+                
+                db.session.add(admin_user)
+                db.session.commit()
+                
+                print("[APP] Created default admin user 'admin' with password 'admin'")
+                print("[APP] WARNING: This is intended for testing only.")
+                print("[APP] IMPORTANT: Please change this password immediately after login.")
+                
+                return admin_user
+            else:
+                print(f"[APP] Found {user_count} existing users in database - no default admin needed.")
+                return None
+    except Exception as e:
+        print(f"[APP] Error creating default admin: {str(e)}")
+        return None
+
 # Call this function when app initializes
 with app.app_context():
     try:
@@ -256,11 +327,20 @@ if os.environ.get('RENDER', False):
         try:
             db.create_all()
             print("[APP] Database tables created successfully.")
+            # Add default admin user if needed
+            add_default_admin_if_needed()
         except Exception as e:
             print(f"[APP] Error creating database tables: {str(e)}", file=sys.stderr)
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
+    with app.app_context():
+        # Create tables if they don't exist
+        db.create_all()
+        
+        # Add default admin account if no users exist
+        add_default_admin_if_needed()
+    
     # Get port from environment variable or use default
     port = int(os.environ.get('PORT', 10000))
     print(f"[APP] Starting Flask server on port {port}")
