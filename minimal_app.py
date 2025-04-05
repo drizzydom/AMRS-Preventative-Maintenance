@@ -1,79 +1,180 @@
+#!/usr/bin/env python3
 """
-Minimal fallback application for debugging purposes.
-This will run if the main app fails to load.
+Ultra-minimal diagnostic application that will definitely run.
 """
 import os
 import sys
-import sqlite3
-import datetime
-from pathlib import Path
+import time
+import traceback
+from datetime import datetime
 
-def application(environ, start_response):
-    """Minimal WSGI application for emergency debug purposes."""
-    status = '200 OK'
-    output = []
+# Ensure as little external dependencies as possible
+try:
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+except ImportError:
+    print("ERROR: Cannot import http.server - Python 3 required")
+    sys.exit(1)
+
+class DiagnosticHandler(BaseHTTPRequestHandler):
+    """Simple request handler that returns diagnostics"""
     
-    # Get path from request
-    path = environ.get('PATH_INFO', '').lstrip('/')
-    
-    # Handle health check specially
-    if path == 'healthz' or path == 'health':
-        output = [f"AMRS Minimal Status Check\n\n"
-                 f"Time: {datetime.datetime.now().isoformat()}\n"
-                 f"Python: {sys.version}\n"
-                 f"Working Directory: {os.getcwd()}\n"]
-    # If requesting the status page, serve it
-    elif path == 'status' or path == 'status.html':
+    def do_GET(self):
+        """Handle GET requests"""
         try:
-            with open('status.html', 'rb') as f:
-                start_response('200 OK', [('Content-Type', 'text/html')])
-                return [f.read()]
+            if self.path == "/health" or self.path == "/healthz":
+                self.health_check()
+            elif self.path == "/env":
+                self.show_environment()
+            elif self.path == "/disk":
+                self.check_disk()
+            else:
+                self.show_main_page()
         except Exception as e:
-            output = [f"Error reading status.html: {str(e)}"]
-    # For all other paths, show some debug info
-    else:
-        output = [f"AMRS Debug Page\n\n"]
-        output.append(f"Path requested: {path}\n")
-        output.append(f"Time: {datetime.datetime.now().isoformat()}\n")
-        output.append(f"Python: {sys.version}\n")
-        output.append(f"Working Directory: {os.getcwd()}\n\n")
+            self.send_error_response(str(e))
+    
+    def health_check(self):
+        """Return basic health check"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(f"OK - {datetime.now().isoformat()}".encode())
+    
+    def show_environment(self):
+        """Show environment variables"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        output = ["Environment Variables:"]
+        for key, value in sorted(os.environ.items()):
+            # Redact potentially sensitive information
+            if "KEY" in key or "SECRET" in key or "PASSWORD" in key or "TOKEN" in key:
+                value = "[REDACTED]"
+            output.append(f"{key}={value}")
+        self.wfile.write("\n".join(output).encode())
+    
+    def check_disk(self):
+        """Check disk space and permissions"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        output = ["Disk Diagnostics:"]
         
-        output.append("Environment Variables:\n")
-        for key in sorted(environ):
-            if key.startswith(('FLASK', 'RENDER', 'PATH', 'PYTHON', 'SERVER', 'wsgi', 'gunicorn')):
-                output.append(f"  {key}: {environ[key]}\n")
-        
-        # Try to get database info
-        output.append("\nDatabase Check:\n")
-        try:
-            # Check the main database location
-            db_path = '/var/data/maintenance.db'
-            db_exists = os.path.exists(db_path)
-            output.append(f"  DB exists at {db_path}: {db_exists}\n")
+        # Check data directory
+        data_dir = "/var/data"
+        output.append(f"Data directory exists: {os.path.exists(data_dir)}")
+        if os.path.exists(data_dir):
+            output.append(f"Is directory: {os.path.isdir(data_dir)}")
+            output.append(f"Can read: {os.access(data_dir, os.R_OK)}")
+            output.append(f"Can write: {os.access(data_dir, os.W_OK)}")
+            output.append(f"Can execute: {os.access(data_dir, os.X_OK)}")
             
-            if db_exists:
-                output.append(f"  DB size: {os.path.getsize(db_path)} bytes\n")
-                
-                # Try to connect and get table info
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-                tables = cursor.fetchall()
-                conn.close()
-                
-                output.append(f"  Tables: {', '.join(t[0] for t in tables)}\n")
-        except Exception as e:
-            output.append(f"  DB error: {str(e)}\n")
+            # Try to write a test file
+            test_file = os.path.join(data_dir, "test_write.txt")
+            try:
+                with open(test_file, "w") as f:
+                    f.write("Test write")
+                output.append(f"Successfully wrote test file: {test_file}")
+                os.remove(test_file)
+                output.append(f"Successfully removed test file: {test_file}")
+            except Exception as e:
+                output.append(f"Error writing test file: {str(e)}")
+            
+            # List directory contents
+            try:
+                files = os.listdir(data_dir)
+                output.append(f"Directory contents ({len(files)} items):")
+                for item in files:
+                    item_path = os.path.join(data_dir, item)
+                    item_type = "dir" if os.path.isdir(item_path) else "file"
+                    item_size = os.path.getsize(item_path) if os.path.isfile(item_path) else "-"
+                    output.append(f"  {item} ({item_type}, {item_size} bytes)")
+            except Exception as e:
+                output.append(f"Error listing directory: {str(e)}")
+        
+        self.wfile.write("\n".join(output).encode())
     
-    headers = [('Content-Type', 'text/plain')]
-    start_response(status, headers)
+    def show_main_page(self):
+        """Show main diagnostic page"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        
+        html = f"""<!DOCTYPE html>
+        <html>
+        <head>
+            <title>AMRS Diagnostics</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                h1 {{ color: #FE7900; }}
+                .section {{ margin-top: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }}
+                .btn {{ padding: 10px 15px; background-color: #FE7900; color: white; border: none; border-radius: 4px; cursor: pointer; display: inline-block; margin: 5px; text-decoration: none; }}
+                .btn:hover {{ background-color: #E56C00; }}
+                pre {{ background-color: #f8f8f8; padding: 10px; overflow: auto; }}
+            </style>
+        </head>
+        <body>
+            <h1>AMRS Diagnostic Server</h1>
+            <p>This is a minimal diagnostic server to help troubleshoot the application.</p>
+            
+            <div class="section">
+                <h2>System Information:</h2>
+                <p><strong>Time:</strong> {datetime.now().isoformat()}</p>
+                <p><strong>Python Version:</strong> {sys.version}</p>
+                <p><strong>Working Directory:</strong> {os.getcwd()}</p>
+                <p><strong>Process ID:</strong> {os.getpid()}</p>
+            </div>
+            
+            <div class="section">
+                <h2>Diagnostic Tools:</h2>
+                <a href="/health" class="btn">Health Check</a>
+                <a href="/env" class="btn">Environment Variables</a>
+                <a href="/disk" class="btn">Disk Diagnostics</a>
+            </div>
+            
+            <div class="section">
+                <h2>Next Steps:</h2>
+                <p>If you're seeing this page, the diagnostic server is working. This means that:</p>
+                <ol>
+                    <li>The server is running and can bind to the required port</li>
+                    <li>The basic Python installation is working</li>
+                    <li>We can output diagnostic information</li>
+                </ol>
+                <p>If the main application isn't working, it likely has issues with:</p>
+                <ol>
+                    <li>Flask installation or configuration</li>
+                    <li>Database access or permissions</li>
+                    <li>Errors in the application code</li>
+                </ol>
+            </div>
+        </body>
+        </html>"""
+        
+        self.wfile.write(html.encode())
     
-    return [s.encode('utf-8') for s in output]
+    def send_error_response(self, error):
+        """Send an error response"""
+        self.send_response(500)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        output = ["ERROR:", str(error), "", "Traceback:", traceback.format_exc()]
+        self.wfile.write("\n".join(output).encode())
 
-# This allows running the script directly for testing
-if __name__ == '__main__':
-    from wsgiref.simple_server import make_server
-    port = int(os.environ.get('PORT', 8000))
-    httpd = make_server('', port, application)
-    print(f"Serving minimal app on port {port}...")
-    httpd.serve_forever()
+def run_server():
+    """Run the diagnostic server"""
+    port = int(os.environ.get("PORT", "10000"))
+    print(f"Starting diagnostic server on port {port}...")
+    
+    server = None
+    try:
+        server = HTTPServer(("0.0.0.0", port), DiagnosticHandler)
+        print(f"Server started successfully, listening on port {port}")
+        server.serve_forever()
+    except Exception as e:
+        print(f"Error starting server: {str(e)}")
+        if server:
+            server.server_close()
+        return 1
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(run_server())

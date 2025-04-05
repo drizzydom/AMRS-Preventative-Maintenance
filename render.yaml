@@ -3,14 +3,7 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: |
-      if python -c "import app" 2>/dev/null; then
-        echo "Starting main app..."
-        gunicorn app:app --workers=1 --timeout=120 --capture-output --log-level=debug
-      else
-        echo "Main app import failed! Starting minimal app..."
-        gunicorn minimal_app:application --workers=1 --timeout=120 --capture-output --log-level=debug
-      fi
+    startCommand: bash ./onstart.sh
     envVars:
       - key: FLASK_APP
         value: app.py
@@ -18,8 +11,14 @@ services:
         value: "1"
       - key: RENDER
         value: "true"
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: PORT
+        fromService:
+          name: maintenance-tracker
+          type: web
+          envVarKey: RENDER_PORT
     disk:
-      name: maintenance-data
+      name: data
       mountPath: /var/data
       sizeGB: 1
-    healthCheckPath: /healthz
