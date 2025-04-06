@@ -21,7 +21,7 @@ import secrets  # Add import for secrets used later in the code
 from sqlalchemy import inspect  # Add import for inspect
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
@@ -801,6 +801,8 @@ def update_maintenance_alt():
     """Alternative route to update maintenance records for a specific part"""
     try:
         part_id = request.form.get('part_id')
+        comments = request.form.get('comments', '')
+        
         if not part_id:
             flash('Missing part ID', 'error')
             return redirect(url_for('maintenance_page'))
@@ -816,9 +818,19 @@ def update_maintenance_alt():
         # Calculate next maintenance date based on frequency
         part.next_maintenance = now + timedelta(days=part.maintenance_days)
         
-        # Commit the changes
+        # Create a maintenance record
+        maintenance_record = MaintenanceRecord(
+            part_id=part.id,
+            user_id=current_user.id,
+            date=now,
+            comments=comments
+        )
+        
+        # Add and commit both changes
+        db.session.add(maintenance_record)
         db.session.commit()
-        flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
+        
+        flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
         
         # Redirect to the referring page, if available
         referrer = request.referrer
@@ -830,6 +842,18 @@ def update_maintenance_alt():
     except Exception as e:
         db.session.rollback()
         flash(f'Error updating maintenance: {str(e)}', 'error')
+        return redirect(url_for('maintenance_page'))
+
+@app.route('/parts/<int:part_id>/history')
+@login_required
+def view_part_history(part_id):
+    """View maintenance history for a specific part"""
+    try:
+        part = Part.query.get_or_404(part_id)
+        maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+        return render_template('part_history.html', part=part, maintenance_records=maintenance_records, machine=part.machine)
+    except Exception as e:
+        flash(f'Error loading maintenance history: {str(e)}', 'error')
         return redirect(url_for('maintenance_page'))
 
 @app.route('/admin/backups')
