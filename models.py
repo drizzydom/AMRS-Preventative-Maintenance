@@ -136,6 +136,9 @@ class Part(db.Model):
     next_maintenance = db.Column(db.DateTime, 
                                 default=lambda: datetime.now() + timedelta(days=30))
     
+    # Relationships
+    maintenance_records = db.relationship('MaintenanceRecord', backref='part', lazy='dynamic')
+    
     def __repr__(self):
         return f'<Part {self.name}>'
         
@@ -143,3 +146,20 @@ class Part(db.Model):
         """Returns a human-readable maintenance frequency"""
         suffix = 's' if self.maintenance_frequency != 1 else ''
         return f"{self.maintenance_frequency} {self.maintenance_unit}{suffix}"
+
+class MaintenanceRecord(db.Model):
+    """Model for maintenance history records"""
+    __tablename__ = 'maintenance_records'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    part_id = db.Column(db.Integer, db.ForeignKey('parts.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    date = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    comments = db.Column(db.Text)
+    
+    # Relationships
+    part = db.relationship('Part', backref=db.backref('maintenance_records', lazy='dynamic'))
+    user = db.relationship('User', backref=db.backref('maintenance_records', lazy='dynamic'))
+    
+    def __repr__(self):
+        return f'<MaintenanceRecord {self.id} for Part {self.part_id}>'

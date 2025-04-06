@@ -1,0 +1,72 @@
+/* 
+ * CONTENT POSITION FIX
+ * Ensures content is properly positioned without excessive vertical spacing
+ */
+
+/* Reset all margins and padding to prevent content from being pushed down */
+body {
+    margin-top: 48px !important; /* Exactly navbar height */
+    padding-top: 0 !important;
+    overflow-x: hidden !important;
+}
+
+/* Properly position content under navbar */
+.content-container {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* Fix excessive spacing in cards */
+.card {
+    margin-top: 0 !important;
+}
+
+/* Fix row spacing */
+.row {
+    margin-top: 0 !important;
+    margin-bottom: 1rem !important;
+}
+
+/* Reset first row margin */
+.row:first-child {
+    margin-top: 0 !important;
+}
+
+/* Fix page header spacing */
+.page-header {
+    margin-top: 0 !important;
+    margin-bottom: 1rem !important;
+}
+
+/* Fix content padding */
+.container-fluid {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+/* Fix page content position */
+.page-content {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* Fix tables layout */
+.table-responsive {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Fix sidebar position */
+.sidebar {
+    top: 48px !important; /* Exactly navbar height */
+    height: calc(100vh - 48px) !important; /* Full height minus navbar */
+}
+
+/* Make content start exactly after the navbar */
+.content-container {
+    position: relative !important;
+    top: 0 !important;
+    padding-top: 0 !important;
+    height: calc(100vh - 48px) !important;
+    overflow-y: auto !important;
+}
