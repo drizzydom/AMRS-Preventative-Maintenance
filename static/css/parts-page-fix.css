@@ -1,0 +1,107 @@
+/**
+ * PARTS PAGE SPECIFIC FIX
+ * Fixes issues with the parts table being pushed far down the page
+ */
+
+/* Reset any excessive margins on the parts page */
+body.parts-page .page-content {
+    margin-top: 0 !important;
+}
+
+/* Force card to appear at the top without spacing */
+body.parts-page .card {
+    margin-top: 0 !important;
+}
+
+/* Remove any excess top padding from content container */
+.content-container > .container-fluid {
+    padding-top: 0.5rem !important;
+}
+
+/* Fix the main row spacing to eliminate gaps */
+.row:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* Ensure header has no excess margin */
+.page-header {
+    margin-bottom: 0.5rem !important;
+}
+
+/* Remove any hidden elements that might be taking up space */
+.hidden-spacer, 
+.invisible-element {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Reset all top margins in the content area */
+.content-container * {
+    margin-top: 0;
+}
+
+/* Ensure table container doesn't add excess spacing */
+.table-responsive {
+    margin-top: 0 !important;
+}
+
+/* Force proper spacing for the table container */
+.card-body {
+    padding: 1rem !important;
+}
+
+/**
+ * EMERGENCY TABLE POSITION FIX
+ * This CSS forces the parts table to display at the top of the page
+ */
+
+/* Reset all margins and padding for the page */
+body {
+  margin-top: 48px !important; /* Just enough for navbar */
+  padding-top: 0 !important;
+  overflow-x: hidden !important;
+}
+
+/* Force content to start at the top */
+.content-container,
+.page-content,
+.container-fluid,
+.row,
+.card {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Specifically target parts table */
+#parts-table-container {
+  margin-top: 0 !important;
+  position: relative !important;
+  top: 0 !important;
+}
+
+/* Force proper margin on page header */
+.page-header {
+  margin-bottom: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+/* Remove all mystery spaces */
+.page-content .row:first-child {
+  margin-top: 0 !important;
+}
+
+/* Make container spacing more compact */
+.container-fluid {
+  padding: 0.5rem !important;
+}
+
+/* Remove any offending elements that might be pushing content down */
+.spacer, 
+.phantom-element {
+  display: none !important;
+  height: 0 !important;
+  visibility: hidden !important;
+}

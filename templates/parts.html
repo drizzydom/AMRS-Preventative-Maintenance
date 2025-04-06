@@ -13,10 +13,32 @@
 {% endblock %}
 
 {% block content %}
-<div class="row">
+<style>
+/* EMERGENCY INLINE STYLE - Directly fixes table position */
+body {
+    padding-top: 48px !important;
+    margin: 0 !important;
+}
+.container-fluid, .page-header, .page-content {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+.container-fluid {
+    padding: 0.5rem !important;
+}
+.row {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+.card {
+    margin-top: 0 !important;
+}
+</style>
+
+<div class="row g-0" id="parts-table-container">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
                 <h5 class="card-title mb-0">Parts</h5>
                 {% if machine_id %}
                 <a href="{{ url_for('manage_parts') }}" class="btn btn-sm btn-secondary">
@@ -24,10 +46,10 @@
                 </a>
                 {% endif %}
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 {% if parts %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table class="table table-striped table-hover mb-0">
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -86,7 +108,7 @@
                     </table>
                 </div>
                 {% else %}
-                <p>No parts found. {% if can_create %}Use the "Add Part" button to create one.{% endif %}</p>
+                <p class="p-3">No parts found. {% if can_create %}Use the "Add Part" button to create one.{% endif %}</p>
                 {% endif %}
             </div>
         </div>
@@ -177,8 +199,13 @@
 </div>
 {% endblock %}
 
+{% block extra_css %}
+{% endblock %}
+
 {% block scripts %}
 <script>
+    document.body.classList.add('parts-page');
+    
     // Set up the delete modal
     document.addEventListener('DOMContentLoaded', function() {
         const deletePartModal = document.getElementById('deletePartModal');

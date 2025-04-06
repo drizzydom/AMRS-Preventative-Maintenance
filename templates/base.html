@@ -48,6 +48,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-sidebar-fix.css') }}">
     <!-- Add our new content position fix CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
+    <!-- Add emergency parts table fix -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/parts-table-emergency-fix.css') }}">
+    <!-- Add critical fixes -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/critical-fix.css') }}">
     <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
@@ -58,7 +62,7 @@
         <!-- Navigation Bar - Simplified with reduced height -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
             <div class="container-fluid">
-                <button class="navbar-toggler" type="button" 
+                <button class="navbar-toggler" type="button" id="hamburger-btn"
                         aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -220,7 +224,53 @@
     
     <!-- Page specific scripts -->
     {% block scripts %}{% endblock %}
-    <!-- Sidebar Toggle Script -->
+    
+    <!-- Important: Load the hamburger fix BEFORE any other sidebar scripts -->
+    <script src="{{ url_for('static', filename='js/hamburger-direct-fix.js') }}"></script>
+    
+    <!-- Sidebar Toggle Script - must come after hamburger fix -->
     <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
+</body>
+</html>- Direct Hamburger Fix - Insert right before closing body tag -->
+    <script>
+        // Direct hamburger fix - simple, clean implementation
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get direct references
+            const hamburger = document.getElementById('hamburger-btn');
+            const sidebar = document.querySelector('.sidebar');
+            
+            if (!hamburger || !sidebar) {
+                console.error('Cannot find hamburger button or sidebar');
+                return;
+            }
+            
+            // Add direct click handler to the hamburger button
+            hamburger.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Toggle sidebar visibility class
+                if (sidebar.classList.contains('show')) {
+                    sidebar.classList.remove('show');
+                    document.body.classList.remove('sidebar-active');
+                } else {
+                    sidebar.classList.add('show');
+                    document.body.classList.add('sidebar-active');
+                }
+            });
+            
+            // Add click handler to close sidebar when clicking outside
+            document.addEventListener('click', function(e) {
+                if (sidebar.classList.contains('show') && 
+                    !sidebar.contains(e.target) && 
+                    e.target !== hamburger && 
+                    !hamburger.contains(e.target)) {
+                    
+                    sidebar.classList.remove('show');
+                    document.body.classList.remove('sidebar-active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
