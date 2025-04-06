@@ -13,6 +13,9 @@ import sys
 import logging
 import secrets
 
+# Import your database and models
+from models import db, User, Role, Site, Machine, Part
+
 # Set up logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -496,26 +499,106 @@ if os.environ.get('RENDER', False):
             print(f"[APP] Error creating database tables: {str(e)}", file=sys.stderr)
 
 # Routes for main navigation items
-@app.route('/sites')
+@app.route('/sites', methods=['GET', 'POST'])
 @login_required
 def manage_sites():
-    """Handle site management page"""
-    sites = []  # In a full implementation, you'd fetch sites from the database
+    """Handle site management page and site creation"""
+    sites = Site.query.all()  # Get all sites
+    
+    # Handle form submission for adding a new site
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            location = request.form.get('location', '')
+            contact_email = request.form.get('contact_email', '')
+            notification_threshold = request.form.get('notification_threshold', 30)
+            enable_notifications = 'enable_notifications' in request.form
+            
+            # Create new site
+            new_site = Site(
+                name=name,
+                location=location,
+                contact_email=contact_email,
+                notification_threshold=notification_threshold,
+                enable_notifications=enable_notifications
+            )
+            
+            # Add site to database
+            db.session.add(new_site)
+            db.session.commit()
+            
+            # Handle user assignments if admin
+            if current_user.is_admin:
+                user_ids = request.form.getlist('user_ids')
+                if user_ids:
+                    for user_id in user_ids:
+                        user = User.query.get(int(user_id))
+                        if user:
+                            new_site.users.append(user)
+                    db.session.commit()
+            
+            flash(f'Site "{name}" has been added successfully.', 'success')
+            return redirect(url_for('manage_sites'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding site: {str(e)}', 'error')
+    
+    # For GET request or if POST processing fails
+    users = User.query.all() if current_user.is_admin else None
+    
     return render_template('sites.html', 
                           sites=sites,
+                          users=users,
+                          is_admin=current_user.is_admin,
                           now=datetime.now(),
                           can_create=True,
                           can_edit=True,
                           can_delete=True)
 
-@app.route('/machines')
+@app.route('/machines', methods=['GET', 'POST'])
 @login_required
 def manage_machines():
-    """Handle machine management page"""
-    machines = []  # In a full implementation, you'd fetch machines from the database
-    sites = []     # Sites for dropdown selection
-    site_id = request.args.get('site_id')
-    title = "Machines"
+    """Handle machine management page and machine creation"""
+    site_id = request.args.get('site_id', type=int)
+    
+    # Filter machines by site if site_id is provided
+    if site_id:
+        machines = Machine.query.filter_by(site_id=site_id).all()
+        title = f"Machines for {Site.query.get_or_404(site_id).name}"
+    else:
+        machines = Machine.query.all()
+        title = "Machines"
+    
+    sites = Site.query.all()
+    
+    # Handle form submission for adding a new machine
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            model = request.form.get('model', '')
+            machine_number = request.form.get('machine_number', '')
+            serial_number = request.form.get('serial_number', '')
+            site_id = request.form['site_id']
+            
+            # Create new machine
+            new_machine = Machine(
+                name=name,
+                model=model,
+                machine_number=machine_number,
+                serial_number=serial_number,
+                site_id=site_id
+            )
+            
+            # Add machine to database
+            db.session.add(new_machine)
+            db.session.commit()
+            
+            flash(f'Machine "{name}" has been added successfully.', 'success')
+            return redirect(url_for('manage_machines', site_id=site_id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding machine: {str(e)}', 'error')
+    
     return render_template('machines.html', 
                           machines=machines,
                           sites=sites,
@@ -526,15 +609,60 @@ def manage_machines():
                           can_edit=True,
                           can_delete=True)
 
-@app.route('/parts')
+@app.route('/parts', methods=['GET', 'POST'])
 @login_required
 def manage_parts():
-    """Handle parts management page"""
-    parts = []     # In a full implementation, you'd fetch parts from the database
-    machines = []  # Machines for dropdown selection
-    machine_id = request.args.get('machine_id')
-    title = "Parts"
-    return render_template('parts.html', 
+    """Handle parts management page and part creation"""
+    machine_id = request.args.get('machine_id', type=int)
+    
+    # Filter parts by machine if machine_id is provided
+    if machine_id:
+        parts = Part.query.filter_by(machine_id=machine_id).all()
+        title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
+        machines = [Machine.query.get_or_404(machine_id)]
+    else:
+        parts = Part.query.all()
+        title = "Parts"
+        machines = Machine.query.all()
+    
+    # Handle form submission for adding a new part
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            description = request.form.get('description', '')
+            machine_id = request.form['machine_id']
+            frequency = request.form['maintenance_frequency']
+            unit = request.form['maintenance_unit']
+            
+            # Convert frequency to days based on unit
+            maintenance_days = calculate_maintenance_days(int(frequency), unit)
+            
+            # Calculate next maintenance date
+            next_maintenance = datetime.now() + timedelta(days=maintenance_days)
+            
+            # Create new part
+            new_part = Part(
+                name=name,
+                description=description,
+                machine_id=machine_id,
+                maintenance_frequency=int(frequency),
+                maintenance_unit=unit,
+                maintenance_days=maintenance_days,
+                last_maintenance=datetime.now(),
+                next_maintenance=next_maintenance
+            )
+            
+            # Add part to database
+            db.session.add(new_part)
+            db.session.commit()
+            
+            flash(f'Part "{name}" has been added successfully.', 'success')
+            return redirect(url_for('manage_parts', machine_id=machine_id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding part: {str(e)}', 'error')
+    
+    return render_template('parts.html',
                           parts=parts,
                           machines=machines,
                           machine_id=machine_id,
@@ -543,6 +671,43 @@ def manage_parts():
                           can_create=True,
                           can_edit=True,
                           can_delete=True)
+
+@app.route('/admin/backups')
+@login_required
+def manage_backups():
+    """Database backup management page"""
+    if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Import and use the backup_utils module to get backups
+    from backup_utils import list_backups
+    backups = list_backups()
+    
+    # Process the backup data for display
+    for backup in backups:
+        # Convert timestamp string to datetime if needed
+        if isinstance(backup.get('created'), str):
+            try:
+                backup['created'] = datetime.fromisoformat(backup['created'].replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
+                # If conversion fails, use file creation time
+                backup['created'] = datetime.now()
+    
+    return render_template('admin_backups.html', backups=backups)
+
+def calculate_maintenance_days(frequency, unit):
+    """Convert maintenance frequency into days"""
+    if unit == 'day':
+        return frequency
+    elif unit == 'week':
+        return frequency * 7
+    elif unit == 'month':
+        return frequency * 30
+    elif unit == 'year':
+        return frequency * 365
+    else:
+        return frequency  # Default to days
 
 @app.route('/profile')
 @login_required
@@ -597,18 +762,6 @@ def manage_roles():
     all_permissions = {"view": "View Content", "edit": "Edit Content"}  # Example permissions
     
     return render_template('admin_roles.html', roles=roles, all_permissions=all_permissions)
-
-@app.route('/admin/backups')
-@login_required
-def manage_backups():
-    """Database backup management page"""
-    if not current_user.is_admin:
-        flash('You do not have permission to access this page.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    backups = []
-    
-    return render_template('admin_backups.html', backups=backups)
 
 # Placeholder routes for CRUD operations (these would be implemented with actual logic)
 @app.route('/sites/add', methods=['POST'])
