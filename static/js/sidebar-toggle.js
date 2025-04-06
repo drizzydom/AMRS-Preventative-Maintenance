@@ -1,18 +1,9 @@
 /**
- * Sidebar Toggle Functionality
- * Handles collapsing and expanding the sidebar
+ * Improved Sidebar Toggle Functionality
  */
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Remove any old toggle buttons that might be created by legacy code
-    const oldToggles = document.querySelectorAll('.sidebar-toggle-container, .sidebar-toggle');
-    oldToggles.forEach(toggle => {
-        if (toggle.parentNode) {
-            toggle.parentNode.removeChild(toggle);
-        }
-    });
-    
-    // Add data-title attributes to all sidebar links for tooltips
+    // Add data-title attributes to sidebar links for tooltips
     addTooltipAttributes();
     
     // Check for saved sidebar state
@@ -26,28 +17,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Toggle sidebar on mobile
     const sidebarToggle = document.querySelector('.navbar-toggler');
-    const sidebar = document.querySelector('.sidebar-container');
+    const sidebar = document.querySelector('.sidebar');
     const body = document.body;
     
     if (sidebarToggle && sidebar) {
-        sidebarToggle.addEventListener('click', function() {
-            sidebar.classList.toggle('show');
-            body.classList.toggle('sidebar-active');
+        sidebarToggle.addEventListener('click', function(event) {
+            event.stopPropagation(); // Prevent event from bubbling up
             
-            // Toggle collapsed class for icon-only display
-            document.querySelector('.sidebar').classList.toggle('collapsed');
+            if (window.innerWidth <= 991.98) { // Only for mobile view
+                sidebar.classList.toggle('show');
+                body.classList.toggle('sidebar-active');
+            }
         });
     }
     
     // Close sidebar when clicking outside on mobile
     document.addEventListener('click', function(event) {
-        const isClickInside = sidebar?.contains(event.target) || 
-                             sidebarToggle?.contains(event.target);
+        const isInsideSidebar = sidebar?.contains(event.target);
+        const isToggleButton = sidebarToggle?.contains(event.target);
         
-        if (!isClickInside && sidebar?.classList.contains('show')) {
+        // If click is outside sidebar and toggle, and sidebar is shown on mobile
+        if (!isInsideSidebar && !isToggleButton && sidebar?.classList.contains('show') && window.innerWidth <= 991.98) {
             sidebar.classList.remove('show');
             body.classList.remove('sidebar-active');
-            document.querySelector('.sidebar')?.classList.remove('collapsed');
+        }
+    });
+    
+    // Prevent clicks inside sidebar from closing it
+    sidebar?.addEventListener('click', function(event) {
+        event.stopPropagation();
+    });
+    
+    // Close sidebar when pressing escape key on mobile
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape' && sidebar?.classList.contains('show') && window.innerWidth <= 991.98) {
+            sidebar.classList.remove('show');
+            body.classList.remove('sidebar-active');
         }
     });
 });
@@ -73,8 +78,12 @@ function addTooltipAttributes() {
     }
 }
 
-// Toggle sidebar expanded/collapsed state
+// Toggle sidebar expanded/collapsed state - desktop only
 function toggleSidebar() {
+    if (window.innerWidth <= 991.98) {
+        return; // Don't use this function on mobile
+    }
+    
     const body = document.body;
     
     // Toggle collapsed class
@@ -88,41 +97,40 @@ function toggleSidebar() {
     }
 }
 
-// Load saved sidebar state from localStorage
+// Load saved sidebar state from localStorage - desktop only
 function loadSidebarState() {
     const body = document.body;
-    const sidebar = document.querySelector('.sidebar');
     
-    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    if (localStorage.getItem('sidebar-collapsed') === 'true' && window.innerWidth > 991.98) {
         body.classList.add('sidebar-collapsed');
-        if (sidebar) {
-            sidebar.classList.add('collapsed');
-            // Set correct icon on page load
-            const icon = document.querySelector('.sidebar-toggle i');
-            if (icon) icon.className = 'fas fa-chevron-right';
-        }
     }
 }
 
-// Auto-collapse sidebar on smaller screens
+// Auto-collapse sidebar on smaller screens, use different approach on mobile
 function handleWindowResize() {
     const body = document.body;
+    const sidebar = document.querySelector('.sidebar');
     const width = window.innerWidth;
     
-    // Auto-collapse on medium screens
-    if (width < 1200 && width >= 992) {
-        body.classList.add('sidebar-collapsed');
-        
-        // Make sure the toggle button shows the correct icon
-        const icon = document.querySelector('.sidebar-toggle i');
-        if (icon) icon.className = 'fas fa-chevron-right';
-    } 
-    // Only restore if user hasn't manually set a preference
-    else if (width >= 1200 && !localStorage.getItem('sidebar-collapsed')) {
+    // Mobile view
+    if (width <= 991.98) {
+        // Remove desktop collapsed class as it's not needed
         body.classList.remove('sidebar-collapsed');
         
-        // Make sure the toggle button shows the correct icon
-        const icon = document.querySelector('.sidebar-toggle i');
-        if (icon) icon.className = 'fas fa-chevron-left';
+        // Hide sidebar by default on mobile
+        sidebar?.classList.remove('show');
+        body.classList.remove('sidebar-active');
+    } 
+    // Medium screens - auto-collapse
+    else if (width < 1200 && width >= 992) {
+        body.classList.add('sidebar-collapsed');
+    } 
+    // Large screens - restore user preference
+    else if (width >= 1200) {
+        if (localStorage.getItem('sidebar-collapsed') === 'true') {
+            body.classList.add('sidebar-collapsed');
+        } else {
+            body.classList.remove('sidebar-collapsed');
+        }
     }
 }
