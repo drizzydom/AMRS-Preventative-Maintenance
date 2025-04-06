@@ -60,7 +60,6 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <!-- Use plain HTML form with hardcoded action to avoid routing issues -->
                                     <form action="/update-maintenance" method="POST" class="d-inline">
                                         <input type="hidden" name="part_id" value="{{ part.id }}">
                                         <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">

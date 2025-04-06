@@ -759,14 +759,18 @@ def manage_parts():
                           can_edit=True,
                           can_delete=True)
 
-@app.route('/parts/<int:part_id>/update_maintenance', methods=['POST'])
+@app.route('/parts/<int:part_id>/update_maintenance', methods=['GET', 'POST'])
 @login_required
 def update_maintenance(part_id):
     """Update maintenance records for a specific part"""
     try:
         part = Part.query.get_or_404(part_id)
         
-        # Get the current datetime
+        # For GET requests, redirect to the maintenance page
+        if request.method == 'GET':
+            return redirect(url_for('maintenance_page'))
+            
+        # For POST requests, update the maintenance
         now = datetime.now()
         
         # Update the last maintenance date
