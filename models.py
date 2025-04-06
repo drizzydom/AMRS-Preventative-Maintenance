@@ -51,6 +51,9 @@ class User(db.Model, UserMixin):
     # Define the relationship to Role
     role = db.relationship('Role', back_populates='users')
     
+    # Add relationship to maintenance records
+    maintenance_records = db.relationship('MaintenanceRecord', back_populates='user')
+    
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
         
@@ -136,8 +139,8 @@ class Part(db.Model):
     next_maintenance = db.Column(db.DateTime, 
                                 default=lambda: datetime.now() + timedelta(days=30))
     
-    # Relationships
-    maintenance_records = db.relationship('MaintenanceRecord', backref='part', lazy='dynamic')
+    # Define relationship to maintenance records WITHOUT backref (we'll set it on the other side)
+    maintenance_records = db.relationship('MaintenanceRecord', back_populates='part')
     
     def __repr__(self):
         return f'<Part {self.name}>'
@@ -157,9 +160,9 @@ class MaintenanceRecord(db.Model):
     date = db.Column(db.DateTime, nullable=False, default=datetime.now)
     comments = db.Column(db.Text)
     
-    # Relationships
-    part = db.relationship('Part', backref=db.backref('maintenance_records', lazy='dynamic'))
-    user = db.relationship('User', backref=db.backref('maintenance_records', lazy='dynamic'))
+    # Define relationships explicitly with back_populates instead of backref
+    part = db.relationship('Part', back_populates='maintenance_records')
+    user = db.relationship('User', back_populates='maintenance_records')
     
     def __repr__(self):
         return f'<MaintenanceRecord {self.id} for Part {self.part_id}>'
