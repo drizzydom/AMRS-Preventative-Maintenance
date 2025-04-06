@@ -17,7 +17,7 @@
   .navbar .container-fluid {
     display: flex !important;
     align-items: center !important;
-    justify-content: flex-start !important; /* Left alignment for better spacing */
+    justify-content: space-between !important; /* Changed to space-between for better distribution */
     width: 100% !important;
     padding: 0 0.5rem !important;
   }
@@ -27,30 +27,31 @@
     position: relative !important;
     z-index: 1060 !important;
     padding: 0.25rem 0.5rem !important;
-    margin-right: 0.5rem !important; /* Provide space between toggle and brand */
+    margin-right: 0.5rem !important;
     margin-left: 0 !important;
     flex: 0 0 auto !important; /* Prevent the toggler from growing/shrinking */
+    order: 0 !important; /* Reset any order changes */
   }
 
   /* Fix brand positioning to ALWAYS stay in navbar */
   .navbar-brand {
-    position: static !important; /* Don't use absolute positioning */
-    transform: none !important; /* Don't use transform */
-    display: flex !important; /* Ensure flex layout */
+    position: relative !important; /* Changed from absolute to relative */
+    transform: none !important; /* Remove any transforms */
+    display: inline-flex !important; /* Use inline-flex for better element sizing */
     align-items: center !important;
-    margin-right: auto !important; /* Push content to the right */
-    margin-left: 0 !important;
     padding: 0.25rem 0 !important;
-    max-width: 75% !important; /* Limit width but allow enough space */
+    margin: 0 auto 0 0 !important; /* Center with auto margins */
+    max-width: 70% !important; /* Limit width but allow enough space */
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    flex: 1 0 auto !important; /* Allow growing but not shrinking */
     z-index: 1050 !important;
   }
 
   /* Make sure the brand icon is visible */
   .navbar-brand i {
-    margin-right: 0.5rem !important; /* Space between icon and text */
+    margin-right: 0.5rem !important;
     display: inline-block !important;
   }
 
