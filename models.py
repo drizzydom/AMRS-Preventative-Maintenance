@@ -12,13 +12,15 @@ user_site = db.Table('user_site',
 
 class Role(db.Model):
     """Role model for user permissions"""
+    __tablename__ = 'roles'
+    
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.String(255))
     permissions = db.Column(db.Text)  # Store comma-separated permissions
     
-    # Relationship with users
-    users = db.relationship('User', backref='role', lazy=True)
+    # Define the relationship to User
+    users = db.relationship('User', back_populates='role')
     
     def __repr__(self):
         return f'<Role {self.name}>'
@@ -38,14 +40,16 @@ class User(db.Model, UserMixin):
     full_name = db.Column(db.String(100))
     email = db.Column(db.String(100))
     is_admin = db.Column(db.Boolean, default=False)
-    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))  # Reference 'roles' not 'role'
     reset_token = db.Column(db.String(100))
     reset_token_expiry = db.Column(db.DateTime)
     notification_preferences = db.Column(db.JSON)
 
     # Define the many-to-many relationship with sites
-    sites = db.relationship('Site', secondary=user_site, backref='users')
-    role = db.relationship('Role', backref='users')
+    sites = db.relationship('Site', secondary=user_site, back_populates='users')
+    
+    # Define the relationship to Role
+    role = db.relationship('Role', back_populates='users')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -53,30 +57,8 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
         
-    def has_permission(self, permission):
-        if self.is_admin:
-            return True
-        if self.role:
-            return permission in self.role.get_permissions_list()
-        return False
-    
-    def get_notification_preferences(self):
-        """Get user notification preferences with defaults if not set"""
-        if not self.notification_preferences:
-            # Create default preferences
-            default_prefs = {
-                'enable_email': True,
-                'email_frequency': 'weekly',
-                'notification_types': ['overdue', 'due_soon']
-            }
-            # Save these defaults to the database
-            self.notification_preferences = default_prefs
-            try:
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-            return default_prefs
-        return self.notification_preferences
+    def __repr__(self):
+        return f'<User {self.username}>'
 
 class Site(db.Model):
     __tablename__ = 'sites'
@@ -90,26 +72,39 @@ class Site(db.Model):
     
     # Relationships
     machines = db.relationship('Machine', backref='site', lazy=True)
+    users = db.relationship('User', secondary=user_site, back_populates='sites')
     
     def __repr__(self):
         return f'<Site {self.name}>'
+    
+    def get_parts_status(self, current_date=None):
+        """
+        Get maintenance status of all parts at this site
+        Returns dictionary with 'overdue' and 'due_soon' lists
+        """
+        if current_date is None:
+            current_date = datetime.now()
         
-    def get_parts_status(self, now=None):
-        """Gets maintenance status of all parts at this site"""
-        if now is None:
-            now = datetime.now()
+        overdue = []
+        due_soon = []
+        threshold = self.notification_threshold or 30  # Default to 30 days if not set
         
-        status = {'overdue': [], 'due_soon': []}
-        
+        # Loop through all machines at this site
         for machine in self.machines:
             for part in machine.parts:
-                days_until = (part.next_maintenance - now).days
+                days_until = (part.next_maintenance - current_date).days
+                
+                # Overdue parts
                 if days_until < 0:
-                    status['overdue'].append(part)
-                elif days_until <= self.notification_threshold:
-                    status['due_soon'].append(part)
+                    overdue.append(part)
+                # Due soon parts within threshold
+                elif days_until <= threshold:
+                    due_soon.append(part)
         
-        return status
+        return {
+            'overdue': overdue,
+            'due_soon': due_soon
+        }
 
 class Machine(db.Model):
     __tablename__ = 'machines'
