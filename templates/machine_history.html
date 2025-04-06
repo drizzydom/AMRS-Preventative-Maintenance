@@ -5,6 +5,10 @@
 {% block header_title %}Maintenance History: {{ machine.name }}{% endblock %}
 
 {% block header_actions %}
+<!-- Add back button to dashboard -->
+<a href="{{ url_for('dashboard') }}" class="btn btn-secondary me-2">
+    <i class="fas fa-tachometer-alt"></i> Back to Dashboard
+</a>
 <a href="{{ url_for('manage_parts', machine_id=machine.id) }}" class="btn btn-primary">
     <i class="fas fa-cogs"></i> Manage Parts
 </a>
@@ -45,6 +49,7 @@
                                 <th>Last Maintenance</th>
                                 <th>Next Maintenance</th>
                                 <th>Frequency</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -54,6 +59,15 @@
                                 <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ record.next_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ record.frequency }}</td>
+                                <td>
+                                    <!-- Use plain HTML form with hardcoded action to avoid routing issues -->
+                                    <form action="/update-maintenance" method="POST" class="d-inline">
+                                        <input type="hidden" name="part_id" value="{{ parts[loop.index0].id }}">
+                                        <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
+                                            <i class="fas fa-check-circle"></i> Record
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
