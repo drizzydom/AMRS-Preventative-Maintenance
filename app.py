@@ -15,6 +15,10 @@ import secrets
 
 # Import your database and models
 from models import db, User, Role, Site, Machine, Part
+=======
+import signal
+import psutil
+from fix_render_routes import apply_render_fixes
 
 # Set up logging
 logging.basicConfig(
@@ -80,6 +84,9 @@ except ImportError as e:
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         return app
+
+# Apply fixes before creating the Flask app
+apply_render_fixes()
 
 # Initialize Flask app with better error handling
 app = Flask(__name__)
@@ -259,14 +266,39 @@ def debug_info():
     return jsonify(output)
 
 # Add health check route for diagnostics
+@app.route('/healthz')
 @app.route('/health')
-def health_check():
-    return jsonify({
-        "status": "ok",
-        "timestamp": datetime.now().isoformat(),
-        "environment": os.environ.get('FLASK_ENV', 'production'),
-        "render": os.environ.get('RENDER', 'false')
-    })
+def health_plaintext():
+    """Simple plain text health check that requires minimal processing."""
+    import sys
+    import datetime
+    import os
+    
+    output = f"AMRS Health Check: OK\n\n"
+    output += f"Time: {datetime.datetime.now().isoformat()}\n"
+    output += f"Python: {sys.version}\n"
+    output += f"Working Directory: {os.getcwd()}\n"
+    
+    # Check database connection
+    from sqlalchemy import text
+    try:
+        with app.app_context():
+            result = db.session.execute(text("SELECT 1")).scalar()
+            output += f"Database Connection: OK (result={result})\n"
+    except Exception as e:
+        output += f"Database Connection: ERROR - {str(e)}\n"
+    
+    return output, 200, {'Content-Type': 'text/plain'}
+
+# Add signal handlers to gracefully handle shutdown
+def signal_handler(sig, frame):
+    print(f"[SHUTDOWN] Received signal {sig} at {datetime.datetime.now().isoformat()}")
+    print("[SHUTDOWN] Gracefully shutting down...")
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 # Add password reset functionality
 @app.route('/forgot-password', methods=['GET', 'POST'])
@@ -422,7 +454,7 @@ def create_default_admin():
         print(f"[APP] Error creating default admin: {str(e)}")
         return False
 
-# Add default user if none exist - ensures at least one admin exists after fresh deployments
+# Update the default admin creation function
 def add_default_admin_if_needed():
     """Add a default admin user if no users exist in the database"""
     try:
@@ -438,11 +470,24 @@ def add_default_admin_if_needed():
             
             # Check if any users exist
             user_count = User.query.count()
+        print("[APP] Creating default admin user if needed...")
+        # Directly query the database to check if users table exists and has any records
+        with db.engine.connect() as connection:
+            # First check if the table exists
+            inspector = db.inspect(db.engine)
+            if 'user' not in inspector.get_table_names():
+                print("[APP] Users table doesn't exist yet. Will create after all models are defined.")
+                return None
+            
+            # Check if there are any user records
+            result = connection.execute(text("SELECT COUNT(*) FROM user"))
+            user_count = result.scalar()
+
             
             if user_count == 0:
                 print("[APP] No users found in database. Creating default admin user.")
                 
-                # Create default admin role if needed
+                # Get or create admin role
                 admin_role = Role.query.filter_by(name="Administrator").first()
                 if not admin_role:
                     print("[APP] Creating Administrator role with full permissions.")
@@ -450,11 +495,22 @@ def add_default_admin_if_needed():
                         name="Administrator",
                         description="Full system access",
                         permissions="admin.full"  # Full administrator access
+=======
+                        permissions=",".join([p for p in dir(Permissions) if not p.startswith('_') and p != 'get_all_permissions'])
                     )
                     db.session.add(admin_role)
                     db.session.commit()
                 
                 # Create default admin user with simple password for testing
+=======
+                # Create default admin user with a secure random password
+                import secrets
+                import string
+                
+                # Generate a strong random password
+                alphabet = string.ascii_letters + string.digits
+                password = ''.join(secrets.choice(alphabet) for _ in range(12))
+                
                 admin_user = User(
                     username="admin",
                     email="admin@example.com",
@@ -470,7 +526,14 @@ def add_default_admin_if_needed():
                 print("[APP] Created default admin user 'admin' with password 'admin'")
                 print("[APP] WARNING: This is intended for testing only.")
                 print("[APP] IMPORTANT: Please change this password immediately after login.")
+
+                admin_user.set_password(password)
                 
+                db.session.add(admin_user)
+                db.session.commit()
+                
+                print("[APP] Created default admin user 'admin' with password '%s'" % password)
+                print("[APP] IMPORTANT: Please change this password immediately after first login!")
                 return admin_user
             else:
                 print(f"[APP] Found {user_count} existing users in database - no default admin needed.")
@@ -487,16 +550,58 @@ with app.app_context():
         print(f"[APP] Error during startup initialization: {str(e)}")
 
 # AFTER all models are defined, THEN create tables
+# Modify table creation and admin user creation to be sequential
 if os.environ.get('RENDER', False):
     print("[APP] Running on Render, creating database tables...")
     with app.app_context():
         try:
+            # First create all tables
             db.create_all()
             print("[APP] Database tables created successfully.")
-            # Add default admin user if needed
+            
+            # Then add default admin user after all tables exist
             add_default_admin_if_needed()
         except Exception as e:
-            print(f"[APP] Error creating database tables: {str(e)}", file=sys.stderr)
+            print(f"[APP] Error setting up database: {str(e)}", file=sys.stderr)
+
+# Add these diagnostic routes at the bottom after all other routes
+@app.route('/ping')
+def ping():
+    """Simple ping endpoint that should always work"""
+    return "pong", 200
+
+@app.route('/routes')
+def list_routes():
+    """List all registered routes for debugging"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            "endpoint": rule.endpoint,
+            "methods": [method for method in rule.methods if method != 'HEAD' and method != 'OPTIONS'],
+            "url": str(rule)
+        })
+    return {"routes": routes, "count": len(routes)}, 200
+
+@app.route('/debug')
+def debug_info():
+    """Return debug info about the application"""
+    import platform
+    info = {
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "working_directory": os.getcwd(),
+        "environment": {k: v for k, v in os.environ.items() if k.startswith(('FLASK_', 'RENDER_', 'PORT', 'PATH'))},
+        "app_name": app.name,
+        "debug_mode": app.debug,
+        "config": {k: str(v) for k, v in app.config.items() if not k.startswith('_')},
+    }
+    return info, 200
+
+# Check if URL rules are properly registered
+if len(list(app.url_map.iter_rules())) == 0:
+    print("[WARNING] No routes registered! Application will return 404 for all requests.")
+else:
+    print(f"[INFO] {len(list(app.url_map.iter_rules()))} routes registered successfully")
 
 # Routes for main navigation items
 @app.route('/sites', methods=['GET', 'POST'])
@@ -1240,6 +1345,7 @@ if __name__ == '__main__':
         # Add default admin account if no users exist
         add_default_admin_if_needed()
     
+    print(f"[STARTUP] Starting Flask application at {datetime.datetime.now().isoformat()}")
     # Get port from environment variable or use default
     port = int(os.environ.get('PORT', 10000))
     print(f"[APP] Starting Flask server on port {port}")

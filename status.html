@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMRS Maintenance System - Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { color: #FE7900; }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: left;
+            overflow-x: auto;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .ok { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>AMRS Maintenance System Status</h1>
+    
+    <div class="status ok">
+        If you can see this page, the web server is working!
+    </div>
+    
+    <p>If the main application isn't loading, this static page can still be accessed.</p>
+    
+    <h2>System Information</h2>
+    <pre id="system-info">Loading system information...</pre>
+    
+    <script>
+        // Attempt to fetch system time from the server
+        function checkStatus() {
+            const sysInfo = document.getElementById('system-info');
+            
+            fetch('/healthz', { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) throw new Error(`Status: ${response.status}`);
+                    return response.text();
+                })
+                .then(data => {
+                    sysInfo.textContent = data;
+                    sysInfo.parentElement.className = 'status ok';
+                })
+                .catch(err => {
+                    sysInfo.textContent = `Error connecting to application: ${err.message}`;
+                    sysInfo.parentElement.className = 'status error';
+                });
+        }
+        
+        // Check status immediately
+        checkStatus();
+        
+        // And check again every 5 seconds
+        setInterval(checkStatus, 5000);
+    </script>
+</body>
+</html>

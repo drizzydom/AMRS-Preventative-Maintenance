@@ -1,7 +1,7 @@
 #!/bin/bash
 # Startup script for ensuring database is ready before starting the app
 
-echo "[STARTUP] Starting application setup..."
+echo "[STARTUP] Starting application setup at $(date)"
 
 # Create data directory if it doesn't exist
 if [ ! -d "/var/data" ]; then
@@ -17,6 +17,10 @@ chmod -R 755 /var/data || echo "[ERROR] Failed to set permissions on /var/data"
 echo "[STARTUP] Creating backups directory..."
 mkdir -p /var/data/backups || echo "[ERROR] Failed to create backups directory"
 chmod -R 755 /var/data/backups || echo "[ERROR] Failed to set permissions on backups directory"
+
+# Create logs directory
+echo "[STARTUP] Creating logs directory..."
+mkdir -p /var/data/logs || echo "[ERROR] Failed to create logs directory"
 
 # Ensure the templates/errors directory exists and is writable
 echo "[STARTUP] Ensuring error templates directory exists..."
@@ -38,12 +42,23 @@ ls -la /var/data || echo "[ERROR] Failed to list /var/data contents"
 echo "[STARTUP] Environment diagnostics:"
 echo "  FLASK_APP: $FLASK_APP"
 echo "  SERVER_NAME: $SERVER_NAME"
-echo "  APPLICATION_ROOT: $APPLICATION_ROOT"
+echo "  PORT: $PORT"
 echo "  PYTHONPATH: $PYTHONPATH"
 echo "  Working directory: $(pwd)"
 echo "  Directory structure:"
 find . -type d -maxdepth 2 | sort
 
-echo "[STARTUP] Starting application server..."
-# Start the application with more verbose logging and log access
-exec gunicorn app:app --log-level debug --access-logfile - --error-logfile - --capture-output --bind 0.0.0.0:$PORT
+echo "[STARTUP] Starting application server with health check and proper signal handling..."
+
+# Start the application with ping handler and more verbose logging
+exec gunicorn app:app \
+  --log-level debug \
+  --access-logfile - \
+  --error-logfile - \
+  --capture-output \
+  --bind 0.0.0.0:$PORT \
+  --timeout 120 \
+  --keep-alive 5 \
+  --graceful-timeout 30 \
+  --worker-tmp-dir /dev/shm \
+  --preload
