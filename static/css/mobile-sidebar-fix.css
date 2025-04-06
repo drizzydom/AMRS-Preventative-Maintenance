@@ -1,0 +1,138 @@
+/**
+ * MOBILE SIDEBAR FIX
+ * Fixes sidebar and toggle button positioning on smaller screens
+ * This must be loaded AFTER other sidebar-related CSS files
+ */
+
+/* Only apply these styles on mobile screens */
+@media (max-width: 767.98px) {
+  /* Fix navbar and toggle button position */
+  .navbar {
+    position: fixed !important;
+    width: 100% !important;
+    z-index: 1050 !important;
+  }
+
+  /* Ensure navbar container is properly laid out */
+  .navbar .container-fluid {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important; /* Left alignment for better spacing */
+    width: 100% !important;
+    padding: 0 0.5rem !important;
+  }
+
+  /* Style the toggle button */
+  .navbar-toggler {
+    position: relative !important;
+    z-index: 1060 !important;
+    padding: 0.25rem 0.5rem !important;
+    margin-right: 0.5rem !important; /* Provide space between toggle and brand */
+    margin-left: 0 !important;
+    order: 0 !important; /* Ensure it's first */
+  }
+
+  /* Fix brand positioning to ALWAYS stay in navbar */
+  .navbar-brand {
+    position: static !important; /* Don't use absolute positioning */
+    transform: none !important; /* Don't use transform */
+    margin: 0 auto 0 0 !important; /* Push to center with auto right margin */
+    max-width: 65% !important; /* Limit width to ensure it fits */
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important; /* Allow brand to take available space */
+  }
+
+  /* Better position the sidebar */
+  .sidebar {
+    width: 260px !important;
+    max-width: 85% !important;
+    left: -260px !important;
+    transition: left 0.3s ease !important;
+    z-index: 1040 !important;
+    border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 3px 0 5px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* When sidebar is shown */
+  .sidebar.show {
+    left: 0 !important;
+  }
+
+  /* Ensure content takes full width on mobile */
+  .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Add overlay when sidebar is active */
+  body.sidebar-active::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1030;
+  }
+
+  /* Style sidebar close button */
+  .sidebar-header {
+    padding: 0.75rem 0.5rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background-color: rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .sidebar-back-btn {
+    background: none !important;
+    border: none !important;
+    color: white !important;
+    padding: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    text-align: left !important;
+    cursor: pointer !important;
+  }
+
+  .sidebar-back-btn i {
+    margin-right: 0.5rem !important;
+  }
+}
+
+/* Extra small devices (phones) */
+@media (max-width: 575.98px) {
+  /* Make sidebar slightly narrower on very small screens */
+  .sidebar {
+    width: 240px !important;
+    left: -240px !important;
+  }
+
+  /* Reduce paddings for sidebar items */
+  .sidebar-link, 
+  .sidebar-logout-btn {
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  /* Further reduce brand text size on very small screens */
+  .navbar-brand {
+    font-size: 0.9rem !important;
+    max-width: 60% !important;
+  }
+  
+  /* Optimize toggler size */
+  .navbar-toggler {
+    padding: 0.2rem 0.4rem !important;
+  }
+}
+
+/* Only apply these styles on tablets or larger */
+@media (min-width: 768px) {
+  /* Remove any mobile-specific close buttons in desktop mode */
+  .sidebar .sidebar-header {
+    display: none !important;
+  }
+}
