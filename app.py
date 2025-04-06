@@ -1,20 +1,30 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
-from functools import wraps
-from flask_mail import Mail, Message
-from dotenv import load_dotenv
-from sqlalchemy import text, inspect
-from sqlalchemy.orm.attributes import flag_modified
+# Standard library imports
 import os
 import sys
+import random
+import string
 import logging
-import secrets
+import signal
+from datetime import datetime, timedelta
+from functools import wraps
 
-# Import your database and models
+# Third-party imports
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort
+from flask_login import LoginManager, login_required, login_user, logout_user, current_user
+from flask_mail import Mail, Message
+import bleach
+import jwt  # Added for password reset tokens
+from sqlalchemy import or_, text  # Added text for SQL execution
+from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv  # Add the missing import for load_dotenv
+import secrets  # Add import for secrets used later in the code
+from sqlalchemy import inspect  # Add import for inspect
+
+# Local imports
 from models import db, User, Role, Site, Machine, Part
+
+# Initialize Flask app
+app = Flask(__name__, instance_relative_config=True)
 
 # Set up logging
 logging.basicConfig(
@@ -82,7 +92,6 @@ except ImportError as e:
         return app
 
 # Initialize Flask app with better error handling
-app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')
 app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '/')
@@ -102,44 +111,9 @@ except Exception as e:
 
 # Initialize database
 print("[APP] Initializing SQLAlchemy...")
-db = SQLAlchemy(app)
+db.init_app(app)
 
-# Define User model - MUST BE DEFINED BEFORE any references to User
-class User(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
-    email = db.Column(db.String(100))
-    full_name = db.Column(db.String(100))
-    is_admin = db.Column(db.Boolean, default=False)
-    role_id = db.Column(db.Integer, db.ForeignKey('role.id'))
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-        
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-        
-    def __repr__(self):
-        return f'<User {self.username}>'
-
-# Define Role model
-class Role(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
-    description = db.Column(db.String(200))
-    permissions = db.Column(db.String(500), default="view")
-    users = db.relationship('User', backref='role', lazy=True)
-    
-    def get_permissions_list(self):
-        if self.permissions:
-            return self.permissions.split(',')
-        return []
-        
-    def __repr__(self):
-        return f'<Role {self.name}>'
-
-# Initialize Flask-Login - CRITICAL: This must be done after User model is defined
+# Initialize Flask-Login
 print("[APP] Initializing Flask-Login...")
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -357,7 +331,7 @@ def create_default_admin():
         
         # Check if users table exists
         inspector = inspect(db.engine)
-        if 'user' not in inspector.get_table_names():
+        if 'users' not in inspector.get_table_names():  # Changed from 'user' to 'users'
             print("[APP] Users table doesn't exist yet, creating all tables...")
             db.create_all()
         
@@ -369,7 +343,7 @@ def create_default_admin():
             
             # Check if Roles table exists and has Administrator role
             admin_role = None
-            if 'role' in inspector.get_table_names():
+            if 'roles' in inspector.get_table_names():  # Changed from 'role' to 'roles'
                 admin_role = Role.query.filter_by(name="Administrator").first()
                 
             # Create admin role if needed
@@ -431,7 +405,7 @@ def add_default_admin_if_needed():
         # First make sure tables exist
         with app.app_context():
             inspector = inspect(db.engine)
-            if 'user' not in inspector.get_table_names():
+            if 'users' not in inspector.get_table_names():  # Changed from 'user' to 'users'
                 print("[APP] User table doesn't exist yet. Will create tables first.")
                 db.create_all()
                 print("[APP] Tables created.")
@@ -724,10 +698,10 @@ def admin():
         return redirect(url_for('dashboard'))
     
     # Placeholder counts - in a real app, you'd query the database
-    user_count = 1
-    site_count = 0
-    machine_count = 0
-    part_count = 0
+    user_count = User.query.count()
+    site_count = Site.query.count()
+    machine_count = Machine.query.count()
+    part_count = Part.query.count()
     
     return render_template('admin.html',
                           user_count=user_count,
@@ -744,11 +718,11 @@ def manage_users():
         flash('You do not have permission to access this page.', 'error')
         return redirect(url_for('dashboard'))
     
-    users = [current_user]  # In a real app, you'd query all users
-    roles = []
-    sites = []
+    users = User.query.all()
+    roles = Role.query.all()
+    sites = Site.query.all()
     
-    return render_template('admin_users.html', users=users, roles=roles, sites=sites)
+    return render_template('admin_users.html', users=users, roles=roles, sites=sites, current_user=current_user)
 
 @app.route('/admin/roles')
 @login_required
@@ -758,303 +732,10 @@ def manage_roles():
         flash('You do not have permission to access this page.', 'error')
         return redirect(url_for('dashboard'))
     
-    roles = []
-    all_permissions = {"view": "View Content", "edit": "Edit Content"}  # Example permissions
-    
-    return render_template('admin_roles.html', roles=roles, all_permissions=all_permissions)
-
-# Placeholder routes for CRUD operations (these would be implemented with actual logic)
-@app.route('/sites/add', methods=['POST'])
-@login_required
-def add_site():
-    flash('Site creation not implemented yet', 'warning')
-    return redirect(url_for('manage_sites'))
-
-@app.route('/sites/edit/<int:site_id>', methods=['GET', 'POST'])
-@login_required
-def edit_site(site_id):
-    site = {"id": site_id, "name": "Example Site", "location": "Example Location"}
-    return render_template('edit_site.html', site=site, users=[])
-
-@app.route('/sites/delete/<int:site_id>', methods=['POST'])
-@login_required
-def delete_site(site_id):
-    """Delete a site and all its machines and parts"""
-    try:
-        site = Site.query.get_or_404(site_id)
-        
-        # Check permissions (optional - implement based on your authentication system)
-        # if not current_user.is_admin and not current_user.has_permission('delete_site'):
-        #     flash('You do not have permission to delete sites.', 'error')
-        #     return redirect(url_for('manage_sites'))
-        
-        site_name = site.name
-        
-        # Delete all parts associated with this site's machines
-        parts_count = 0
-        # Get all machines for this site
-        machines = Machine.query.filter_by(site_id=site_id).all()
-        for machine in machines:
-            # Delete parts for each machine
-            parts = Part.query.filter_by(machine_id=machine.id).all()
-            parts_count += len(parts)
-            for part in parts:
-                db.session.delete(part)
-        
-        # Delete all machines for this site
-        machines_count = Machine.query.filter_by(site_id=site_id).count()
-        Machine.query.filter_by(site_id=site_id).delete()
-        
-        # Delete the site
-        db.session.delete(site)
-        db.session.commit()
-        
-        flash(f'Site "{site_name}" with {machines_count} machines and {parts_count} parts has been deleted.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting site: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_sites'))
-
-# Part Management Routes
-@app.route('/parts/delete/<int:part_id>', methods=['POST'])
-@login_required
-def delete_part(part_id):
-    """Delete a part from the system"""
-    try:
-        part = Part.query.get_or_404(part_id)
-        
-        # Check permissions (optional - implement based on your authentication system)
-        # if not current_user.is_admin and not current_user.has_permission('delete_part'):
-        #     flash('You do not have permission to delete parts.', 'error')
-        #     return redirect(url_for('manage_parts'))
-        
-        # Store information for flash message
-        part_name = part.name
-        machine_id = part.machine_id
-        
-        # Delete part
-        db.session.delete(part)
-        db.session.commit()
-        
-        flash(f'Part "{part_name}" has been deleted.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting part: {str(e)}', 'error')
-    
-    # Redirect back to the machine's parts page if we know the machine_id
-    if 'machine_id' in locals():
-        return redirect(url_for('manage_parts', machine_id=machine_id))
-    else:
-        return redirect(url_for('manage_parts'))
-
-# Machine Management Routes
-@app.route('/machines/delete/<int:machine_id>', methods=['POST'])
-@login_required
-def delete_machine(machine_id):
-    """Delete a machine and all its parts"""
-    try:
-        machine = Machine.query.get_or_404(machine_id)
-        
-        # Check permissions (optional - implement based on your authentication system)
-        # if not current_user.is_admin and not current_user.has_permission('delete_machine'):
-        #     flash('You do not have permission to delete machines.', 'error')
-        #     return redirect(url_for('manage_machines'))
-        
-        # Store information for flash message and redirect
-        machine_name = machine.name
-        site_id = machine.site_id
-        
-        # Delete all parts associated with this machine
-        parts_count = Part.query.filter_by(machine_id=machine_id).count()
-        Part.query.filter_by(machine_id=machine_id).delete()
-        
-        # Delete the machine
-        db.session.delete(machine)
-        db.session.commit()
-        
-        flash(f'Machine "{machine_name}" and its {parts_count} parts have been deleted.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting machine: {str(e)}', 'error')
-    
-    # Redirect back to the site's machines page if we know the site_id
-    if 'site_id' in locals():
-        return redirect(url_for('manage_machines', site_id=site_id))
-    else:
-        return redirect(url_for('manage_machines'))
-
-# User Management Routes
-@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
-@login_required
-def edit_user(user_id):
-    """Edit an existing user"""
-    # Ensure user has admin privileges
-    if not current_user.is_admin:
-        flash('You do not have permission to edit users.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    user = User.query.get_or_404(user_id)
     roles = Role.query.all()
-    sites = Site.query.all()
-    
-    if request.method == 'POST':
-        try:
-            # Update user details
-            user.username = request.form['username']
-            user.email = request.form['email']
-            user.full_name = request.form['full_name']
-            
-            # Handle role assignment
-            role_id = request.form.get('role_id')
-            user.role_id = int(role_id) if role_id and role_id != '' else None
-            
-            # Handle admin status
-            user.is_admin = 'is_admin' in request.form
-            
-            # Handle site assignments - get list of site IDs from form
-            site_ids = request.form.getlist('site_ids')
-            
-            # Clear current site assignments and add new ones
-            user.sites = []
-            if site_ids:
-                for site_id in site_ids:
-                    site = Site.query.get(int(site_id))
-                    if site:
-                        user.sites.append(site)
-            
-            # Handle password reset if requested
-            if 'reset_password' in request.form:
-                import secrets
-                import string
-                
-                # Generate a secure random password
-                alphabet = string.ascii_letters + string.digits
-                password = ''.join(secrets.choice(alphabet) for _ in range(12))
-                
-                user.set_password(password)
-                password_message = f" Password has been reset to '{password}'."
-            else:
-                password_message = ""
-            
-            db.session.commit()
-            flash(f'User {user.username} has been updated.{password_message}', 'success')
-            return redirect(url_for('manage_users'))
-            
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating user: {str(e)}', 'error')
-    
-    return render_template(
-        'edit_user.html',
-        user=user,
-        roles=roles,
-        sites=sites
-    )
-
-# Role Management Routes
-@app.route('/admin/roles/delete/<int:role_id>', methods=['POST'])
-@login_required
-def delete_role(role_id):
-    """Delete a role if it has no users assigned"""
-    # Ensure user has admin privileges
-    if not current_user.is_admin:
-        flash('You do not have permission to delete roles.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        role = Role.query.get_or_404(role_id)
-        
-        # Check if any users have this role
-        if role.users and len(role.users) > 0:
-            flash(f'Cannot delete role "{role.name}" because it is assigned to {len(role.users)} users.', 'error')
-            return redirect(url_for('manage_roles'))
-        
-        role_name = role.name
-        db.session.delete(role)
-        db.session.commit()
-        
-        flash(f'Role "{role_name}" has been deleted.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting role: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_roles'))
-
-@app.route('/admin/roles/add', methods=['POST'])
-@login_required
-def add_role():
-    """Add a new role"""
-    # Ensure user has admin privileges
-    if not current_user.is_admin:
-        flash('You do not have permission to add roles.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        # Get form data
-        name = request.form['name']
-        description = request.form.get('description', '')
-        
-        # Get selected permissions
-        permissions = request.form.getlist('permissions')
-        permissions_str = ','.join(permissions) if permissions else ''
-        
-        # Create new role
-        new_role = Role(
-            name=name,
-            description=description,
-            permissions=permissions_str
-        )
-        
-        # Add role to database
-        db.session.add(new_role)
-        db.session.commit()
-        
-        flash(f'Role "{name}" created successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error adding role: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_roles'))
-
-@app.route('/admin/roles/edit/<int:role_id>', methods=['GET', 'POST'])
-@login_required
-def edit_role(role_id):
-    """Edit an existing role"""
-    # Ensure user has admin privileges
-    if not current_user.is_admin:
-        flash('You do not have permission to edit roles.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    role = Role.query.get_or_404(role_id)
-    
-    if request.method == 'POST':
-        try:
-            # Update role details
-            role.name = request.form['name']
-            role.description = request.form.get('description', '')
-            
-            # Update permissions
-            permissions = request.form.getlist('permissions')
-            role.permissions = ','.join(permissions) if permissions else ''
-            
-            db.session.commit()
-            flash(f'Role "{role.name}" has been updated.', 'success')
-            return redirect(url_for('manage_roles'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating role: {str(e)}', 'error')
-    
-    # For GET request, render the edit form
-    role_permissions = role.permissions.split(',') if role.permissions else []
     all_permissions = get_all_permissions()
     
-    return render_template(
-        'edit_role.html',
-        role=role,
-        role_permissions=role_permissions,
-        all_permissions=all_permissions
-    )
+    return render_template('admin_roles.html', roles=roles, all_permissions=all_permissions)
 
 # Add helper function to get all available permissions
 def get_all_permissions():
@@ -1076,130 +757,253 @@ def get_all_permissions():
         "admin.backups": "Manage Backups"
     }
 
-# Add routes for backup management if they don't exist
-@app.route('/admin/backups/create', methods=['POST'])
+# Site CRUD Operations
+@app.route('/sites/edit/<int:site_id>', methods=['GET', 'POST'])
 @login_required
-def create_backup():
-    """Create a new database backup"""
-    # Ensure user has admin privileges
-    if not current_user.is_admin:
-        flash('You do not have permission to create backups.', 'error')
-        return redirect(url_for('dashboard'))
+def edit_site(site_id):
+    """Edit an existing site"""
+    site = Site.query.get_or_404(site_id)
     
-    try:
-        from backup_utils import create_backup as create_db_backup
-        success, message = create_db_backup()
-        
-        if success:
-            flash(f'Backup created successfully: {message}', 'success')
-        else:
-            flash(f'Backup failed: {message}', 'error')
-    except Exception as e:
-        flash(f'Error creating backup: {str(e)}', 'error')
+    if request.method == 'POST':
+        try:
+            # Update site details
+            site.name = request.form['name']
+            site.location = request.form.get('location', '')
+            site.contact_email = request.form.get('contact_email', '')
+            site.notification_threshold = request.form.get('notification_threshold', 30)
+            site.enable_notifications = 'enable_notifications' in request.form
+            
+            # Handle user assignments if admin
+            if current_user.is_admin:
+                # Clear current user assignments
+                site.users = []
+                
+                # Add selected users
+                user_ids = request.form.getlist('user_ids')
+                if user_ids:
+                    for user_id in user_ids:
+                        user = User.query.get(int(user_id))
+                        if user:
+                            site.users.append(user)
+            
+            db.session.commit()
+            flash(f'Site "{site.name}" has been updated successfully.', 'success')
+            return redirect(url_for('manage_sites'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating site: {str(e)}', 'error')
     
-    return redirect(url_for('manage_backups'))
+    # For GET request or if POST processing fails
+    users = User.query.all() if current_user.is_admin else []
+    is_admin = current_user.is_admin
+    
+    return render_template('edit_site.html', site=site, users=users, is_admin=is_admin)
 
-@app.route('/admin/backups/delete/<filename>', methods=['POST'])
+@app.route('/sites/delete/<int:site_id>', methods=['POST'])
 @login_required
-def delete_backup(filename):
-    """Delete a database backup file"""
-    # Ensure user has admin privileges
-    if not current_user.is_admin:
-        flash('You do not have permission to delete backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
+def delete_site(site_id):
+    """Delete a site and all its machines and parts"""
     try:
-        from backup_utils import get_backup_dir
-        import os
+        site = Site.query.get_or_404(site_id)
         
-        backup_path = os.path.join(get_backup_dir(), filename)
-        if os.path.exists(backup_path):
-            os.remove(backup_path)
-            # Also remove info file if it exists
-            info_path = f"{backup_path}.info"
-            if os.path.exists(info_path):
-                os.remove(info_path)
-            flash(f'Backup "{filename}" has been deleted.', 'success')
-        else:
-            flash(f'Backup file not found.', 'error')
-    except Exception as e:
-        flash(f'Error deleting backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
-
-@app.route('/admin/backups/restore/<filename>', methods=['POST'])
-@login_required
-def restore_backup(filename):
-    """Restore database from a backup file"""
-    # Ensure user has admin privileges
-    if not current_user.is_admin:
-        flash('You do not have permission to restore backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        from backup_utils import restore_backup as restore_db_backup
-        success, message = restore_db_backup(filename)
+        # Store site name for flash message
+        site_name = site.name
         
-        if success:
-            flash(f'Database restored successfully: {message}', 'success')
-        else:
-            flash(f'Restore failed: {message}', 'error')
-    except Exception as e:
-        flash(f'Error restoring backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
-
-@app.route('/admin/users/add', methods=['POST'])
-@login_required
-def add_user():
-    """Add a new user"""
-    if not current_user.is_admin:
-        flash('You do not have permission to add users.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        # Get form data
-        username = request.form['username']
-        email = request.form['email']
-        full_name = request.form.get('full_name', '')
-        role_id = request.form.get('role_id')
-        is_admin = 'is_admin' in request.form
-        site_ids = request.form.getlist('site_ids')
+        # Delete all parts associated with this site's machines
+        parts_count = 0
+        for machine in Machine.query.filter_by(site_id=site_id).all():
+            parts_count += Part.query.filter_by(machine_id=machine.id).count()
+            Part.query.filter_by(machine_id=machine.id).delete()
         
-        # Generate a random password
-        import secrets
-        import string
-        alphabet = string.ascii_letters + string.digits
-        password = ''.join(secrets.choice(alphabet) for i in range(12))
+        # Delete all machines for this site
+        machines_count = Machine.query.filter_by(site_id=site_id).count()
+        Machine.query.filter_by(site_id=site_id).delete()
         
-        # Create new user
-        new_user = User(
-            username=username,
-            email=email,
-            full_name=full_name,
-            is_admin=is_admin,
-            role_id=int(role_id) if role_id and role_id != '' else None
-        )
-        new_user.set_password(password)
-        
-        # Add user to database
-        db.session.add(new_user)
+        # Delete the site
+        db.session.delete(site)
         db.session.commit()
         
-        # Assign sites if any were selected
-        if site_ids:
-            for site_id in site_ids:
-                site = Site.query.get(int(site_id))
-                if site:
-                    new_user.sites.append(site)
-            db.session.commit()
-        
-        flash(f'User {username} created successfully with password: {password}', 'success')
+        flash(f'Site "{site_name}" with {machines_count} machines and {parts_count} parts has been deleted.', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error adding user: {str(e)}', 'error')
+        flash(f'Error deleting site: {str(e)}', 'error')
     
-    return redirect(url_for('manage_users'))
+    return redirect(url_for('manage_sites'))
+
+# Machine CRUD Operations
+@app.route('/machines/edit/<int:machine_id>', methods=['GET', 'POST'])
+@login_required
+def edit_machine(machine_id):
+    """Edit an existing machine"""
+    machine = Machine.query.get_or_404(machine_id)
+    
+    if request.method == 'POST':
+        try:
+            # Update machine details
+            machine.name = request.form['name']
+            machine.model = request.form.get('model', '')
+            machine.machine_number = request.form.get('machine_number', '')
+            machine.serial_number = request.form.get('serial_number', '')
+            machine.site_id = request.form['site_id']
+            
+            db.session.commit()
+            flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
+            return redirect(url_for('manage_machines', site_id=machine.site_id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating machine: {str(e)}', 'error')
+    
+    # For GET request or if POST processing fails
+    sites = Site.query.all()
+    
+    return render_template('edit_machine.html', machine=machine, sites=sites)
+
+@app.route('/machines/delete/<int:machine_id>', methods=['POST'])
+@login_required
+def delete_machine(machine_id):
+    """Delete a machine and all its parts"""
+    try:
+        machine = Machine.query.get_or_404(machine_id)
+        site_id = machine.site_id  # Store site_id for redirect
+        
+        # Store machine name for flash message
+        machine_name = machine.name
+        
+        # Delete all parts associated with this machine
+        parts_count = Part.query.filter_by(machine_id=machine_id).count()
+        Part.query.filter_by(machine_id=machine_id).delete()
+        
+        # Delete the machine
+        db.session.delete(machine)
+        db.session.commit()
+        
+        flash(f'Machine "{machine_name}" and its {parts_count} parts have been deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting machine: {str(e)}', 'error')
+    
+    # Redirect back to the site's machines page if we have the site_id
+    if 'site_id' in locals():
+        return redirect(url_for('manage_machines', site_id=site_id))
+    else:
+        return redirect(url_for('manage_machines'))
+
+# Part CRUD Operations
+@app.route('/parts/edit/<int:part_id>', methods=['GET', 'POST'])
+@login_required
+def edit_part(part_id):
+    """Edit an existing part"""
+    part = Part.query.get_or_404(part_id)
+    
+    if request.method == 'POST':
+        try:
+            # Update part details
+            part.name = request.form['name']
+            part.description = request.form.get('description', '')
+            part.machine_id = request.form['machine_id']
+            part.maintenance_frequency = int(request.form['maintenance_frequency'])
+            part.maintenance_unit = request.form['maintenance_unit']
+            
+            # Update maintenance days based on frequency and unit
+            part.maintenance_days = calculate_maintenance_days(part.maintenance_frequency, part.maintenance_unit)
+            
+            # Update next maintenance date (optionally)
+            # Uncomment if you want to recalculate the next date based on last_maintenance:
+            # part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_days)
+            
+            db.session.commit()
+            flash(f'Part "{part.name}" has been updated successfully.', 'success')
+            return redirect(url_for('manage_parts', machine_id=part.machine_id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating part: {str(e)}', 'error')
+    
+    # For GET request or if POST processing fails
+    machines = Machine.query.all()
+    
+    return render_template('edit_part.html', part=part, machines=machines)
+
+@app.route('/parts/delete/<int:part_id>', methods=['POST'])
+@login_required
+def delete_part(part_id):
+    """Delete a part"""
+    try:
+        part = Part.query.get_or_404(part_id)
+        machine_id = part.machine_id  # Store machine_id for redirect
+        
+        # Store part name for flash message
+        part_name = part.name
+        
+        # Delete the part
+        db.session.delete(part)
+        db.session.commit()
+        
+        flash(f'Part "{part_name}" has been deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting part: {str(e)}', 'error')
+    
+    # Redirect back to the machine's parts page if we have the machine_id
+    if 'machine_id' in locals():
+        return redirect(url_for('manage_parts', machine_id=machine_id))
+    else:
+        return redirect(url_for('manage_parts'))
+
+# User Management Routes
+@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    """Edit an existing user"""
+    if not current_user.is_admin:
+        flash('You do not have permission to edit users.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == 'POST':
+        try:
+            # Update user details
+            user.username = request.form['username']
+            user.email = request.form['email']
+            user.full_name = request.form['full_name']
+            
+            # Handle role assignment
+            role_id = request.form.get('role_id')
+            user.role_id = int(role_id) if role_id and role_id != '' else None
+            
+            # Handle admin status
+            user.is_admin = 'is_admin' in request.form
+            
+            # Handle site assignments
+            user.sites = []
+            site_ids = request.form.getlist('site_ids')
+            if site_ids:
+                for site_id in site_ids:
+                    site = Site.query.get(int(site_id))
+                    if site:
+                        user.sites.append(site)
+            
+            # Handle password reset if requested
+            password_reset_message = ""
+            if 'reset_password' in request.form:
+                # Generate a random password
+                alphabet = string.ascii_letters + string.digits
+                password = ''.join(random.choice(alphabet) for i in range(12))
+                user.set_password(password)
+                password_reset_message = f" Password has been reset to '{password}'."
+            
+            db.session.commit()
+            flash(f'User {user.username} has been updated.{password_reset_message}', 'success')
+            return redirect(url_for('manage_users'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating user: {str(e)}', 'error')
+    
+    # For GET request or if POST processing fails
+    roles = Role.query.all()
+    sites = Site.query.all()
+    
+    return render_template('edit_user.html', user=user, roles=roles, sites=sites)
 
 @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
 @login_required
@@ -1230,6 +1034,220 @@ def delete_user(user_id):
         flash(f'Error deleting user: {str(e)}', 'error')
     
     return redirect(url_for('manage_users'))
+
+@app.route('/admin/users/add', methods=['POST'])
+@login_required
+def add_user():
+    """Add a new user"""
+    if not current_user.is_admin:
+        flash('You do not have permission to add users.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Get form data
+        username = request.form['username']
+        email = request.form['email']
+        full_name = request.form.get('full_name', '')
+        role_id = request.form.get('role_id')
+        is_admin = 'is_admin' in request.form
+        
+        # Generate a random password
+        alphabet = string.ascii_letters + string.digits
+        password = ''.join(random.choice(alphabet) for i in range(12))
+        
+        # Create new user
+        new_user = User(
+            username=username,
+            email=email,
+            full_name=full_name,
+            is_admin=is_admin,
+            role_id=int(role_id) if role_id and role_id != '' else None
+        )
+        new_user.set_password(password)
+        
+        # Add user to database
+        db.session.add(new_user)
+        db.session.commit()
+        
+        # Assign sites if any were selected
+        site_ids = request.form.getlist('site_ids')
+        if site_ids:
+            for site_id in site_ids:
+                site = Site.query.get(int(site_id))
+                if site:
+                    new_user.sites.append(site)
+            db.session.commit()
+        
+        flash(f'User {username} created successfully with password: {password}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding user: {str(e)}', 'error')
+    
+    return redirect(url_for('manage_users'))
+
+# Role Management Routes
+@app.route('/admin/roles/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+def edit_role(role_id):
+    """Edit an existing role"""
+    if not current_user.is_admin:
+        flash('You do not have permission to edit roles.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    role = Role.query.get_or_404(role_id)
+    
+    if request.method == 'POST':
+        try:
+            # Update role details
+            role.name = request.form['name']
+            role.description = request.form.get('description', '')
+            
+            # Update permissions
+            permissions = request.form.getlist('permissions')
+            role.permissions = ','.join(permissions) if permissions else ''
+            
+            db.session.commit()
+            flash(f'Role "{role.name}" has been updated.', 'success')
+            return redirect(url_for('manage_roles'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating role: {str(e)}', 'error')
+    
+    # For GET request or if POST processing fails
+    role_permissions = role.get_permissions_list()
+    all_permissions = get_all_permissions()
+    
+    return render_template('edit_role.html', role=role, role_permissions=role_permissions, all_permissions=all_permissions)
+
+@app.route('/admin/roles/delete/<int:role_id>', methods=['POST'])
+@login_required
+def delete_role(role_id):
+    """Delete a role if it has no users assigned"""
+    if not current_user.is_admin:
+        flash('You do not have permission to delete roles.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        role = Role.query.get_or_404(role_id)
+        
+        # Check if any users have this role
+        if role.users and len(role.users) > 0:
+            flash(f'Cannot delete role "{role.name}" because it is assigned to {len(role.users)} users.', 'error')
+            return redirect(url_for('manage_roles'))
+        
+        role_name = role.name
+        db.session.delete(role)
+        db.session.commit()
+        
+        flash(f'Role "{role_name}" has been deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting role: {str(e)}', 'error')
+    
+    return redirect(url_for('manage_roles'))
+
+@app.route('/admin/roles/add', methods=['POST'])
+@login_required
+def add_role():
+    """Add a new role"""
+    if not current_user.is_admin:
+        flash('You do not have permission to add roles.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Get form data
+        name = request.form['name']
+        description = request.form.get('description', '')
+        permissions = request.form.getlist('permissions')
+        permissions_str = ','.join(permissions) if permissions else ''
+        
+        # Create new role
+        new_role = Role(
+            name=name,
+            description=description,
+            permissions=permissions_str
+        )
+        
+        # Add role to database
+        db.session.add(new_role)
+        db.session.commit()
+        
+        flash(f'Role "{name}" created successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding role: {str(e)}', 'error')
+    
+    return redirect(url_for('manage_roles'))
+
+# Backup Management Routes
+@app.route('/admin/backups/create', methods=['POST'])
+@login_required
+def create_backup():
+    """Create a new database backup"""
+    if not current_user.is_admin:
+        flash('You do not have permission to create backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        from backup_utils import create_backup as create_db_backup
+        success, message = create_db_backup()
+        
+        if success:
+            flash(f'Backup created successfully: {message}', 'success')
+        else:
+            flash(f'Backup failed: {message}', 'error')
+    except Exception as e:
+        flash(f'Error creating backup: {str(e)}', 'error')
+    
+    return redirect(url_for('manage_backups'))
+
+@app.route('/admin/backups/restore/<filename>', methods=['POST'])
+@login_required
+def restore_backup(filename):
+    """Restore database from a backup file"""
+    if not current_user.is_admin:
+        flash('You do not have permission to restore backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        from backup_utils import restore_backup as restore_db_backup
+        success, message = restore_db_backup(filename)
+        
+        if success:
+            flash(f'Database restored successfully: {message}', 'success')
+        else:
+            flash(f'Restore failed: {message}', 'error')
+    except Exception as e:
+        flash(f'Error restoring backup: {str(e)}', 'error')
+    
+    return redirect(url_for('manage_backups'))
+
+@app.route('/admin/backups/delete/<filename>', methods=['POST'])
+@login_required
+def delete_backup(filename):
+    """Delete a database backup file"""
+    if not current_user.is_admin:
+        flash('You do not have permission to delete backups.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        from backup_utils import get_backup_dir
+        import os
+        
+        backup_path = os.path.join(get_backup_dir(), filename)
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+            # Also remove info file if it exists
+            info_path = f"{backup_path}.info"
+            if os.path.exists(info_path):
+                os.remove(info_path)
+            flash(f'Backup "{filename}" has been deleted.', 'success')
+        else:
+            flash(f'Backup file not found.', 'error')
+    except Exception as e:
+        flash(f'Error deleting backup: {str(e)}', 'error')
+    
+    return redirect(url_for('manage_backups'))
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':

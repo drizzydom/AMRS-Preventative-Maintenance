@@ -45,6 +45,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-simple-fix.css') }}">
     <!-- Add form fixes CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/form-fixes.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-sidebar-fix.css') }}">
     <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
@@ -55,21 +56,18 @@
         <!-- Navigation Bar - Simplified with reduced height -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
             <div class="container-fluid">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-                    <i class="fas fa-tools me-2"></i> AMRS Maintenance
-                </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
-                        aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <button class="navbar-toggler" type="button" 
+                        aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    {% if current_user.is_authenticated %}
-                    <!-- Completely empty navbar menu - all navigation moved to sidebar -->
-                    <ul class="navbar-nav me-auto">
-                        <!-- Empty but kept for mobile menu structure -->
-                    </ul>
-                    {% endif %}
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                    <i class="fas fa-tools me-2"></i> AMRS Maintenance
+                </a>
+                
+                <!-- Empty div for proper spacing - pushes navbar content to the edges -->
+                <div class="d-none d-lg-block">
+                    <!-- Empty placeholder for proper flex spacing -->
                 </div>
             </div>
         </nav>
