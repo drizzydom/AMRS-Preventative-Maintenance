@@ -36,15 +36,19 @@
                                 <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
                                 <td><span class="badge bg-danger">{{ part.days }} days</span></td>
                                 <td>
-                                    <!-- Use POST form with hidden input -->
-                                    <form action="/update-maintenance" method="POST" class="d-inline">
-                                        <input type="hidden" name="part_id" value="{{ part.id }}">
-                                        <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                            <i class="fas fa-check-circle"></i> Record
-                                        </button>
-                                    </form>
+                                    <button class="btn btn-sm btn-success" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#recordMaintenanceModal" 
+                                            data-part-id="{{ part.id }}"
+                                            data-part-name="{{ part.name }}"
+                                            title="Record Maintenance">
+                                        <i class="fas fa-check-circle"></i> Record
+                                    </button>
                                     <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
                                         <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-history"></i> History
                                     </a>
                                 </td>
                             </tr>
@@ -91,15 +95,19 @@
                                 <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
                                 <td><span class="badge bg-warning text-dark">{{ part.days }} days</span></td>
                                 <td>
-                                    <!-- Use POST form with hidden input -->
-                                    <form action="/update-maintenance" method="POST" class="d-inline">
-                                        <input type="hidden" name="part_id" value="{{ part.id }}">
-                                        <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                            <i class="fas fa-check-circle"></i> Record
-                                        </button>
-                                    </form>
+                                    <button class="btn btn-sm btn-success" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#recordMaintenanceModal" 
+                                            data-part-id="{{ part.id }}"
+                                            data-part-name="{{ part.name }}"
+                                            title="Record Maintenance">
+                                        <i class="fas fa-check-circle"></i> Record
+                                    </button>
                                     <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
                                         <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-history"></i> History
                                     </a>
                                 </td>
                             </tr>
@@ -146,15 +154,19 @@
                                 <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ part.days }} days</td>
                                 <td>
-                                    <!-- Use POST form with hidden input -->
-                                    <form action="/update-maintenance" method="POST" class="d-inline">
-                                        <input type="hidden" name="part_id" value="{{ part.id }}">
-                                        <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                            <i class="fas fa-check-circle"></i> Record
-                                        </button>
-                                    </form>
+                                    <button class="btn btn-sm btn-success" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#recordMaintenanceModal" 
+                                            data-part-id="{{ part.id }}"
+                                            data-part-name="{{ part.name }}"
+                                            title="Record Maintenance">
+                                        <i class="fas fa-check-circle"></i> Record
+                                    </button>
                                     <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
                                         <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-history"></i> History
                                     </a>
                                 </td>
                             </tr>
@@ -169,4 +181,62 @@
         </div>
     </div>
 </div>
+
+<!-- Record Maintenance Modal -->
+<div class="modal fade" id="recordMaintenanceModal" tabindex="-1" aria-labelledby="recordMaintenanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="recordMaintenanceModalLabel">Record Maintenance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/update-maintenance" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="part_id" id="maintenance-part-id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Part</label>
+                        <input type="text" class="form-control" id="maintenance-part-name" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="maintenance-comments" class="form-label">Comments</label>
+                        <textarea class="form-control" id="maintenance-comments" name="comments" rows="3" 
+                                  placeholder="Enter maintenance details, parts replaced, issues found, etc..."></textarea>
+                    </div>
+                    
+                    <div class="form-text mb-3">
+                        <i class="fas fa-info-circle"></i> 
+                        This will update the maintenance record and set the next due date based on the maintenance schedule.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check-circle me-1"></i> Record Maintenance
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Set up the maintenance modal
+    document.addEventListener('DOMContentLoaded', function() {
+        const recordMaintenanceModal = document.getElementById('recordMaintenanceModal');
+        if (recordMaintenanceModal) {
+            recordMaintenanceModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const partId = button.getAttribute('data-part-id');
+                const partName = button.getAttribute('data-part-name');
+                
+                document.getElementById('maintenance-part-id').value = partId;
+                document.getElementById('maintenance-part-name').value = partName;
+            });
+        }
+    });
+</script>
 {% endblock %}
