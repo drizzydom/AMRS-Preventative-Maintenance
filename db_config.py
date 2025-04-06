@@ -12,84 +12,67 @@ def configure_database(app: Flask):
     # For Render deployment
     if os.environ.get('RENDER'):
         try:
-            # Try multiple possible data directories
-            possible_paths = [
-                '/var/data',                      # Standard Render persistent storage
-                '/tmp',                           # Fallback to temp directory
-                os.path.dirname(os.path.abspath(__file__)),  # Project directory
-                os.getcwd()                       # Current working directory
-            ]
+            # Use Render's persistent disk for database storage
+            # /var/data is the persistent storage on Render
+            data_dir = '/var/data'
             
-            db_path = None
+            # Ensure the directory exists
+            if not os.path.exists(data_dir):
+                print(f"[DB_CONFIG] Creating data directory: {data_dir}")
+                os.makedirs(data_dir, exist_ok=True)
             
-            for path in possible_paths:
-                try:
-                    print(f"[DB_CONFIG] Trying path: {path}")
-                    # Check if directory exists and is writable
-                    if os.path.exists(path) and os.access(path, os.W_OK):
-                        # Try to create a test file to verify write permissions
-                        test_file = os.path.join(path, 'db_test_file')
-                        with open(test_file, 'w') as f:
-                            f.write('test')
-                        os.remove(test_file)
-                        
-                        db_path = os.path.join(path, 'maintenance.db')
-                        print(f"[DB_CONFIG] Found writable directory: {path}")
-                        break
-                    else:
-                        print(f"[DB_CONFIG] Directory not writable: {path}")
-                except Exception as e:
-                    print(f"[DB_CONFIG] Error with path {path}: {str(e)}")
-                    continue
-                    
-            if db_path is None:
-                print("[DB_CONFIG] No writable directory found. Using in-memory database as fallback.")
-                db_path = ':memory:'
+            # Check if directory is writable
+            if os.access(data_dir, os.W_OK):
+                print(f"[DB_CONFIG] Using Render persistent storage at: {data_dir}")
                 
-            # Configure Flask app to use this database
-            app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-            
-            print(f"[DB_CONFIG] Using database at: {db_path}")
-            
-            # Check database access
-            if db_path != ':memory:':
-                MAX_RETRIES = 5
-                retry_count = 0
-                while retry_count < MAX_RETRIES:
-                    try:
-                        # Try to connect to and access the database
-                        print(f"[DB_CONFIG] Testing database connection (attempt {retry_count+1}/{MAX_RETRIES})...")
-                        conn = sqlite3.connect(db_path)
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
-                        tables = cursor.fetchall()
-                        conn.close()
-                        print(f"[DB_CONFIG] Successfully connected to database. Found {len(tables)} tables.")
-                        break
-                    except Exception as e:
-                        retry_count += 1
-                        print(f"[DB_CONFIG] Attempt {retry_count}/{MAX_RETRIES} - Error accessing database: {str(e)}")
-                        if retry_count < MAX_RETRIES:
-                            print(f"[DB_CONFIG] Waiting 3 seconds before retry...")
-                            time.sleep(3)
-                        else:
-                            print(f"[DB_CONFIG] Failed to access database after {MAX_RETRIES} attempts.")
-                            print(f"[DB_CONFIG] Will create one when tables are created.")
-            
+                # Create a dedicated directory for database files
+                db_dir = os.path.join(data_dir, 'db')
+                os.makedirs(db_dir, exist_ok=True)
+                
+                db_path = os.path.join(db_dir, 'maintenance.db')
+                app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+                print(f"[DB_CONFIG] Database will be stored at: {db_path}")
+                
+                # Also create directory for backups
+                backup_dir = os.path.join(data_dir, 'backups')
+                os.makedirs(backup_dir, exist_ok=True)
+                app.config['BACKUP_DIR'] = backup_dir
+                print(f"[DB_CONFIG] Backups will be stored at: {backup_dir}")
+            else:
+                print(f"[DB_CONFIG] Warning: {data_dir} is not writable.")
+                # Fallback to project directory
+                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'maintenance.db')
+                app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+                print(f"[DB_CONFIG] Using fallback database at: {db_path}")
         except Exception as e:
             print(f"[DB_CONFIG] Error setting up database: {str(e)}")
-            # Fallback to in-memory database as a last resort
-            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-            print(f"[DB_CONFIG] Using in-memory database as fallback")
+            # Fallback to project directory as a last resort
+            try:
+                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'maintenance.db')
+                os.makedirs(os.path.dirname(db_path), exist_ok=True)
+                app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+                print(f"[DB_CONFIG] Using fallback database at: {db_path}")
+            except:
+                # Last resort - in-memory database (non-persistent)
+                app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+                print("[DB_CONFIG] WARNING: Using non-persistent in-memory database!")
     else:
         # Local development setup - store in project directory
         try:
             instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
             print(f"[DB_CONFIG] Using local instance path: {instance_path}")
             os.makedirs(instance_path, exist_ok=True)
+            
+            # Create database directory
             db_path = os.path.join(instance_path, 'maintenance.db')
             app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-            print(f"[DB_CONFIG] Using local database at {db_path}")
+            print(f"[DB_CONFIG] Using local database at: {db_path}")
+            
+            # Create backups directory
+            backup_dir = os.path.join(instance_path, 'backups')
+            os.makedirs(backup_dir, exist_ok=True)
+            app.config['BACKUP_DIR'] = backup_dir
+            print(f"[DB_CONFIG] Using local backups at: {backup_dir}")
         except Exception as e:
             print(f"[DB_CONFIG] Error setting up local database: {str(e)}")
             # Fallback to a very basic configuration
@@ -98,6 +81,12 @@ def configure_database(app: Flask):
     
     # Disable SQLAlchemy event system - improves performance
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Set up connection pooling - good for SQLite
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,  # Check connections before using them
+        'pool_recycle': 280,    # Recycle connections every ~4.5 minutes
+    }
     
     print("[DB_CONFIG] Database configuration complete.")
     return app

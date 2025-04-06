@@ -34,6 +34,6 @@ services:
           name: maintenance-tracker
           envVarKey: RENDER_PORT
     disk:
-      name: data
+      name: maintenance-data
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 2  # Increased to 2GB for more storage space

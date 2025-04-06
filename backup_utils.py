@@ -4,170 +4,195 @@ Utilities for backing up and restoring maintenance data.
 """
 
 import os
-import shutil
-import sqlite3
-import datetime
 import time
 import json
+import sqlite3
+import shutil
+from datetime import datetime
 from flask import current_app
-
-def get_db_path():
-    """Get the path to the current database file"""
-    if os.environ.get('RENDER'):
-        return os.path.join('/var/data', 'maintenance.db')
-    else:
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'maintenance.db')
 
 def get_backup_dir():
     """Get the directory where backups should be stored"""
-    if os.environ.get('RENDER'):
-        backup_dir = os.path.join('/var/data', 'backups')
+    # First check if BACKUP_DIR is configured in Flask app
+    if current_app and current_app.config.get('BACKUP_DIR'):
+        backup_dir = current_app.config['BACKUP_DIR']
     else:
-        backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'backups')
+        # Check if on Render
+        if os.environ.get('RENDER'):
+            # Use Render's persistent storage
+            backup_dir = '/var/data/backups'
+        else:
+            # Local development - use instance directory
+            backup_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                'instance',
+                'backups'
+            )
     
-    # Create the directory if it doesn't exist
+    # Ensure the directory exists
     os.makedirs(backup_dir, exist_ok=True)
     return backup_dir
 
+def get_database_path():
+    """Get path to the current SQLite database file"""
+    if current_app:
+        db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if db_uri.startswith('sqlite:///'):
+            # Strip the prefix
+            if db_uri.startswith('sqlite:////'):  # Absolute path
+                return db_uri[10:]
+            else:  # Relative path
+                return db_uri[9:]
+    
+    # Fallback - check if on Render
+    if os.environ.get('RENDER'):
+        return '/var/data/db/maintenance.db'
+    else:
+        # Local development
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'instance',
+            'maintenance.db'
+        )
+
 def create_backup():
-    """Create a backup of the current database"""
+    """Create a backup of the database"""
     try:
-        db_path = get_db_path()
+        # Get the database path
+        db_path = get_database_path()
         if not os.path.exists(db_path):
-            return False, "Database file not found"
+            return False, f"Database file not found at {db_path}"
         
-        # Create a timestamp for the backup filename
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Get the backup directory
+        backup_dir = get_backup_dir()
+        
+        # Create a timestamp for the backup file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_filename = f"backup_{timestamp}.db"
-        backup_path = os.path.join(get_backup_dir(), backup_filename)
+        backup_path = os.path.join(backup_dir, backup_filename)
         
-        # Test database connection before backup
-        try:
-            conn = sqlite3.connect(db_path)
-            conn.close()
-        except Exception as e:
-            return False, f"Database access error before backup: {str(e)}"
-        
-        # Create the backup
-        shutil.copy2(db_path, backup_path)
-        
-        # Verify backup file exists and has data
-        if not os.path.exists(backup_path) or os.path.getsize(backup_path) == 0:
-            return False, "Backup file creation failed or file is empty"
-        
-        # Create an info file with metadata about the backup
-        info = {
-            'created': datetime.datetime.now().isoformat(),
+        # Create backup metadata
+        metadata = {
+            'created': datetime.now().isoformat(),
             'source_db': db_path,
-            'backup_path': backup_path,
-            'size_bytes': os.path.getsize(backup_path)
+            'description': f"Automatic backup - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            'size_bytes': os.path.getsize(db_path),
         }
         
+        # Connect to the database to ensure it's valid and check tables
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = cursor.fetchall()
+        metadata['tables'] = [table[0] for table in tables if table[0] != 'sqlite_sequence']
+        
+        # Get row counts for each table
+        table_counts = {}
+        for table in metadata['tables']:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM '{table}'")
+                count = cursor.fetchone()[0]
+                table_counts[table] = count
+            except sqlite3.OperationalError:
+                table_counts[table] = "Error counting rows"
+        
+        metadata['table_counts'] = table_counts
+        conn.close()
+        
+        # Copy the database file
+        shutil.copy2(db_path, backup_path)
+        
+        # Save metadata to a JSON file
         with open(f"{backup_path}.info", 'w') as f:
-            json.dump(info, f, indent=2)
-            
+            json.dump(metadata, f, indent=2)
+        
         return True, backup_filename
+    
     except Exception as e:
-        return False, f"Backup error: {str(e)}"
+        return False, str(e)
 
 def restore_backup(backup_filename):
-    """Restore database from a backup file"""
+    """Restore the database from a backup file"""
     try:
-        backup_path = os.path.join(get_backup_dir(), backup_filename)
-        db_path = get_db_path()
+        # Get the backup directory
+        backup_dir = get_backup_dir()
+        backup_path = os.path.join(backup_dir, backup_filename)
         
         if not os.path.exists(backup_path):
-            return False, "Backup file not found"
+            return False, f"Backup file not found: {backup_filename}"
+        
+        # Get the current database path
+        db_path = get_database_path()
         
         # Create a backup of the current database before restoring
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        pre_restore_backup = f"pre_restore_{timestamp}.db"
-        pre_restore_path = os.path.join(get_backup_dir(), pre_restore_backup)
+        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+        pre_restore_backup = f"{db_path}.pre_restore_{current_time}"
         
         if os.path.exists(db_path):
-            shutil.copy2(db_path, pre_restore_path)
+            shutil.copy2(db_path, pre_restore_backup)
         
-        # Restore the backup
+        # Copy the backup file to the database path
         shutil.copy2(backup_path, db_path)
         
-        # Verify restore succeeded
-        if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
-            # If restore failed, try to recover from pre-restore backup
-            if os.path.exists(pre_restore_path):
-                shutil.copy2(pre_restore_path, db_path)
-            return False, "Restore failed - database file is missing or empty"
-            
-        # Test the restored database
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = cursor.fetchall()
-            conn.close()
-            
-            if len(tables) == 0:
-                # No tables found, restore from pre-restore backup
-                if os.path.exists(pre_restore_path):
-                    shutil.copy2(pre_restore_path, db_path)
-                return False, "Restored database contains no tables"
-        except Exception as e:
-            # Database error, restore from pre-restore backup
-            if os.path.exists(pre_restore_path):
-                shutil.copy2(pre_restore_path, db_path)
-            return False, f"Error accessing restored database: {str(e)}"
-        
-        return True, f"Restored from {backup_filename}"
+        return True, f"Database restored from {backup_filename}. Previous database saved as {os.path.basename(pre_restore_backup)}"
+    
     except Exception as e:
-        return False, f"Restore error: {str(e)}"
+        return False, str(e)
 
 def list_backups():
-    """List all available database backups with metadata"""
+    """List all available backups"""
     try:
         backup_dir = get_backup_dir()
-        backups = []
+        if not os.path.exists(backup_dir):
+            return []
         
+        backups = []
         for filename in os.listdir(backup_dir):
             if filename.endswith('.db'):
-                backup_path = os.path.join(backup_dir, filename)
-                info_path = f"{backup_path}.info"
+                file_path = os.path.join(backup_dir, filename)
+                info_path = f"{file_path}.info"
                 
-                # Get file information
-                size_bytes = os.path.getsize(backup_path)
-                created = datetime.datetime.fromtimestamp(os.path.getctime(backup_path))
+                # Basic backup info
+                backup_info = {
+                    'filename': filename,
+                    'created': datetime.fromtimestamp(os.path.getctime(file_path)),
+                    'size': os.path.getsize(file_path)
+                }
                 
-                # Get additional metadata if available
-                info = {}
+                # Add additional metadata if available
                 if os.path.exists(info_path):
                     try:
                         with open(info_path, 'r') as f:
-                            info = json.load(f)
+                            metadata = json.load(f)
+                        # Update with more detailed info
+                        backup_info.update(metadata)
                     except:
                         pass
                 
-                # Format size for display
-                size = _format_size(size_bytes)
-                
-                backups.append({
-                    'filename': filename,
-                    'created': info.get('created', created.isoformat()),
-                    'size': size,
-                    'size_bytes': size_bytes
-                })
+                backups.append(backup_info)
         
         # Sort backups by creation time (newest first)
-        backups.sort(key=lambda x: x['created'], reverse=True)
+        backups.sort(key=lambda x: x['created'] if isinstance(x['created'], str) 
+                    else x['created'].isoformat(), reverse=True)
+        
         return backups
     except Exception as e:
         print(f"Error listing backups: {str(e)}")
         return []
 
-def _format_size(size_bytes):
-    """Format file size in a human-readable format"""
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    elif size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.2f} KB"
-    elif size_bytes < 1024 * 1024 * 1024:
-        return f"{size_bytes / (1024 * 1024):.2f} MB"
-    else:
-        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+def delete_backup(backup_filename):
+    """Delete a backup file"""
+    try:
+        backup_dir = get_backup_dir()
+        backup_path = os.path.join(backup_dir, backup_filename)
+        info_path = f"{backup_path}.info"
+        
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+            
+        if os.path.exists(info_path):
+            os.remove(info_path)
+            
+        return True, f"Backup {backup_filename} deleted."
+    except Exception as e:
+        return False, str(e)
