@@ -775,7 +775,7 @@ def update_maintenance(part_id):
         # Calculate next maintenance date based on frequency
         part.next_maintenance = now + timedelta(days=part.maintenance_days)
         
-        # Add a success message
+        # Commit the changes
         db.session.commit()
         flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
         
@@ -790,6 +790,43 @@ def update_maintenance(part_id):
         db.session.rollback()
         flash(f'Error updating maintenance: {str(e)}', 'error')
         return redirect(url_for('manage_parts'))
+
+@app.route('/update-maintenance', methods=['POST'])
+@login_required
+def update_maintenance_alt():
+    """Alternative route to update maintenance records for a specific part"""
+    try:
+        part_id = request.form.get('part_id')
+        if not part_id:
+            flash('Missing part ID', 'error')
+            return redirect(url_for('maintenance_page'))
+        
+        part = Part.query.get_or_404(int(part_id))
+        
+        # Get the current datetime
+        now = datetime.now()
+        
+        # Update the last maintenance date
+        part.last_maintenance = now
+        
+        # Calculate next maintenance date based on frequency
+        part.next_maintenance = now + timedelta(days=part.maintenance_days)
+        
+        # Commit the changes
+        db.session.commit()
+        flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
+        
+        # Redirect to the referring page, if available
+        referrer = request.referrer
+        if referrer:
+            return redirect(referrer)
+        else:
+            return redirect(url_for('maintenance_page'))
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating maintenance: {str(e)}', 'error')
+        return redirect(url_for('maintenance_page'))
 
 @app.route('/admin/backups')
 @login_required
@@ -1393,6 +1430,74 @@ def delete_backup(filename):
         flash(f'Error deleting backup: {str(e)}', 'error')
     
     return redirect(url_for('manage_backups'))
+
+@app.route('/maintenance')
+@login_required
+def maintenance_page():
+    """Dedicated page for recording maintenance activities"""
+    try:
+        # Get user-accessible sites 
+        if current_user.is_admin:
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+            
+        site_ids = [site.id for site in sites]
+        machines = []
+        if site_ids:
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        machine_ids = [machine.id for machine in machines]
+        parts = []
+        if machine_ids:
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
+        
+        # Process parts for maintenance status
+        now = datetime.now()
+        overdue_parts = []
+        due_soon_parts = []
+        upcoming_parts = []
+        
+        for part in parts:
+            days_until = (part.next_maintenance - now).days
+            part_data = {
+                'id': part.id,
+                'name': part.name,
+                'description': part.description,
+                'machine': part.machine,
+                'site': part.machine.site,
+                'last_maintenance': part.last_maintenance,
+                'next_maintenance': part.next_maintenance,
+                'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}(s)",
+                'days': abs(days_until) if days_until < 0 else days_until
+            }
+            
+            if days_until < 0:
+                # Part is overdue
+                overdue_parts.append(part_data)
+            elif days_until <= 30:  # Due within 30 days
+                due_soon_parts.append(part_data)
+            else:
+                upcoming_parts.append(part_data)
+        
+        # Sort parts by urgency
+        overdue_parts.sort(key=lambda x: x['days'], reverse=True)
+        due_soon_parts.sort(key=lambda x: x['days'])
+        upcoming_parts.sort(key=lambda x: x['days'])
+        
+        return render_template('maintenance.html',
+                              overdue_parts=overdue_parts,
+                              due_soon_parts=due_soon_parts,
+                              upcoming_parts=upcoming_parts,
+                              now=now)
+    except Exception as e:
+        flash(f'Error loading maintenance page: {str(e)}', 'error')
+        print(f"Maintenance page error: {str(e)}")
+        return render_template('maintenance.html', 
+                              overdue_parts=[],
+                              due_soon_parts=[],
+                              upcoming_parts=[],
+                              now=datetime.now())
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':

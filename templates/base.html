@@ -110,6 +110,15 @@
                                 <span class="sidebar-link-text">Parts</span>
                             </a>
                         </li>
+
+                        <!-- Add Maintenance Recording Link -->
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('maintenance_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-tools"></i>
+                                <span class="sidebar-link-text">Record Maintenance</span>
+                            </a>
+                        </li>
+
                         <!-- Added User Profile Link to Sidebar -->
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">

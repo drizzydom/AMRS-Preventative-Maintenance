@@ -132,6 +132,7 @@
                                     <th>Machine</th>
                                     <th class="hide-sm">Site</th>
                                     <th>Overdue</th>
+                                    <th>Next Maintenance</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -146,10 +147,13 @@
                                                     <td>{{ machine.name }}</td>
                                                     <td>{{ site.name }}</td>
                                                     <td><span class="text-danger fw-bold">{{ -days_until }} days</span></td>
+                                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                                     <td>
-                                                        <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="btn btn-sm btn-danger">
-                                                            <i class="fas fa-tools me-1"></i> Maintain
-                                                        </a>
+                                                        <form action="/parts/{{ part.id }}/update_maintenance" method="POST" class="d-inline">
+                                                            <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
+                                                                <i class="fas fa-check-circle"></i> Record
+                                                            </button>
+                                                        </form>
                                                     </td>
                                                 </tr>
                                             {% endif %}
@@ -184,6 +188,7 @@
                                     <th>Machine</th>
                                     <th>Site</th>
                                     <th>Due In</th>
+                                    <th>Next Maintenance</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -198,10 +203,13 @@
                                                     <td>{{ machine.name }}</td>
                                                     <td>{{ site.name }}</td>
                                                     <td><span class="text-warning fw-bold">{{ days_until }} days</span></td>
+                                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                                     <td>
-                                                        <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="btn btn-sm btn-warning text-dark">
-                                                            <i class="fas fa-tools me-1"></i> Maintain
-                                                        </a>
+                                                        <form action="/parts/{{ part.id }}/update_maintenance" method="POST" class="d-inline">
+                                                            <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
+                                                                <i class="fas fa-check-circle"></i> Record
+                                                            </button>
+                                                        </form>
                                                     </td>
                                                 </tr>
                                             {% endif %}
