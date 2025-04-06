@@ -13,54 +13,54 @@
 {% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Database Backups</h5>
-            </div>
-            <div class="card-body">
-                {% if backups %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Backup Name</th>
-                                <th>Created</th>
-                                <th>Size</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for backup in backups %}
-                            <tr>
-                                <td>{{ backup.filename }}</td>
-                                <td>{{ backup.created.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                                <td>{{ backup.size }}</td>
-                                <td>
-                                    <button type="button" class="btn btn-sm btn-warning" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#restoreBackupModal"
-                                            data-backup-name="{{ backup.filename }}">
-                                        Restore
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-danger" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#deleteBackupModal"
-                                            data-backup-name="{{ backup.filename }}">
-                                        Delete
-                                    </button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p>No backups found. Use the "Create Backup" button to create a database backup.</p>
-                {% endif %}
-            </div>
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Database Backups</h5>
+    </div>
+    <div class="card-body">
+        {% if backups %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th class="column-name">Backup Name</th>
+                        <th class="column-medium">Created</th>
+                        <th class="column-narrow">Size</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for backup in backups %}
+                    <tr>
+                        <td>{{ backup.filename }}</td>
+                        <td>
+                            {{ backup.created.strftime('%Y-%m-%d %H:%M:%S') if backup.created is not string else backup.created }}
+                        </td>
+                        <td>{{ backup.size }}</td>
+                        <td>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-warning" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#restoreBackupModal"
+                                        data-backup-name="{{ backup.filename }}">
+                                    Restore
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#deleteBackupModal"
+                                        data-backup-name="{{ backup.filename }}">
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% else %}
+        <p>No backups found. Use the "Create Backup" button to create a database backup.</p>
+        {% endif %}
     </div>
 </div>
 
