@@ -1,0 +1,46 @@
+/**
+ * DIRECT TABLE FIX
+ * This is a minimal CSS file that contains only the essential overrides
+ * needed to fix the table positioning issue.
+ */
+
+/* Force core container spacing to be minimal */
+.page-content {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* Reset container padding */
+.container-fluid {
+  padding-top: 0.75rem !important;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+}
+
+/* Fix content position relative to sidebar */
+.content-container {
+  margin-left: 200px !important;
+  width: calc(100% - 200px) !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Reset column padding */
+.centered-content-col {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Ensure sidebar has consistent width */
+.sidebar {
+  width: 200px !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+  .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+}

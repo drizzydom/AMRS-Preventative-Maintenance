@@ -1,0 +1,112 @@
+/**
+ * EMERGENCY LAYOUT RESET
+ * This file contains aggressive style overrides to fix position and padding issues
+ * High specificity selectors and !important flags ensure these styles win any CSS conflicts
+ */
+
+/* ===== RESET ALL CONTAINER POSITIONING AND PADDING ===== */
+
+/* Target sidebar specifically */
+html body .sidebar,
+html body .sidebar-container .sidebar,
+.sidebar-container .sidebar {
+  width: 200px !important;
+  position: fixed !important;
+  left: 0 !important;
+  top: 48px !important; /* Match navbar height */
+  height: calc(100vh - 48px) !important;
+  transition: none !important; /* Disable animations */
+  z-index: 1000 !important;
+}
+
+/* Fix main content container horizontal position - MAJOR FIX FOR RIGHT PADDING */
+html body .content-container,
+html body .content-container[class],
+body .content-container {
+  margin-left: 200px !important; /* Exactly match sidebar width */
+  width: calc(100% - 200px) !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  max-width: none !important;
+  transition: none !important; /* Disable animations */
+  transform: none !important; /* Prevent transforms from affecting layout */
+  position: static !important; /* Use normal document flow */
+  float: none !important; /* No floating */
+}
+
+/* Reset all nested container padding - FIXES TOP SPACING */
+html body .content-container .container-fluid,
+html body .container-fluid,
+.container-fluid {
+  padding-top: 0.75rem !important; /* Minimal top spacing */
+  padding-bottom: 0.75rem !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  margin-top: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Fix page header and content vertical spacing */
+html body .page-header,
+html body .page-content,
+.page-header, 
+.page-content {
+  margin-top: 0 !important;
+  margin-bottom: 1rem !important;
+  padding-top: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Ensure cards start without extra spacing */
+html body .card,
+html body .row .card,
+html body .page-content .card,
+.card {
+  margin-top: 0 !important;
+  margin-bottom: 1rem !important;
+}
+
+/* Fix table containers */
+html body .table-responsive,
+.table-responsive {
+  padding: 0 !important;
+  margin: 0 !important;
+  position: static !important;
+}
+
+/* Fix all rows and columns */
+html body .row,
+.row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+}
+
+html body [class*="col-"],
+[class*="col-"] {
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+  html body .content-container,
+  html body .content-container[class],
+  body .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  
+  html body .sidebar,
+  html body .sidebar-container .sidebar {
+    left: -200px !important;
+  }
+  
+  html body .sidebar.show {
+    left: 0 !important;
+  }
+}
