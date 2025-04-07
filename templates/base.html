@@ -41,25 +41,48 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-header-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
-    <!-- Basic functional mobile sidebar styling - placing it high in the chain -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-mobile-basic.css') }}">
-    <!-- Add simple layout fix CSS as the very last CSS file before theme -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-simple-fix.css') }}">
-    <!-- Add form fixes CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/form-fixes.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-sidebar-fix.css') }}">
-    <!-- Add simple mobile sidebar CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/simple-sidebar-mobile.css') }}">
-    <!-- Add our new content position fix CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
-    <!-- Add emergency parts table fix -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/parts-table-emergency-fix.css') }}">
-    <!-- Add critical fixes -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/critical-fix.css') }}">
+    <!-- New global layout fix - must be loaded before the theme -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/global-layout-fix.css') }}">
     <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
+    <!-- SIMPLE DIRECT FIX - Minimal CSS to fix table positioning -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/direct-table-fix.css') }}">
+    
     {% block extra_css %}{% endblock %}
+    
+    <!-- Immediate fix for mobile sidebar styling -->
+    <style>
+    /* Critical mobile sidebar styling - load immediately */
+    @media (max-width: 991.98px) {
+        .sidebar {
+            position: fixed !important;
+            top: 48px !important;
+            left: -280px !important; /* Start offscreen */
+            width: 280px !important;
+            height: calc(100vh - 48px) !important;
+            z-index: 1040 !important;
+            transition: left 0.3s ease !important;
+            overflow-y: auto !important;
+            background-color: #5E5E5E !important;
+        }
+
+        .sidebar.show {
+            left: 0 !important;
+        }
+
+        body.sidebar-active::before {
+            content: '';
+            position: fixed;
+            top: 48px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1030;
+        }
+    }
+    </style>
 </head>
 <body class="preload">
     <header>
@@ -215,18 +238,21 @@
 
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Main application scripts --><script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    document.body.classList.remove('preload');
-    <!-- Remove preload class after page load to enable animations -->
-    <script>document.body.classList.remove('preload');
-        document.addEventListener('DOMContentLoaded', function() {
-            // Remove the preload class to allow animations after page loadtra simple hamburger button handler - the only script needed for sidebar toggle -->
-            document.body.classList.remove('preload');rc="{{ url_for('static', filename='js/simple-hamburger.js') }}"></script>
-        });ge specific scripts -->
-    </script>scripts %}{% endblock %}
     
-    <!-- Page specific scripts -->dy> fix -->
-    {% block scripts %}{% endblock %}        <!-- Important: Load the hamburger fix BEFORE any other sidebar scripts -->dy>    <script src="{{ url_for('static', filename='js/hamburger-direct-fix.js') }}"></script>        <!-- Sidebar Toggle Script - must come after hamburger fix -->    <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script></body></html>- Direct Hamburger Fix - Insert right before closing body tag -->    <script>        // Direct hamburger fix - simple, clean implementation        document.addEventListener('DOMContentLoaded', function() {            // Get direct references            const hamburger = document.getElementById('hamburger-btn');            const sidebar = document.querySelector('.sidebar');                        if (!hamburger || !sidebar) {                console.error('Cannot find hamburger button or sidebar');                return;            }                        // Add direct click handler to the hamburger button            hamburger.addEventListener('click', function(e) {                e.preventDefault();                e.stopPropagation();                                // Toggle sidebar visibility class                if (sidebar.classList.contains('show')) {                    sidebar.classList.remove('show');                    document.body.classList.remove('sidebar-active');                } else {                    sidebar.classList.add('show');                    document.body.classList.add('sidebar-active');                }            });                        // Add click handler to close sidebar when clicking outside            document.addEventListener('click', function(e) {                if (sidebar.classList.contains('show') &&                     !sidebar.contains(e.target) &&                     e.target !== hamburger &&                     !hamburger.contains(e.target)) {                                        sidebar.classList.remove('show');                    document.body.classList.remove('sidebar-active');                }            });        });    </script>
+    <!-- Main application scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
+    <!-- Remove preload class after page load to enable animations -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.remove('preload');
+        });
+    </script>
+    
+    <!-- Page specific scripts -->
+    {% block scripts %}{% endblock %}
+    
+    <!-- Emergency hamburger fix script - must be loaded after all other scripts -->
+    <script src="{{ url_for('static', filename='js/emergency-hamburger.js') }}"></script>
 </body>
 </html>

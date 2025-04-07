@@ -1,0 +1,55 @@
+/**
+ * GLOBAL LAYOUT FIX
+ * Addresses two specific layout issues:
+ * 1. Excessive right indentation on Dashboard and Profile pages
+ * 2. Content pushed too far down the page on other pages
+ */
+
+/* Fix for all pages - horizontal indentation */
+.content-container {
+  margin-left: 200px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  width: calc(100% - 200px) !important;
+  max-width: none !important;
+}
+
+.centered-content-col {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+}
+
+.container-fluid {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Fix for pages with content pushed down - vertical position */
+.page-content {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.page-header {
+  margin-bottom: 1rem !important;
+}
+
+/* Force all cards to start at the top of their containers */
+.card {
+  margin-top: 0 !important;
+}
+
+.row {
+  margin-top: 0 !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+  .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+}
