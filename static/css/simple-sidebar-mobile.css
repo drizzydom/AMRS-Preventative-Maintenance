@@ -1,0 +1,42 @@
+/**
+ * SIMPLE MOBILE SIDEBAR CSS
+ * Basic styling for sidebar on mobile devices
+ */
+
+/* Mobile sidebar styles */
+@media (max-width: 991.98px) {
+  /* Hide sidebar by default on mobile */
+  .sidebar {
+    position: fixed !important;
+    top: 48px !important; /* Match navbar height */
+    left: -250px !important; /* Start offscreen */
+    width: 250px !important;
+    height: calc(100vh - 48px) !important;
+    z-index: 1030 !important;
+    transition: left 0.3s ease !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Show sidebar when it has the 'show' class */
+  .sidebar.show {
+    left: 0 !important;
+  }
+  
+  /* Add overlay when sidebar is shown */
+  body.sidebar-active::before {
+    content: '';
+    position: fixed;
+    top: 48px; /* Start below navbar */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1025; /* Below sidebar but above content */
+  }
+  
+  /* Don't let content shift when sidebar opens */
+  .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+}

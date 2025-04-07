@@ -41,11 +41,15 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-header-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
+    <!-- Basic functional mobile sidebar styling - placing it high in the chain -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-mobile-basic.css') }}">
     <!-- Add simple layout fix CSS as the very last CSS file before theme -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-simple-fix.css') }}">
     <!-- Add form fixes CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/form-fixes.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-sidebar-fix.css') }}">
+    <!-- Add simple mobile sidebar CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/simple-sidebar-mobile.css') }}">
     <!-- Add our new content position fix CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
     <!-- Add emergency parts table fix -->
@@ -211,66 +215,18 @@
 
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Main application scripts -->
+    <!-- Main application scripts --><script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    
+    document.body.classList.remove('preload');
     <!-- Remove preload class after page load to enable animations -->
-    <script>
+    <script>document.body.classList.remove('preload');
         document.addEventListener('DOMContentLoaded', function() {
-            // Remove the preload class to allow animations after page load
-            document.body.classList.remove('preload');
-        });
-    </script>
+            // Remove the preload class to allow animations after page loadtra simple hamburger button handler - the only script needed for sidebar toggle -->
+            document.body.classList.remove('preload');rc="{{ url_for('static', filename='js/simple-hamburger.js') }}"></script>
+        });ge specific scripts -->
+    </script>scripts %}{% endblock %}
     
-    <!-- Page specific scripts -->
-    {% block scripts %}{% endblock %}
-    
-    <!-- Important: Load the hamburger fix BEFORE any other sidebar scripts -->
-    <script src="{{ url_for('static', filename='js/hamburger-direct-fix.js') }}"></script>
-    
-    <!-- Sidebar Toggle Script - must come after hamburger fix -->
-    <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
-</body>
-</html>- Direct Hamburger Fix - Insert right before closing body tag -->
-    <script>
-        // Direct hamburger fix - simple, clean implementation
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get direct references
-            const hamburger = document.getElementById('hamburger-btn');
-            const sidebar = document.querySelector('.sidebar');
-            
-            if (!hamburger || !sidebar) {
-                console.error('Cannot find hamburger button or sidebar');
-                return;
-            }
-            
-            // Add direct click handler to the hamburger button
-            hamburger.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // Toggle sidebar visibility class
-                if (sidebar.classList.contains('show')) {
-                    sidebar.classList.remove('show');
-                    document.body.classList.remove('sidebar-active');
-                } else {
-                    sidebar.classList.add('show');
-                    document.body.classList.add('sidebar-active');
-                }
-            });
-            
-            // Add click handler to close sidebar when clicking outside
-            document.addEventListener('click', function(e) {
-                if (sidebar.classList.contains('show') && 
-                    !sidebar.contains(e.target) && 
-                    e.target !== hamburger && 
-                    !hamburger.contains(e.target)) {
-                    
-                    sidebar.classList.remove('show');
-                    document.body.classList.remove('sidebar-active');
-                }
-            });
-        });
-    </script>
+    <!-- Page specific scripts -->dy> fix -->
+    {% block scripts %}{% endblock %}        <!-- Important: Load the hamburger fix BEFORE any other sidebar scripts -->dy>    <script src="{{ url_for('static', filename='js/hamburger-direct-fix.js') }}"></script>        <!-- Sidebar Toggle Script - must come after hamburger fix -->    <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script></body></html>- Direct Hamburger Fix - Insert right before closing body tag -->    <script>        // Direct hamburger fix - simple, clean implementation        document.addEventListener('DOMContentLoaded', function() {            // Get direct references            const hamburger = document.getElementById('hamburger-btn');            const sidebar = document.querySelector('.sidebar');                        if (!hamburger || !sidebar) {                console.error('Cannot find hamburger button or sidebar');                return;            }                        // Add direct click handler to the hamburger button            hamburger.addEventListener('click', function(e) {                e.preventDefault();                e.stopPropagation();                                // Toggle sidebar visibility class                if (sidebar.classList.contains('show')) {                    sidebar.classList.remove('show');                    document.body.classList.remove('sidebar-active');                } else {                    sidebar.classList.add('show');                    document.body.classList.add('sidebar-active');                }            });                        // Add click handler to close sidebar when clicking outside            document.addEventListener('click', function(e) {                if (sidebar.classList.contains('show') &&                     !sidebar.contains(e.target) &&                     e.target !== hamburger &&                     !hamburger.contains(e.target)) {                                        sidebar.classList.remove('show');                    document.body.classList.remove('sidebar-active');                }            });        });    </script>
 </body>
 </html>
