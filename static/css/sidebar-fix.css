@@ -1,55 +1,132 @@
-/*
- * SIDEBAR POSITIONING FIX
- * Ensures sidebar sits flush against the left edge of the screen
+/**
+ * SIDEBAR LAYOUT STYLES
+ * Defines consistent sidebar dimensions and styling
+ * Uses higher specificity instead of !important
  */
 
-/* Target all possible parent elements that might be adding space */
-.container-fluid,
-.row,
-[class*="col-"] {
-    padding-left: 0 !important;
-}
-
-/* Target the first column in any row that contains the sidebar */
-.row > [class*="col"]:first-child {
-    padding-left: 0 !important;
-}
-
-/* Force sidebar to left edge */
+/* Set consistent sidebar width and positioning */
 .sidebar {
-    margin-left: 0 !important;
-    padding-left: 0 !important;
-    left: 0 !important;
+  width: 200px;
+  position: fixed;
+  left: 0;
+  top: 48px; /* Match navbar height */
+  height: calc(100vh - 48px); /* Full height minus navbar */
+  overflow-y: auto; /* Allow scrolling */
+  background-color: #5E5E5E; /* AMRS secondary gray */
+  color: #ffffff;
+  z-index: 1030;
+  padding: 0;
 }
 
-/* For Bootstrap grid column that contains the sidebar */
-.sidebar-container,
-.sidebar-wrapper,
-[class*="col-"].sidebar-col {
-    padding-left: 0 !important;
+/* Higher specificity overrides */
+body .sidebar,
+html body .sidebar {
+  width: 200px;
+  position: fixed;
 }
 
-/* If sidebar is in a Bootstrap container or row, realign it */
-.container .sidebar,
-.container-fluid .sidebar,
-.row .sidebar {
-    margin-left: -15px !important; /* Counteract container padding */
+/* Sidebar container width */
+.sidebar-container {
+  width: 200px;
+  flex: 0 0 200px;
 }
 
-/* Fix for the container-row-column hierarchy */
-body > .container-fluid > .row > [class*="col-"]:first-child {
-    padding-left: 0 !important;
+/* Sidebar navigation style */
+.sidebar-nav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-/* Improve sidebar styling while keeping it flush left */
-.sidebar .nav-item a,
-.sidebar .sidebar-link {
-    padding-left: 1.5rem !important; /* Add inner padding instead */
+.sidebar-nav-item {
+  margin: 0;
+  padding: 0;
 }
 
-/* Ensure content doesn't shift when sidebar is flush left */
-@media (min-width: 992px) {
-    .content-container {
-        padding-left: 2rem !important;
-    }
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: white;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background-color 0.2s, border-left-color 0.2s;
+}
+
+.sidebar-link:hover {
+  background-color: #4D4D4D; /* Darker gray */
+  border-left-color: rgba(254, 121, 0, 0.5); /* Semi-transparent orange */
+  color: white;
+  text-decoration: none;
+}
+
+.sidebar-link.active {
+  background-color: #FE7900; /* AMRS primary orange */
+  border-left-color: white;
+  color: white;
+}
+
+.sidebar-icon {
+  width: 20px;
+  text-align: center;
+  margin-right: 0.75rem;
+}
+
+/* Sidebar footer with logout button */
+.sidebar-footer {
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-logout-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  color: white;
+  background-color: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  text-decoration: none;
+}
+
+.sidebar-logout-btn:hover {
+  background-color: #4D4D4D;
+  border-left-color: rgba(254, 121, 0, 0.5);
+  color: white;
+}
+
+.sidebar-logout-btn i {
+  width: 20px;
+  text-align: center;
+  margin-right: 0.75rem;
+}
+
+/* Mobile adjustments */
+@media (max-width: 991.98px) {
+  .sidebar {
+    position: fixed;
+    top: 48px;
+    left: -280px; /* Start off-screen */
+    width: 280px; /* Slightly wider on mobile */
+    height: calc(100vh - 48px);
+    z-index: 1040;
+    transition: left 0.3s ease;
+  }
+  
+  .sidebar.show {
+    left: 0;
+  }
+  
+  /* Color overlay when sidebar is active */
+  body.sidebar-active::before {
+    content: '';
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1030;
+  }
 }
