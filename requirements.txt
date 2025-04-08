@@ -31,3 +31,8 @@ itsdangerous==2.1.2
 pyinstaller==6.0.0; sys_platform == 'win32'
 pillow==10.0.0; sys_platform == 'win32' # For application icons
 pywin32==306; sys_platform == 'win32'   # For Windows-specific features like startup registration
+
+# Offline mode and standalone app dependencies (install if needed)
+# PyQt5==5.15.9; sys_platform == 'win32'  # Modern browser component
+# PyQt5-WebEngine==5.15.6; sys_platform == 'win32'  # WebEngine component
+# cefpython3==66.1; sys_platform == 'win32'  # Alternative browser component

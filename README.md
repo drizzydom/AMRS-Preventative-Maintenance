@@ -62,70 +62,14 @@ Default login:
 
 A Windows desktop application is available, which provides a native interface for the system:
 
-#### Features
+#### Standalone App Features
 
-- **Standalone Window Mode**: View the application in a dedicated window
-- **Auto-start Option**: Configure the application to launch on Windows startup
-- **Offline Capability**: Connect to the server even when offline
-- **Native Integration**: Integrates with Windows for a seamless experience
+- **Offline Mode**: The app works even without an internet connection, using cached data
+- **Embedded Browser**: View the application in its own window without a separate browser
+- **Automatic Syncing**: Changes made offline are automatically synced when online
+- **Multi-Browser Technology**: Uses multiple browser technologies for the best experience
 
 #### Building the Windows Client 
-
-1. **Prerequisites**:
-   - Python 3.8 or 3.9 (recommended for best compatibility)
-   - Microsoft Visual C++ Build Tools 2019 or later
-   - Admin privileges (required for startup feature)
-
-2. **Build Steps**:
-   - Open Command Prompt as Administrator
-   - Navigate to the project directory:
-     ```
-     cd C:\path\to\AMRS-Preventative-Maintenance
-     ```
-   - Create a virtual environment:
-     ```
-     python -m venv venv
-     venv\Scripts\activate
-     ```
-   - Install required dependencies:
-     ```
-     pip install -r requirements.txt
-     ```
-   - Run the build script:
-     ```
-     python build_windows_app.py
-     ```
-   - The executable will be created in the `dist` folder
-
-3. **Running the Application**:
-   - Navigate to the `dist` folder
-   - Double-click `AMRSMaintenanceTracker.exe`
-   - The application will open in its own window and connect to the server
-   - You can configure it to start with Windows through the Tools menu
-
-#### Troubleshooting Windows Build
-
-If you encounter encoding errors during the build process:
-
-1. **Fix for Unicode/Encoding Errors**:
-   - Open Command Prompt and run:
-     ```
-     chcp 65001
-     ```
-   - This switches the Command Prompt to UTF-8 encoding
-   - Then run the build script again
-
-2. **Fix for Missing Dependencies**:
-   - If PyInstaller fails with missing dependencies, run:
-     ```
-     pip install pywin32 tkinter
-     ```
-
-3. **Use the Batch File Alternative**:
-   - If the EXE file doesn't build properly, use the batch file:
-   - Run `AMRS_Launcher.bat` from the `dist` folder
-
-#### Building the Windows Client (Simplified Method)
 
 1. **Prerequisites**:
    - Python 3.8 or 3.9 (recommended for best compatibility)
@@ -141,31 +85,34 @@ If you encounter encoding errors during the build process:
      ```
      python build_windows_app.py
      ```
-   - The script will create:
-     - A standalone executable (if PyInstaller works correctly)
-     - A batch file launcher (as fallback)
-   - Both can be found in the `dist` folder
+   - The script will:
+     - Install necessary dependencies
+     - Create a standalone application with offline capabilities
+     - Generate an executable file in the `dist` folder
 
 3. **Running the Application**:
    - Navigate to the `dist` folder
-   - Double-click either:
-     - `AMRSMaintenanceTracker.exe` (if PyInstaller worked successfully)
-     - `AMRS_Launcher.bat` (if PyInstaller failed)
+   - Double-click `AMRSMaintenanceTracker.exe` to launch the application
+   - The app will automatically connect to the server if available
+   - When offline, the app will use cached data and sync when back online
 
-#### Troubleshooting
+#### Troubleshooting Windows Build
 
 If you encounter issues with the build:
 
-1. **Dependency Issues**:
-   - The fallback batch launcher requires only Python and standard libraries
-   - Make sure Python is added to your PATH environment variable
+1. **Browser Component Issues**:
+   - The app will automatically try different browser technologies
+   - If all browser components fail, it will fall back to a basic mode
+   - You can manually install components with:
+     ```
+     pip install PyQt5 PyQt5-WebEngine
+     # or
+     pip install cefpython3
+     ```
 
-2. **Manual Setup**:
-   - If the build script fails completely, run these commands:
-     ```
-     pip install tkinter
-     python amrs_connect.py
-     ```
+2. **Dependency Issues**:
+   - Run the batch file in the `dist` folder if the EXE doesn't work
+   - The batch file will use Python's built-in modules as a fallback
 
 3. **Direct Browser Access**:
    - As a last resort, you can always access the application directly at:
