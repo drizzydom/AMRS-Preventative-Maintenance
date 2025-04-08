@@ -30,3 +30,4 @@ itsdangerous==2.1.2
 # Windows app packaging (optional, install only for building Windows app)
 pyinstaller==6.0.0; sys_platform == 'win32'
 pillow==10.0.0; sys_platform == 'win32' # For application icons
+pywin32==306; sys_platform == 'win32'   # For Windows-specific features like startup registration

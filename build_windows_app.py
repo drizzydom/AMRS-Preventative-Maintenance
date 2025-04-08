@@ -8,6 +8,8 @@ import sys
 import subprocess
 import shutil
 from pathlib import Path
+import winreg
+import ctypes
 
 # Configuration
 APP_NAME = "AMRS Maintenance Tracker"
@@ -28,7 +30,7 @@ os.makedirs(BUILD_DIR, exist_ok=True)
 
 # Create a simple, dependency-free main application script
 print(f"Creating main application script: {MAIN_SCRIPT}")
-with open(MAIN_SCRIPT, "w") as f:
+with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
     f.write(f"""
 import os
 import sys
@@ -39,161 +41,384 @@ import urllib.request
 import urllib.error
 import threading
 import time
+import winreg
+import subprocess
+from pathlib import Path
 
 # Configuration
 SERVER_URL = "{SERVER_URL}"
 APP_NAME = "{APP_NAME}"
 APP_VERSION = "{APP_VERSION}"
 
-class AMRSMaintenanceApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title(APP_NAME)
-        self.root.geometry("500x350")
-        self.root.minsize(500, 350)
+class StandaloneWindow(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title(APP_NAME)
+        self.geometry("1024x768")
+        self.minsize(800, 600)
         
-        # Main frame with some padding
-        main_frame = ttk.Frame(root, padding=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        # Set icon if available
+        try:
+            icon_path = os.path.join(os.path.dirname(sys.executable), "amrs_icon.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+        except:
+            pass
         
-        # App header
-        header_frame = ttk.Frame(main_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 20))
+        # Create menu bar
+        self.create_menu()
         
-        title_label = ttk.Label(
-            header_frame, 
-            text=APP_NAME,
-            font=("Arial", 16, "bold")
+        # Create status bar
+        self.status_var = tk.StringVar(value="Starting...")
+        status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Create browser frame
+        try:
+            # Try to import browser components - fallbacks in sequence
+            browser_frame = None
+            
+            # Try CEFPython if available
+            try:
+                from cefpython3 import cefpython as cef
+                browser_frame = self.create_cef_browser(cef)
+                self.status_var.set("Using CEF Browser Engine")
+            except ImportError:
+                # Try tkinterweb if available
+                try:
+                    from tkinterweb import HtmlFrame
+                    browser_frame = HtmlFrame(self)
+                    browser_frame.load_website(SERVER_URL)
+                    browser_frame.pack(fill=tk.BOTH, expand=True)
+                    self.status_var.set("Using TkinterWeb Browser Engine")
+                except ImportError:
+                    # Fallback to basic mode
+                    browser_frame = self.create_basic_view()
+                    self.status_var.set("Using Basic Browser Mode")
+            
+            if browser_frame:
+                self.browser_frame = browser_frame
+        except Exception as e:
+            self.status_var.set(f"Error initializing browser: {{str(e)}}")
+            # Final fallback to basic mode
+            self.browser_frame = self.create_basic_view()
+    
+    def create_menu(self):
+        # Create menubar
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Refresh", command=self.refresh_page)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+        
+        # Tools menu
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="Open in Browser", command=lambda: webbrowser.open(SERVER_URL))
+        tools_menu.add_command(label="Run on Startup", command=self.toggle_run_on_startup)
+        
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+    
+    def create_cef_browser(self, cef):
+        # Initialize CEF
+        sys.excepthook = cef.ExceptHook
+        cef.Initialize()
+        
+        # Create browser frame
+        browser_frame = tk.Frame(self)
+        browser_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Get window info
+        window_info = cef.WindowInfo()
+        rect = [0, 0, browser_frame.winfo_width(), browser_frame.winfo_height()]
+        window_info.SetAsChild(browser_frame.winfo_id(), rect)
+        
+        # Create browser
+        browser = cef.CreateBrowserSync(window_info, url=SERVER_URL)
+        
+        # Set up bindings for resize
+        def on_resize(event):
+            if browser:
+                width, height = event.width, event.height
+                browser.SetBounds(0, 0, width, height)
+                browser_frame.update()
+        
+        browser_frame.bind("<Configure>", on_resize)
+        
+        # Make sure CEF is shut down properly
+        def on_closing():
+            cef.QuitMessageLoop()
+            cef.Shutdown()
+            self.destroy()
+        
+        self.protocol("WM_DELETE_WINDOW", on_closing)
+        
+        return browser_frame
+        
+    def create_basic_view(self):
+        """Create a fallback basic view that provides connection options"""
+        frame = ttk.Frame(self, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title_label = ttk.Label(frame, 
+                               text=APP_NAME,
+                               font=("Arial", 16, "bold"))
+        title_label.pack(pady=(0, 20))
+        
+        # Status frame
+        status_frame = ttk.LabelFrame(frame, text="Server Status")
+        status_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        self.server_status_var = tk.StringVar(value="Checking connection...")
+        server_status = ttk.Label(status_frame, textvariable=self.server_status_var, padding=10)
+        server_status.pack(fill=tk.X)
+        
+        # Connection button
+        connect_btn = ttk.Button(
+            frame,
+            text="Connect to Application in Browser",
+            command=lambda: webbrowser.open(SERVER_URL)
         )
-        title_label.pack(side=tk.LEFT)
+        connect_btn.pack(fill=tk.X, pady=(0, 10))
         
-        # Server URL input
-        url_frame = ttk.Frame(main_frame)
-        url_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        url_label = ttk.Label(url_frame, text="Server URL:")
-        url_label.pack(side=tk.LEFT)
-        
-        self.url_var = tk.StringVar(value=SERVER_URL)
-        url_entry = ttk.Entry(url_frame, textvariable=self.url_var, width=50)
-        url_entry.pack(side=tk.LEFT, padx=(10, 0), fill=tk.X, expand=True)
-        
-        # Server status section
-        status_frame = ttk.LabelFrame(main_frame, text="Server Status")
-        status_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        self.status_var = tk.StringVar(value="Checking connection...")
-        self.status_label = ttk.Label(status_frame, textvariable=self.status_var, padding=10)
-        self.status_label.pack(fill=tk.X)
-        
-        # Control buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        self.connect_btn = ttk.Button(
-            button_frame, 
-            text="Connect to AMRS Maintenance System", 
-            command=self.open_browser
-        )
-        self.connect_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.refresh_btn = ttk.Button(
-            button_frame, 
-            text="Check Connection", 
-            command=self.check_connection
-        )
-        self.refresh_btn.pack(side=tk.LEFT)
-        
-        quit_btn = ttk.Button(button_frame, text="Exit", command=self.root.quit)
-        quit_btn.pack(side=tk.RIGHT)
-        
-        # Auto connect checkbox
+        # Auto-connect 
         self.auto_connect_var = tk.BooleanVar(value=True)
         auto_connect_cb = ttk.Checkbutton(
-            main_frame, 
-            text="Automatically connect on startup", 
+            frame,
+            text="Automatically open in browser on startup",
             variable=self.auto_connect_var
         )
-        auto_connect_cb.pack(anchor=tk.W, pady=(0, 10))
+        auto_connect_cb.pack(anchor=tk.W, pady=(0, 20))
         
-        # Version info
-        version_label = ttk.Label(
-            main_frame, 
-            text=f"Version {APP_VERSION}",
-            foreground="gray"
-        )
-        version_label.pack(side=tk.BOTTOM, anchor=tk.SE, pady=(20, 0))
+        # Server info
+        info_text = f"""
+        This is a standalone application that connects to:
+        {{SERVER_URL}}
+        
+        For the best experience, this application will open the 
+        AMRS Preventative Maintenance system in your default web browser.
+        """
+        
+        info_label = ttk.Label(frame, text=info_text, justify=tk.LEFT, wraplength=500)
+        info_label.pack(fill=tk.BOTH, expand=True)
         
         # Start connection check
         threading.Thread(target=self.check_connection, daemon=True).start()
         
-        # Auto-connect if enabled (after a short delay)
+        # Auto-connect if enabled
         if self.auto_connect_var.get():
-            self.root.after(1500, self.open_browser)
+            self.after(1500, lambda: webbrowser.open(SERVER_URL))
             
+        return frame
+    
     def check_connection(self):
-        self.status_var.set("Checking server connection...")
-        self.status_label.configure(foreground="black")
-        self.root.update()
-        
+        """Check server connection status"""
         try:
-            # Disable connect button during check
-            self.connect_btn.configure(state="disabled")
-            self.refresh_btn.configure(state="disabled")
-            
-            # Try to connect to the server
-            url = self.url_var.get().strip()
-            start_time = time.time()
+            self.server_status_var.set("Checking server connection...")
             
             try:
-                with urllib.request.urlopen(f"{{url}}/health", timeout=5) as response:
-                    elapsed = time.time() - start_time
+                with urllib.request.urlopen(f"{{SERVER_URL}}/health", timeout=5) as response:
                     if response.status == 200:
-                        self.server_online = True
-                        self.status_var.set(f"✓ Server is online! ({{elapsed:.2f}}s)")
-                        self.status_label.configure(foreground="green")
+                        self.server_status_var.set("Server is online!")
                     else:
-                        self.server_online = False
-                        self.status_var.set(f"⚠ Server responded with status: {{response.status}}")
-                        self.status_label.configure(foreground="orange")
-            except urllib.error.URLError as e:
-                self.server_online = False
-                self.status_var.set(f"✗ Cannot connect to server")
-                self.status_label.configure(foreground="red")
+                        self.server_status_var.set(f"Server responded with status: {{response.status}}")
+            except urllib.error.URLError:
+                self.server_status_var.set("Cannot connect to server")
             except Exception as e:
-                self.server_online = False
-                self.status_var.set(f"✗ Error: {{str(e)}}")
-                self.status_label.configure(foreground="red")
-        finally:
-            # Re-enable buttons
-            self.connect_btn.configure(state="normal")
-            self.refresh_btn.configure(state="normal")
+                self.server_status_var.set(f"Error: {{str(e)}}")
+        except:
+            # Ignore errors if variables don't exist
+            pass
     
-    def open_browser(self):
-        url = self.url_var.get().strip()
-        if not url:
-            messagebox.showerror("Error", "Please enter a valid server URL")
-            return
-            
+    def refresh_page(self):
+        """Refresh the current page"""
         try:
-            webbrowser.open(url)
-            self.status_var.set(f"Opened {{url}} in your browser")
+            # Try to refresh in CEF
+            if hasattr(self, 'browser'):
+                self.browser.Reload()
+            else:
+                # Fallback to restarting the app
+                self.status_var.set("Refreshing...")
+                # Re-check connection
+                threading.Thread(target=self.check_connection, daemon=True).start()
+        except:
+            self.status_var.set("Refresh failed")
+    
+    def toggle_run_on_startup(self):
+        """Toggle whether app runs on Windows startup"""
+        try:
+            # Get the path to the executable
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable
+                app_path = sys.executable
+            else:
+                # Running as script
+                app_path = sys.argv[0]
+                
+            app_path = os.path.abspath(app_path)
+            
+            # Check if already in startup
+            startup_enabled = self.is_in_startup(app_path)
+            
+            if startup_enabled:
+                # Remove from startup
+                self.remove_from_startup()
+                messagebox.showinfo("Startup Disabled", 
+                                   f"{{APP_NAME}} will no longer start automatically with Windows.")
+            else:
+                # Add to startup
+                self.add_to_startup(app_path)
+                messagebox.showinfo("Startup Enabled", 
+                                   f"{{APP_NAME}} will now start automatically with Windows.")
         except Exception as e:
-            messagebox.showerror("Connection Error", f"Could not open browser: {{str(e)}}")
-            self.status_var.set(f"Error: {{str(e)}}")
+            messagebox.showerror("Error", f"Could not configure startup: {{str(e)}}")
+    
+    def is_in_startup(self, app_path=None):
+        """Check if app is set to run on startup"""
+        try:
+            # Open the registry key
+            reg_key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+                0, winreg.KEY_READ
+            )
+            
+            try:
+                # Check if our app name exists
+                value, _ = winreg.QueryValueEx(reg_key, APP_NAME)
+                return True
+            except WindowsError:
+                return False
+            finally:
+                winreg.CloseKey(reg_key)
+        except:
+            # Alternative method - check startup folder
+            startup_folder = self.get_startup_folder()
+            shortcut_path = os.path.join(startup_folder, f"{{APP_NAME}}.lnk")
+            return os.path.exists(shortcut_path)
+    
+    def add_to_startup(self, app_path):
+        """Add app to Windows startup"""
+        try:
+            # Try registry method first
+            reg_key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+                0, winreg.KEY_WRITE
+            )
+            
+            winreg.SetValueEx(reg_key, APP_NAME, 0, winreg.REG_SZ, app_path)
+            winreg.CloseKey(reg_key)
+            return True
+        except:
+            # Fallback to startup folder method
+            try:
+                startup_folder = self.get_startup_folder()
+                shortcut_path = os.path.join(startup_folder, f"{{APP_NAME}}.lnk")
+                
+                # Create shortcut using PowerShell
+                ps_script = f'''
+                $WshShell = New-Object -ComObject WScript.Shell
+                $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
+                $Shortcut.TargetPath = "{app_path}"
+                $Shortcut.Save()
+                '''
+                
+                # Execute PowerShell script
+                subprocess.run(["powershell", "-Command", ps_script], check=True)
+                return True
+            except:
+                return False
+    
+    def remove_from_startup(self):
+        """Remove app from Windows startup"""
+        try:
+            # Try registry method first
+            reg_key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+                0, winreg.KEY_WRITE
+            )
+            
+            try:
+                winreg.DeleteValue(reg_key, APP_NAME)
+            except WindowsError:
+                pass
+            finally:
+                winreg.CloseKey(reg_key)
+        except:
+            # Fallback to startup folder method
+            try:
+                startup_folder = self.get_startup_folder()
+                shortcut_path = os.path.join(startup_folder, f"{{APP_NAME}}.lnk")
+                if os.path.exists(shortcut_path):
+                    os.remove(shortcut_path)
+            except:
+                pass
+    
+    def get_startup_folder(self):
+        """Get the Windows startup folder path"""
+        try:
+            # Try to get startup folder from registry
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
+                              r"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders") as key:
+                startup_folder = winreg.QueryValueEx(key, "Startup")[0]
+                return startup_folder
+        except:
+            # Fallback to standard location
+            return os.path.join(os.environ['APPDATA'], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+    
+    def show_about(self):
+        """Show about dialog"""
+        messagebox.showinfo(
+            "About",
+            f"{{APP_NAME}} v{{APP_VERSION}}\\n\\n"
+            f"This application connects to the AMRS Preventative Maintenance System.\\n"
+            f"Server URL: {{SERVER_URL}}"
+        )
+
+def is_admin():
+    """Check if the script is running with admin privileges"""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except:
+        return False
+
+def run_as_admin():
+    """Re-run the script with admin privileges"""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        script = sys.executable
+    else:
+        # Running as script
+        script = sys.argv[0]
+        
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, script, None, 1)
 
 if __name__ == "__main__":
-    # Try to enable DPI awareness on Windows
+    # Try to enable DPI awareness
     try:
         from ctypes import windll
         windll.shcore.SetProcessDpiAwareness(1)
     except:
         pass
-        
-    # Create and run the application
-    root = tk.Tk()
-    app = AMRSMaintenanceApp(root)
-    root.mainloop()
+    
+    # Check if admin rights are needed for startup feature
+    if len(sys.argv) > 1 and sys.argv[1] == "--configure-startup" and not is_admin():
+        run_as_admin()
+        sys.exit(0)
+    
+    # Create and run standalone window
+    app = StandaloneWindow()
+    app.mainloop()
 """)
 print(f"Created {MAIN_SCRIPT}")
 
@@ -222,6 +447,10 @@ if not exist "{MAIN_SCRIPT}" (
     pause
     exit /b 1
 )
+
+REM Install required packages if missing
+pip install tkinter --quiet
+pip install pywin32 --quiet
 
 REM Run the application
 echo Connecting to {SERVER_URL}...
@@ -260,20 +489,72 @@ try:
             print(f"You can run the application using: {BATCH_FILE}")
             sys.exit(0)
     
-    # Build with PyInstaller
+    # Create a spec file for PyInstaller with additional dependencies
+    spec_file = "amrs_app.spec"
+    with open(spec_file, "w", encoding="utf-8") as f:
+        f.write(f"""# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['{MAIN_SCRIPT}'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=['winreg'],
+    hookspath=[],
+    hooksconfig={{}},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='{APP_NAME.replace(" ", "")}',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='amrs_icon.ico' if os.path.exists('amrs_icon.ico') else None,
+)
+""")
+    
+    # Try to install additional dependencies if needed
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "pywin32"])
+    except:
+        print("Warning: Failed to install pywin32. Continuing anyway...")
+    
+    # Build with PyInstaller using the spec file
     print("Building executable...")
     pyinstaller_cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name", APP_NAME.replace(" ", ""),
-        "--onefile",
-        "--windowed",
-        MAIN_SCRIPT
+        "--clean",
+        spec_file
     ]
     
     result = subprocess.run(pyinstaller_cmd, capture_output=True, text=True)
     
     if result.returncode == 0:
-        print("\n✅ PyInstaller build successful!")
+        print("\n[SUCCESS] PyInstaller build successful!")
         exe_path = os.path.join("dist", f"{APP_NAME.replace(' ', '')}.exe")
         if os.path.exists(exe_path):
             print(f"\nExecutable created: {os.path.abspath(exe_path)}")
@@ -287,7 +568,7 @@ try:
         print(f"You can run the application using: {BATCH_FILE}")
 
 except Exception as e:
-    print(f"\n❌ Error during build: {str(e)}")
+    print(f"\n[ERROR] Error during build: {str(e)}")
     print("\nFalling back to batch file launcher.")
     print(f"You can run the application using: {BATCH_FILE}")
 
@@ -296,5 +577,5 @@ print(f"Build process complete for {APP_NAME} v{APP_VERSION}")
 print(f"The application will connect to: {SERVER_URL}")
 print("\nTo run the application:")
 print(f"1. Navigate to the '{OUTPUT_DIR}' folder")
-print(f"2. Run the 'AMRS_Launcher.bat' file or '{APP_NAME.replace(' ', '')}.exe' if it was created")
+print(f"2. Run the '{APP_NAME.replace(' ', '')}.exe' file or 'AMRS_Launcher.bat' if EXE was not created")
 print("=" * 60)
