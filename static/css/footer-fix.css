@@ -1,0 +1,73 @@
+/**
+ * FOOTER POSITIONING AND ALIGNMENT FIX
+ * Ensures the footer appears properly at the bottom of the page
+ * without overlapping with content and with properly aligned elements
+ */
+
+/* Basic footer positioning */
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  z-index: 1030;
+  background-color: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+  display: flex;
+  align-items: center;
+}
+
+/* Footer content container */
+.footer .container-fluid {
+  width: 100%;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+/* Footer content layout */
+.footer .d-flex {
+  width: 100%;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+/* Footer spacing on larger screens */
+@media (min-width: 992px) {
+  .footer .container-fluid {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+  
+  /* Footer with sidebar offset */
+  .footer .container-fluid {
+    padding-left: calc(1rem + 200px) !important;
+    width: 100% !important;
+  }
+}
+
+/* Mobile footer styles */
+@media (max-width: 991.98px) {
+  .footer .container-fluid {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+/* Add margin to main content to prevent footer overlap */
+.content-container {
+  margin-bottom: 48px !important; /* Match footer height */
+}
+
+/* Make sure very long pages still show the footer at the bottom */
+html, body {
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Ensure content fills the space but doesn't overflow */
+.page-content {
+  padding-bottom: 1rem; /* Add some space before footer */
+}

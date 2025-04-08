@@ -5,76 +5,83 @@
 {% block header_title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="card text-center h-100">
-            <div class="card-body">
-                <h5 class="card-title">Users</h5>
-                <h2 class="display-4">{{ user_count }}</h2>
-                <a href="{{ url_for('manage_users') }}" class="btn btn-primary">Manage Users</a>
+<div class="row mx-0 w-100">
+  <div class="col-12 px-0">
+    <!-- First row with stats cards -->
+    <div class="row">
+        <div class="col-md-3 mb-4">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Users</h5>
+                    <h2 class="display-4">{{ user_count }}</h2>
+                    <a href="{{ url_for('manage_users') }}" class="btn btn-primary">Manage Users</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Sites</h5>
+                    <h2 class="display-4">{{ site_count }}</h2>
+                    <a href="{{ url_for('manage_sites') }}" class="btn btn-primary">Manage Sites</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Machines</h5>
+                    <h2 class="display-4">{{ machine_count }}</h2>
+                    <a href="{{ url_for('manage_machines') }}" class="btn btn-primary">Manage Machines</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Parts</h5>
+                    <h2 class="display-4">{{ part_count }}</h2>
+                    <a href="{{ url_for('manage_parts') }}" class="btn btn-primary">Manage Parts</a>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3 mb-4">
-        <div class="card text-center h-100">
-            <div class="card-body">
-                <h5 class="card-title">Sites</h5>
-                <h2 class="display-4">{{ site_count }}</h2>
-                <a href="{{ url_for('manage_sites') }}" class="btn btn-primary">Manage Sites</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="card text-center h-100">
-            <div class="card-body">
-                <h5 class="card-title">Machines</h5>
-                <h2 class="display-4">{{ machine_count }}</h2>
-                <a href="{{ url_for('manage_machines') }}" class="btn btn-primary">Manage Machines</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="card text-center h-100">
-            <div class="card-body">
-                <h5 class="card-title">Parts</h5>
-                <h2 class="display-4">{{ part_count }}</h2>
-                <a href="{{ url_for('manage_parts') }}" class="btn btn-primary">Manage Parts</a>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">System Administration</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <div class="d-grid">
-                            <a href="{{ url_for('manage_users') }}" class="btn btn-lg btn-outline-primary">
-                                <i class="fas fa-users me-2"></i> User Management
-                            </a>
+    
+    <!-- Second row with admin actions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">System Administration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="d-grid">
+                                <a href="{{ url_for('manage_users') }}" class="btn btn-lg btn-outline-primary">
+                                    <i class="fas fa-users me-2"></i> User Management
+                                </a>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="d-grid">
-                            <a href="{{ url_for('manage_roles') }}" class="btn btn-lg btn-outline-primary">
-                                <i class="fas fa-user-tag me-2"></i> Role Management
-                            </a>
+                        <div class="col-md-4 mb-3">
+                            <div class="d-grid">
+                                <a href="{{ url_for('manage_roles') }}" class="btn btn-lg btn-outline-primary">
+                                    <i class="fas fa-user-tag me-2"></i> Role Management
+                                </a>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="d-grid">
-                            <a href="{{ url_for('manage_backups') }}" class="btn btn-lg btn-outline-primary">
-                                <i class="fas fa-database me-2"></i> Database Backup
-                            </a>
+                        <div class="col-md-4 mb-3">
+                            <div class="d-grid">
+                                <a href="{{ url_for('manage_backups') }}" class="btn btn-lg btn-outline-primary">
+                                    <i class="fas fa-database me-2"></i> Database Backup
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+  </div>
 </div>
 {% endblock %}

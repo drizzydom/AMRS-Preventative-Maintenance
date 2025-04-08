@@ -1,0 +1,36 @@
+/**
+ * BASIC MOBILE SIDEBAR STYLING
+ * No complex interactions, just the essentials for mobile display
+ */
+
+/* Mobile sidebar base styling */
+@media (max-width: 991.98px) {
+    /* Position sidebar off-screen by default */
+    .sidebar {
+        position: fixed !important;
+        top: 48px !important; /* Match navbar height */
+        left: -100% !important;
+        width: 250px !important;
+        height: calc(100vh - 48px) !important;
+        z-index: 1040;
+        transition: left 0.3s ease-in-out;
+        overflow-y: auto;
+    }
+    
+    /* Show sidebar when .show class is applied */
+    .sidebar.show {
+        left: 0 !important;
+    }
+    
+    /* Add dark overlay when sidebar is active */
+    body.sidebar-active::before {
+        content: '';
+        position: fixed;
+        top: 48px; /* Below navbar */
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1030;
+    }
+}

@@ -51,6 +51,9 @@ class User(db.Model, UserMixin):
     # Define the relationship to Role
     role = db.relationship('Role', back_populates='users')
     
+    # Add relationship to maintenance records
+    maintenance_records = db.relationship('MaintenanceRecord', back_populates='user')
+    
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
         
@@ -136,6 +139,9 @@ class Part(db.Model):
     next_maintenance = db.Column(db.DateTime, 
                                 default=lambda: datetime.now() + timedelta(days=30))
     
+    # Define relationship to maintenance records WITHOUT backref (we'll set it on the other side)
+    maintenance_records = db.relationship('MaintenanceRecord', back_populates='part')
+    
     def __repr__(self):
         return f'<Part {self.name}>'
         
@@ -143,3 +149,20 @@ class Part(db.Model):
         """Returns a human-readable maintenance frequency"""
         suffix = 's' if self.maintenance_frequency != 1 else ''
         return f"{self.maintenance_frequency} {self.maintenance_unit}{suffix}"
+
+class MaintenanceRecord(db.Model):
+    """Model for maintenance history records"""
+    __tablename__ = 'maintenance_records'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    part_id = db.Column(db.Integer, db.ForeignKey('parts.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    date = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    comments = db.Column(db.Text)
+    
+    # Define relationships explicitly with back_populates instead of backref
+    part = db.relationship('Part', back_populates='maintenance_records')
+    user = db.relationship('User', back_populates='maintenance_records')
+    
+    def __repr__(self):
+        return f'<MaintenanceRecord {self.id} for Part {self.part_id}>'

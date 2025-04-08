@@ -14,49 +14,176 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <!-- App CSS files -->
+    <!-- CORE CSS FILES - Keep only essential ones -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-fixes.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile-dropdown.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/card-color-patch.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/overflow-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-width-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-unified-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-sidebar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-element-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-toggle.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-visibility-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/centered-layout-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-alignment-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/card-layout-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-reset.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-position-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-header-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}"> <!-- Add our new CSS file -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
-    <!-- Add simple layout fix CSS as the very last CSS file before theme -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-simple-fix.css') }}">
-    <!-- Add form fixes CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/form-fixes.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-sidebar-fix.css') }}">
-    <!-- Add the AMRS theme CSS file after all other CSS files to override them -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
+    
+    <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
     {% block extra_css %}{% endblock %}
+    
+    <!-- Core layout styles - using higher specificity instead of !important -->
+    <style>
+    /* 1. HEADER POSITIONING - Ensure it's above all other elements */
+    html body header,
+    body header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px; /* Fixed height for navbar */
+        z-index: 1050; /* Highest z-index to stay on top */
+    }
+    
+    html body .navbar,
+    body .navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        min-height: 48px;
+        z-index: 1050; /* Highest z-index */
+    }
+    
+    /* 2. SIDEBAR POSITIONING - fixed below header */
+    html body .sidebar,
+    body:not(.mobile-view) .sidebar {
+        position: fixed;
+        width: 200px;
+        top: 48px; /* Start right below the navbar */
+        left: 0;
+        bottom: 48px; /* Make room for footer */
+        height: calc(100vh - 96px); /* Account for both navbar and footer */
+        overflow-y: auto;
+        z-index: 1020; /* Below the navbar z-index */
+    }
+    
+    html body .sidebar-container,
+    body:not(.mobile-view) .sidebar-container {
+        width: 200px;
+        flex: 0 0 200px;
+    }
+    
+    /* 3. BODY PADDING - ensure content starts below header */
+    html body,
+    body {
+        padding-top: 48px; /* Exactly match header height */
+    }
+    
+    /* 4. MAIN CONTENT POSITIONING - using more specific selectors */
+    html body .content-container,
+    body:not(.mobile-view) .content-container {
+        margin-left: 200px; /* Exactly match sidebar width */
+        width: calc(100% - 200px);
+        max-width: calc(100% - 200px);
+        padding-left: 0;
+        padding-right: 0;
+        min-height: calc(100vh - 96px); /* Account for both navbar and footer */
+        padding-bottom: 48px; /* Make room for footer */
+        margin-top: 0; /* No extra margin at top */
+    }
+    
+    html body .container-fluid,
+    .centered-layout .row .centered-content-col .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-top: 1rem; /* Increased padding to create more space below header */
+    }
+    
+    /* 5. RESET VERTICAL SPACING - with specific combined selectors */
+    html body .page-content,
+    .centered-layout .centered-content-col .content-container .page-content {
+        margin-top: 0;
+        padding-top: 1rem; /* Added padding to create space between header and content */
+        padding-left: 0;
+        padding-right: 0;
+    }
+    
+    /* 6. ENSURE TABLE DISPLAYS CORRECTLY - with class hierarchy */
+    html body .table-responsive,
+    .card-body .table-responsive {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    /* 7. FOOTER POSITIONING AND STYLING */
+    html body .footer,
+    body .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        z-index: 1030; /* Below header but above most content */
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        display: flex;
+        align-items: center;
+    }
+    
+    html body .footer .container-fluid,
+    body .footer .container-fluid {
+        width: 100%;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    
+    html body .footer .d-flex,
+    body .footer .d-flex {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    /* 8. MOBILE ADJUSTMENTS */
+    @media (max-width: 991.98px) {
+        html body .content-container {
+            margin-left: 0;
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        html body .sidebar {
+            position: fixed;
+            top: 48px;
+            left: -280px;
+            width: 280px;
+            height: calc(100vh - 96px);
+            z-index: 1040;
+            transition: left 0.3s ease;
+            bottom: 48px;
+        }
+        
+        html body .sidebar.show {
+            left: 0;
+        }
+        
+        body.sidebar-active::before {
+            content: '';
+            position: fixed;
+            top: 48px; /* Start below header */
+            left: 0;
+            right: 0;
+            bottom: 48px; /* End above footer */
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1030;
+        }
+    }
+    </style>
 </head>
 <body class="preload">
     <header>
         <!-- Navigation Bar - Simplified with reduced height -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
             <div class="container-fluid">
-                <button class="navbar-toggler" type="button" 
+                <button class="navbar-toggler" type="button" id="hamburger-btn"
                         aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -110,6 +237,15 @@
                                 <span class="sidebar-link-text">Parts</span>
                             </a>
                         </li>
+
+                        <!-- Add Maintenance Recording Link -->
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('maintenance_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-tools"></i>
+                                <span class="sidebar-link-text">Record Maintenance</span>
+                            </a>
+                        </li>
+
                         <!-- Added User Profile Link to Sidebar -->
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
@@ -182,8 +318,8 @@
 
     <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light">
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center">
+        <div class="container-fluid px-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
                 <div>
                     <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
                 </div>
@@ -196,20 +332,18 @@
 
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    
     <!-- Main application scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     
     <!-- Remove preload class after page load to enable animations -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Remove the preload class to allow animations after page load
             document.body.classList.remove('preload');
         });
     </script>
     
     <!-- Page specific scripts -->
     {% block scripts %}{% endblock %}
-    <!-- Sidebar Toggle Script -->
-    <script src="{{ url_for('static', filename='js/sidebar-toggle.js') }}"></script>
 </body>
 </html>
