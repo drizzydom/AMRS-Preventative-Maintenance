@@ -28,7 +28,7 @@ os.makedirs(BUILD_DIR, exist_ok=True)
 
 # Create a simple, dependency-free main application script
 print(f"Creating main application script: {MAIN_SCRIPT}")
-with open(MAIN_SCRIPT, "w") as f:
+with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:  # Added UTF-8 encoding
     f.write("""
 import os
 import sys
@@ -149,16 +149,16 @@ class SimpleApp:
                 with urllib.request.urlopen(f"{{url}}/health", timeout=5) as response:
                     elapsed = time.time() - start_time
                     if response.status == 200:
-                        self.status_var.set(f"✓ Server is online! ({{elapsed:.2f}}s)")
+                        self.status_var.set(f"[OK] Server is online! ({{elapsed:.2f}}s)")
                         self.status_label.configure(foreground="green")
                     else:
-                        self.status_var.set(f"⚠ Server responded with status: {{response.status}}")
+                        self.status_var.set(f"[WARNING] Server responded with status: {{response.status}}")
                         self.status_label.configure(foreground="orange")
             except urllib.error.URLError as e:
-                self.status_var.set(f"✗ Cannot connect to server")
+                self.status_var.set(f"[ERROR] Cannot connect to server")
                 self.status_label.configure(foreground="red")
             except Exception as e:
-                self.status_var.set(f"✗ Error: {{str(e)}}")
+                self.status_var.set(f"[ERROR] {{str(e)}}")
                 self.status_label.configure(foreground="red")
         finally:
             # Re-enable buttons
@@ -261,7 +261,7 @@ try:
     result = subprocess.run(pyinstaller_cmd, capture_output=True, text=True)
     
     if result.returncode == 0:
-        print("\n✅ PyInstaller build successful!")
+        print("\n[SUCCESS] PyInstaller build successful!")
         exe_path = os.path.join("dist", f"{APP_NAME.replace(' ', '')}.exe")
         if os.path.exists(exe_path):
             print(f"\nExecutable created: {os.path.abspath(exe_path)}")
@@ -275,7 +275,7 @@ try:
         print(f"You can run the application using: {BATCH_FILE}")
 
 except Exception as e:
-    print(f"\n❌ Error during build: {str(e)}")
+    print(f"\n[ERROR] Error during build: {str(e)}")
     print("\nFalling back to batch file launcher.")
     print(f"You can run the application using: {BATCH_FILE}")
 
