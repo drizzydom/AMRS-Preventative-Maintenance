@@ -62,10 +62,68 @@ Default login:
 
 A Windows desktop application is available, which provides a native interface for the system:
 
-1. Download the latest release from the Releases page
-2. Run the installer
-3. Launch the AMRS Maintenance Tracker application
-4. The application will automatically connect to the production server at https://amrs-preventative-maintenance.onrender.com
+#### Features
+
+- **Standalone Window Mode**: View the application in a dedicated window
+- **Auto-start Option**: Configure the application to launch on Windows startup
+- **Offline Capability**: Connect to the server even when offline
+- **Native Integration**: Integrates with Windows for a seamless experience
+
+#### Building the Windows Client 
+
+1. **Prerequisites**:
+   - Python 3.8 or 3.9 (recommended for best compatibility)
+   - Microsoft Visual C++ Build Tools 2019 or later
+   - Admin privileges (required for startup feature)
+
+2. **Build Steps**:
+   - Open Command Prompt as Administrator
+   - Navigate to the project directory:
+     ```
+     cd C:\path\to\AMRS-Preventative-Maintenance
+     ```
+   - Create a virtual environment:
+     ```
+     python -m venv venv
+     venv\Scripts\activate
+     ```
+   - Install required dependencies:
+     ```
+     pip install -r requirements.txt
+     ```
+   - Run the build script:
+     ```
+     python build_windows_app.py
+     ```
+   - The executable will be created in the `dist` folder
+
+3. **Running the Application**:
+   - Navigate to the `dist` folder
+   - Double-click `AMRSMaintenanceTracker.exe`
+   - The application will open in its own window and connect to the server
+   - You can configure it to start with Windows through the Tools menu
+
+#### Troubleshooting Windows Build
+
+If you encounter encoding errors during the build process:
+
+1. **Fix for Unicode/Encoding Errors**:
+   - Open Command Prompt and run:
+     ```
+     chcp 65001
+     ```
+   - This switches the Command Prompt to UTF-8 encoding
+   - Then run the build script again
+
+2. **Fix for Missing Dependencies**:
+   - If PyInstaller fails with missing dependencies, run:
+     ```
+     pip install pywin32 tkinter
+     ```
+
+3. **Use the Batch File Alternative**:
+   - If the EXE file doesn't build properly, use the batch file:
+   - Run `AMRS_Launcher.bat` from the `dist` folder
 
 #### Building the Windows Client (Simplified Method)
 
