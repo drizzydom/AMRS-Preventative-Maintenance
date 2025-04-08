@@ -72,6 +72,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    
+    // Add click handler to the sidebar toggle button in the sidebar
+    const sidebarToggleBtn = document.querySelector('.sidebar-toggle-btn');
+    if (sidebarToggleBtn) {
+        sidebarToggleBtn.addEventListener('click', function() {
+            toggleSidebar();
+        });
+    }
 });
 
 // Add data-title attributes to sidebar links for tooltips
@@ -125,6 +133,8 @@ function loadSidebarState() {
     } else if (userPreference !== 'true' && window.innerWidth > 991.98) {
         body.classList.remove('sidebar-collapsed');
     }
+    
+    console.log("Sidebar state loaded:", userPreference === 'true' ? 'collapsed' : 'expanded');
 }
 
 // Auto-collapse sidebar on smaller screens, use different approach on mobile

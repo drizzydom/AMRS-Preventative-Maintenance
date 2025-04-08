@@ -1,0 +1,80 @@
+/**
+ * CRITICAL EMERGENCY FIXES
+ * Directly addresses core layout and sidebar issues
+ */
+
+/* SIDEBAR VISIBILITY ON MOBILE */
+@media (max-width: 991.98px) {
+    /* Position sidebar off-screen by default on mobile */
+    .sidebar {
+        position: fixed !important;
+        top: 48px !important;
+        bottom: 0 !important;
+        left: -100% !important; /* Off-screen by default */
+        width: 280px !important;
+        height: calc(100vh - 48px) !important;
+        z-index: 9999 !important;
+        transition: left 0.3s ease-in-out !important;
+        overflow-y: auto !important;
+        padding-bottom: 100px !important; /* Extra padding at bottom for scrolling */
+    }
+
+    /* Show sidebar when it has 'show' class */
+    .sidebar.show {
+        left: 0 !important;
+    }
+
+    /* Add overlay when sidebar is shown */
+    body.sidebar-active::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    /* Ensure content doesn't shift when sidebar opens */
+    .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+
+/* FIX PARTS TABLE POSITION */
+body.parts-page .page-content {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+body.parts-page .card {
+    margin-top: 0 !important;
+}
+
+body.parts-page .container-fluid {
+    padding-top: 0 !important;
+}
+
+body.parts-page .page-header {
+    margin-bottom: 0.5rem !important;
+}
+
+/* ENSURE NAVBAR IS ABOVE SIDEBAR */
+.navbar {
+    z-index: 10000 !important;
+}
+
+/* HAMBURGER BUTTON STYLES */
+.navbar-toggler {
+    z-index: 10001 !important;
+    cursor: pointer !important;
+    padding: 0.25rem 0.5rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.navbar-toggler:focus {
+    box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25) !important;
+    outline: none !important;
+}

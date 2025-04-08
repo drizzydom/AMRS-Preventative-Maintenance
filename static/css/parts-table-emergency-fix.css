@@ -1,0 +1,55 @@
+/**
+ * EMERGENCY PARTS TABLE POSITION FIX
+ */
+
+/* Reset any excessive margins and padding */
+body {
+  padding-top: 48px !important; /* Only space needed is for navbar */
+  margin-top: 0 !important;
+}
+
+/* Force the page header to stay at the top */
+.page-header {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Make container fluid have minimal padding */
+.container-fluid {
+  padding-top: 0.5rem !important;
+}
+
+/* Force card to appear at the top */
+.card {
+  margin-top: 0 !important;
+}
+
+/* Reset row margins */
+.row {
+  margin-top: 0 !important;
+  margin-bottom: 0.75rem !important;
+}
+
+/* Fix content container position */
+.content-container {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Ensure page content starts at the top */
+.page-content {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Override any troublesome Bootstrap spacing */
+.mb-4 {
+  margin-bottom: 1rem !important;
+}
+
+/* Fix table responsiveness */
+.table-responsive {
+  margin: 0 !important;
+  padding: 0 !important;
+}

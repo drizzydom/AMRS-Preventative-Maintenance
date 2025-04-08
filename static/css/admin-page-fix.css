@@ -1,63 +1,46 @@
 /**
- * ADMIN PAGE SPACING FIX
- * Places content at the top of admin pages without excessive spacing
+ * ADMIN PAGE LAYOUT FIX
+ * Ensures consistent layout on admin, dashboard, and profile pages
  */
 
-/* Force content to start at top on all pages */
-.container-fluid > .page-content {
-  padding-top: 0 !important;
-  margin-top: 0 !important;
+/* Remove previous rules that might be conflicting with base.html */
+
+/* Establish proper content structure for all admin pages */
+.page-content .row,
+.admin-dashboard .row,
+.user-profile .row,
+.admin-roles .row,
+.admin-users .row,
+.dashboard .row {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
 }
 
-/* Aggressively reduce padding in all content containers */
-.container-fluid {
-  padding-top: 0.5rem !important;
+/* Remove excess indentation */
+.page-content > .row > .col-12,
+.page-content > .row > .col,
+.page-content > .row > [class*="col-"] {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
 }
 
-/* Remove specific classes that may cause the user management page to behave differently */
-.admin-users-card,
-.admin_users_card {
-  margin-top: 0 !important;
+/* Fix spacing for nested rows */
+.page-content .row .row {
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
 }
 
-/* Remove extra space above all cards */
+/* Remove any card margin/padding conflicts */
 .card {
-  margin-top: 0 !important;
+    margin-bottom: 1rem;
 }
 
-/* Fix for admin pages specifically */
-body[data-url*="admin"] .card:first-of-type,
-[id*="admin"] .card:first-of-type {
-  margin-top: 0 !important;
+/* Ensure tables take full width */
+.table-responsive {
+    width: 100%;
 }
 
-/* Ensure page header is compact */
-.page-header {
-  margin-bottom: 0.5rem !important;
-  padding-bottom: 0 !important;
-}
-
-/* Make sure flash messages don't add extra space */
-.alert {
-  margin-bottom: 0.5rem !important;
-}
-
-/* Fix spacing between header and first card - critical fix */
-.page-header + * {
-  margin-top: 0 !important;
-}
-
-/* Target all admin pages specifically */
-[id*="admin"] .card,
-[class*="admin"] .card,
-.admin_users .card,
-.admin-users .card,
-#admin-users-container .card,
-.admin-content .card {
-  margin-top: 0 !important;
-}
-
-/* Force container to start content at top */
-.container-fluid.py-4 {
-  padding-top: 0.25rem !important;
+.table {
+    margin-bottom: 0;
 }
