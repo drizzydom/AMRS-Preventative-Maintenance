@@ -1,15 +1,32 @@
+# Core dependencies
 flask==2.2.5
 flask_sqlalchemy==3.0.5
 flask_login==0.6.2
 werkzeug==2.2.3
 SQLAlchemy==2.0.21
 Jinja2==3.1.2
+
+# Email functionality
 flask_mail==0.9.1
+
+# Environment & configuration
 python-dotenv==1.0.0
+
+# Data processing
 pandas==2.0.3
 openpyxl==3.1.2
+
+# Production server
 gunicorn==21.2.0
+
+# Security
 PyJWT==2.8.0
+bleach==6.0.0
+
+# Utilities
 click==8.1.7
 itsdangerous==2.1.2
-bleach==6.0.0  # Add the missing bleach dependency
+
+# Windows app packaging (optional, install only for building Windows app)
+pyinstaller==6.0.0; sys_platform == 'win32'
+pillow==10.0.0; sys_platform == 'win32' # For application icons
