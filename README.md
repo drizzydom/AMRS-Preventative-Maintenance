@@ -84,17 +84,27 @@ A Windows desktop application is available, which provides a native interface fo
 
 ### Building the Windows App
 
-1. Install PyInstaller:
+1. **Prerequisites**:
+   - Install [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+     - During installation, select "Desktop development with C++
+     - This is required to build NumPy and other dependencies
+   - Ensure you have Python 3.8-3.10 installed (3.11+ may have compatibility issues with some dependencies)
+
+2. Install requirements:
    ```
    pip install -r requirements.txt
    ```
 
-2. Run the build script:
+3. Run the build script:
    ```
    python build_windows_app.py
    ```
 
-3. The executable will be created in the `dist` folder
+4. The executable will be created in the `dist` folder
+
+#### Alternative: Use Pre-built Release
+
+If you encounter build issues, you can download the pre-built Windows application from the [Releases](https://github.com/yourusername/AMRS-Preventative-Maintenance/releases) page.
 
 ## 📊 Deployment
 
