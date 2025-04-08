@@ -51,7 +51,7 @@ if not os.path.exists(ICON_FILE):
 # Create a standalone application with embedded browser
 print(f"Creating standalone application: {MAIN_SCRIPT}")
 with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
-    f.write(f"""
+    f.write("""
 import os
 import sys
 import time
@@ -1114,7 +1114,7 @@ class StandaloneTkApp:
         )
 
 # Main entry point
-if __name__ "__main__":
+if __name__ == "__main__":
     try:
         # Start the appropriate UI
         if USING_QT5 or USING_QT6:
@@ -1154,7 +1154,13 @@ if __name__ "__main__":
             else:
                 print(f"ERROR: {str(e)}")
                 print(f"See log file: {os.path.join(CACHE_DIR, 'app.log')}")
-""")
+""".format(
+        APP_NAME=APP_NAME,
+        APP_VERSION=APP_VERSION,
+        SERVER_URL=SERVER_URL,
+        ICON_FILE=ICON_FILE,
+        SPLASH_FILE=SPLASH_FILE
+    ))
 
 print(f"Created {MAIN_SCRIPT}")
 
