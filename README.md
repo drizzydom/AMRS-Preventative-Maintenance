@@ -67,6 +67,52 @@ A Windows desktop application is available, which provides a native interface fo
 3. Launch the AMRS Maintenance Tracker application
 4. The application will automatically connect to the production server at https://amrs-preventative-maintenance.onrender.com
 
+#### Building the Windows Client (Simplified Method)
+
+1. **Prerequisites**:
+   - Python 3.8 or 3.9 (recommended for best compatibility)
+   - Basic Python packages (automatically installed by the build script)
+
+2. **Build Steps**:
+   - Open Command Prompt
+   - Navigate to the project directory:
+     ```
+     cd C:\path\to\AMRS-Preventative-Maintenance
+     ```
+   - Run the build script:
+     ```
+     python build_windows_app.py
+     ```
+   - The script will create:
+     - A standalone executable (if PyInstaller works correctly)
+     - A batch file launcher (as fallback)
+   - Both can be found in the `dist` folder
+
+3. **Running the Application**:
+   - Navigate to the `dist` folder
+   - Double-click either:
+     - `AMRSMaintenanceTracker.exe` (if PyInstaller worked successfully)
+     - `AMRS_Launcher.bat` (if PyInstaller failed)
+
+#### Troubleshooting
+
+If you encounter issues with the build:
+
+1. **Dependency Issues**:
+   - The fallback batch launcher requires only Python and standard libraries
+   - Make sure Python is added to your PATH environment variable
+
+2. **Manual Setup**:
+   - If the build script fails completely, run these commands:
+     ```
+     pip install tkinter
+     python amrs_connect.py
+     ```
+
+3. **Direct Browser Access**:
+   - As a last resort, you can always access the application directly at:
+   - https://amrs-preventative-maintenance.onrender.com
+
 ## 💻 Development
 
 ### Setup Development Environment
@@ -84,27 +130,55 @@ A Windows desktop application is available, which provides a native interface fo
 
 ### Building the Windows App
 
-1. **Prerequisites**:
-   - Install [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-     - During installation, select "Desktop development with C++
-     - This is required to build NumPy and other dependencies
-   - Ensure you have Python 3.8-3.10 installed (3.11+ may have compatibility issues with some dependencies)
+1. **Clean Installation Method (Recommended)**:
+   
+   To ensure a clean build without dependency issues:
 
-2. Install requirements:
-   ```
-   pip install -r requirements.txt
-   ```
+   - Open Command Prompt as Administrator
+   - Create a new, clean virtual environment:
+     ```
+     mkdir amrs_build
+     cd amrs_build
+     python -m venv venv
+     venv\Scripts\activate
+     ```
+   - Install only the minimal required packages:
+     ```
+     pip install pyinstaller
+     pip install pillow
+     ```
+   - Copy the build script to this directory:
+     ```
+     copy \path\to\AMRS-Preventative-Maintenance\build_windows_app.py .
+     ```
+   - Run the build script:
+     ```
+     python build_windows_app.py
+     ```
+   - Find the executable in the `dist` folder
 
-3. Run the build script:
-   ```
-   python build_windows_app.py
-   ```
+2. **Troubleshooting Build Issues**:
 
-4. The executable will be created in the `dist` folder
+   If you encounter build issues, try these solutions:
 
-#### Alternative: Use Pre-built Release
+   - **Solution 1**: Install Visual C++ Build Tools
+     - Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+     - Choose "Desktop Development with C++" during installation
+     - Restart your command prompt and try building again
 
-If you encounter build issues, you can download the pre-built Windows application from the [Releases](https://github.com/yourusername/AMRS-Preventative-Maintenance/releases) page.
+   - **Solution 2**: Use a different Python version
+     - PyInstaller works best with Python 3.8 or 3.9
+     - Avoid Python 3.11+ for builds if experiencing issues
+
+   - **Solution 3**: Manual PyInstaller command
+     ```
+     pyinstaller --onefile --windowed --name=AMRSMaintenanceTracker amrs_launcher_main.py
+     ```
+
+3. **Direct Executable Download**:
+
+   For immediate use without building, download the pre-built executable from:
+   [Releases Page](https://github.com/yourusername/AMRS-Preventative-Maintenance/releases)
 
 ## 📊 Deployment
 
