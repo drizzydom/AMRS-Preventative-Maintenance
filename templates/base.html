@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
@@ -30,16 +31,39 @@
     
     <!-- Core layout styles - using higher specificity instead of !important -->
     <style>
-    /* 1. SIDEBAR POSITIONING - using increased specificity */
+    /* 1. HEADER POSITIONING - Ensure it's above all other elements */
+    html body header,
+    body header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px; /* Fixed height for navbar */
+        z-index: 1050; /* Highest z-index to stay on top */
+    }
+    
+    html body .navbar,
+    body .navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        min-height: 48px;
+        z-index: 1050; /* Highest z-index */
+    }
+    
+    /* 2. SIDEBAR POSITIONING - fixed below header */
     html body .sidebar,
     body:not(.mobile-view) .sidebar {
         position: fixed;
         width: 200px;
-        top: 48px;
+        top: 48px; /* Start right below the navbar */
         left: 0;
-        bottom: 0;
-        height: calc(100vh - 48px);
+        bottom: 48px; /* Make room for footer */
+        height: calc(100vh - 96px); /* Account for both navbar and footer */
         overflow-y: auto;
+        z-index: 1020; /* Below the navbar z-index */
     }
     
     html body .sidebar-container,
@@ -48,7 +72,13 @@
         flex: 0 0 200px;
     }
     
-    /* 2. MAIN CONTENT POSITIONING - using more specific selectors */
+    /* 3. BODY PADDING - ensure content starts below header */
+    html body,
+    body {
+        padding-top: 48px; /* Exactly match header height */
+    }
+    
+    /* 4. MAIN CONTENT POSITIONING - using more specific selectors */
     html body .content-container,
     body:not(.mobile-view) .content-container {
         margin-left: 200px; /* Exactly match sidebar width */
@@ -56,37 +86,63 @@
         max-width: calc(100% - 200px);
         padding-left: 0;
         padding-right: 0;
+        min-height: calc(100vh - 96px); /* Account for both navbar and footer */
+        padding-bottom: 48px; /* Make room for footer */
+        margin-top: 0; /* No extra margin at top */
     }
     
     html body .container-fluid,
     .centered-layout .row .centered-content-col .container-fluid {
         padding-left: 1rem;
         padding-right: 1rem;
-        padding-top: 0.5rem;
+        padding-top: 1rem; /* Increased padding to create more space below header */
     }
     
-    /* 3. RESET VERTICAL SPACING - with specific combined selectors */
+    /* 5. RESET VERTICAL SPACING - with specific combined selectors */
     html body .page-content,
     .centered-layout .centered-content-col .content-container .page-content {
         margin-top: 0;
-        padding-top: 0;
+        padding-top: 1rem; /* Added padding to create space between header and content */
         padding-left: 0;
         padding-right: 0;
     }
     
-    html body .card,
-    .page-content .card {
-        margin-top: 0;
-    }
-    
-    /* 4. ENSURE TABLE DISPLAYS CORRECTLY - with class hierarchy */
+    /* 6. ENSURE TABLE DISPLAYS CORRECTLY - with class hierarchy */
     html body .table-responsive,
     .card-body .table-responsive {
         width: 100%;
         overflow-x: auto;
     }
     
-    /* 5. MOBILE ADJUSTMENTS - using media queries without !important */
+    /* 7. FOOTER POSITIONING AND STYLING */
+    html body .footer,
+    body .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        z-index: 1030; /* Below header but above most content */
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        display: flex;
+        align-items: center;
+    }
+    
+    html body .footer .container-fluid,
+    body .footer .container-fluid {
+        width: 100%;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    
+    html body .footer .d-flex,
+    body .footer .d-flex {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    /* 8. MOBILE ADJUSTMENTS */
     @media (max-width: 991.98px) {
         html body .content-container {
             margin-left: 0;
@@ -99,9 +155,10 @@
             top: 48px;
             left: -280px;
             width: 280px;
-            height: calc(100vh - 48px);
+            height: calc(100vh - 96px);
             z-index: 1040;
             transition: left 0.3s ease;
+            bottom: 48px;
         }
         
         html body .sidebar.show {
@@ -111,10 +168,10 @@
         body.sidebar-active::before {
             content: '';
             position: fixed;
-            top: 48px;
+            top: 48px; /* Start below header */
             left: 0;
             right: 0;
-            bottom: 0;
+            bottom: 48px; /* End above footer */
             background-color: rgba(0, 0, 0, 0.5);
             z-index: 1030;
         }
@@ -261,8 +318,8 @@
 
     <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light">
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center">
+        <div class="container-fluid px-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
                 <div>
                     <span class="text-muted">© {{ now.year if now else 2023 }} AMRS Maintenance</span>
                 </div>
