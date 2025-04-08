@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 import json
 import base64
+import platform
 
 # Configuration
 APP_NAME = "AMRS Maintenance Tracker"
@@ -19,6 +20,73 @@ SERVER_URL = "https://amrs-preventative-maintenance.onrender.com"
 MAIN_PY = "windows_app.py"
 OUTPUT_DIR = "dist"
 BUILD_DIR = "build"
+
+# Check for prerequisites
+def check_prerequisites():
+    """Check that all prerequisites are met before attempting build"""
+    
+    # Check Python version - NumPy has issues with Python 3.11+ on Windows
+    print(f"Checking Python version...")
+    python_version = platform.python_version_tuple()
+    if int(python_version[0]) >= 3 and int(python_version[1]) >= 11:
+        print(f"⚠️ WARNING: You're using Python {platform.python_version()}")
+        print(f"   NumPy and other dependencies may have issues with Python 3.11+")
+        print(f"   Consider using Python 3.8-3.10 for building the application")
+        response = input("Continue anyway? (y/n): ")
+        if response.lower() != 'y':
+            print("Build aborted.")
+            sys.exit(1)
+    else:
+        print(f"✓ Python {platform.python_version()} is compatible")
+    
+    # Check for Microsoft Visual C++ Build Tools
+    print("Checking for Microsoft Visual C++ Build Tools...")
+    try:
+        # Try to compile a simple C program to test if MSVC is available
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.c', delete=False) as f:
+            f.write(b'int main() { return 0; }')
+            test_file = f.name
+        
+        # Try to compile with MSVC
+        try:
+            subprocess.run(['cl', test_file], 
+                          stdout=subprocess.PIPE, 
+                          stderr=subprocess.PIPE, 
+                          check=True)
+            os.remove(test_file)
+            print("✓ Microsoft Visual C++ Build Tools found")
+        except (subprocess.SubprocessError, FileNotFoundError):
+            print("❌ Microsoft Visual C++ Build Tools not found or not in PATH")
+            print("\nTo install Visual C++ Build Tools:")
+            print("1. Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/")
+            print("2. During installation, select 'Desktop development with C++'")
+            print("3. Restart your computer after installation")
+            print("\nAlternatively, use the pre-built release from:")
+            print("https://github.com/yourusername/AMRS-Preventative-Maintenance/releases")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"⚠️ Could not verify build tools: {str(e)}")
+        print("Continuing but build may fail if tools are missing.")
+    
+    # Check for PyInstaller
+    print("Checking for PyInstaller...")
+    try:
+        import PyInstaller
+        print(f"✓ PyInstaller {PyInstaller.__version__} is installed")
+    except ImportError:
+        print("❌ PyInstaller not found")
+        print("Installing PyInstaller...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
+            print("✓ PyInstaller installed successfully")
+        except subprocess.SubprocessError:
+            print("❌ Failed to install PyInstaller")
+            sys.exit(1)
+
+# Call the prerequisites check before proceeding
+check_prerequisites()
 
 # Ensure required directories exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
