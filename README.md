@@ -1,81 +1,142 @@
 # AMRS Preventative Maintenance System
 
-A comprehensive system for tracking and managing preventative maintenance tasks for AMRS equipment.
+A comprehensive maintenance tracking and scheduling application for AMRS machines and equipment. This system helps maintenance teams track service schedules for machinery, generates alerts for overdue maintenance, and maintains a complete service history.
 
-## Components
+## 🌟 Features
 
-- **Server**: Flask-based API and web interface
-- **Windows Client**: Desktop application for technicians
-- **Docker Deployment**: Containerized setup for easy deployment
+- **Dashboard**: Overview of all maintenance tasks, with overdue and upcoming work
+- **Site Management**: Organize equipment by location/site
+- **Machine Tracking**: Track machines at each site with detailed information
+- **Parts Maintenance**: Schedule and record maintenance for individual machine parts
+- **Notification System**: Email alerts for upcoming and overdue maintenance
+- **User Management**: Role-based permissions system with granular access control
+- **Mobile-Friendly Interface**: Responsive design works on desktops, tablets, and phones
+- **Backup & Restore**: Database backup functionality for data protection
 
-## Quick Setup
+## 🔗 Live Application
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
-cd AMRS-Preventative-Maintenance
+The application is deployed and accessible at:
+https://amrs-preventative-maintenance.onrender.com
 
-# Run the master setup script
-chmod +x master_setup.sh
-./master_setup.sh
-```
+Default login:
+- Username: **admin**
+- Password: **admin**
 
-## Troubleshooting Common Issues
+⚠️ **Important**: Please change the default admin password after your first login.
 
-### 404 Not Found Error
+## 🚀 Installation
 
-If you experience 404 errors after setup:
+### Web Application Setup
 
-1. Run the Nginx fix script:
-   ```bash
-   chmod +x fix_nginx_routes.sh
-   ./fix_nginx_routes.sh
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
+   cd AMRS-Preventative-Maintenance
    ```
 
-2. Test route access:
-   ```bash
-   chmod +x test_route_access.sh
-   ./test_route_access.sh
+2. Create and activate a virtual environment:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-### 500 Internal Server Error
-
-If you encounter 500 Internal Server errors:
-
-1. Run the all-in-one fix script:
-   ```bash
-   chmod +x fix_500_error.sh
-   ./fix_500_error.sh
+3. Install required packages:
+   ```
+   pip install -r requirements.txt
    ```
 
-2. If database issues persist:
-   ```bash
-   chmod +x db_fix.sh
-   ./db_fix.sh
+4. Create a config.py file (copy from config.example.py) and configure your settings:
+   ```
+   cp config.example.py config.py
+   # Edit config.py with your settings
    ```
 
-3. For complex issues, run the diagnostics:
-   ```bash
-   chmod +x diagnose_500_error.sh
-   ./diagnose_500_error.sh
+5. Run the application:
+   ```
+   python app.py
    ```
 
-### Docker Issues
+6. Access at http://localhost:10000
 
-For Docker-related problems:
+### Windows Desktop Application
 
-1. Clean up Docker resources:
-   ```bash
-   chmod +x docker_cleanup.sh
-   ./docker_cleanup.sh
+A Windows desktop application is available, which provides a native interface for the system:
+
+1. Download the latest release from the Releases page
+2. Run the installer
+3. Launch the AMRS Maintenance Tracker application
+4. The application will automatically connect to the production server at https://amrs-preventative-maintenance.onrender.com
+
+## 💻 Development
+
+### Setup Development Environment
+
+1. Follow the installation steps above
+2. Additional development dependencies:
+   ```
+   pip install pytest pytest-flask flake8
    ```
 
-2. Restart containers:
-   ```bash
-   chmod +x restart_containers.sh
-   ./restart_containers.sh
+3. Run tests:
+   ```
+   pytest
    ```
 
-## Advanced Configuration
+### Building the Windows App
 
-For HTTPS, DDNS, and other advanced configurations, see the documentation in the [`docs`](./docs) directory.
+1. Install PyInstaller:
+   ```
+   pip install -r requirements.txt
+   ```
+
+2. Run the build script:
+   ```
+   python build_windows_app.py
+   ```
+
+3. The executable will be created in the `dist` folder
+
+## 📊 Deployment
+
+### Deploying to Render
+
+1. Fork this repository
+2. Create a new Web Service on Render
+3. Connect your GitHub repository
+4. Use these settings:
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn wsgi:app`
+   - Add the environment variables specified in render.yaml
+
+## 🏗️ Architecture
+
+- **Flask**: Web framework
+- **SQLAlchemy**: Database ORM
+- **Flask-Login**: Authentication
+- **Bootstrap**: Frontend framework
+- **SQLite**: Database (persistent storage on Render)
+
+## 📋 Data Model
+
+- **Sites**: Physical locations where equipment is housed
+- **Machines**: Individual pieces of equipment at sites
+- **Parts**: Components of machines that require maintenance
+- **Users**: System users with different access levels
+- **Roles**: User role categories with specific permissions
+- **Maintenance Records**: History of maintenance activities
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+[MIT License](LICENSE)
+
+## 📬 Contact
+
+Project Link: [https://github.com/yourusername/AMRS-Preventative-Maintenance](https://github.com/yourusername/AMRS-Preventative-Maintenance)
