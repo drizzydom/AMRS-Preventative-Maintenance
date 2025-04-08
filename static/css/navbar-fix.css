@@ -1,66 +1,99 @@
-/*
+/**
  * NAVBAR APPEARANCE FIX
  * Improves navbar contrast and readability
+ * Uses increased specificity instead of !important
  */
 
-/* Better navbar contrast */
-.navbar-dark {
-    background-color: #FE7900 !important; /* AMRS primary orange */
+/* Variables for consistent navbar sizing */
+:root {
+  --navbar-height: 48px;
 }
 
-/* Ensure navbar text is white for contrast */
+/* Better navbar contrast */
+.navbar-dark,
+html .navbar-dark,
+body .navbar-dark {
+  background-color: #FE7900; /* AMRS primary orange */
+  height: var(--navbar-height);
+  min-height: var(--navbar-height);
+}
+
+/* Ensure navbar text is white for contrast using specificity */
 .navbar-dark .navbar-brand,
 .navbar-dark .nav-link,
 .navbar-dark .navbar-text {
-    color: white !important;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); /* Add subtle text shadow */
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); /* Add subtle text shadow */
 }
 
-/* Improve hover states */
+/* Improve hover states with transitions */
+.navbar-dark .nav-link {
+  transition: color 0.2s;
+}
+
 .navbar-dark .nav-link:hover {
-    color: rgba(255, 255, 255, 0.85) !important;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Active/current page indicator */
 .navbar-dark .nav-link.active {
-    color: white !important;
-    font-weight: 600;
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+  color: white;
+  font-weight: 600;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
 }
 
 /* Compact navbar styling */
 .navbar {
-    padding: 0.25rem 1rem !important;
+  padding: 0.25rem 1rem;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 /* Mobile menu toggle button */
 .navbar-toggler {
-    border-color: rgba(255, 255, 255, 0.1) !important;
-    background-color: rgba(255, 255, 255, 0.05) !important;
-    padding: 0.25rem 0.5rem !important; /* Smaller toggle button */
+  border-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.5rem; /* Smaller toggle button */
 }
 
-/* Dark mode adjustments */
-html[data-theme="dark"] .navbar-dark {
-    background-color: #FE7900 !important; /* Keep AMRS orange in dark mode */
+/* Consistent navbar height for all elements */
+.navbar-brand,
+.navbar-dark .navbar-brand {
+  font-size: 1.1rem;
+  padding: 0.25rem 0;
+  line-height: calc(var(--navbar-height) - 1rem);
+  height: var(--navbar-height);
+  display: flex;
+  align-items: center;
 }
 
-/* Fix navbar height for top positioning of sidebar */
-.navbar-fixed-height {
-    height: 48px !important;
+/* Fix navbar items alignment with flexbox */
+.navbar-nav,
+.navbar-dark .navbar-nav {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-nav .nav-item {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-nav .nav-link {
+  padding: 0.25rem 0.5rem;
+  line-height: 1.5;
 }
 
 /* Center the navbar brand on mobile */
 @media (max-width: 991.98px) {
-    .navbar-brand {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        margin: 0;
-    }
-    
-    .navbar-toggler {
-        order: -1; /* Move toggler to the left */
-    }
+  .navbar-brand {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+  }
+  
+  .navbar-toggler {
+    order: -1; /* Move toggler to the left */
+  }
 }

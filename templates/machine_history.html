@@ -1,68 +1,83 @@
 {% extends "base.html" %}
 
-{% block title %}Machine History - {{ machine.name }} - Maintenance Tracker{% endblock %}
+{% block title %}Machine History - {{ machine.name }}{% endblock %}
 
-{% block header_title %}Machine History: {{ machine.name }}{% endblock %}
+{% block header_title %}Maintenance History: {{ machine.name }}{% endblock %}
 
 {% block header_actions %}
-<a href="{{ url_for('manage_machines') }}" class="btn btn-secondary">
+<!-- Add back button to dashboard -->
+<a href="{{ url_for('dashboard') }}" class="btn btn-secondary me-2">
+    <i class="fas fa-tachometer-alt"></i> Back to Dashboard
+</a>
+<a href="{{ url_for('manage_parts', machine_id=machine.id) }}" class="btn btn-primary">
+    <i class="fas fa-cogs"></i> Manage Parts
+</a>
+<a href="{{ url_for('manage_machines', site_id=machine.site_id) }}" class="btn btn-secondary">
     <i class="fas fa-arrow-left"></i> Back to Machines
 </a>
 {% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h5 class="card-title mb-0">Machine Information</h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Machine Details</h5>
+            </div>
+            <div class="card-body">
                 <p><strong>Name:</strong> {{ machine.name }}</p>
-                <p><strong>Model:</strong> {{ machine.model or 'N/A' }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Machine Number:</strong> {{ machine.machine_number or 'N/A' }}</p>
-                <p><strong>Serial Number:</strong> {{ machine.serial_number or 'N/A' }}</p>
+                <p><strong>Model:</strong> {{ machine.model or 'Not specified' }}</p>
+                <p><strong>Machine Number:</strong> {{ machine.machine_number or 'Not specified' }}</p>
+                <p><strong>Serial Number:</strong> {{ machine.serial_number or 'Not specified' }}</p>
+                <p><strong>Site:</strong> {{ site.name }}</p>
+                <p><strong>Parts Count:</strong> {{ parts|length }}</p>
             </div>
         </div>
-        <p><strong>Site:</strong> {{ machine.site.name }}</p>
     </div>
-</div>
-
-<div class="card mt-4">
-    <div class="card-header">
-        <h5 class="card-title mb-0">Maintenance History</h5>
-    </div>
-    <div class="card-body">
-        {% if maintenance_logs %}
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Part</th>
-                        <th>Performed By</th>
-                        <th>Invoice #</th>
-                        <th>Notes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for log in maintenance_logs %}
-                    <tr>
-                        <td>{{ log.maintenance_date.strftime('%Y-%m-%d') }}</td>
-                        <td>{{ log.part.name }}</td>
-                        <td>{{ log.performed_by }}</td>
-                        <td>{{ log.invoice_number or '-' }}</td>
-                        <td>{{ log.notes or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Maintenance History</h5>
+            </div>
+            <div class="card-body">
+                {% if maintenance_records %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Part</th>
+                                <th>Last Maintenance</th>
+                                <th>Next Maintenance</th>
+                                <th>Frequency</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in maintenance_records %}
+                            <tr>
+                                <td>{{ record.part }}</td>
+                                <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ record.next_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ record.frequency }}</td>
+                                <td>
+                                    <!-- Use plain HTML form with hardcoded action to avoid routing issues -->
+                                    <form action="/update-maintenance" method="POST" class="d-inline">
+                                        <input type="hidden" name="part_id" value="{{ parts[loop.index0].id }}">
+                                        <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
+                                            <i class="fas fa-check-circle"></i> Record
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p>No maintenance history found for this machine.</p>
+                {% endif %}
+            </div>
         </div>
-        {% else %}
-        <p>No maintenance history found for this machine.</p>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

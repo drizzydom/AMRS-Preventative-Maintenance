@@ -21,7 +21,7 @@ import secrets  # Add import for secrets used later in the code
 from sqlalchemy import inspect  # Add import for inspect
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
@@ -205,9 +205,94 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Show the main dashboard"""
-    # Add your dashboard logic here
-    return render_template('dashboard.html')
+    """Show the main dashboard with all sites, machines, and parts information"""
+    try:
+        # Get upcoming and overdue maintenance across all sites the user has access to
+        if current_user.is_admin:
+            # Admins can see all sites
+            sites = Site.query.all()
+        else:
+            # Non-admins can only see sites they're assigned to
+            sites = current_user.sites
+            
+        # Get all machines across accessible sites
+        machines = []
+        site_ids = [site.id for site in sites]
+        if site_ids:
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        # Get all parts that need maintenance soon or are overdue
+        parts = []
+        machine_ids = [machine.id for machine in machines]
+        if machine_ids:
+            # Get all parts for these machines
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
+            
+        # Get statistics
+        stats = {
+            'sites_count': len(sites),
+            'machines_count': len(machines),
+            'parts_count': len(parts),
+            'overdue_count': 0,
+            'due_soon_count': 0
+        }
+        
+        # Process parts for maintenance status
+        now = datetime.now()
+        overdue_parts = []
+        due_soon_parts = []
+        
+        for part in parts:
+            days_until = (part.next_maintenance - now).days
+            
+            if days_until < 0:
+                # Part is overdue
+                overdue_parts.append({
+                    'id': part.id,
+                    'name': part.name,
+                    'machine': part.machine.name,
+                    'site': part.machine.site.name,
+                    'days_overdue': abs(days_until),
+                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
+                })
+                stats['overdue_count'] += 1
+            elif days_until <= 30:  # Due within 30 days
+                # Part is due soon
+                due_soon_parts.append({
+                    'id': part.id,
+                    'name': part.name,
+                    'machine': part.machine.name,
+                    'site': part.machine.site.name,
+                    'days_until': days_until,
+                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
+                })
+                stats['due_soon_count'] += 1
+        
+        # Sort parts by urgency
+        overdue_parts.sort(key=lambda x: x['days_overdue'], reverse=True)
+        due_soon_parts.sort(key=lambda x: x['days_until'])
+        
+        return render_template('dashboard.html',
+                              sites=sites,
+                              machines=machines,
+                              parts=parts,
+                              stats=stats,
+                              overdue_parts=overdue_parts,
+                              due_soon_parts=due_soon_parts,
+                              now=now)
+    except Exception as e:
+        flash(f'Error loading dashboard: {str(e)}', 'error')
+        # Log the error details for debugging
+        print(f"Dashboard error: {str(e)}")
+        # Return an empty dashboard as fallback
+        return render_template('dashboard.html', 
+                              sites=[], 
+                              machines=[], 
+                              parts=[], 
+                              stats={'sites_count': 0, 'machines_count': 0, 'parts_count': 0, 'overdue_count': 0, 'due_soon_count': 0},
+                              overdue_parts=[],
+                              due_soon_parts=[],
+                              now=datetime.now())
 
 # Root route handler
 @app.route('/')
@@ -583,6 +668,34 @@ def manage_machines():
                           can_edit=True,
                           can_delete=True)
 
+@app.route('/machines/<int:machine_id>/history')
+@login_required
+def machine_history(machine_id):
+    """Display maintenance history for a specific machine"""
+    machine = Machine.query.get_or_404(machine_id)
+    parts = Part.query.filter_by(machine_id=machine_id).all()
+    
+    # Get maintenance records sorted by date
+    # Since we don't have a separate maintenance record model in the context,
+    # we'll use the parts' last_maintenance dates as a simple history
+    maintenance_records = []
+    for part in parts:
+        maintenance_records.append({
+            'part': part.name,
+            'date': part.last_maintenance,
+            'next_date': part.next_maintenance,
+            'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}(s)"
+        })
+    
+    # Sort by most recent first
+    maintenance_records.sort(key=lambda x: x['date'], reverse=True)
+    
+    return render_template('machine_history.html', 
+                          machine=machine,
+                          parts=parts,
+                          maintenance_records=maintenance_records,
+                          site=machine.site)
+
 @app.route('/parts', methods=['GET', 'POST'])
 @login_required
 def manage_parts():
@@ -645,6 +758,103 @@ def manage_parts():
                           can_create=True,
                           can_edit=True,
                           can_delete=True)
+
+@app.route('/parts/<int:part_id>/update_maintenance', methods=['GET', 'POST'])
+@login_required
+def update_maintenance(part_id):
+    """Update maintenance records for a specific part"""
+    try:
+        part = Part.query.get_or_404(part_id)
+        
+        # For GET requests, redirect to the maintenance page
+        if request.method == 'GET':
+            return redirect(url_for('maintenance_page'))
+            
+        # For POST requests, update the maintenance
+        now = datetime.now()
+        
+        # Update the last maintenance date
+        part.last_maintenance = now
+        
+        # Calculate next maintenance date based on frequency
+        part.next_maintenance = now + timedelta(days=part.maintenance_days)
+        
+        # Commit the changes
+        db.session.commit()
+        flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
+        
+        # Redirect to the referring page, if available
+        referrer = request.referrer
+        if referrer:
+            return redirect(referrer)
+        else:
+            return redirect(url_for('manage_parts', machine_id=part.machine_id))
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating maintenance: {str(e)}', 'error')
+        return redirect(url_for('manage_parts'))
+
+@app.route('/update-maintenance', methods=['POST'])
+@login_required
+def update_maintenance_alt():
+    """Alternative route to update maintenance records for a specific part"""
+    try:
+        part_id = request.form.get('part_id')
+        comments = request.form.get('comments', '')
+        
+        if not part_id:
+            flash('Missing part ID', 'error')
+            return redirect(url_for('maintenance_page'))
+        
+        part = Part.query.get_or_404(int(part_id))
+        
+        # Get the current datetime
+        now = datetime.now()
+        
+        # Update the last maintenance date
+        part.last_maintenance = now
+        
+        # Calculate next maintenance date based on frequency
+        part.next_maintenance = now + timedelta(days=part.maintenance_days)
+        
+        # Create a maintenance record
+        maintenance_record = MaintenanceRecord(
+            part_id=part.id,
+            user_id=current_user.id,
+            date=now,
+            comments=comments
+        )
+        
+        # Add and commit both changes
+        db.session.add(maintenance_record)
+        db.session.commit()
+        
+        flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
+        
+        # Redirect to the referring page, if available
+        referrer = request.referrer
+        if referrer:
+            return redirect(referrer)
+        else:
+            return redirect(url_for('maintenance_page'))
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating maintenance: {str(e)}', 'error')
+        return redirect(url_for('maintenance_page'))
+
+@app.route('/parts/<int:part_id>/history')
+@login_required
+def view_part_history(part_id):
+    """View maintenance history for a specific part"""
+    try:
+        part = Part.query.get_or_404(part_id)
+        maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+        return render_template('part_history.html', part=part, maintenance_records=maintenance_records, machine=part.machine)
+    except Exception as e:
+        flash(f'Error loading maintenance history: {str(e)}', 'error')
+        return redirect(url_for('maintenance_page'))
 
 @app.route('/admin/backups')
 @login_required
@@ -1248,6 +1458,74 @@ def delete_backup(filename):
         flash(f'Error deleting backup: {str(e)}', 'error')
     
     return redirect(url_for('manage_backups'))
+
+@app.route('/maintenance')
+@login_required
+def maintenance_page():
+    """Dedicated page for recording maintenance activities"""
+    try:
+        # Get user-accessible sites 
+        if current_user.is_admin:
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+            
+        site_ids = [site.id for site in sites]
+        machines = []
+        if site_ids:
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        machine_ids = [machine.id for machine in machines]
+        parts = []
+        if machine_ids:
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
+        
+        # Process parts for maintenance status
+        now = datetime.now()
+        overdue_parts = []
+        due_soon_parts = []
+        upcoming_parts = []
+        
+        for part in parts:
+            days_until = (part.next_maintenance - now).days
+            part_data = {
+                'id': part.id,
+                'name': part.name,
+                'description': part.description,
+                'machine': part.machine,
+                'site': part.machine.site,
+                'last_maintenance': part.last_maintenance,
+                'next_maintenance': part.next_maintenance,
+                'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}(s)",
+                'days': abs(days_until) if days_until < 0 else days_until
+            }
+            
+            if days_until < 0:
+                # Part is overdue
+                overdue_parts.append(part_data)
+            elif days_until <= 30:  # Due within 30 days
+                due_soon_parts.append(part_data)
+            else:
+                upcoming_parts.append(part_data)
+        
+        # Sort parts by urgency
+        overdue_parts.sort(key=lambda x: x['days'], reverse=True)
+        due_soon_parts.sort(key=lambda x: x['days'])
+        upcoming_parts.sort(key=lambda x: x['days'])
+        
+        return render_template('maintenance.html',
+                              overdue_parts=overdue_parts,
+                              due_soon_parts=due_soon_parts,
+                              upcoming_parts=upcoming_parts,
+                              now=now)
+    except Exception as e:
+        flash(f'Error loading maintenance page: {str(e)}', 'error')
+        print(f"Maintenance page error: {str(e)}")
+        return render_template('maintenance.html', 
+                              overdue_parts=[],
+                              due_soon_parts=[],
+                              upcoming_parts=[],
+                              now=datetime.now())
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
