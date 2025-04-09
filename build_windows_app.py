@@ -51,8 +51,8 @@ if not os.path.exists(ICON_FILE):
 # Create a standalone application with embedded browser
 print(f"Creating standalone application: {MAIN_SCRIPT}")
 with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
-    # Use regular string with .format() instead of f-string
-    f.write("""
+    # Fix: Use a regular string (not an f-string) and .format() at the end
+    content = """
 import os
 import sys
 import time
