@@ -440,6 +440,8 @@ class OfflineManager:
     def __init__(self):
         self.server_url = SERVER_URL
         self.init_db()
+        self.template_cache = {}
+        self.load_templates()
         
     def init_db(self):
         '''Initialize SQLite database tables'''
@@ -450,10 +452,9 @@ class OfflineManager:
             
             # Create basic tables
             cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cached_pages (
-                url TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS cached_data (
+                endpoint TEXT PRIMARY KEY,
                 content TEXT,
-                content_type TEXT,
                 timestamp INTEGER
             )''')
             
@@ -463,6 +464,37 @@ class OfflineManager:
         except Exception as e:
             log.error(f"Database initialization error: {e}")
             log.error(traceback.format_exc())
+    
+    def load_templates(self):
+        '''Load HTML templates from bundled files'''
+        try:
+            # Get the executable directory or script directory
+            if getattr(sys, 'frozen', False):
+                # Running in PyInstaller bundle
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                # Running in normal Python
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                
+            templates_dir = os.path.join(base_dir, "embedded_templates")
+            
+            # Load each template file
+            for template_name in ["dashboard.html", "maintenance.html"]:
+                template_path = os.path.join(templates_dir, template_name)
+                if os.path.exists(template_path):
+                    with open(template_path, 'r', encoding='utf-8') as f:
+                        self.template_cache[template_name] = f.read()
+                        log.info(f"Loaded template: {template_name}")
+                else:
+                    log.warning(f"Template not found: {template_path}")
+        except Exception as e:
+            log.error(f"Error loading templates: {e}")
+            
+    def get_template(self, template_name):
+        '''Get a template by name'''
+        if template_name in self.template_cache:
+            return self.template_cache[template_name]
+        return f"<html><body><h1>Template {template_name} not found</h1></body></html>"
             
     def is_online(self):
         '''Check if server is reachable'''
@@ -471,6 +503,156 @@ class OfflineManager:
                 return response.getcode() == 200
         except:
             return False
+            
+    def cache_data(self, endpoint, content):
+        '''Save data to cache'''
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            timestamp = int(time.time())
+            
+            cursor.execute(
+                "INSERT OR REPLACE INTO cached_data (endpoint, content, timestamp) VALUES (?, ?, ?)",
+                (endpoint, content, timestamp)
+            )
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            log.error(f"Error caching data: {e}")
+            
+    def get_cached_data(self, endpoint):
+        '''Get cached data for an endpoint'''
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT content FROM cached_data WHERE endpoint = ?", (endpoint,))
+            row = cursor.fetchone()
+            
+            conn.close()
+            
+            if row:
+                return row[0]
+        except Exception as e:
+            log.error(f"Error retrieving cached data: {e}")
+            
+        return None
+"""
+
+# Template renderer class
+template_renderer = """
+# ===== TEMPLATE RENDERER =====
+class TemplateRenderer:
+    '''Simple template rendering engine'''
+    
+    def __init__(self, offline_manager):
+        self.offline_manager = offline_manager
+        
+    def render(self, template_name, context=None):
+        '''Render a template with the given context'''
+        if context is None:
+            context = {}
+            
+        template = self.offline_manager.get_template(template_name)
+        if not template:
+            return f"<html><body><h1>Template {template_name} not found</h1></body></html>"
+            
+        # Very simple template substitution - replace {{variable}} with values
+        for key, value in context.items():
+            template = template.replace(f"{{{{{key}}}}}", str(value))
+            
+        # Handle simple loops with {% for item in items %} ... {% endfor %}
+        import re
+        for match in re.finditer(r'{%\s*for\s+(\w+)\s+in\s+(\w+)\s*%}(.*?){%\s*endfor\s*%}', template, re.DOTALL):
+            item_var, items_var, loop_content = match.groups()
+            
+            if items_var not in context or not isinstance(context[items_var], (list, tuple)):
+                # Skip if items variable doesn't exist or isn't iterable
+                template = template.replace(match.group(0), "")
+                continue
+                
+            loop_items = []
+            for item in context[items_var]:
+                # Replace {{item.attribute}} with the actual value
+                item_content = loop_content
+                for key, value in item.items():
+                    item_content = item_content.replace(f"{{{{{item_var}.{key}}}}}", str(value))
+                loop_items.append(item_content)
+                
+            template = template.replace(match.group(0), ''.join(loop_items))
+            
+        return template
+"""
+
+# Add API client for fetching data without WebEngine
+api_client = """
+# ===== API CLIENT =====
+class ApiClient:
+    '''Client for interacting with the AMRS API'''
+    
+    def __init__(self):
+        self.server_url = SERVER_URL
+        self.offline_manager = OfflineManager()
+        self.session_token = None
+        
+    def get(self, endpoint, use_cache=True):
+        '''Make a GET request to the API'''
+        url = f"{self.server_url}/{endpoint.lstrip('/')}"
+        
+        try:
+            # Check if we're online
+            if not self.offline_manager.is_online():
+                log.warning(f"Offline mode: retrieving cached data for {endpoint}")
+                return self.offline_manager.get_cached_data(endpoint)
+                
+            # Make the request
+            headers = {}
+            if self.session_token:
+                headers['Authorization'] = f"Bearer {self.session_token}"
+                
+            req = Request(url, headers=headers)
+            with urlopen(req, timeout=5) as response:
+                content = response.read().decode('utf-8')
+                
+                # Cache the response if successful
+                if use_cache and response.getcode() == 200:
+                    self.offline_manager.cache_data(endpoint, content)
+                    
+                return content
+        except Exception as e:
+            log.error(f"API request error ({url}): {e}")
+            # Try to return cached data as fallback
+            return self.offline_manager.get_cached_data(endpoint)
+            
+    def login(self, username, password):
+        '''Log in to the API'''
+        # This is a simplified example - in real app would make actual login request
+        log.info(f"Logging in as {username}...")
+        # For demo, simulate login success
+        self.session_token = "DEMO_TOKEN"
+        return True
+        
+    def fetch_maintenance_items(self):
+        '''Get maintenance items from API or cache'''
+        try:
+            # In a real app, would call self.get('/api/maintenance')
+            # For demo, return sample data
+            import json
+            return json.loads('''{
+                "overdue_items": [
+                    {"id": 1, "machine": "Machine A", "part": "Belt", "days": 5},
+                    {"id": 2, "machine": "Machine B", "part": "Filter", "days": 3}
+                ],
+                "due_soon_items": [
+                    {"id": 3, "machine": "Machine C", "part": "Motor", "days": 2},
+                    {"id": 4, "machine": "Machine A", "part": "Bearing", "days": 5}
+                ],
+                "status": "success"
+            }''')
+        except Exception as e:
+            log.error(f"Error fetching maintenance items: {e}")
+            return {"overdue_items": [], "due_soon_items": [], "status": "error"}
 """
 
 # Main entry point
@@ -481,8 +663,10 @@ if __name__ == "__main__":
         log.info(f"Starting {APP_NAME} v{APP_VERSION}")
         log.info(f"Server URL: {SERVER_URL}")
         
-        # Initialize offline manager
+        # Initialize core components
         offline_manager = OfflineManager()
+        api_client = ApiClient()
+        template_renderer = TemplateRenderer(offline_manager)
         
         # Check connection
         is_online = offline_manager.is_online()
@@ -493,7 +677,7 @@ if __name__ == "__main__":
             # Use PyQt interface
             app = QApplication(sys.argv)
             
-            # Basic window with status message
+            # Main window setup
             window = QMainWindow()
             window.setWindowTitle(APP_NAME)
             window.resize(1000, 700)
@@ -501,95 +685,217 @@ if __name__ == "__main__":
             central_widget = QWidget()
             window.setCentralWidget(central_widget)
             
-            layout = QVBoxLayout(central_widget)
+            main_layout = QVBoxLayout(central_widget)
             
-            # Header with status information
+            # Create tabs for different screens
+            tabs = QTabWidget()
+            main_layout.addWidget(tabs)
+            
+            # Dashboard tab
+            dashboard_tab = QWidget()
+            dashboard_layout = QVBoxLayout(dashboard_tab)
+            
+            # Dashboard header
             header_layout = QHBoxLayout()
             status_label = QLabel(f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
             status_label.setStyleSheet("font-weight: bold; font-size: 14px;")
             header_layout.addWidget(status_label)
             
-            # Add refresh button 
-            refresh_btn = QPushButton("Refresh Connection")
-            refresh_btn.setFixedWidth(150)
+            refresh_btn = QPushButton("Refresh Data")
+            refresh_btn.setMaximumWidth(150)
             header_layout.addWidget(refresh_btn)
             header_layout.addStretch()
             
-            layout.addLayout(header_layout)
+            dashboard_layout.addLayout(header_layout)
             
-            # Add a simple browser if available
-            if WEB_ENGINE_AVAILABLE:
-                browser = QWebEngineView()
-                browser.load(QUrl(SERVER_URL))
-                layout.addWidget(browser)
-                
-                # Connect refresh button
-                refresh_btn.clicked.connect(lambda: browser.load(QUrl(SERVER_URL)))
-                
-                if not is_online:
-                    browser.setHtml(f"<h1>Offline Mode</h1><p>Could not connect to {SERVER_URL}</p>")
-            else:
-                # Create a fallback UI for when WebEngine is not available
-                fallback_widget = QWidget()
-                fallback_layout = QVBoxLayout(fallback_widget)
-                
-                info_label = QLabel("WebEngine is not available - Unable to display web content")
-                info_label.setStyleSheet("font-size: 16px; color: #FF5733; margin: 20px;")
-                fallback_layout.addWidget(info_label)
-                
-                # Add detailed instructions
-                help_text = QLabel(
-                    "To fix this issue:\n\n"
-                    "1. Make sure you have Visual C++ Redistributable installed\n"
-                    "2. Try reinstalling the application\n"
-                    "3. Or visit the website directly at:\n" + SERVER_URL
-                )
-                help_text.setStyleSheet("margin: 20px;")
-                help_text.setWordWrap(True)
-                fallback_layout.addWidget(help_text)
-                
-                # Add a button to open the URL in system browser
-                open_browser_btn = QPushButton("Open in System Browser")
-                open_browser_btn.setFixedWidth(200)
-                open_browser_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(SERVER_URL)))
-                fallback_layout.addWidget(open_browser_btn)
-                
-                fallback_layout.addStretch()
-                layout.addWidget(fallback_widget)
-                
-                # Update refresh button behavior
-                refresh_btn.clicked.connect(lambda: QMessageBox.information(
-                    window, 
-                    "WebEngine Not Available",
-                    f"Cannot refresh web content because WebEngine is not available.\n\n"
-                    f"Please visit {SERVER_URL} directly in your browser."
-                ))
+            # We'll use a QTextBrowser to display HTML content from templates
+            text_browser = QTextBrowser()
+            text_browser.setOpenExternalLinks(True)
+            dashboard_layout.addWidget(text_browser)
             
+            # Function to update the dashboard
+            def update_dashboard():
+                # Get maintenance data (either from API or mock)
+                maintenance_data = api_client.fetch_maintenance_items()
+                
+                # Render the dashboard template
+                context = {
+                    'server_url': SERVER_URL,
+                    'status': 'Online' if offline_manager.is_online() else 'Offline',
+                    'overdue_items': maintenance_data['overdue_items'],
+                    'due_soon_items': maintenance_data['due_soon_items']
+                }
+                html_content = template_renderer.render('dashboard.html', context)
+                text_browser.setHtml(html_content)
+                
+                # Update status label
+                status_label.setText(f"Connected to {SERVER_URL}" if offline_manager.is_online() else "Offline Mode")
+            
+            # Connect refresh button
+            refresh_btn.clicked.connect(update_dashboard)
+            
+            # Render initial dashboard
+            update_dashboard()
+            
+            # Add dashboard to tabs
+            tabs.addTab(dashboard_tab, "Dashboard")
+            
+            # Maintenance tab
+            maintenance_tab = QWidget()
+            maintenance_layout = QVBoxLayout(maintenance_tab)
+            
+            # Maintenance form (native controls since we can't use web forms)
+            form_layout = QFormLayout()
+            
+            site_combo = QComboBox()
+            site_combo.addItem("Site A")
+            site_combo.addItem("Site B")
+            form_layout.addRow("Site:", site_combo)
+            
+            machine_combo = QComboBox()
+            machine_combo.addItem("Machine 1")
+            machine_combo.addItem("Machine 2")
+            form_layout.addRow("Machine:", machine_combo)
+            
+            part_combo = QComboBox()
+            part_combo.addItem("Belt")
+            part_combo.addItem("Filter")
+            form_layout.addRow("Part:", part_combo)
+            
+            date_edit = QDateEdit(QDate.currentDate())
+            form_layout.addRow("Date:", date_edit)
+            
+            comments = QTextEdit()
+            comments.setMaximumHeight(100)
+            form_layout.addRow("Comments:", comments)
+            
+            submit_btn = QPushButton("Record Maintenance")
+            
+            maintenance_layout.addLayout(form_layout)
+            maintenance_layout.addWidget(submit_btn)
+            maintenance_layout.addStretch()
+            
+            # Add maintenance tab to tabs
+            tabs.addTab(maintenance_tab, "Record Maintenance")
+            
+            # Display the app window
             window.show()
-            sys.exit(app.exec_() if USING_QT5 else app.exec())
             
+            # Start the application event loop
+            sys.exit(app.exec_() if USING_QT5 else app.exec())
+        
         elif USING_TKINTER:
-            # Use Tkinter fallback
+            # Tkinter fallback implementation
             root = tk.Tk()
             root.title(APP_NAME)
-            root.geometry("800x600")
+            root.geometry("900x700")
             
-            label = tk.Label(root, text=f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
-            label.pack(pady=20)
+            # Create notebook for tabs
+            notebook = ttk.Notebook(root)
+            notebook.pack(fill=tk.BOTH, expand=True)
             
-            text = ScrolledText(root)
-            text.pack(fill=tk.BOTH, expand=True)
-            text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\n\n")
-            text.insert(tk.END, f"Server URL: {SERVER_URL}\n")
-            text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\n\n")
-            text.insert(tk.END, "WebEngine not available with Tkinter - basic functionality only\n")
+            # Dashboard tab with basic info
+            dashboard_frame = ttk.Frame(notebook)
+            notebook.add(dashboard_frame, text="Dashboard")
             
+            # Status frame
+            status_frame = ttk.Frame(dashboard_frame)
+            status_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            status_label = ttk.Label(status_frame, 
+                                   text=f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
+            status_label.pack(side=tk.LEFT, padx=5)
+            
+            refresh_btn = ttk.Button(status_frame, text="Refresh Data")
+            refresh_btn.pack(side=tk.RIGHT, padx=5)
+            
+            # Text area for content
+            content_text = ScrolledText(dashboard_frame)
+            content_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+            
+            # Add some default content
+            content_text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\n\n")
+            content_text.insert(tk.END, f"Server URL: {SERVER_URL}\n")
+            content_text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\n\n")
+            
+            if is_online:
+                # Add sample maintenance items
+                items = api_client.fetch_maintenance_items()
+                
+                content_text.insert(tk.END, "===== OVERDUE ITEMS =====\n")
+                for item in items['overdue_items']:
+                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - {item['days']} days overdue\n")
+                content_text.insert(tk.END, "\n")
+                
+                content_text.insert(tk.END, "===== DUE SOON =====\n")
+                for item in items['due_soon_items']:
+                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - Due in {item['days']} days\n")
+            else:
+                content_text.insert(tk.END, "Offline mode - using cached data\n")
+                
+            # Function to update dashboard
+            def update_tkinter_dashboard():
+                is_online = offline_manager.is_online()
+                status_label.config(text=f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
+                
+                content_text.delete(1.0, tk.END)
+                content_text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\n\n")
+                content_text.insert(tk.END, f"Server URL: {SERVER_URL}\n")
+                content_text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\n\n")
+                
+                # Add maintenance items
+                items = api_client.fetch_maintenance_items()
+                
+                content_text.insert(tk.END, "===== OVERDUE ITEMS =====\n")
+                for item in items['overdue_items']:
+                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - {item['days']} days overdue\n")
+                content_text.insert(tk.END, "\n")
+                
+                content_text.insert(tk.END, "===== DUE SOON =====\n")
+                for item in items['due_soon_items']:
+                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - Due in {item['days']} days\n")
+            
+            # Connect refresh button
+            refresh_btn.config(command=update_tkinter_dashboard)
+            
+            # Maintenance tab
+            maintenance_frame = ttk.Frame(notebook)
+            notebook.add(maintenance_frame, text="Record Maintenance")
+            
+            # Simple maintenance form
+            form_frame = ttk.LabelFrame(maintenance_frame, text="Record Maintenance")
+            form_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            ttk.Label(form_frame, text="Site:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+            site_combo = ttk.Combobox(form_frame, values=["Site A", "Site B"])
+            site_combo.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+            
+            ttk.Label(form_frame, text="Machine:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+            machine_combo = ttk.Combobox(form_frame, values=["Machine 1", "Machine 2"])
+            machine_combo.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+            
+            ttk.Label(form_frame, text="Part:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+            part_combo = ttk.Combobox(form_frame, values=["Belt", "Filter"])
+            part_combo.grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
+            
+            ttk.Label(form_frame, text="Comments:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
+            comments = ScrolledText(form_frame, height=5)
+            comments.grid(row=3, column=1, sticky=tk.EW, padx=5, pady=5)
+            
+            submit_btn = ttk.Button(form_frame, text="Record Maintenance")
+            submit_btn.grid(row=4, column=0, columnspan=2, pady=10)
+            
+            # Configure grid weights
+            form_frame.columnconfigure(1, weight=1)
+            
+            # Start the Tkinter main loop
             root.mainloop()
+            
         else:
             # No UI toolkit available
             log.error("No UI toolkit available - cannot start application")
             print(f"ERROR: No UI toolkit available. Application cannot start.")
-            print(f"Please install PyQt5 or PyQt6 to run this application.")
+            print(f"Please install PyQt5, PyQt6, or ensure Tkinter is available.")
     except Exception as e:
         # Show error message
         error_details = traceback.format_exc()
@@ -617,6 +923,8 @@ with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
     # Add the rest of the code
     f.write(app_config)
     f.write(offline_manager)
+    f.write(api_client)       # Add new API client
+    f.write(template_renderer) # Add new template renderer
     f.write(main_code)
 
 print(f"Created {MAIN_SCRIPT}")
