@@ -24,6 +24,87 @@ if not is_windows:
         sys.exit(0)
     print("\nContinuing with build on non-Windows platform...\n")
 
+# Windows-specific dependency checks and setup
+def setup_windows_environment():
+    """Set up Windows-specific environment for build success"""
+    if not is_windows:
+        return False
+        
+    success = True
+    print("\n[WINDOWS SETUP] Checking Windows-specific requirements...")
+    
+    # Check Python architecture (should be 64-bit for best compatibility)
+    is_64bit = sys.maxsize > 2**32
+    print(f"[WINDOWS SETUP] Python architecture: {'64-bit' if is_64bit else '32-bit'}")
+    if not is_64bit:
+        print("[WINDOWS SETUP] ⚠️ Warning: Using 32-bit Python. 64-bit is recommended for better compatibility.")
+        print("                Consider reinstalling Python (64-bit) for better results.")
+    
+    # Check for long path support
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem") as key:
+            value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
+            if value == 1:
+                print("[WINDOWS SETUP] ✓ Long path support is enabled")
+            else:
+                print("[WINDOWS SETUP] ⚠️ Long path support is not enabled. This might cause issues with deep paths.")
+                print("                Run 'Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux'")
+                print("                in an admin PowerShell to enable it.")
+    except:
+        print("[WINDOWS SETUP] Could not check long path support")
+    
+    # Check for Visual C++ Redistributable
+    print("[WINDOWS SETUP] Checking for Microsoft Visual C++ Redistributables...")
+    vcredist_installed = False
+    try:
+        # Simple check - try to list installed packages and grep for Visual C++
+        result = subprocess.run(
+            'powershell "Get-WmiObject -Class Win32_Product | Select-String -Pattern \'Visual C\+\+ Redistributable\'"',
+            capture_output=True, text=True, shell=True
+        )
+        if "Visual C++" in result.stdout:
+            print("[WINDOWS SETUP] ✓ Visual C++ Redistributable appears to be installed")
+            vcredist_installed = True
+        else:
+            print("[WINDOWS SETUP] ⚠️ Visual C++ Redistributable may not be installed")
+            print("                Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+            success = False
+    except:
+        print("[WINDOWS SETUP] Could not check for Visual C++ Redistributable")
+    
+    # Clean up temporary folders that might cause issues
+    print("[WINDOWS SETUP] Cleaning temporary build directories...")
+    temp_dirs_to_clean = [
+        os.path.join(tempfile.gettempdir(), "pip-build-env-*"),
+        os.path.join(tempfile.gettempdir(), "pip-req-build-*"),
+        os.path.join(tempfile.gettempdir(), "pip-install-*"),
+    ]
+    
+    import glob
+    for pattern in temp_dirs_to_clean:
+        for dir_path in glob.glob(pattern):
+            try:
+                if os.path.isdir(dir_path):
+                    print(f"[WINDOWS SETUP] Cleaning: {dir_path}")
+                    shutil.rmtree(dir_path, ignore_errors=True)
+            except:
+                pass
+    
+    return success
+
+# Windows-specific dependency versions known to work well together
+WINDOWS_DEPS = {
+    "pyinstaller": ["pyinstaller==5.13.0", "pyinstaller==5.8.0", "pyinstaller==5.6.2"],
+    "pyqt": ["PyQt5==5.15.7", "PyQt5==5.15.6", "PyQt5==5.15.2"],
+    "webengine": ["PyQtWebEngine==5.15.6", "PyQtWebEngine==5.15.5", "PyQtWebEngine==5.15.2"],
+    "pillow": ["Pillow==10.0.0", "Pillow==9.5.0", "Pillow==9.0.0"],
+}
+
+# Run Windows setup before proceeding with installation
+if is_windows:
+    setup_windows_environment()
+
 # Configuration
 APP_NAME = "AMRS Maintenance Tracker"
 APP_VERSION = "1.0.0"
@@ -68,10 +149,13 @@ def install_package(package_name, alternatives=None):
     """Install a package with pip, trying alternatives if the first attempt fails"""
     print(f"Installing {package_name}...")
     
+    # For Windows, try using --no-cache-dir to avoid cache-related issues
+    pip_extra_args = ["--no-cache-dir"] if is_windows else []
+    
     # First try direct installation
     try:
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", package_name],
+            [sys.executable, "-m", "pip", "install", package_name] + pip_extra_args,
             check=True,
             capture_output=True,
             text=True
@@ -90,7 +174,7 @@ def install_package(package_name, alternatives=None):
                 try:
                     print(f"  Trying alternative: {alt}")
                     subprocess.run(
-                        [sys.executable, "-m", "pip", "install", alt],
+                        [sys.executable, "-m", "pip", "install", alt] + pip_extra_args,
                         check=True,
                         capture_output=True,
                         text=True
@@ -99,6 +183,10 @@ def install_package(package_name, alternatives=None):
                     return True
                 except subprocess.CalledProcessError as alt_e:
                     print(f"  × Failed to install alternative {alt}")
+                    if alt_e.stderr and "Microsoft Visual C++" in alt_e.stderr:
+                        print("\n⚠️ Visual C++ build tools are required.")
+                        print("Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/")
+                        print("During installation, select 'Desktop development with C++'\n")
                     continue
         
         print(f"× All installation attempts for {package_name} failed")
@@ -111,15 +199,15 @@ ui_toolkit = {
     "tkinter": True,  # Tkinter is part of standard library and assumed available
 }
 
-# First install base build tools
-install_package("pyinstaller>=5.0.0", ["pyinstaller==5.13.2", "pyinstaller==5.8.0"])
+# First install base build tools with Windows-specific versions
+install_package("pyinstaller>=5.0.0", WINDOWS_DEPS["pyinstaller"])
 
-# Try installing PyQt5 with fallbacks
-qt5_success = install_package("pyqt5", ["PyQt5==5.15.7", "PyQt5==5.15.6", "PyQt5==5.15.2", "PyQt5-sip"])
+# Try installing PyQt5 with Windows-specific fallbacks
+qt5_success = install_package("pyqt5", WINDOWS_DEPS["pyqt"])
 if qt5_success:
     ui_toolkit["qt5"] = True
-    # Install QtWebEngine component
-    webengine_success = install_package("PyQtWebEngine", ["PyQtWebEngine==5.15.6", "PyQtWebEngine==5.15.5"])
+    # Install QtWebEngine component with Windows-specific versions
+    webengine_success = install_package("PyQtWebEngine", WINDOWS_DEPS["webengine"])
     if not webengine_success:
         print("⚠️ Warning: PyQtWebEngine failed to install. Web functionality will be limited.")
 
