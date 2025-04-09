@@ -48,73 +48,176 @@ if not os.path.exists(ICON_FILE):
     except Exception as e:
         print(f"Could not create icon: {str(e)} - continuing without icon")
 
-# Create a standalone application with embedded browser
+# Improved dependency installation with better error handling
+print("Installing required dependencies for build...")
+
+# Function to run pip with robust error handling
+def install_package(package_name, alternatives=None):
+    """Install a package with pip, trying alternatives if the first attempt fails"""
+    print(f"Installing {package_name}...")
+    
+    # First try direct installation
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", package_name],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print(f"✓ Successfully installed {package_name}")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"× Failed to install {package_name}: {e}")
+        if e.stderr:
+            print(f"  Error output: {e.stderr.strip()}")
+        
+        # If alternatives exist, try them one by one
+        if alternatives:
+            print(f"  Trying alternative packages for {package_name}...")
+            for alt in alternatives:
+                try:
+                    print(f"  Trying alternative: {alt}")
+                    subprocess.run(
+                        [sys.executable, "-m", "pip", "install", alt],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    print(f"  ✓ Successfully installed alternative package {alt}")
+                    return True
+                except subprocess.CalledProcessError as alt_e:
+                    print(f"  × Failed to install alternative {alt}")
+                    continue
+        
+        print(f"× All installation attempts for {package_name} failed")
+        return False
+
+# Dictionary to track what UI toolkits are available
+ui_toolkit = {
+    "qt5": False,
+    "qt6": False,
+    "tkinter": True,  # Tkinter is part of standard library and assumed available
+}
+
+# First install base build tools
+install_package("pyinstaller>=5.0.0", ["pyinstaller==5.13.2", "pyinstaller==5.8.0"])
+
+# Try installing PyQt5 with fallbacks
+qt5_success = install_package("pyqt5", ["PyQt5==5.15.7", "PyQt5==5.15.6", "PyQt5==5.15.2", "PyQt5-sip"])
+if qt5_success:
+    ui_toolkit["qt5"] = True
+    # Install QtWebEngine component
+    webengine_success = install_package("PyQtWebEngine", ["PyQtWebEngine==5.15.6", "PyQtWebEngine==5.15.5"])
+    if not webengine_success:
+        print("⚠️ Warning: PyQtWebEngine failed to install. Web functionality will be limited.")
+
+# If PyQt5 failed, try PyQt6
+if not ui_toolkit["qt5"]:
+    qt6_success = install_package("pyqt6", ["PyQt6==6.5.0", "PyQt6==6.4.0"])
+    if qt6_success:
+        ui_toolkit["qt6"] = True
+        # Install QtWebEngine component for Qt6
+        webengine6_success = install_package("PyQt6-WebEngine", ["PyQt6-WebEngine==6.5.0", "PyQt6-WebEngine==6.4.0"])
+        if not webengine6_success:
+            print("⚠️ Warning: PyQt6-WebEngine failed to install. Web functionality will be limited.")
+
+# Install Pillow for icon generation but don't fail if not available
+pillow_available = install_package("pillow", ["Pillow==10.0.0", "Pillow==9.5.0"])
+
+print("\nDependency installation summary:")
+print(f"PyQt5:          {'✓ Available' if ui_toolkit['qt5'] else '× Not available'}")
+print(f"PyQt6:          {'✓ Available' if ui_toolkit['qt6'] else '× Not available'}")
+print(f"Tkinter:        {'✓ Available' if ui_toolkit['tkinter'] else '× Not available'}")
+print(f"Pillow:         {'✓ Available' if pillow_available else '× Not available'}")
+
+# Create a standalone application with embedded browser - MODIFIED for toolkit detection
 print(f"Creating standalone application: {MAIN_SCRIPT}")
 
-# Write the Python code to the standalone script file in chunks to avoid nested docstring issues
 with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
-    # Write imports and basic setup
+    # Basic imports
     f.write("""
 import os
 import sys
 import time
-import json
 import sqlite3
 import threading
 import datetime
-import uuid
-import tempfile
-import base64
-import io
-import re
 import traceback
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
-from http.client import HTTPResponse
+""")
 
-# Try to import UI libraries
+    # Dynamic UI toolkit imports based on what's available
+    if ui_toolkit["qt5"]:
+        f.write("""
+# Using PyQt5 for UI
 try:
-    # First try PyQt5
     from PyQt5.QtWidgets import *
     from PyQt5.QtCore import *
     from PyQt5.QtGui import *
-    from PyQt5.QtWebEngineWidgets import *
+    try:
+        from PyQt5.QtWebEngineWidgets import *
+        WEB_ENGINE_AVAILABLE = True
+    except ImportError:
+        WEB_ENGINE_AVAILABLE = False
+    
     USING_QT5 = True
     USING_QT6 = False
     USING_TKINTER = False
 except ImportError:
+    USING_QT5 = False
+""")
+    elif ui_toolkit["qt6"]:
+        f.write("""
+# Using PyQt6 for UI
+try:
+    from PyQt6.QtWidgets import *
+    from PyQt6.QtCore import *
+    from PyQt6.QtGui import *
     try:
-        # Next try PyQt6
-        from PyQt6.QtWidgets import *
-        from PyQt6.QtCore import *
-        from PyQt6.QtGui import *
         from PyQt6.QtWebEngineWidgets import *
         from PyQt6.QtWebEngineCore import *
-        USING_QT5 = False
-        USING_QT6 = True
-        USING_TKINTER = False
+        WEB_ENGINE_AVAILABLE = True
     except ImportError:
-        # Last resort, fall back to tkinter
-        import tkinter as tk
-        from tkinter import ttk, messagebox, font
-        from tkinter.scrolledtext import ScrolledText
-        USING_QT5 = False
-        USING_QT6 = False
-        USING_TKINTER = True
-
-# Application configuration
+        WEB_ENGINE_AVAILABLE = False
+    
+    USING_QT5 = False
+    USING_QT6 = True
+    USING_TKINTER = False
+except ImportError:
+    USING_QT6 = False
+""")
+    else:
+        # If neither PyQt5 nor PyQt6 installed, don't even try importing them
+        f.write("""
+# PyQt not available
+USING_QT5 = False
+USING_QT6 = False
+WEB_ENGINE_AVAILABLE = False
+""")
+    
+    # Always try to import Tkinter as fallback
+    f.write("""
+# Try Tkinter
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox, font
+    from tkinter.scrolledtext import ScrolledText
+    USING_TKINTER = True
+except ImportError:
+    USING_TKINTER = False
 """)
 
-    # Write configuration variables
-    f.write(f'APP_NAME = "{APP_NAME}"\n')
-    f.write(f'APP_VERSION = "{APP_VERSION}"\n')
-    f.write(f'SERVER_URL = "{SERVER_URL}"\n')
-    f.write('CACHE_DIR = os.path.join(os.path.expanduser("~"), ".amrs-maintenance")\n')
-    f.write('DB_PATH = os.path.join(CACHE_DIR, "offline_data.db")\n\n')
+    # Configuration variables
+    f.write(f"""
+# Application configuration
+APP_NAME = "{APP_NAME}"
+APP_VERSION = "{APP_VERSION}"
+SERVER_URL = "{SERVER_URL}"
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".amrs-maintenance")
+DB_PATH = os.path.join(CACHE_DIR, "offline_data.db")
 
-    # Continue with more setup
-    f.write("""
 # Create cache directory
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -130,6 +233,27 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# Log what UI toolkit we're using
+if USING_QT5:
+    log.info("Using PyQt5 UI toolkit")
+    if WEB_ENGINE_AVAILABLE:
+        log.info("QtWebEngine is available")
+    else:
+        log.info("QtWebEngine is not available - using simple browser")
+elif USING_QT6:
+    log.info("Using PyQt6 UI toolkit")
+    if WEB_ENGINE_AVAILABLE:
+        log.info("QtWebEngine is available")
+    else:
+        log.info("QtWebEngine is not available - using simple browser")
+elif USING_TKINTER:
+    log.info("Using Tkinter UI toolkit - limited functionality")
+else:
+    log.error("No UI toolkit available - cannot continue")
+""")
+
+    # Write the basic offline manager class 
+    f.write("""
 # ===== OFFLINE DATABASE MANAGER =====
 class OfflineManager:
     '''Manages local data storage and server synchronization'''
@@ -137,10 +261,7 @@ class OfflineManager:
     def __init__(self):
         self.server_url = SERVER_URL
         self.init_db()
-""")
-
-    # Write the rest of the OfflineManager class without docstrings using triple quotes
-    f.write("""        
+        
     def init_db(self):
         '''Initialize SQLite database tables'''
         try:
@@ -148,7 +269,7 @@ class OfflineManager:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             
-            # Table for cached pages
+            # Create basic tables
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS cached_pages (
                 url TEXT PRIMARY KEY,
@@ -157,104 +278,102 @@ class OfflineManager:
                 timestamp INTEGER
             )''')
             
-            # Rest of database initialization
-            # ...
-""")
-    
-    # Continue writing the rest of the file in chunks, avoiding nested triple quotes when possible
-
-    # Write the PyQt application class
-    f.write("""
-# ===== QT APPLICATION (PYQT5/6) =====
-class StandaloneQtApp:
-    def __init__(self):
-        self.app = QApplication(sys.argv)
-        self.offline_manager = OfflineManager()
-""")
-    
-    # Write icon file paths
-    f.write(f"""
-        # Set application details
-        if USING_QT5:
-            self.app.setApplicationName(APP_NAME)
-            self.app.setApplicationVersion(APP_VERSION)
-            self.app.setWindowIcon(QIcon("{ICON_FILE}") if os.path.exists("{ICON_FILE}") else QIcon())
-        elif USING_QT6:
-            self.app.setApplicationName(APP_NAME)
-            self.app.setApplicationVersion(APP_VERSION)
-            self.app.setWindowIcon(QIcon("{ICON_FILE}") if os.path.exists("{ICON_FILE}") else QIcon())
+            conn.commit()
+            conn.close()
+            log.info("Database initialization complete")
+        except Exception as e:
+            log.error(f"Database initialization error: {e}")
+            log.error(traceback.format_exc())
             
-        # Create splash screen if file exists
-        self.show_splash_screen()
+    def is_online(self):
+        """Check if server is reachable"""
+        try:
+            with urlopen(f"{self.server_url}/health", timeout=3) as response:
+                return response.getcode() == 200
+        except:
+            return False
 """)
 
-    # Continue with the rest of the application code
-    f.write("""
-    def show_splash_screen(self):
-        '''Show splash screen while app is loading'''
-""")
-
-    # Write the rest of your application code in similar chunks
-    # End with the main entry point
-
+    # Add main entry point
     f.write("""
 # Main entry point
 if __name__ == "__main__":
     try:
-        # Start the appropriate UI
+        log.info(f"Starting {APP_NAME} v{APP_VERSION}")
+        log.info(f"Server URL: {SERVER_URL}")
+        
+        # Initialize offline manager
+        offline_manager = OfflineManager()
+        
+        # Check connection
+        is_online = offline_manager.is_online()
+        log.info(f"Server connection: {'Online' if is_online else 'Offline'}")
+        
+        # Start UI based on what's available
         if USING_QT5 or USING_QT6:
-            # Use Qt interface
-            log.info("Starting Qt application")
-            StandaloneQtApp()
+            # Use PyQt interface
+            app = QApplication(sys.argv)
+            
+            # Basic window with status message
+            window = QMainWindow()
+            window.setWindowTitle(APP_NAME)
+            window.resize(800, 600)
+            
+            central_widget = QWidget()
+            window.setCentralWidget(central_widget)
+            
+            layout = QVBoxLayout(central_widget)
+            
+            status_label = QLabel(f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
+            layout.addWidget(status_label)
+            
+            # Add a simple browser if available
+            if WEB_ENGINE_AVAILABLE:
+                browser = QWebEngineView()
+                browser.load(QUrl(SERVER_URL))
+                layout.addWidget(browser)
+                
+                if not is_online:
+                    browser.setHtml(f"<h1>Offline Mode</h1><p>Could not connect to {SERVER_URL}</p>")
+            else:
+                info_label = QLabel("WebEngine not available - simple mode only")
+                layout.addWidget(info_label)
+            
+            window.show()
+            sys.exit(app.exec_() if USING_QT5 else app.exec())
+            
         elif USING_TKINTER:
             # Use Tkinter fallback
-            log.info("Starting Tkinter application")
-            StandaloneTkApp()
+            root = tk.Tk()
+            root.title(APP_NAME)
+            root.geometry("800x600")
+            
+            label = tk.Label(root, text=f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
+            label.pack(pady=20)
+            
+            text = ScrolledText(root)
+            text.pack(fill=tk.BOTH, expand=True)
+            text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\\n\\n")
+            text.insert(tk.END, f"Server URL: {SERVER_URL}\\n")
+            text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\\n\\n")
+            text.insert(tk.END, "WebEngine not available with Tkinter - basic functionality only\\n")
+            
+            root.mainloop()
         else:
-            # If this happens, we've hit an impossible state
-            raise RuntimeError("No suitable UI framework available")
+            # No UI toolkit available
+            log.error("No UI toolkit available - cannot start application")
+            print(f"ERROR: No UI toolkit available. Application cannot start.")
+            print(f"Please install PyQt5 or PyQt6 to run this application.")
     except Exception as e:
         # Show error message
         error_details = traceback.format_exc()
         log.critical(f"Fatal application error: {e}\\n{error_details}")
         
-        # Try to display error message to user
-        # ...
+        print(f"ERROR: {str(e)}")
+        print(f"See log file: {os.path.join(CACHE_DIR, 'app.log')}")
 """)
 
 print(f"Created {MAIN_SCRIPT}")
-
-# Try to install necessary dependencies for build
-print("Installing required dependencies for build...")
-try:
-    # Install PyInstaller if not already installed
-    subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
-    
-    # Try installing PyQt5 for better UI
-    try:
-        print("Installing PyQt5...")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "PyQt5", "PyQtWebEngine"],
-            check=True
-        )
-        print("Successfully installed PyQt5")
-    except:
-        print("Could not install PyQt5")
-        
-    # Install Pillow for icon creation
-    try:
-        print("Installing Pillow for icon creation...")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "Pillow"],
-            check=True
-        )
-        print("Successfully installed Pillow")
-    except:
-        print("Could not install Pillow - continuing without custom icon")
-        
-except Exception as e:
-    print(f"Error installing dependencies: {e}")
-    print("Continuing with available packages...")
 
 # Build with PyInstaller
 print("\nBuilding executable with PyInstaller...")
