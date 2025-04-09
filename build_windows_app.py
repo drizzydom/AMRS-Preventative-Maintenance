@@ -103,6 +103,9 @@ WINDOWS_DEPS = {
         ("PyQt5==5.15.7", "PyQtWebEngine==5.15.6"),  # Sometimes works
     ],
     "pillow": ["Pillow==10.0.0", "Pillow==9.5.0", "Pillow==9.0.0"],
+    # Add dependencies for API and template-based approach
+    "requests": ["requests==2.31.0", "requests==2.28.2"],
+    "jinja2": ["Jinja2==3.1.2", "Jinja2==3.0.3"],
 }
 
 # Run Windows setup before proceeding with installation
@@ -268,6 +271,10 @@ ui_toolkit = {
 # First install base build tools
 install_package("pyinstaller>=5.0.0", WINDOWS_DEPS["pyinstaller"])
 
+# Install API communication libraries
+requests_available = install_package("requests", WINDOWS_DEPS["requests"])
+jinja2_available = install_package("jinja2", WINDOWS_DEPS["jinja2"])
+
 # Try installing PyQt with WebEngine as matched pairs
 qt5_success = install_qt_with_webengine()
 if qt5_success:
@@ -299,6 +306,8 @@ print("\nDependency installation summary:")
 print(f"PyQt5:          {'✓ Available' if ui_toolkit['qt5'] else '× Not available'}")
 print(f"PyQt6:          {'✓ Available' if ui_toolkit['qt6'] else '× Not available'}")
 print(f"Tkinter:        {'✓ Available' if ui_toolkit['tkinter'] else '× Not available'}")
+print(f"Requests:       {'✓ Available' if requests_available else '× Not available'}")
+print(f"Jinja2:         {'✓ Available' if jinja2_available else '× Not available'}")
 print(f"Pillow:         {'✓ Available' if pillow_available else '× Not available'}")
 
 # Create a standalone application with embedded browser - MODIFIED for toolkit detection
@@ -611,6 +620,145 @@ with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
     f.write(main_code)
 
 print(f"Created {MAIN_SCRIPT}")
+
+# Create templates directory in the executable
+templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "embedded_templates")
+os.makedirs(templates_dir, exist_ok=True)
+
+# Create example embedded templates
+dashboard_template = os.path.join(templates_dir, "dashboard.html")
+with open(dashboard_template, "w", encoding="utf-8") as f:
+    f.write("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .header { background-color: #FE7900; color: white; padding: 10px; border-radius: 5px; }
+        .card { border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-top: 20px; }
+        .overdue { background-color: #ffeeee; border-left: 4px solid #cc0000; }
+        .due-soon { background-color: #ffffee; border-left: 4px solid #cccc00; }
+        .status-ok { background-color: #eeffee; border-left: 4px solid #00cc00; }
+        table { width: 100%; border-collapse: collapse; }
+        table, th, td { border: 1px solid #ddd; }
+        th, td { padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Maintenance Dashboard</h1>
+        <p>Connected to: {{server_url}}</p>
+        <p>Status: {{status}}</p>
+    </div>
+    
+    <div class="card overdue">
+        <h2>Overdue Maintenance</h2>
+        <table>
+            <tr>
+                <th>Machine</th>
+                <th>Part</th>
+                <th>Days Overdue</th>
+                <th>Actions</th>
+            </tr>
+            {% for item in overdue_items %}
+            <tr>
+                <td>{{item.machine}}</td>
+                <td>{{item.part}}</td>
+                <td>{{item.days}}</td>
+                <td><button data-id="{{item.id}}">Mark Complete</button></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    
+    <div class="card due-soon">
+        <h2>Due Soon</h2>
+        <table>
+            <tr>
+                <th>Machine</th>
+                <th>Part</th>
+                <th>Due In (Days)</th>
+                <th>Actions</th>
+            </tr>
+            {% for item in due_soon_items %}
+            <tr>
+                <td>{{item.machine}}</td>
+                <td>{{item.part}}</td>
+                <td>{{item.days}}</td>
+                <td><button data-id="{{item.id}}">Mark Complete</button></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>
+""")
+
+# Create maintenance template
+maintenance_template = os.path.join(templates_dir, "maintenance.html")
+with open(maintenance_template, "w", encoding="utf-8") as f:
+    f.write("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Record Maintenance</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .header { background-color: #FE7900; color: white; padding: 10px; border-radius: 5px; }
+        .form { margin-top: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        select, input, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background-color: #FE7900; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Record Maintenance</h1>
+    </div>
+    
+    <div class="form">
+        <div class="form-group">
+            <label for="site">Site:</label>
+            <select id="site">
+                <option value="">Select Site</option>
+                {% for site in sites %}
+                <option value="{{site.id}}">{{site.name}}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="machine">Machine:</label>
+            <select id="machine">
+                <option value="">Select Machine</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="part">Part:</label>
+            <select id="part">
+                <option value="">Select Part</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="date">Date:</label>
+            <input type="date" id="date">
+        </div>
+        
+        <div class="form-group">
+            <label for="comments">Comments:</label>
+            <textarea id="comments" rows="4"></textarea>
+        </div>
+        
+        <button type="submit">Record Maintenance</button>
+    </div>
+</body>
+</html>
+""")
 
 # Build with PyInstaller
 print("\nBuilding executable with PyInstaller...")
