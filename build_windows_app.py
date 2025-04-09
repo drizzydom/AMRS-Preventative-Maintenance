@@ -1074,16 +1074,25 @@ try:
     # Create spec file with all dependencies
     spec_file = f"{os.path.splitext(MAIN_SCRIPT)[0]}.spec"
     
+    # Important: Add the templates directory to the PyInstaller datas list
+    templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "embedded_templates")
+    templates_dir_relative = os.path.relpath(templates_dir)
+    
     with open(spec_file, "w") as f:
         f.write(f"""# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
+# Add template files to the bundle
+template_files = [
+    ('{templates_dir_relative}/*.html', 'embedded_templates'),
+]
+
 a = Analysis(
     ['{MAIN_SCRIPT}'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=template_files,  # Include template files here
     hiddenimports=['PyQt5', 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'PyQt5.QtWebEngineWidgets',
                   'PyQt6', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets', 'PyQt6.QtWebEngineWidgets',
                   'tkinter', 'sqlite3', 'logging', 'urllib', 'http.client'],
