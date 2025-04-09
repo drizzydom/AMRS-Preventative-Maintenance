@@ -12,6 +12,18 @@ import tempfile
 import platform
 from pathlib import Path
 
+# Check if running on Windows
+is_windows = platform.system() == 'Windows'
+if not is_windows:
+    print("⚠️ WARNING: This script is designed to build Windows applications.")
+    print("   Running on non-Windows platforms may cause build failures.")
+    print("   For best results, run this script on Windows.\n")
+    user_input = input("Do you want to continue anyway? (y/n): ")
+    if user_input.lower() != 'y':
+        print("Build cancelled.")
+        sys.exit(0)
+    print("\nContinuing with build on non-Windows platform...\n")
+
 # Configuration
 APP_NAME = "AMRS Maintenance Tracker"
 APP_VERSION = "1.0.0"
@@ -133,9 +145,11 @@ print(f"Pillow:         {'✓ Available' if pillow_available else '× Not availa
 # Create a standalone application with embedded browser - MODIFIED for toolkit detection
 print(f"Creating standalone application: {MAIN_SCRIPT}")
 
-with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
-    # Basic imports
-    f.write("""
+# Use a different approach to writing the file content to avoid syntax issues
+# Build complete strings for each section then write them all at once
+
+# Basic imports
+basic_imports = """
 import os
 import sys
 import time
@@ -146,11 +160,10 @@ import traceback
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
-""")
+"""
 
-    # Dynamic UI toolkit imports based on what's available
-    if ui_toolkit["qt5"]:
-        f.write("""
+# UI toolkit imports based on availability
+qt5_imports = """
 # Using PyQt5 for UI
 try:
     from PyQt5.QtWidgets import *
@@ -167,9 +180,9 @@ try:
     USING_TKINTER = False
 except ImportError:
     USING_QT5 = False
-""")
-    elif ui_toolkit["qt6"]:
-        f.write("""
+"""
+
+qt6_imports = """
 # Using PyQt6 for UI
 try:
     from PyQt6.QtWidgets import *
@@ -187,18 +200,16 @@ try:
     USING_TKINTER = False
 except ImportError:
     USING_QT6 = False
-""")
-    else:
-        # If neither PyQt5 nor PyQt6 installed, don't even try importing them
-        f.write("""
+"""
+
+no_qt_imports = """
 # PyQt not available
 USING_QT5 = False
 USING_QT6 = False
 WEB_ENGINE_AVAILABLE = False
-""")
-    
-    # Always try to import Tkinter as fallback
-    f.write("""
+"""
+
+tkinter_imports = """
 # Try Tkinter
 try:
     import tkinter as tk
@@ -207,10 +218,10 @@ try:
     USING_TKINTER = True
 except ImportError:
     USING_TKINTER = False
-""")
+"""
 
-    # Configuration variables
-    f.write(f"""
+# App configuration
+app_config = f"""
 # Application configuration
 APP_NAME = "{APP_NAME}"
 APP_VERSION = "{APP_VERSION}"
@@ -250,10 +261,10 @@ elif USING_TKINTER:
     log.info("Using Tkinter UI toolkit - limited functionality")
 else:
     log.error("No UI toolkit available - cannot continue")
-""")
+"""
 
-    # Write the basic offline manager class 
-    f.write("""
+# Offline manager class - fixed the nested docstring issue
+offline_manager = """
 # ===== OFFLINE DATABASE MANAGER =====
 class OfflineManager:
     '''Manages local data storage and server synchronization'''
@@ -286,16 +297,16 @@ class OfflineManager:
             log.error(traceback.format_exc())
             
     def is_online(self):
-        """Check if server is reachable"""
+        '''Check if server is reachable'''
         try:
             with urlopen(f"{self.server_url}/health", timeout=3) as response:
                 return response.getcode() == 200
         except:
             return False
-""")
+"""
 
-    # Add main entry point
-    f.write("""
+# Main entry point
+main_code = r"""
 # Main entry point
 if __name__ == "__main__":
     try:
@@ -353,10 +364,10 @@ if __name__ == "__main__":
             
             text = ScrolledText(root)
             text.pack(fill=tk.BOTH, expand=True)
-            text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\\n\\n")
-            text.insert(tk.END, f"Server URL: {SERVER_URL}\\n")
-            text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\\n\\n")
-            text.insert(tk.END, "WebEngine not available with Tkinter - basic functionality only\\n")
+            text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\n\n")
+            text.insert(tk.END, f"Server URL: {SERVER_URL}\n")
+            text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\n\n")
+            text.insert(tk.END, "WebEngine not available with Tkinter - basic functionality only\n")
             
             root.mainloop()
         else:
@@ -367,11 +378,31 @@ if __name__ == "__main__":
     except Exception as e:
         # Show error message
         error_details = traceback.format_exc()
-        log.critical(f"Fatal application error: {e}\\n{error_details}")
+        log.critical(f"Fatal application error: {e}\n{error_details}")
         
         print(f"ERROR: {str(e)}")
         print(f"See log file: {os.path.join(CACHE_DIR, 'app.log')}")
-""")
+"""
+
+# Now write everything to the file at once
+with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
+    f.write(basic_imports)
+    
+    # Add UI toolkit imports based on availability
+    if ui_toolkit.get("qt5", False):
+        f.write(qt5_imports)
+    elif ui_toolkit.get("qt6", False):
+        f.write(qt6_imports)
+    else:
+        f.write(no_qt_imports)
+    
+    # Always add Tkinter as fallback
+    f.write(tkinter_imports)
+    
+    # Add the rest of the code
+    f.write(app_config)
+    f.write(offline_manager)
+    f.write(main_code)
 
 print(f"Created {MAIN_SCRIPT}")
 
