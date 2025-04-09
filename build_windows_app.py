@@ -93,11 +93,15 @@ def setup_windows_environment():
     
     return success
 
-# Windows-specific dependency versions known to work well together
+# Windows-specific dependency versions - EXACTLY MATCHING PAIRS are crucial for WebEngine
 WINDOWS_DEPS = {
     "pyinstaller": ["pyinstaller==5.13.0", "pyinstaller==5.8.0", "pyinstaller==5.6.2"],
-    "pyqt": ["PyQt5==5.15.7", "PyQt5==5.15.6", "PyQt5==5.15.2"],
-    "webengine": ["PyQtWebEngine==5.15.6", "PyQtWebEngine==5.15.5", "PyQtWebEngine==5.15.2"],
+    # These specific version combinations are known to work together well
+    "pyqt_combos": [
+        ("PyQt5==5.15.2", "PyQtWebEngine==5.15.2"),  # Best match combo
+        ("PyQt5==5.15.6", "PyQtWebEngine==5.15.6"),  # Also works well
+        ("PyQt5==5.15.7", "PyQtWebEngine==5.15.6"),  # Sometimes works
+    ],
     "pillow": ["Pillow==10.0.0", "Pillow==9.5.0", "Pillow==9.0.0"],
 }
 
@@ -192,6 +196,68 @@ def install_package(package_name, alternatives=None):
         print(f"× All installation attempts for {package_name} failed")
         return False
 
+# Enhanced function to install PyQt and WebEngine as a matched pair
+def install_qt_with_webengine():
+    """Install PyQt and PyQtWebEngine as compatible pairs"""
+    print("Installing PyQt with WebEngine components...")
+    
+    # First clean any existing installations that might conflict
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "uninstall", "-y", "PyQt5", "PyQtWebEngine"],
+            check=False,  # Don't fail if packages aren't installed
+            capture_output=True
+        )
+        print("Cleaned existing PyQt installations")
+    except:
+        pass
+        
+    # Try each known working combination
+    success = False
+    for pyqt_ver, webengine_ver in WINDOWS_DEPS["pyqt_combos"]:
+        try:
+            print(f"\nTrying combination: {pyqt_ver} with {webengine_ver}")
+            
+            # Install PyQt first
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--no-cache-dir", pyqt_ver],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            print(f"✓ Successfully installed {pyqt_ver}")
+            
+            # Then install matching WebEngine
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--no-cache-dir", webengine_ver],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            print(f"✓ Successfully installed {webengine_ver}")
+            
+            # Test if imports work
+            test_script = "import sys; from PyQt5.QtWidgets import QApplication; from PyQt5.QtWebEngineWidgets import QWebEngineView; print('WebEngine successfully installed and imported!')"
+            result = subprocess.run(
+                [sys.executable, "-c", test_script],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                print("✓ WebEngine TEST PASSED: Imports working correctly!")
+                success = True
+                break
+            else:
+                print("× WebEngine test failed despite installation succeeding")
+                print(f"  Error: {result.stderr}")
+                # Continue to the next combination
+        except Exception as e:
+            print(f"× Failed to install combination: {str(e)}")
+            continue
+    
+    return success
+
 # Dictionary to track what UI toolkits are available
 ui_toolkit = {
     "qt5": False,
@@ -199,27 +265,32 @@ ui_toolkit = {
     "tkinter": True,  # Tkinter is part of standard library and assumed available
 }
 
-# First install base build tools with Windows-specific versions
+# First install base build tools
 install_package("pyinstaller>=5.0.0", WINDOWS_DEPS["pyinstaller"])
 
-# Try installing PyQt5 with Windows-specific fallbacks
-qt5_success = install_package("pyqt5", WINDOWS_DEPS["pyqt"])
+# Try installing PyQt with WebEngine as matched pairs
+qt5_success = install_qt_with_webengine()
 if qt5_success:
     ui_toolkit["qt5"] = True
-    # Install QtWebEngine component with Windows-specific versions
-    webengine_success = install_package("PyQtWebEngine", WINDOWS_DEPS["webengine"])
-    if not webengine_success:
-        print("⚠️ Warning: PyQtWebEngine failed to install. Web functionality will be limited.")
-
-# If PyQt5 failed, try PyQt6
-if not ui_toolkit["qt5"]:
-    qt6_success = install_package("pyqt6", ["PyQt6==6.5.0", "PyQt6==6.4.0"])
-    if qt6_success:
-        ui_toolkit["qt6"] = True
-        # Install QtWebEngine component for Qt6
-        webengine6_success = install_package("PyQt6-WebEngine", ["PyQt6-WebEngine==6.5.0", "PyQt6-WebEngine==6.4.0"])
-        if not webengine6_success:
-            print("⚠️ Warning: PyQt6-WebEngine failed to install. Web functionality will be limited.")
+    ui_toolkit["webengine"] = True
+    print("✓ PyQt5 with WebEngine successfully installed")
+else:
+    print("× Could not install PyQt5 with WebEngine")
+    # Try installing just PyQt5 without WebEngine
+    qt5_basic_success = install_package("pyqt5", ["PyQt5==5.15.2", "PyQt5==5.15.6", "PyQt5==5.15.7"])
+    if qt5_basic_success:
+        ui_toolkit["qt5"] = True
+        print("⚠️ PyQt5 installed but WebEngine failed - limited functionality")
+    else:
+        # Try Qt6 as fallback
+        qt6_success = install_package("pyqt6", ["PyQt6==6.5.0", "PyQt6==6.4.0"])
+        if qt6_success:
+            ui_toolkit["qt6"] = True
+            # Try WebEngine for Qt6
+            webengine6_success = install_package("PyQt6-WebEngine", 
+                                               ["PyQt6-WebEngine==6.5.0", "PyQt6-WebEngine==6.4.0"])
+            if webengine6_success:
+                ui_toolkit["webengine"] = True
 
 # Install Pillow for icon generation but don't fail if not available
 pillow_available = install_package("pillow", ["Pillow==10.0.0", "Pillow==9.5.0"])
@@ -416,15 +487,26 @@ if __name__ == "__main__":
             # Basic window with status message
             window = QMainWindow()
             window.setWindowTitle(APP_NAME)
-            window.resize(800, 600)
+            window.resize(1000, 700)
             
             central_widget = QWidget()
             window.setCentralWidget(central_widget)
             
             layout = QVBoxLayout(central_widget)
             
+            # Header with status information
+            header_layout = QHBoxLayout()
             status_label = QLabel(f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
-            layout.addWidget(status_label)
+            status_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+            header_layout.addWidget(status_label)
+            
+            # Add refresh button 
+            refresh_btn = QPushButton("Refresh Connection")
+            refresh_btn.setFixedWidth(150)
+            header_layout.addWidget(refresh_btn)
+            header_layout.addStretch()
+            
+            layout.addLayout(header_layout)
             
             # Add a simple browser if available
             if WEB_ENGINE_AVAILABLE:
@@ -432,11 +514,47 @@ if __name__ == "__main__":
                 browser.load(QUrl(SERVER_URL))
                 layout.addWidget(browser)
                 
+                # Connect refresh button
+                refresh_btn.clicked.connect(lambda: browser.load(QUrl(SERVER_URL)))
+                
                 if not is_online:
                     browser.setHtml(f"<h1>Offline Mode</h1><p>Could not connect to {SERVER_URL}</p>")
             else:
-                info_label = QLabel("WebEngine not available - simple mode only")
-                layout.addWidget(info_label)
+                # Create a fallback UI for when WebEngine is not available
+                fallback_widget = QWidget()
+                fallback_layout = QVBoxLayout(fallback_widget)
+                
+                info_label = QLabel("WebEngine is not available - Unable to display web content")
+                info_label.setStyleSheet("font-size: 16px; color: #FF5733; margin: 20px;")
+                fallback_layout.addWidget(info_label)
+                
+                # Add detailed instructions
+                help_text = QLabel(
+                    "To fix this issue:\n\n"
+                    "1. Make sure you have Visual C++ Redistributable installed\n"
+                    "2. Try reinstalling the application\n"
+                    "3. Or visit the website directly at:\n" + SERVER_URL
+                )
+                help_text.setStyleSheet("margin: 20px;")
+                help_text.setWordWrap(True)
+                fallback_layout.addWidget(help_text)
+                
+                # Add a button to open the URL in system browser
+                open_browser_btn = QPushButton("Open in System Browser")
+                open_browser_btn.setFixedWidth(200)
+                open_browser_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(SERVER_URL)))
+                fallback_layout.addWidget(open_browser_btn)
+                
+                fallback_layout.addStretch()
+                layout.addWidget(fallback_widget)
+                
+                # Update refresh button behavior
+                refresh_btn.clicked.connect(lambda: QMessageBox.information(
+                    window, 
+                    "WebEngine Not Available",
+                    f"Cannot refresh web content because WebEngine is not available.\n\n"
+                    f"Please visit {SERVER_URL} directly in your browser."
+                ))
             
             window.show()
             sys.exit(app.exec_() if USING_QT5 else app.exec())
