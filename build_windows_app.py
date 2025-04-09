@@ -155,8 +155,13 @@ def install_package(package_name, alternatives=None):
     
     # For Windows, try using --no-cache-dir to avoid cache-related issues
     pip_extra_args = ["--no-cache-dir"] if is_windows else []
+
+    # Special handling for packages that need compilation
+    if "pywebview" in package_name:
+        print("Looking for binary wheel for pywebview (to avoid C++ compilation)...")
+        pip_extra_args += ["--only-binary=:all:"]
     
-    # First try direct installation
+    # First try direct installation 
     try:
         subprocess.run(
             [sys.executable, "-m", "pip", "install", package_name] + pip_extra_args,
@@ -170,6 +175,27 @@ def install_package(package_name, alternatives=None):
         print(f"× Failed to install {package_name}: {e}")
         if e.stderr:
             print(f"  Error output: {e.stderr.strip()}")
+            
+            # Give more helpful advice for Visual C++ errors
+            if "Microsoft Visual C++" in e.stderr:
+                print("\n⚠️ Visual C++ error detected:")
+                print("1. Make sure you installed Visual Studio with 'Desktop development with C++' workload")
+                print("2. You might need to restart your computer after installing")
+                print("3. Trying to find pre-compiled binary wheel as alternative...\n")
+                
+                # Try again with --only-binary flag to force wheel use
+                try:
+                    print("  Attempting binary-only wheel installation...")
+                    subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "--only-binary=:all:", package_name],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    print(f"  ✓ Successfully installed {package_name} from binary wheel")
+                    return True
+                except:
+                    print("  × Binary wheel not available")
         
         # If alternatives exist, try them one by one
         if alternatives:
@@ -188,18 +214,16 @@ def install_package(package_name, alternatives=None):
                 except subprocess.CalledProcessError as alt_e:
                     print(f"  × Failed to install alternative {alt}")
                     if alt_e.stderr and "Microsoft Visual C++" in alt_e.stderr:
-                        print("\n⚠️ Visual C++ build tools are required.")
-                        print("Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/")
-                        print("During installation, select 'Desktop development with C++'\n")
-                    continue
+                        continue  # Already showed C++ error above, just continue to next alternative
         
         print(f"× All installation attempts for {package_name} failed")
         return False
 
 # Dictionary to track what UI toolkits are available
 ui_toolkit = {
-    "webview": False,   # pywebview with Microsoft WebView2 (works on ARM64)
-    "tkinter": True,    # Tkinter is part of standard library
+    "webview": False,    # pywebview with Microsoft WebView2 (works on ARM64)
+    "cef": False,        # CEF Python (Chromium Embedded Framework)
+    "tkinter": True,     # Tkinter is part of standard library
 }
 
 # First install base build tools
@@ -249,6 +273,16 @@ import json
 import webbrowser
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
+"""
+
+# Add CEF imports
+cef_imports = """
+# Try to use CEF for browser rendering
+try:
+    from cefpython3 import cefpython as cef
+    CEF_AVAILABLE = True
+except ImportError:
+    CEF_AVAILABLE = False
 """
 
 wx_imports = """
@@ -1280,8 +1314,8 @@ if __name__ == "__main__":
 # Now write everything to the file at once
 with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
     f.write(basic_imports)
-    f.write(wx_imports)
-    f.write(webview_imports)
+    f.write(cef_imports)  # Add CEF imports
+    f.write(webview_imports) 
     f.write(flask_imports)
     f.write(tkinter_imports)
     f.write(app_config)
