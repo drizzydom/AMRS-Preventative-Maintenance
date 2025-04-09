@@ -466,35 +466,240 @@ class OfflineManager:
             log.error(traceback.format_exc())
     
     def load_templates(self):
-        '''Load HTML templates from bundled files'''
+        '''Load HTML templates from bundled files with comprehensive fallbacks'''
+        log.info("Loading HTML templates...")
+        
+        # Define fallback templates that will be embedded in the code itself
+        fallback_templates = {
+            "dashboard.html": '''<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .header { background-color: #FE7900; color: white; padding: 10px; border-radius: 5px; }
+        .card { border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-top: 20px; }
+        .overdue { background-color: #ffeeee; border-left: 4px solid #cc0000; }
+        .due-soon { background-color: #ffffee; border-left: 4px solid #cccc00; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px; text-align: left; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Maintenance Dashboard (Embedded Template)</h1>
+        <p>Connected to: {{server_url}}</p>
+        <p>Status: {{status}}</p>
+    </div>
+    
+    <div class="card overdue">
+        <h2>Overdue Maintenance</h2>
+        <table>
+            <tr><th>Machine</th><th>Part</th><th>Days Overdue</th><th>Actions</th></tr>
+            {% for item in overdue_items %}
+            <tr>
+                <td>{{item.machine}}</td>
+                <td>{{item.part}}</td>
+                <td>{{item.days}}</td>
+                <td><button>Mark Complete</button></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    
+    <div class="card due-soon">
+        <h2>Due Soon</h2>
+        <table>
+            <tr><th>Machine</th><th>Part</th><th>Days</th><th>Actions</th></tr>
+            {% for item in due_soon_items %}
+            <tr>
+                <td>{{item.machine}}</td>
+                <td>{{item.part}}</td>
+                <td>{{item.days}}</td>
+                <td><button>Mark Complete</button></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>''',
+            "maintenance.html": '''<!DOCTYPE html>
+<html>
+<head>
+    <title>Record Maintenance</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .header { background-color: #FE7900; color: white; padding: 10px; border-radius: 5px; }
+        .form { margin-top: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Record Maintenance (Embedded Template)</h1>
+    </div>
+    
+    <div class="form">
+        <div class="form-group">
+            <label>Site:</label>
+            <select>
+                <option>Select Site</option>
+                {% for site in sites %}
+                <option>{{site.name}}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Machine:</label>
+            <select><option>Select Machine</option></select>
+        </div>
+        
+        <div class="form-group">
+            <label>Part:</label>
+            <select><option>Select Part</option></select>
+        </div>
+        
+        <div class="form-group">
+            <label>Date:</label>
+            <input type="date">
+        </div>
+        
+        <div class="form-group">
+            <label>Comments:</label>
+            <textarea rows="4"></textarea>
+        </div>
+        
+        <button type="submit">Record Maintenance</button>
+    </div>
+</body>
+</html>'''
+        }
+        
+        # Try multiple approaches to find the templates
+        templates_loaded = False
+        
         try:
-            # Get the executable directory or script directory
+            # Approach 1: Look in standard locations relative to executable or script
             if getattr(sys, 'frozen', False):
-                # Running in PyInstaller bundle
+                # Running as compiled executable
                 base_dir = os.path.dirname(sys.executable)
-            else:
-                # Running in normal Python
-                base_dir = os.path.dirname(os.path.abspath(__file__))
+                log.info(f"Running from PyInstaller bundle: {base_dir}")
                 
-            templates_dir = os.path.join(base_dir, "embedded_templates")
+                # Try multiple possible locations where PyInstaller might put the templates
+                possible_dirs = [
+                    os.path.join(base_dir, "embedded_templates"),
+                    os.path.join(os.path.dirname(base_dir), "embedded_templates"),
+                    base_dir,  # Sometimes files are extracted to the root directory
+                ]
+            else:
+                # Running as script
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                log.info(f"Running from script: {base_dir}")
+                
+                possible_dirs = [
+                    os.path.join(base_dir, "embedded_templates"),
+                ]
             
-            # Load each template file
-            for template_name in ["dashboard.html", "maintenance.html"]:
-                template_path = os.path.join(templates_dir, template_name)
-                if os.path.exists(template_path):
-                    with open(template_path, 'r', encoding='utf-8') as f:
-                        self.template_cache[template_name] = f.read()
-                        log.info(f"Loaded template: {template_name}")
-                else:
-                    log.warning(f"Template not found: {template_path}")
+            # Try to load from each possible directory
+            for dir_path in possible_dirs:
+                log.info(f"Looking for templates in: {dir_path}")
+                
+                for template_name, fallback_content in fallback_templates.items():
+                    template_path = os.path.join(dir_path, template_name)
+                    
+                    if os.path.exists(template_path):
+                        try:
+                            with open(template_path, 'r', encoding='utf-8') as f:
+                                self.template_cache[template_name] = f.read()
+                                log.info(f"Successfully loaded template: {template_name} from {template_path}")
+                                templates_loaded = True
+                        except Exception as e:
+                            log.error(f"Error reading template {template_path}: {e}")
+            
+            # Approach 2: Try to use PyInstaller's resource extraction (if running in frozen app)
+            if not templates_loaded and getattr(sys, 'frozen', False):
+                log.info("Trying PyInstaller-specific resource loading...")
+                
+                # First check if templates are directly in the _MEIPASS directory (PyInstaller temp dir)
+                if hasattr(sys, '_MEIPASS'):
+                    meipass_dir = sys._MEIPASS
+                    log.info(f"MEIPASS directory: {meipass_dir}")
+                    
+                    for template_name in fallback_templates.keys():
+                        # Try in root of _MEIPASS
+                        template_path = os.path.join(meipass_dir, template_name)
+                        if os.path.exists(template_path):
+                            with open(template_path, 'r', encoding='utf-8') as f:
+                                self.template_cache[template_name] = f.read()
+                                log.info(f"Loaded from MEIPASS root: {template_name}")
+                                templates_loaded = True
+                                
+                        # Try in embedded_templates subfolder of _MEIPASS  
+                        template_path = os.path.join(meipass_dir, "embedded_templates", template_name)
+                        if os.path.exists(template_path):
+                            with open(template_path, 'r', encoding='utf-8') as f:
+                                self.template_cache[template_name] = f.read()
+                                log.info(f"Loaded from MEIPASS subfolder: {template_name}")
+                                templates_loaded = True
+                
+                # Try loading as a resource directly via PyInstaller's pkg_resources approach
+                try:
+                    import pkg_resources
+                    for template_name in fallback_templates.keys():
+                        try:
+                            resource_path = f"embedded_templates/{template_name}"
+                            template_content = pkg_resources.resource_string(__name__, resource_path)
+                            if template_content:
+                                self.template_cache[template_name] = template_content.decode('utf-8')
+                                log.info(f"Loaded via pkg_resources: {template_name}")
+                                templates_loaded = True
+                        except Exception as e:
+                            log.debug(f"Could not load {template_name} via pkg_resources: {e}")
+                except ImportError:
+                    log.debug("pkg_resources not available")
+            
+            # Resort to embedded fallback templates if no files found
+            if not templates_loaded:
+                log.warning("Could not find external template files, using embedded fallbacks")
+                self.template_cache = fallback_templates
+                templates_loaded = True
+        
         except Exception as e:
-            log.error(f"Error loading templates: {e}")
+            log.error(f"Error during template loading: {e}")
+            log.error(traceback.format_exc())
             
+        # Final check - make sure we have templates one way or another
+        if not templates_loaded:
+            log.warning("Failed to load templates from any source, using fallbacks")
+            self.template_cache = fallback_templates
+            
+        log.info(f"Loaded templates: {list(self.template_cache.keys())}")
+    
     def get_template(self, template_name):
         '''Get a template by name'''
         if template_name in self.template_cache:
             return self.template_cache[template_name]
-        return f"<html><body><h1>Template {template_name} not found</h1></body></html>"
+        
+        # Display a friendly error message if template is missing
+        log.error(f"Template not found in cache: {template_name}")
+        return f'''<!DOCTYPE html>
+<html>
+<head>
+    <title>Template Not Found</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; text-align: center; }}
+        .error {{ color: #cc0000; }}
+        .info {{ color: #666; margin-top: 20px; font-size: 0.9em; }}
+    </style>
+</head>
+<body>
+    <h1 class="error">Template Not Found</h1>
+    <p>The application could not find the template: <strong>{template_name}</strong></p>
+    <p class="info">Please check the application log for more details.</p>
+</body>
+</html>'''
             
     def is_online(self):
         '''Check if server is reachable'''
@@ -933,8 +1138,13 @@ print(f"Created {MAIN_SCRIPT}")
 templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "embedded_templates")
 os.makedirs(templates_dir, exist_ok=True)
 
+print(f"Creating templates directory: {templates_dir}")
+
 # Create example embedded templates
 dashboard_template = os.path.join(templates_dir, "dashboard.html")
+maintenance_template = os.path.join(templates_dir, "maintenance.html")
+
+print(f"Writing dashboard template to: {dashboard_template}")
 with open(dashboard_template, "w", encoding="utf-8") as f:
     f.write("""
 <!DOCTYPE html>
@@ -1004,8 +1214,7 @@ with open(dashboard_template, "w", encoding="utf-8") as f:
 </html>
 """)
 
-# Create maintenance template
-maintenance_template = os.path.join(templates_dir, "maintenance.html")
+print(f"Writing maintenance template to: {maintenance_template}")
 with open(maintenance_template, "w", encoding="utf-8") as f:
     f.write("""
 <!DOCTYPE html>
@@ -1074,25 +1283,35 @@ try:
     # Create spec file with all dependencies
     spec_file = f"{os.path.splitext(MAIN_SCRIPT)[0]}.spec"
     
-    # Important: Add the templates directory to the PyInstaller datas list
-    templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "embedded_templates")
+    # Important: Correctly reference the embedded_templates for PyInstaller
     templates_dir_relative = os.path.relpath(templates_dir)
+    
+    print(f"Using templates directory: {templates_dir_relative}")
+    print(f"Dashboard template exists: {os.path.exists(dashboard_template)}")
+    print(f"Maintenance template exists: {os.path.exists(maintenance_template)}")
     
     with open(spec_file, "w") as f:
         f.write(f"""# -*- mode: python ; coding: utf-8 -*-
 
+import os
+from PyInstaller.utils.hooks import collect_data_files
+
 block_cipher = None
 
-# Add template files to the bundle
+# Explicitly list template files to include
 template_files = [
-    ('{templates_dir_relative}/*.html', 'embedded_templates'),
+    (r'{os.path.abspath(dashboard_template)}', 'embedded_templates'),
+    (r'{os.path.abspath(maintenance_template)}', 'embedded_templates')
 ]
+
+# Print template files for debugging
+print(f"Template files to be included: {{template_files}}")
 
 a = Analysis(
     ['{MAIN_SCRIPT}'],
     pathex=[],
     binaries=[],
-    datas=template_files,  # Include template files here
+    datas=template_files,
     hiddenimports=['PyQt5', 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'PyQt5.QtWebEngineWidgets',
                   'PyQt6', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets', 'PyQt6.QtWebEngineWidgets',
                   'tkinter', 'sqlite3', 'logging', 'urllib', 'http.client'],
@@ -1105,6 +1324,10 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
+# Also explicitly include templates directory
+a.datas += [(f'embedded_templates/dashboard.html', r'{os.path.abspath(dashboard_template)}', 'DATA')]
+a.datas += [(f'embedded_templates/maintenance.html', r'{os.path.abspath(maintenance_template)}', 'DATA')]
 
 # Add icon and splash image
 if os.path.exists('{ICON_FILE}'):
@@ -1129,7 +1352,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,  # Changed to True for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -1139,40 +1362,7 @@ exe = EXE(
     version='file_version_info.txt',
 )
 """)
-    
-    # Create version info file
-    with open("file_version_info.txt", "w") as f:
-        f.write(f"""
-VSVersionInfo(
-  ffi=FixedFileInfo(
-    filevers=({APP_VERSION.replace('.', ', ')}, 0),
-    prodvers=({APP_VERSION.replace('.', ', ')}, 0),
-    mask=0x3f,
-    flags=0x0,
-    OS=0x40004,
-    fileType=0x1,
-    subtype=0x0,
-    date=(0, 0)
-    ),
-  kids=[
-    StringFileInfo(
-      [
-      StringTable(
-        u'040904B0',
-        [StringStruct(u'CompanyName', u'AMRS'),
-        StringStruct(u'FileDescription', u'{APP_NAME}'),
-        StringStruct(u'FileVersion', u'{APP_VERSION}'),
-        StringStruct(u'InternalName', u'{APP_NAME}'),
-        StringStruct(u'LegalCopyright', u'Copyright (c) 2023 AMRS'),
-        StringStruct(u'OriginalFilename', u'{APP_NAME.replace(" ", "")}.exe'),
-        StringStruct(u'ProductName', u'{APP_NAME}'),
-        StringStruct(u'ProductVersion', u'{APP_VERSION}')])
-      ]), 
-    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
-  ]
-)
-""")
-    
+
     # Run PyInstaller with the spec file
     subprocess.run(
         [sys.executable, "-m", "PyInstaller", "--clean", spec_file],
