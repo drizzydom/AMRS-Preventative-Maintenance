@@ -93,16 +93,19 @@ def setup_windows_environment():
     
     return success
 
-# Windows-specific dependency versions - EXACTLY MATCHING PAIRS are crucial for WebEngine
+# Windows-specific dependency versions - Simplified for x86/x64 Windows
 WINDOWS_DEPS = {
     "pyinstaller": ["pyinstaller==5.13.0", "pyinstaller==5.8.0", "pyinstaller==5.6.2"],
-    # WebView2 - Microsoft's Edge component with full ARM64 support
-    "webview": ["pywebview==4.4.1", "pywebview==4.3.3", "pywebview==4.2.2"],
+    # Standard PyQt5 with WebEngine - proven to work well on standard Windows
+    "pyqt": ["PyQt5==5.15.9", "PyQt5==5.15.7", "PyQt5==5.15.6"],
+    "pyqt_webengine": ["PyQt5-WebEngine==5.15.6", "PyQt5-WebEngine==5.15.5"],
+    # Alternative UI toolkit
+    "pyside": ["PySide6==6.5.2", "PySide6==6.4.2"],
+    # For image processing (icons, etc.)
     "pillow": ["Pillow==10.0.0", "Pillow==9.5.0", "Pillow==9.0.0"],
     # API and template-based approach dependencies
     "requests": ["requests==2.31.0", "requests==2.28.2"],
     "jinja2": ["Jinja2==3.1.2", "Jinja2==3.0.3"],
-    "flask": ["Flask==2.2.5", "Flask==2.0.1"],  # For local server
 }
 
 # Run Windows setup before proceeding with installation
@@ -153,77 +156,71 @@ def install_package(package_name, alternatives=None):
     """Install a package with pip, trying alternatives if the first attempt fails"""
     print(f"Installing {package_name}...")
     
-    # For Windows, try using --no-cache-dir to avoid cache-related issues
+    # For Windows, use --no-cache-dir to avoid cache-related issues
     pip_extra_args = ["--no-cache-dir"] if is_windows else []
-
-    # Special handling for packages that need compilation
-    if "pywebview" in package_name:
-        print("Looking for binary wheel for pywebview (to avoid C++ compilation)...")
-        pip_extra_args += ["--only-binary=:all:"]
     
-    # First try direct installation 
+    # First try direct installation - with better error handling
     try:
-        subprocess.run(
+        result = subprocess.run(
             [sys.executable, "-m", "pip", "install", package_name] + pip_extra_args,
-            check=True,
             capture_output=True,
-            text=True
+            text=True,
+            check=False  # Don't raise exceptions so we can handle errors
         )
-        print(f"✓ Successfully installed {package_name}")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"× Failed to install {package_name}: {e}")
-        if e.stderr:
-            print(f"  Error output: {e.stderr.strip()}")
-            
-            # Give more helpful advice for Visual C++ errors
-            if "Microsoft Visual C++" in e.stderr:
-                print("\n⚠️ Visual C++ error detected:")
-                print("1. Make sure you installed Visual Studio with 'Desktop development with C++' workload")
-                print("2. You might need to restart your computer after installing")
-                print("3. Trying to find pre-compiled binary wheel as alternative...\n")
-                
-                # Try again with --only-binary flag to force wheel use
-                try:
-                    print("  Attempting binary-only wheel installation...")
-                    subprocess.run(
-                        [sys.executable, "-m", "pip", "install", "--only-binary=:all:", package_name],
-                        check=True,
-                        capture_output=True,
-                        text=True
-                    )
-                    print(f"  ✓ Successfully installed {package_name} from binary wheel")
-                    return True
-                except:
-                    print("  × Binary wheel not available")
         
-        # If alternatives exist, try them one by one
-        if alternatives:
-            print(f"  Trying alternative packages for {package_name}...")
-            for alt in alternatives:
-                try:
-                    print(f"  Trying alternative: {alt}")
-                    subprocess.run(
-                        [sys.executable, "-m", "pip", "install", alt] + pip_extra_args,
-                        check=True,
-                        capture_output=True,
-                        text=True
-                    )
+        if result.returncode == 0:
+            print(f"✓ Successfully installed {package_name}")
+            return True
+        else:
+            print(f"× Failed to install {package_name}")
+            if result.stderr:
+                print(f"  Error output: {result.stderr.strip()}")
+                
+                # Check for specific errors to provide better guidance
+                if "Microsoft Visual C++ 14.0 or greater is required" in result.stderr:
+                    print("\n⚠️ Visual C++ build tools are required.")
+                    print("1. Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/")
+                    print("2. During installation, select 'Desktop development with C++'")
+                    print("3. Restart your computer after installation\n")
+                    
+                if "PyQt5" in package_name and "No matching distribution found" in result.stderr:
+                    print("  ℹ️ PyQt5 not found for your Python version. Trying alternate PyQt version...")
+    except Exception as e:
+        print(f"× Error running pip: {str(e)}")
+    
+    # If alternatives exist, try them one by one
+    if alternatives:
+        print(f"  Trying alternative packages for {package_name}...")
+        for alt in alternatives:
+            try:
+                # Display a clearer message about which alternative we're trying
+                print(f"  Trying alternative: {alt}")
+                
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", alt] + pip_extra_args,
+                    capture_output=True,
+                    text=True,
+                    check=False  # Don't raise exceptions
+                )
+                
+                if result.returncode == 0:
                     print(f"  ✓ Successfully installed alternative package {alt}")
                     return True
-                except subprocess.CalledProcessError as alt_e:
+                else:
                     print(f"  × Failed to install alternative {alt}")
-                    if alt_e.stderr and "Microsoft Visual C++" in alt_e.stderr:
-                        continue  # Already showed C++ error above, just continue to next alternative
-        
-        print(f"× All installation attempts for {package_name} failed")
-        return False
+                    if result.stderr and len(result.stderr) < 500:  # Only show reasonably sized errors
+                        print(f"    Error: {result.stderr.strip()}")
+            except Exception as e:
+                print(f"  × Error installing alternative {alt}: {str(e)}")
+    
+    print(f"× All installation attempts for {package_name} failed")
+    return False
 
 # Dictionary to track what UI toolkits are available
 ui_toolkit = {
-    "webview": False,    # pywebview with Microsoft WebView2 (works on ARM64)
-    "cef": False,        # CEF Python (Chromium Embedded Framework)
-    "tkinter": True,     # Tkinter is part of standard library
+    "pyqt": False,      # PyQt5 with WebEngine (primary choice for x86/x64)
+    "pyside": False,    # PySide6 as alternative
+    "tkinter": True,    # Tkinter as final fallback (part of Python)
 }
 
 # First install base build tools
@@ -232,26 +229,37 @@ install_package("pyinstaller>=5.0.0", WINDOWS_DEPS["pyinstaller"])
 # Install API communication libraries
 requests_available = install_package("requests", WINDOWS_DEPS["requests"])
 jinja2_available = install_package("jinja2", WINDOWS_DEPS["jinja2"])
-flask_available = install_package("flask", WINDOWS_DEPS["flask"])
 
-# Install pywebview for WebView2 access - works on ARM64 Windows!
-webview_success = install_package("pywebview", WINDOWS_DEPS["webview"])
-if webview_success:
-    ui_toolkit["webview"] = True
-    print("✓ WebView2 binding successfully installed")
-else:
-    print("× WebView2 binding installation failed - will use fallback approach")
+# Install PyQt5 with WebEngine (best option for standard Windows)
+print("\nAttempting to install PyQt5 with WebEngine (primary UI toolkit)...")
+pyqt_success = install_package("PyQt5", WINDOWS_DEPS["pyqt"])
+if pyqt_success:
+    # If PyQt installs successfully, install WebEngine
+    webengine_success = install_package("PyQt5-WebEngine", WINDOWS_DEPS["pyqt_webengine"])
+    if webengine_success:
+        ui_toolkit["pyqt"] = True
+        print("✓ PyQt5 with WebEngine successfully installed - will use for excellent browser rendering")
+    else:
+        print("× PyQt5 installed but WebEngine failed - will use basic WebKit")
 
-# Install Pillow for icon generation but don't fail if not available
-pillow_available = install_package("pillow", ["Pillow==10.0.0", "Pillow==9.5.0"])
+# Try PySide6 as an alternative if PyQt fails
+if not ui_toolkit["pyqt"]:
+    print("\nAttempting to install PySide6 as alternative...")
+    pyside_success = install_package("PySide6", WINDOWS_DEPS["pyside"])
+    if pyside_success:
+        ui_toolkit["pyside"] = True
+        print("✓ PySide6 successfully installed - will use as alternative browser")
+
+# Install Pillow for icon generation (but don't fail if not available)
+pillow_available = install_package("pillow", WINDOWS_DEPS["pillow"])
 
 print("\nDependency installation summary:")
-print(f"WebView:        {'✓ Available' if ui_toolkit['webview'] else '× Not available'}")
-print(f"Tkinter:        {'✓ Available' if ui_toolkit['tkinter'] else '× Not available'}")
-print(f"Requests:       {'✓ Available' if requests_available else '× Not available'}")
-print(f"Jinja2:         {'✓ Available' if jinja2_available else '× Not available'}")
-print(f"Flask:          {'✓ Available' if flask_available else '× Not available'}")
-print(f"Pillow:         {'✓ Available' if pillow_available else '× Not available'}")
+print(f"PyQt:          {'✓ Available' if ui_toolkit['pyqt'] else '× Not available'}")
+print(f"PySide:        {'✓ Available' if ui_toolkit['pyside'] else '× Not available'}")
+print(f"Tkinter:       {'✓ Available' if ui_toolkit['tkinter'] else '× Not available'}")
+print(f"Requests:      {'✓ Available' if requests_available else '× Not available'}")
+print(f"Jinja2:        {'✓ Available' if jinja2_available else '× Not available'}")
+print(f"Pillow:        {'✓ Available' if pillow_available else '× Not available'}")
 
 # Create a standalone application with embedded browser - MODIFIED for toolkit detection
 print(f"Creating standalone application: {MAIN_SCRIPT}")
