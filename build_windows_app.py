@@ -96,10 +96,8 @@ def setup_windows_environment():
 # Windows-specific dependency versions - EXACTLY MATCHING PAIRS are crucial for WebEngine
 WINDOWS_DEPS = {
     "pyinstaller": ["pyinstaller==5.13.0", "pyinstaller==5.8.0", "pyinstaller==5.6.2"],
-    # Use wxPython instead of PyQt for better compatibility
-    "wxpython": ["wxPython==4.2.1", "wxPython==4.2.0", "wxPython==4.1.1"],
-    # WebView2 loader - Microsoft Edge component
-    "webview2": ["pywebview==4.3.3", "pywebview==4.3", "pywebview==4.0"],
+    # WebView2 - Microsoft's Edge component with full ARM64 support
+    "webview": ["pywebview==4.4.1", "pywebview==4.3.3", "pywebview==4.2.2"],
     "pillow": ["Pillow==10.0.0", "Pillow==9.5.0", "Pillow==9.0.0"],
     # API and template-based approach dependencies
     "requests": ["requests==2.31.0", "requests==2.28.2"],
@@ -200,9 +198,8 @@ def install_package(package_name, alternatives=None):
 
 # Dictionary to track what UI toolkits are available
 ui_toolkit = {
-    "wxpython": False,
-    "webview": False,
-    "tkinter": True,  # Tkinter is part of standard library and assumed available
+    "webview": False,   # pywebview with Microsoft WebView2 (works on ARM64)
+    "tkinter": True,    # Tkinter is part of standard library
 }
 
 # First install base build tools
@@ -213,27 +210,18 @@ requests_available = install_package("requests", WINDOWS_DEPS["requests"])
 jinja2_available = install_package("jinja2", WINDOWS_DEPS["jinja2"])
 flask_available = install_package("flask", WINDOWS_DEPS["flask"])
 
-# Install wxPython instead of PyQt
-wxpython_success = install_package("wxPython", WINDOWS_DEPS["wxpython"])
-if wxpython_success:
-    ui_toolkit["wxpython"] = True
-    print("✓ wxPython successfully installed")
-    
-    # Try installing pywebview for WebView2 access
-    webview_success = install_package("pywebview", WINDOWS_DEPS["webview2"])
-    if webview_success:
-        ui_toolkit["webview"] = True
-        print("✓ WebView2 binding successfully installed")
-    else:
-        print("× WebView2 binding installation failed - will try alternative approach")
+# Install pywebview for WebView2 access - works on ARM64 Windows!
+webview_success = install_package("pywebview", WINDOWS_DEPS["webview"])
+if webview_success:
+    ui_toolkit["webview"] = True
+    print("✓ WebView2 binding successfully installed")
 else:
-    print("× wxPython installation failed - will use fallback approach")
+    print("× WebView2 binding installation failed - will use fallback approach")
 
 # Install Pillow for icon generation but don't fail if not available
 pillow_available = install_package("pillow", ["Pillow==10.0.0", "Pillow==9.5.0"])
 
 print("\nDependency installation summary:")
-print(f"wxPython:       {'✓ Available' if ui_toolkit['wxpython'] else '× Not available'}")
 print(f"WebView:        {'✓ Available' if ui_toolkit['webview'] else '× Not available'}")
 print(f"Tkinter:        {'✓ Available' if ui_toolkit['tkinter'] else '× Not available'}")
 print(f"Requests:       {'✓ Available' if requests_available else '× Not available'}")
@@ -447,7 +435,6 @@ class OfflineManager:
                 <td>{{item.part}}</td>
                 <td>{{item.days}}</td>
                 <td><button>Mark Complete</button></td>
-            </tr>
             {% endfor %}
         </table>
     </div>
@@ -839,8 +826,7 @@ class ApiClient:
             # Check if we're online
             if not self.offline_manager.is_online():
                 log.warning(f"Offline mode: retrieving cached data for {endpoint}")
-                cached_data = self.offline_manager.get_cached_data(endpoint)
-                if cached_data:
+                if cached_data := self.offline_manager.get_cached_data(endpoint):
                     return cached_data
                 else:
                     log.warning(f"No cached data available for {endpoint}")
@@ -870,16 +856,16 @@ class ApiClient:
                 return content
         except HTTPError as e:
             log.error(f"HTTP error ({url}): {e.code} - {e.reason}")
-            cached_data = self.offline_manager.get_cached_data(endpoint)
-            return cached_data if cached_data else None
+            if cached_data := self.offline_manager.get_cached_data(endpoint):
+                return cached_data
         except URLError as e:
             log.error(f"URL error ({url}): {e.reason}")
-            cached_data = self.offline_manager.get_cached_data(endpoint)
-            return cached_data if cached_data else None
+            if cached_data := self.offline_manager.get_cached_data(endpoint):
+                return cached_data
         except Exception as e:
             log.error(f"API request error ({url}): {e}")
-            cached_data = self.offline_manager.get_cached_data(endpoint)
-            return cached_data if cached_data else None
+            if cached_data := self.offline_manager.get_cached_data(endpoint):
+                return cached_data
             
     def login(self, username, password):
         '''Log in to the API'''
