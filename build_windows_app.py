@@ -98,7 +98,7 @@ WINDOWS_DEPS = {
     "pyinstaller": ["pyinstaller==5.13.0", "pyinstaller==5.8.0", "pyinstaller==5.6.2"],
     # Standard PyQt5 with WebEngine - proven to work well on standard Windows
     "pyqt": ["PyQt5==5.15.9", "PyQt5==5.15.7", "PyQt5==5.15.6"],
-    "pyqt_webengine": ["PyQt5-WebEngine==5.15.6", "PyQt5-WebEngine==5.15.5"],
+    "pyqt_webengine": ["PyQtWebEngine==5.15.6", "PyQtWebEngine==5.15.5", "PyQtWebEngine==5.15.4"],
     # Alternative UI toolkit
     "pyside": ["PySide6==6.5.2", "PySide6==6.4.2"],
     # For image processing (icons, etc.)
@@ -235,7 +235,7 @@ print("\nAttempting to install PyQt5 with WebEngine (primary UI toolkit)...")
 pyqt_success = install_package("PyQt5", WINDOWS_DEPS["pyqt"])
 if pyqt_success:
     # If PyQt installs successfully, install WebEngine
-    webengine_success = install_package("PyQt5-WebEngine", WINDOWS_DEPS["pyqt_webengine"])
+    webengine_success = install_package("PyQtWebEngine", WINDOWS_DEPS["pyqt_webengine"])
     if webengine_success:
         ui_toolkit["pyqt"] = True
         print("✓ PyQt5 with WebEngine successfully installed - will use for excellent browser rendering")
