@@ -96,16 +96,15 @@ def setup_windows_environment():
 # Windows-specific dependency versions - EXACTLY MATCHING PAIRS are crucial for WebEngine
 WINDOWS_DEPS = {
     "pyinstaller": ["pyinstaller==5.13.0", "pyinstaller==5.8.0", "pyinstaller==5.6.2"],
-    # These specific version combinations are known to work together well
-    "pyqt_combos": [
-        ("PyQt5==5.15.2", "PyQtWebEngine==5.15.2"),  # Best match combo
-        ("PyQt5==5.15.6", "PyQtWebEngine==5.15.6"),  # Also works well
-        ("PyQt5==5.15.7", "PyQtWebEngine==5.15.6"),  # Sometimes works
-    ],
+    # Use wxPython instead of PyQt for better compatibility
+    "wxpython": ["wxPython==4.2.1", "wxPython==4.2.0", "wxPython==4.1.1"],
+    # WebView2 loader - Microsoft Edge component
+    "webview2": ["pywebview==4.3.3", "pywebview==4.3", "pywebview==4.0"],
     "pillow": ["Pillow==10.0.0", "Pillow==9.5.0", "Pillow==9.0.0"],
-    # Add dependencies for API and template-based approach
+    # API and template-based approach dependencies
     "requests": ["requests==2.31.0", "requests==2.28.2"],
     "jinja2": ["Jinja2==3.1.2", "Jinja2==3.0.3"],
+    "flask": ["Flask==2.2.5", "Flask==2.0.1"],  # For local server
 }
 
 # Run Windows setup before proceeding with installation
@@ -199,72 +198,10 @@ def install_package(package_name, alternatives=None):
         print(f"× All installation attempts for {package_name} failed")
         return False
 
-# Enhanced function to install PyQt and WebEngine as a matched pair
-def install_qt_with_webengine():
-    """Install PyQt and PyQtWebEngine as compatible pairs"""
-    print("Installing PyQt with WebEngine components...")
-    
-    # First clean any existing installations that might conflict
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "pip", "uninstall", "-y", "PyQt5", "PyQtWebEngine"],
-            check=False,  # Don't fail if packages aren't installed
-            capture_output=True
-        )
-        print("Cleaned existing PyQt installations")
-    except:
-        pass
-        
-    # Try each known working combination
-    success = False
-    for pyqt_ver, webengine_ver in WINDOWS_DEPS["pyqt_combos"]:
-        try:
-            print(f"\nTrying combination: {pyqt_ver} with {webengine_ver}")
-            
-            # Install PyQt first
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--no-cache-dir", pyqt_ver],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            print(f"✓ Successfully installed {pyqt_ver}")
-            
-            # Then install matching WebEngine
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--no-cache-dir", webengine_ver],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            print(f"✓ Successfully installed {webengine_ver}")
-            
-            # Test if imports work
-            test_script = "import sys; from PyQt5.QtWidgets import QApplication; from PyQt5.QtWebEngineWidgets import QWebEngineView; print('WebEngine successfully installed and imported!')"
-            result = subprocess.run(
-                [sys.executable, "-c", test_script],
-                capture_output=True,
-                text=True
-            )
-            
-            if result.returncode == 0:
-                print("✓ WebEngine TEST PASSED: Imports working correctly!")
-                success = True
-                break
-            else:
-                print("× WebEngine test failed despite installation succeeding")
-                print(f"  Error: {result.stderr}")
-                # Continue to the next combination
-        except Exception as e:
-            print(f"× Failed to install combination: {str(e)}")
-            continue
-    
-    return success
-
 # Dictionary to track what UI toolkits are available
 ui_toolkit = {
-    "qt5": False,
-    "qt6": False,
+    "wxpython": False,
+    "webview": False,
     "tkinter": True,  # Tkinter is part of standard library and assumed available
 }
 
@@ -274,40 +211,34 @@ install_package("pyinstaller>=5.0.0", WINDOWS_DEPS["pyinstaller"])
 # Install API communication libraries
 requests_available = install_package("requests", WINDOWS_DEPS["requests"])
 jinja2_available = install_package("jinja2", WINDOWS_DEPS["jinja2"])
+flask_available = install_package("flask", WINDOWS_DEPS["flask"])
 
-# Try installing PyQt with WebEngine as matched pairs
-qt5_success = install_qt_with_webengine()
-if qt5_success:
-    ui_toolkit["qt5"] = True
-    ui_toolkit["webengine"] = True
-    print("✓ PyQt5 with WebEngine successfully installed")
-else:
-    print("× Could not install PyQt5 with WebEngine")
-    # Try installing just PyQt5 without WebEngine
-    qt5_basic_success = install_package("pyqt5", ["PyQt5==5.15.2", "PyQt5==5.15.6", "PyQt5==5.15.7"])
-    if qt5_basic_success:
-        ui_toolkit["qt5"] = True
-        print("⚠️ PyQt5 installed but WebEngine failed - limited functionality")
+# Install wxPython instead of PyQt
+wxpython_success = install_package("wxPython", WINDOWS_DEPS["wxpython"])
+if wxpython_success:
+    ui_toolkit["wxpython"] = True
+    print("✓ wxPython successfully installed")
+    
+    # Try installing pywebview for WebView2 access
+    webview_success = install_package("pywebview", WINDOWS_DEPS["webview2"])
+    if webview_success:
+        ui_toolkit["webview"] = True
+        print("✓ WebView2 binding successfully installed")
     else:
-        # Try Qt6 as fallback
-        qt6_success = install_package("pyqt6", ["PyQt6==6.5.0", "PyQt6==6.4.0"])
-        if qt6_success:
-            ui_toolkit["qt6"] = True
-            # Try WebEngine for Qt6
-            webengine6_success = install_package("PyQt6-WebEngine", 
-                                               ["PyQt6-WebEngine==6.5.0", "PyQt6-WebEngine==6.4.0"])
-            if webengine6_success:
-                ui_toolkit["webengine"] = True
+        print("× WebView2 binding installation failed - will try alternative approach")
+else:
+    print("× wxPython installation failed - will use fallback approach")
 
 # Install Pillow for icon generation but don't fail if not available
 pillow_available = install_package("pillow", ["Pillow==10.0.0", "Pillow==9.5.0"])
 
 print("\nDependency installation summary:")
-print(f"PyQt5:          {'✓ Available' if ui_toolkit['qt5'] else '× Not available'}")
-print(f"PyQt6:          {'✓ Available' if ui_toolkit['qt6'] else '× Not available'}")
+print(f"wxPython:       {'✓ Available' if ui_toolkit['wxpython'] else '× Not available'}")
+print(f"WebView:        {'✓ Available' if ui_toolkit['webview'] else '× Not available'}")
 print(f"Tkinter:        {'✓ Available' if ui_toolkit['tkinter'] else '× Not available'}")
 print(f"Requests:       {'✓ Available' if requests_available else '× Not available'}")
 print(f"Jinja2:         {'✓ Available' if jinja2_available else '× Not available'}")
+print(f"Flask:          {'✓ Available' if flask_available else '× Not available'}")
 print(f"Pillow:         {'✓ Available' if pillow_available else '× Not available'}")
 
 # Create a standalone application with embedded browser - MODIFIED for toolkit detection
@@ -326,55 +257,56 @@ import threading
 import datetime
 import traceback
 from pathlib import Path
+import json
+import webbrowser
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 """
 
-# UI toolkit imports based on availability
-qt5_imports = """
-# Using PyQt5 for UI
+wx_imports = """
+# Using wxPython for UI with WebView
 try:
-    from PyQt5.QtWidgets import *
-    from PyQt5.QtCore import *
-    from PyQt5.QtGui import *
+    import wx
+    import wx.html2
+    USING_WX = True
     try:
-        from PyQt5.QtWebEngineWidgets import *
-        WEB_ENGINE_AVAILABLE = True
-    except ImportError:
-        WEB_ENGINE_AVAILABLE = False
-    
-    USING_QT5 = True
-    USING_QT6 = False
-    USING_TKINTER = False
+        # Test if WebView is actually available
+        test_wx = wx.App(False)
+        test_panel = wx.Panel(None)
+        try:
+            test_webview = wx.html2.WebView.New(test_panel)
+            WEBVIEW_AVAILABLE = True
+            test_app_exists = True
+        except Exception as e:
+            WEBVIEW_AVAILABLE = False
+        test_panel.Destroy()
+        if test_app_exists:
+            test_wx.Destroy()
+    except Exception as e:
+        WEBVIEW_AVAILABLE = False
 except ImportError:
-    USING_QT5 = False
+    USING_WX = False
+    WEBVIEW_AVAILABLE = False
 """
 
-qt6_imports = """
-# Using PyQt6 for UI
+webview_imports = """
+# Try standalone webview (uses Edge WebView2 on Windows)
 try:
-    from PyQt6.QtWidgets import *
-    from PyQt6.QtCore import *
-    from PyQt6.QtGui import *
-    try:
-        from PyQt6.QtWebEngineWidgets import *
-        from PyQt6.QtWebEngineCore import *
-        WEB_ENGINE_AVAILABLE = True
-    except ImportError:
-        WEB_ENGINE_AVAILABLE = False
-    
-    USING_QT5 = False
-    USING_QT6 = True
-    USING_TKINTER = False
+    import webview
+    WEBVIEW_STANDALONE_AVAILABLE = True
 except ImportError:
-    USING_QT6 = False
+    WEBVIEW_STANDALONE_AVAILABLE = False
 """
 
-no_qt_imports = """
-# PyQt not available
-USING_QT5 = False
-USING_QT6 = False
-WEB_ENGINE_AVAILABLE = False
+flask_imports = """
+# Use Flask for local server if needed
+try:
+    from flask import Flask, render_template_string, send_from_directory, jsonify, request
+    import socket
+    import random
+    FLASK_AVAILABLE = True
+except ImportError:
+    FLASK_AVAILABLE = False
 """
 
 tkinter_imports = """
@@ -413,18 +345,14 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # Log what UI toolkit we're using
-if USING_QT5:
-    log.info("Using PyQt5 UI toolkit")
-    if WEB_ENGINE_AVAILABLE:
-        log.info("QtWebEngine is available")
+if USING_WX:
+    log.info("Using wxPython UI toolkit")
+    if WEBVIEW_AVAILABLE:
+        log.info("WebView is available")
     else:
-        log.info("QtWebEngine is not available - using simple browser")
-elif USING_QT6:
-    log.info("Using PyQt6 UI toolkit")
-    if WEB_ENGINE_AVAILABLE:
-        log.info("QtWebEngine is available")
-    else:
-        log.info("QtWebEngine is not available - using simple browser")
+        log.info("WebView is not available - using simple browser")
+elif WEBVIEW_STANDALONE_AVAILABLE:
+    log.info("Using standalone WebView")
 elif USING_TKINTER:
     log.info("Using Tkinter UI toolkit - limited functionality")
 else:
@@ -1008,6 +936,194 @@ class ApiClient:
             }
 """
 
+# Add Flask server implementation
+flask_server = """
+# ===== FLASK SERVER =====
+class FlaskAppWrapper:
+    '''Wrapper for Flask application with template handling'''
+    
+    def __init__(self, offline_manager, name=None):
+        self.app = Flask(name or __name__)
+        self.offline_manager = offline_manager
+        self.api_routes = {}
+        self.template_paths = {}
+        self.port = None
+        self.flask_thread = None
+        self.server_url = None
+        self._setup_routes()
+        
+    def _setup_routes(self):
+        '''Set up Flask routes'''
+        
+        @self.app.route('/')
+        def index():
+            return self.render_template('dashboard.html', {
+                'server_url': SERVER_URL,
+                'status': 'Local Mode',
+                'overdue_items': [],
+                'due_soon_items': [],
+                'status_class': 'warning'
+            })
+            
+        @self.app.route('/dashboard')
+        def dashboard():
+            # This will be replaced with real data from API
+            is_online = self.offline_manager.is_online()
+            status = 'Online' if is_online else 'Offline'
+            status_class = 'good' if is_online else 'overdue'
+            
+            # Get data - will implement real API later
+            maintenance_data = {
+                'overdue_items': [
+                    {"id": 1, "machine": "Machine A", "part": "Belt", "days": 5, "due_date": "2023-10-15"},
+                    {"id": 2, "machine": "Machine B", "part": "Filter", "days": 3, "due_date": "2023-10-17"}
+                ],
+                'due_soon_items': [
+                    {"id": 3, "machine": "Machine C", "part": "Motor", "days": 2, "due_date": "2023-10-22"},
+                    {"id": 4, "machine": "Machine A", "part": "Bearing", "days": 5, "due_date": "2023-10-25"}
+                ]
+            }
+            
+            # Get the current time for "last updated" info
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            return self.render_template('dashboard.html', {
+                'server_url': SERVER_URL,
+                'status': status,
+                'status_class': status_class,
+                'overdue_items': maintenance_data['overdue_items'],
+                'due_soon_items': maintenance_data['due_soon_items'],
+                'overdue_count': len(maintenance_data['overdue_items']),
+                'due_soon_count': len(maintenance_data['due_soon_items']),
+                'on_schedule_count': 10,  # Placeholder
+                'last_updated': now
+            })
+        
+        @self.app.route('/maintenance')
+        def maintenance():
+            # Show maintenance recording page
+            return self.render_template('maintenance.html', {
+                'sites': [
+                    {'id': 1, 'name': 'Site A'},
+                    {'id': 2, 'name': 'Site B'}
+                ]
+            })
+            
+        @self.app.route('/api/status')
+        def api_status():
+            is_online = self.offline_manager.is_online()
+            return jsonify({
+                'online': is_online,
+                'server_url': SERVER_URL,
+                'timestamp': datetime.datetime.now().isoformat()
+            })
+            
+        @self.app.route('/static/css/core.css')
+        def core_css():
+            return self.offline_manager.get_css('core.css'), 200, {'Content-Type': 'text/css'}
+        
+    def render_template(self, template_name, context={}):
+        '''Render a template with context'''
+        # Get the template content
+        template = self.offline_manager.get_template(template_name)
+        
+        # Get CSS and inject if not already there
+        css = self.offline_manager.get_css("core.css")
+        if "<style>" not in template:
+            template = template.replace("</head>", f"<style>{css}</style></head>")
+        
+        # Process template with context
+        for key, value in context.items():
+            if isinstance(value, str):
+                template = template.replace(f"{{{{{key}}}}}", value)
+            elif isinstance(value, int) or isinstance(value, float):
+                template = template.replace(f"{{{{{key}}}}}", str(value))
+            
+        # Process loops
+        import re
+        for match in re.finditer(r'{%\s*for\s+(\w+)\s+in\s+(\w+)\s*%}(.*?){%\s*endfor\s*%}', template, re.DOTALL):
+            item_var, items_var, loop_content = match.groups()
+            
+            if items_var not in context or not isinstance(context[items_var], (list, tuple)):
+                # Skip if items variable doesn't exist or isn't iterable
+                template = template.replace(match.group(0), "")
+                continue
+                
+            loop_items = []
+            for item in context[items_var]:
+                # Replace {{item.attribute}} with the actual value
+                item_content = loop_content
+                for key, value in item.items():
+                    item_content = item_content.replace(f"{{{{{item_var}.{key}}}}}", str(value))
+                loop_items.append(item_content)
+                
+            template = template.replace(match.group(0), ''.join(loop_items))
+            
+        # Add JavaScript for frontend functionality
+        template = template.replace("</body>", '''
+        <script>
+            // Add JavaScript to handle API requests
+            async function refreshData() {
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+                    console.log('Status:', data);
+                    // Reload page to refresh data
+                    window.location.reload();
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            }
+
+            // Add click handlers to buttons
+            document.addEventListener('DOMContentLoaded', function() {
+                // Find refresh buttons
+                const refreshButtons = document.querySelectorAll('.btn-refresh, button[data-action="refresh"]');
+                refreshButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        refreshData();
+                    });
+                });
+            });
+        </script>
+        </body>''')
+            
+        return template
+        
+    def find_free_port(self):
+        '''Find a free port to run the Flask server'''
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 0))
+            return s.getsockname()[1]
+            
+    def run_server(self):
+        '''Run the Flask server in a thread'''
+        if self.flask_thread and self.flask_thread.is_alive():
+            return self.server_url
+            
+        # Find a free port
+        try:
+            self.port = self.find_free_port()
+        except:
+            # If port finding fails, use a random port in the dynamic range
+            self.port = random.randint(49152, 65535)
+            
+        self.server_url = f"http://127.0.0.1:{self.port}"
+        
+        # Start the server in a thread
+        def run_flask():
+            self.app.run(port=self.port, debug=False, threaded=True)
+            
+        self.flask_thread = threading.Thread(target=run_flask)
+        self.flask_thread.daemon = True  # Thread will die when main thread exits
+        self.flask_thread.start()
+        
+        # Wait a moment for the server to start
+        time.sleep(0.5)
+        
+        return self.server_url
+"""
+
 # Main entry point
 main_code = r"""
 # Main entry point
@@ -1019,278 +1135,153 @@ if __name__ == "__main__":
         # Initialize core components
         offline_manager = OfflineManager()
         api_client = ApiClient()
-        template_renderer = TemplateRenderer(offline_manager)
         
-        # Check connection
-        is_online = offline_manager.is_online()
-        log.info(f"Server connection: {'Online' if is_online else 'Offline'}")
+        # Decide which approach to use based on available toolkits
+        app_mode = "wx_webview" if USING_WX and WEBVIEW_AVAILABLE else \
+                   "webview" if WEBVIEW_STANDALONE_AVAILABLE else \
+                   "flask_browser" if FLASK_AVAILABLE else \
+                   "tkinter"  # Final fallback
         
-        # Start UI based on what's available
-        if USING_QT5 or USING_QT6:
-            # Use PyQt interface
-            app = QApplication(sys.argv)
-            
-            # Set application style for a more modern look
-            app.setStyle("Fusion")
-            
-            # Main window setup with better styling
-            window = QMainWindow()
-            window.setWindowTitle(APP_NAME)
-            window.resize(1000, 700)
-            
-            central_widget = QWidget()
-            window.setCentralWidget(central_widget)
-            
-            main_layout = QVBoxLayout(central_widget)
-            
-            # Create tabs for different screens
-            tabs = QTabWidget()
-            main_layout.addWidget(tabs)
-            
-            # Dashboard tab
-            dashboard_tab = QWidget()
-            dashboard_layout = QVBoxLayout(dashboard_tab)
-            
-            # Dashboard header with improved styling
-            header_layout = QHBoxLayout()
-            status_label = QLabel(f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
-            status_label.setStyleSheet(
-                "font-weight: bold; font-size: 14px; "
-                f"color: {'#1e7e34' if is_online else '#dc3545'};"
-            )
-            header_layout.addWidget(status_label)
-            
-            refresh_btn = QPushButton("Refresh Data")
-            refresh_btn.setMaximumWidth(150)
-            refresh_btn.setStyleSheet(
-                "background-color: #FE7900; color: white; "
-                "border: none; padding: 8px 16px; border-radius: 4px;"
-            )
-            header_layout.addWidget(refresh_btn)
-            header_layout.addStretch()
-            
-            dashboard_layout.addLayout(header_layout)
-            
-            # We'll use a QTextBrowser to display HTML content from templates
-            text_browser = QTextBrowser()
-            text_browser.setOpenExternalLinks(True)
-            dashboard_layout.addWidget(text_browser)
-            
-            # Function to update the dashboard
-            def update_dashboard():
-                try:
-                    # Check connection status first
-                    is_online = offline_manager.is_online()
-                    log.info(f"Refreshing dashboard (online={is_online})")
-                    
-                    # Update status label
-                    status_label.setText(f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
-                    status_label.setStyleSheet(
-                        "font-weight: bold; font-size: 14px; "
-                        f"color: {'#1e7e34' if is_online else '#dc3545'};"
-                    )
-                    
-                    # Get maintenance data (either from API or mock)
-                    maintenance_data = api_client.fetch_maintenance_items()
-                    
-                    # Calculate counts for summary
-                    overdue_count = len(maintenance_data.get('overdue_items', []))
-                    due_soon_count = len(maintenance_data.get('due_soon_items', []))
-                    on_schedule_count = 10 - (overdue_count + due_soon_count)  # Just for demo
-                    
-                    # Get the current time for "last updated" info
-                    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # Determine status class for CSS
-                    status_class = "good" if is_online else "overdue"
-                    
-                    # Render the dashboard template with expanded context
-                    context = {
-                        'server_url': SERVER_URL,
-                        'status': 'Online' if is_online else 'Offline',
-                        'status_class': status_class,
-                        'overdue_items': maintenance_data.get('overdue_items', []),
-                        'due_soon_items': maintenance_data.get('due_soon_items', []),
-                        'overdue_count': overdue_count,
-                        'due_soon_count': due_soon_count,
-                        'on_schedule_count': on_schedule_count,
-                        'last_updated': now
-                    }
-                    
-                    html_content = template_renderer.render('dashboard.html', context)
-                    text_browser.setHtml(html_content)
-                    
-                    log.info("Dashboard updated successfully")
-                    
-                except Exception as e:
-                    log.error(f"Error updating dashboard: {e}")
-                    log.error(traceback.format_exc())
-            
-            # Connect refresh button
-            refresh_btn.clicked.connect(update_dashboard)
-            
-            # Render initial dashboard
-            update_dashboard()
-            
-            # Add dashboard to tabs
-            tabs.addTab(dashboard_tab, "Dashboard")
-            
-            # Maintenance tab
-            maintenance_tab = QWidget()
-            maintenance_layout = QVBoxLayout(maintenance_tab)
-            
-            # Maintenance form (native controls since we can't use web forms)
-            form_layout = QFormLayout()
-            
-            site_combo = QComboBox()
-            site_combo.addItem("Site A")
-            site_combo.addItem("Site B")
-            form_layout.addRow("Site:", site_combo)
-            
-            machine_combo = QComboBox()
-            machine_combo.addItem("Machine 1")
-            machine_combo.addItem("Machine 2")
-            form_layout.addRow("Machine:", machine_combo)
-            
-            part_combo = QComboBox()
-            part_combo.addItem("Belt")
-            part_combo.addItem("Filter")
-            form_layout.addRow("Part:", part_combo)
-            
-            date_edit = QDateEdit(QDate.currentDate())
-            form_layout.addRow("Date:", date_edit)
-            
-            comments = QTextEdit()
-            comments.setMaximumHeight(100)
-            form_layout.addRow("Comments:", comments)
-            
-            submit_btn = QPushButton("Record Maintenance")
-            
-            maintenance_layout.addLayout(form_layout)
-            maintenance_layout.addWidget(submit_btn)
-            maintenance_layout.addStretch()
-            
-            # Add maintenance tab to tabs
-            tabs.addTab(maintenance_tab, "Record Maintenance")
-            
-            # Display the app window
-            window.show()
-            
-            # Start the application event loop
-            sys.exit(app.exec_() if USING_QT5 else app.exec())
+        log.info(f"Using application mode: {app_mode}")
         
-        elif USING_TKINTER:
-            # Tkinter fallback implementation
-            root = tk.Tk()
-            root.title(APP_NAME)
-            root.geometry("900x700")
+        # Use wxPython with WebView for best experience
+        if app_mode == "wx_webview":
+            log.info("Starting wxPython with WebView")
             
-            # Create notebook for tabs
-            notebook = ttk.Notebook(root)
-            notebook.pack(fill=tk.BOTH, expand=True)
+            # Initialize Flask server for local content
+            flask_app = FlaskAppWrapper(offline_manager, name="AMRS_Maintenance")
+            local_url = flask_app.run_server()
+            log.info(f"Local server running at {local_url}")
             
-            # Dashboard tab with basic info
-            dashboard_frame = ttk.Frame(notebook)
-            notebook.add(dashboard_frame, text="Dashboard")
+            # Create wxPython app
+            app = wx.App(False)
             
-            # Status frame
-            status_frame = ttk.Frame(dashboard_frame)
-            status_frame.pack(fill=tk.X, padx=10, pady=10)
+            # Create the main frame
+            frame = wx.Frame(None, title=APP_NAME, size=(1200, 800))
             
-            status_label = ttk.Label(status_frame, 
-                                   text=f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
-            status_label.pack(side=tk.LEFT, padx=5)
+            # Create panel for controls
+            panel = wx.Panel(frame)
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
             
-            refresh_btn = ttk.Button(status_frame, text="Refresh Data")
-            refresh_btn.pack(side=tk.RIGHT, padx=5)
+            # Create toolbar with refresh button
+            control_sizer = wx.BoxSizer(wx.HORIZONTAL)
             
-            # Text area for content
-            content_text = ScrolledText(dashboard_frame)
-            content_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+            # Status display
+            status_text = wx.StaticText(panel, label="Connecting...")
+            control_sizer.Add(status_text, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
             
-            # Add some default content
-            content_text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\n\n")
-            content_text.insert(tk.END, f"Server URL: {SERVER_URL}\n")
-            content_text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\n\n")
+            # Buttons
+            refresh_btn = wx.Button(panel, label="Refresh")
+            dashboard_btn = wx.Button(panel, label="Dashboard")
+            maintenance_btn = wx.Button(panel, label="Record Maintenance")
             
-            if is_online:
-                # Add sample maintenance items
-                items = api_client.fetch_maintenance_items()
-                
-                content_text.insert(tk.END, "===== OVERDUE ITEMS =====\n")
-                for item in items['overdue_items']:
-                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - {item['days']} days overdue\n")
-                content_text.insert(tk.END, "\n")
-                
-                content_text.insert(tk.END, "===== DUE SOON =====\n")
-                for item in items['due_soon_items']:
-                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - Due in {item['days']} days\n")
-            else:
-                content_text.insert(tk.END, "Offline mode - using cached data\n")
-                
-            # Function to update dashboard
-            def update_tkinter_dashboard():
+            control_sizer.Add(dashboard_btn, 0, wx.ALL, 5)
+            control_sizer.Add(maintenance_btn, 0, wx.ALL, 5)
+            control_sizer.Add(refresh_btn, 0, wx.ALL, 5)
+            
+            main_sizer.Add(control_sizer, 0, wx.EXPAND | wx.BOTTOM, 5)
+            
+            # Create browser
+            browser = wx.html2.WebView.New(panel)
+            main_sizer.Add(browser, 1, wx.EXPAND)
+            
+            # Layout the panel
+            panel.SetSizer(main_sizer)
+            
+            # Set up event handlers
+            def check_connection():
                 is_online = offline_manager.is_online()
-                status_label.config(text=f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
+                wx.CallAfter(status_text.SetLabel, 
+                            f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
+                wx.CallAfter(status_text.SetForegroundColour, 
+                            wx.Colour(0, 128, 0) if is_online else wx.Colour(192, 0, 0))
+            
+            def on_refresh(event):
+                # Check connection in a thread to avoid freezing UI
+                threading.Thread(target=check_connection).start()
+                # Reload current page
+                browser.Reload()
+            
+            def on_dashboard(event):
+                browser.LoadURL(f"{local_url}/dashboard")
+            
+            def on_maintenance(event):
+                browser.LoadURL(f"{local_url}/maintenance")
                 
-                content_text.delete(1.0, tk.END)
-                content_text.insert(tk.END, f"AMRS Maintenance Tracker v{APP_VERSION}\n\n")
-                content_text.insert(tk.END, f"Server URL: {SERVER_URL}\n")
-                content_text.insert(tk.END, f"Connection Status: {'Online' if is_online else 'Offline'}\n\n")
-                
-                # Add maintenance items
-                items = api_client.fetch_maintenance_items()
-                
-                content_text.insert(tk.END, "===== OVERDUE ITEMS =====\n")
-                for item in items['overdue_items']:
-                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - {item['days']} days overdue\n")
-                content_text.insert(tk.END, "\n")
-                
-                content_text.insert(tk.END, "===== DUE SOON =====\n")
-                for item in items['due_soon_items']:
-                    content_text.insert(tk.END, f"{item['machine']}: {item['part']} - Due in {item['days']} days\n")
+            refresh_btn.Bind(wx.EVT_BUTTON, on_refresh)
+            dashboard_btn.Bind(wx.EVT_BUTTON, on_dashboard)
+            maintenance_btn.Bind(wx.EVT_BUTTON, on_maintenance)
             
-            # Connect refresh button
-            refresh_btn.config(command=update_tkinter_dashboard)
+            # Load the dashboard
+            browser.LoadURL(f"{local_url}/dashboard")
             
-            # Maintenance tab
-            maintenance_frame = ttk.Frame(notebook)
-            notebook.add(maintenance_frame, text="Record Maintenance")
+            # Check connection initially
+            threading.Thread(target=check_connection).start()
             
-            # Simple maintenance form
-            form_frame = ttk.LabelFrame(maintenance_frame, text="Record Maintenance")
-            form_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            # Show the frame
+            frame.Centre()
+            frame.Show()
             
-            ttk.Label(form_frame, text="Site:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-            site_combo = ttk.Combobox(form_frame, values=["Site A", "Site B"])
-            site_combo.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+            # Start the application
+            app.MainLoop()
             
-            ttk.Label(form_frame, text="Machine:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-            machine_combo = ttk.Combobox(form_frame, values=["Machine 1", "Machine 2"])
-            machine_combo.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        # Use standalone webview as an alternative
+        elif app_mode == "webview":
+            log.info("Starting standalone WebView")
             
-            ttk.Label(form_frame, text="Part:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-            part_combo = ttk.Combobox(form_frame, values=["Belt", "Filter"])
-            part_combo.grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
+            # Initialize Flask server for local content
+            flask_app = FlaskAppWrapper(offline_manager, name="AMRS_Maintenance")
+            local_url = flask_app.run_server()
+            log.info(f"Local server running at {local_url}")
             
-            ttk.Label(form_frame, text="Comments:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
-            comments = ScrolledText(form_frame, height=5)
-            comments.grid(row=3, column=1, sticky=tk.EW, padx=5, pady=5)
+            # Check connection
+            is_online = offline_manager.is_online()
+            connection_status = "Online" if is_online else "Offline Mode"
             
-            submit_btn = ttk.Button(form_frame, text="Record Maintenance")
-            submit_btn.grid(row=4, column=0, columnspan=2, pady=10)
+            # Create webview window
+            webview.create_window(
+                APP_NAME, 
+                url=f"{local_url}/dashboard",
+                min_size=(800, 600),
+                confirm_close=True
+            )
+            webview.start()
             
-            # Configure grid weights
-            form_frame.columnconfigure(1, weight=1)
+        # Use Flask with system browser as a fallback
+        elif app_mode == "flask_browser":
+            log.info("Starting Flask with system browser")
             
-            # Start the Tkinter main loop
-            root.mainloop()
+            # Initialize Flask server
+            flask_app = FlaskAppWrapper(offline_manager, name="AMRS_Maintenance")
+            local_url = flask_app.run_server()
+            log.info(f"Local server running at {local_url}")
             
+            # Open browser
+            webbrowser.open(local_url)
+            
+            # Keep the application alive
+            print(f"Server running at {local_url}")
+            print("Close this window to exit the application.")
+            
+            try:
+                # Keep the main thread running
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("Application terminated by user.")
+        
+        # Tkinter fallback if nothing else works
+        elif app_mode == "tkinter":
+            log.info("Starting Tkinter fallback UI")
+            
+            # ...existing tkinter code...
+        
         else:
             # No UI toolkit available
             log.error("No UI toolkit available - cannot start application")
             print(f"ERROR: No UI toolkit available. Application cannot start.")
-            print(f"Please install PyQt5, PyQt6, or ensure Tkinter is available.")
+            print(f"Please install wxPython, pywebview, or ensure Tkinter is available.")
+    
     except Exception as e:
         # Show error message
         error_details = traceback.format_exc()
@@ -1303,23 +1294,15 @@ if __name__ == "__main__":
 # Now write everything to the file at once
 with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
     f.write(basic_imports)
-    
-    # Add UI toolkit imports based on availability
-    if ui_toolkit.get("qt5", False):
-        f.write(qt5_imports)
-    elif ui_toolkit.get("qt6", False):
-        f.write(qt6_imports)
-    else:
-        f.write(no_qt_imports)
-    
-    # Always add Tkinter as fallback
+    f.write(wx_imports)
+    f.write(webview_imports)
+    f.write(flask_imports)
     f.write(tkinter_imports)
-    
-    # Add the rest of the code
     f.write(app_config)
     f.write(offline_manager)
-    f.write(api_client)       # Add new API client
-    f.write(template_renderer) # Add new template renderer
+    f.write(api_client)
+    f.write(template_renderer)
+    f.write(flask_server)
     f.write(main_code)
 
 print(f"Created {MAIN_SCRIPT}")
@@ -1399,7 +1382,6 @@ with open(dashboard_template, "w", encoding="utf-8") as f:
                 <td><span class="status-badge warning">{{item.days}} days</span></td>
                 <td>{{item.due_date}}</td>
                 <td><button class="btn btn-sm" data-id="{{item.id}}">Mark Complete</button></td>
-            </tr>
             {% endfor %}
         </table>
     </div>
@@ -1510,9 +1492,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=template_files,
-    hiddenimports=['PyQt5', 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'PyQt5.QtWebEngineWidgets',
-                  'PyQt6', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets', 'PyQt6.QtWebEngineWidgets',
-                  'tkinter', 'sqlite3', 'logging', 'urllib', 'http.client'],
+    hiddenimports=['wx', 'wx.html2', 'webview', 'flask', 'tkinter', 'sqlite3', 'logging', 'urllib', 'http.client'],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
