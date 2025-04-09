@@ -442,6 +442,8 @@ class OfflineManager:
         self.init_db()
         self.template_cache = {}
         self.load_templates()
+        self.css_cache = {}
+        self.load_css()
         
     def init_db(self):
         '''Initialize SQLite database tables'''
@@ -677,6 +679,73 @@ class OfflineManager:
             
         log.info(f"Loaded templates: {list(self.template_cache.keys())}")
     
+    def load_css(self):
+        '''Load CSS files for styling templates'''
+        try:
+            # Define embedded core CSS styles
+            self.css_cache["core.css"] = '''
+                body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f9fafb; }
+                .header { background-color: #FE7900; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+                .header h1 { margin: 0; font-size: 24px; }
+                .header p { margin: 5px 0 0 0; font-size: 14px; }
+                
+                .card { background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+                       padding: 20px; margin-bottom: 20px; }
+                
+                .overdue { border-left: 5px solid #ef4444; }
+                .due-soon { border-left: 5px solid #f59e0b; }
+                .status-ok { border-left: 5px solid #10b981; }
+                
+                table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 15px 0; }
+                table, th, td { border: 1px solid #e5e7eb; }
+                th { background-color: #f9fafb; font-weight: 600; text-align: left; padding: 12px; }
+                td { padding: 12px; }
+                tr:nth-child(even) { background-color: #f9fafb; }
+                
+                button, .btn { 
+                    background-color: #FE7900; 
+                    color: white; 
+                    border: none; 
+                    padding: 8px 16px; 
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: background-color 0.2s;
+                }
+                button:hover, .btn:hover { background-color: #e56c00; }
+                
+                select, input, textarea {
+                    width: 100%;
+                    padding: 10px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    box-sizing: border-box;
+                    font-size: 14px;
+                }
+                
+                .form-group { margin-bottom: 20px; }
+                label { display: block; font-weight: 600; margin-bottom: 6px; }
+                
+                .badge {
+                    display: inline-block;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                .badge-danger { background-color: #fee2e2; color: #ef4444; }
+                .badge-warning { background-color: #fef3c7; color: #d97706; }
+                .badge-success { background-color: #d1fae5; color: #10b981; }
+            '''
+            
+            log.info("Loaded embedded CSS styles")
+        except Exception as e:
+            log.error(f"Error loading CSS: {e}")
+    
+    def get_css(self, name="core.css"):
+        '''Get cached CSS by name'''
+        return self.css_cache.get(name, "")
+    
     def get_template(self, template_name):
         '''Get a template by name'''
         if template_name in self.template_cache:
@@ -702,12 +771,37 @@ class OfflineManager:
 </html>'''
             
     def is_online(self):
-        '''Check if server is reachable'''
-        try:
-            with urlopen(f"{self.server_url}/health", timeout=3) as response:
-                return response.getcode() == 200
-        except:
-            return False
+        '''Check if server is reachable with improved reliability'''
+        endpoints_to_try = [
+            "/health",  # Standard health endpoint
+            "/",        # Root path as fallback
+            "/favicon.ico",  # Often accessible without auth
+            "/static/favicon.ico" # Common path for favicons
+        ]
+        
+        # Valid status codes for "online" state
+        valid_status = [200, 201, 202, 203, 204, 301, 302, 307, 308]
+        
+        for endpoint in endpoints_to_try:
+            try:
+                url = f"{self.server_url}{endpoint}"
+                headers = {
+                    'User-Agent': f'AMRS-Maintenance-App/{APP_VERSION}',
+                    'Accept': '*/*'
+                }
+                
+                req = Request(url, headers=headers)
+                with urlopen(req, timeout=3) as response:
+                    status = response.getcode()
+                    log.info(f"Connection check to {url}: status={status}")
+                    if status in valid_status:
+                        return True
+            except Exception as e:
+                log.debug(f"Connection check to {endpoint} failed: {str(e)}")
+                continue
+        
+        log.warning("All connection attempts failed, considering offline")
+        return False
             
     def cache_data(self, endpoint, content):
         '''Save data to cache'''
@@ -749,21 +843,28 @@ class OfflineManager:
 template_renderer = """
 # ===== TEMPLATE RENDERER =====
 class TemplateRenderer:
-    '''Simple template rendering engine'''
+    '''Simple template rendering engine with CSS support'''
     
     def __init__(self, offline_manager):
         self.offline_manager = offline_manager
         
     def render(self, template_name, context=None):
-        '''Render a template with the given context'''
+        '''Render a template with the given context and embedded CSS'''
         if context is None:
             context = {}
             
         template = self.offline_manager.get_template(template_name)
         if not template:
             return f"<html><body><h1>Template {template_name} not found</h1></body></html>"
-            
-        # Very simple template substitution - replace {{variable}} with values
+        
+        # Get CSS styles
+        css = self.offline_manager.get_css("core.css")
+        
+        # Inject CSS into template if not already there
+        if "<style>" not in template:
+            template = template.replace("</head>", f"<style>{css}</style></head>")
+        
+        # Handle standard variable substitution
         for key, value in context.items():
             template = template.replace(f"{{{{{key}}}}}", str(value))
             
@@ -786,7 +887,8 @@ class TemplateRenderer:
                 loop_items.append(item_content)
                 
             template = template.replace(match.group(0), ''.join(loop_items))
-            
+        
+        # Return the fully rendered template
         return template
 """
 
@@ -802,62 +904,108 @@ class ApiClient:
         self.session_token = None
         
     def get(self, endpoint, use_cache=True):
-        '''Make a GET request to the API'''
+        '''Make a GET request to the API with better error handling'''
         url = f"{self.server_url}/{endpoint.lstrip('/')}"
         
         try:
             # Check if we're online
             if not self.offline_manager.is_online():
                 log.warning(f"Offline mode: retrieving cached data for {endpoint}")
-                return self.offline_manager.get_cached_data(endpoint)
+                cached_data = self.offline_manager.get_cached_data(endpoint)
+                if cached_data:
+                    return cached_data
+                else:
+                    log.warning(f"No cached data available for {endpoint}")
+                    return None
                 
-            # Make the request
-            headers = {}
+            # Make the request with proper headers
+            headers = {
+                'User-Agent': f'AMRS-Maintenance-App/{APP_VERSION}',
+                'Accept': 'application/json, text/html'
+            }
+            
             if self.session_token:
                 headers['Authorization'] = f"Bearer {self.session_token}"
                 
+            log.info(f"Making API request to {url}")
             req = Request(url, headers=headers)
             with urlopen(req, timeout=5) as response:
                 content = response.read().decode('utf-8')
+                status_code = response.getcode()
+                
+                log.info(f"API response: status={status_code}, length={len(content) if content else 0}")
                 
                 # Cache the response if successful
                 if use_cache and response.getcode() == 200:
                     self.offline_manager.cache_data(endpoint, content)
                     
                 return content
+        except HTTPError as e:
+            log.error(f"HTTP error ({url}): {e.code} - {e.reason}")
+            cached_data = self.offline_manager.get_cached_data(endpoint)
+            return cached_data if cached_data else None
+        except URLError as e:
+            log.error(f"URL error ({url}): {e.reason}")
+            cached_data = self.offline_manager.get_cached_data(endpoint)
+            return cached_data if cached_data else None
         except Exception as e:
             log.error(f"API request error ({url}): {e}")
-            # Try to return cached data as fallback
-            return self.offline_manager.get_cached_data(endpoint)
+            cached_data = self.offline_manager.get_cached_data(endpoint)
+            return cached_data if cached_data else None
             
     def login(self, username, password):
         '''Log in to the API'''
         # This is a simplified example - in real app would make actual login request
-        log.info(f"Logging in as {username}...")
-        # For demo, simulate login success
-        self.session_token = "DEMO_TOKEN"
-        return True
+        log.info(f"Attempting to log in as {username}...")
+        
+        try:
+            # For demo, simply check if we're online and consider it success
+            if self.offline_manager.is_online():
+                self.session_token = f"SAMPLE_TOKEN_{int(time.time())}"
+                log.info("Login successful")
+                return True
+            else:
+                log.warning("Cannot log in - offline mode")
+                return False
+        except Exception as e:
+            log.error(f"Login error: {e}")
+            return False
         
     def fetch_maintenance_items(self):
         '''Get maintenance items from API or cache'''
         try:
-            # In a real app, would call self.get('/api/maintenance')
-            # For demo, return sample data
+            # First check if we're online to determine which data source to use
+            is_online = self.offline_manager.is_online()
+            log.info(f"Fetching maintenance items (online={is_online})")
+            
+            # In a production app, we would get real data from the API:
+            # result = self.get('/api/maintenance')
+            # return json.loads(result) if result else {"overdue_items": [], "due_soon_items": [], "status": "error"}
+            
+            # For demo, return sample data with more realistic fields
             import json
             return json.loads('''{
                 "overdue_items": [
-                    {"id": 1, "machine": "Machine A", "part": "Belt", "days": 5},
-                    {"id": 2, "machine": "Machine B", "part": "Filter", "days": 3}
+                    {"id": 1, "machine": "Machine A", "part": "Belt", "days": 5, "due_date": "2023-10-15"},
+                    {"id": 2, "machine": "Machine B", "part": "Filter", "days": 3, "due_date": "2023-10-17"},
+                    {"id": 3, "machine": "Machine C", "part": "Pump", "days": 10, "due_date": "2023-10-10"}
                 ],
                 "due_soon_items": [
-                    {"id": 3, "machine": "Machine C", "part": "Motor", "days": 2},
-                    {"id": 4, "machine": "Machine A", "part": "Bearing", "days": 5}
+                    {"id": 4, "machine": "Machine C", "part": "Motor", "days": 2, "due_date": "2023-10-22"},
+                    {"id": 5, "machine": "Machine A", "part": "Bearing", "days": 5, "due_date": "2023-10-25"},
+                    {"id": 6, "machine": "Machine D", "part": "Valve", "days": 7, "due_date": "2023-10-27"}
                 ],
-                "status": "success"
+                "status": "success",
+                "online": true
             }''')
         except Exception as e:
             log.error(f"Error fetching maintenance items: {e}")
-            return {"overdue_items": [], "due_soon_items": [], "status": "error"}
+            return {
+                "overdue_items": [],
+                "due_soon_items": [],
+                "status": "error",
+                "online": self.offline_manager.is_online()
+            }
 """
 
 # Main entry point
@@ -882,7 +1030,10 @@ if __name__ == "__main__":
             # Use PyQt interface
             app = QApplication(sys.argv)
             
-            # Main window setup
+            # Set application style for a more modern look
+            app.setStyle("Fusion")
+            
+            # Main window setup with better styling
             window = QMainWindow()
             window.setWindowTitle(APP_NAME)
             window.resize(1000, 700)
@@ -900,14 +1051,21 @@ if __name__ == "__main__":
             dashboard_tab = QWidget()
             dashboard_layout = QVBoxLayout(dashboard_tab)
             
-            # Dashboard header
+            # Dashboard header with improved styling
             header_layout = QHBoxLayout()
             status_label = QLabel(f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
-            status_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+            status_label.setStyleSheet(
+                "font-weight: bold; font-size: 14px; "
+                f"color: {'#1e7e34' if is_online else '#dc3545'};"
+            )
             header_layout.addWidget(status_label)
             
             refresh_btn = QPushButton("Refresh Data")
             refresh_btn.setMaximumWidth(150)
+            refresh_btn.setStyleSheet(
+                "background-color: #FE7900; color: white; "
+                "border: none; padding: 8px 16px; border-radius: 4px;"
+            )
             header_layout.addWidget(refresh_btn)
             header_layout.addStretch()
             
@@ -920,21 +1078,53 @@ if __name__ == "__main__":
             
             # Function to update the dashboard
             def update_dashboard():
-                # Get maintenance data (either from API or mock)
-                maintenance_data = api_client.fetch_maintenance_items()
-                
-                # Render the dashboard template
-                context = {
-                    'server_url': SERVER_URL,
-                    'status': 'Online' if offline_manager.is_online() else 'Offline',
-                    'overdue_items': maintenance_data['overdue_items'],
-                    'due_soon_items': maintenance_data['due_soon_items']
-                }
-                html_content = template_renderer.render('dashboard.html', context)
-                text_browser.setHtml(html_content)
-                
-                # Update status label
-                status_label.setText(f"Connected to {SERVER_URL}" if offline_manager.is_online() else "Offline Mode")
+                try:
+                    # Check connection status first
+                    is_online = offline_manager.is_online()
+                    log.info(f"Refreshing dashboard (online={is_online})")
+                    
+                    # Update status label
+                    status_label.setText(f"Connected to {SERVER_URL}" if is_online else "Offline Mode")
+                    status_label.setStyleSheet(
+                        "font-weight: bold; font-size: 14px; "
+                        f"color: {'#1e7e34' if is_online else '#dc3545'};"
+                    )
+                    
+                    # Get maintenance data (either from API or mock)
+                    maintenance_data = api_client.fetch_maintenance_items()
+                    
+                    # Calculate counts for summary
+                    overdue_count = len(maintenance_data.get('overdue_items', []))
+                    due_soon_count = len(maintenance_data.get('due_soon_items', []))
+                    on_schedule_count = 10 - (overdue_count + due_soon_count)  # Just for demo
+                    
+                    # Get the current time for "last updated" info
+                    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Determine status class for CSS
+                    status_class = "good" if is_online else "overdue"
+                    
+                    # Render the dashboard template with expanded context
+                    context = {
+                        'server_url': SERVER_URL,
+                        'status': 'Online' if is_online else 'Offline',
+                        'status_class': status_class,
+                        'overdue_items': maintenance_data.get('overdue_items', []),
+                        'due_soon_items': maintenance_data.get('due_soon_items', []),
+                        'overdue_count': overdue_count,
+                        'due_soon_count': due_soon_count,
+                        'on_schedule_count': on_schedule_count,
+                        'last_updated': now
+                    }
+                    
+                    html_content = template_renderer.render('dashboard.html', context)
+                    text_browser.setHtml(html_content)
+                    
+                    log.info("Dashboard updated successfully")
+                    
+                except Exception as e:
+                    log.error(f"Error updating dashboard: {e}")
+                    log.error(traceback.format_exc())
             
             # Connect refresh button
             refresh_btn.clicked.connect(update_dashboard)
@@ -1184,8 +1374,9 @@ with open(dashboard_template, "w", encoding="utf-8") as f:
             <tr>
                 <td>{{item.machine}}</td>
                 <td>{{item.part}}</td>
-                <td>{{item.days}}</td>
-                <td><button data-id="{{item.id}}">Mark Complete</button></td>
+                <td><span class="status-badge overdue">{{item.days}} days</span></td>
+                <td>{{item.due_date}}</td>
+                <td><button class="btn btn-sm" data-id="{{item.id}}">Mark Complete</button></td>
             </tr>
             {% endfor %}
         </table>
@@ -1197,18 +1388,25 @@ with open(dashboard_template, "w", encoding="utf-8") as f:
             <tr>
                 <th>Machine</th>
                 <th>Part</th>
-                <th>Due In (Days)</th>
+                <th>Due In</th>
+                <th>Due Date</th>
                 <th>Actions</th>
             </tr>
             {% for item in due_soon_items %}
             <tr>
                 <td>{{item.machine}}</td>
                 <td>{{item.part}}</td>
-                <td>{{item.days}}</td>
-                <td><button data-id="{{item.id}}">Mark Complete</button></td>
+                <td><span class="status-badge warning">{{item.days}} days</span></td>
+                <td>{{item.due_date}}</td>
+                <td><button class="btn btn-sm" data-id="{{item.id}}">Mark Complete</button></td>
             </tr>
             {% endfor %}
         </table>
+    </div>
+    
+    <div class="card">
+        <h2>Last Updated: {{last_updated}}</h2>
+        <p>Click the "Refresh Data" button above to check for new maintenance items.</p>
     </div>
 </body>
 </html>
