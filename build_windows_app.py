@@ -50,9 +50,9 @@ if not os.path.exists(ICON_FILE):
 
 # Create a standalone application with embedded browser
 print(f"Creating standalone application: {MAIN_SCRIPT}")
-with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
-    # Fix: Use a regular string (not an f-string) and .format() at the end
-    content = """
+
+# First define the content as a template
+template = """
 import os
 import sys
 import time
@@ -1132,14 +1132,14 @@ if __name__ == "__main__":
     except Exception as e:
         # Get error details
         error_details = traceback.format_exc()
-        log.critical(f"Fatal application error: {e}\\n{error_details}")
+        log.critical(f"Fatal application error: {{e}}\\n{{error_details}}")
         
         # Show error message
         if USING_TKINTER:
             messagebox.showerror(
-                f"Error Starting {APP_NAME}",
-                f"An error occurred while starting the application:\\n\\n{str(e)}\\n\\n" +
-                f"Please check the log file at:\\n{os.path.join(CACHE_DIR, 'app.log')}"
+                f"Error Starting {{APP_NAME}}",
+                f"An error occurred while starting the application:\\n\\n{{str(e)}}\\n\\n" +
+                f"Please check the log file at:\\n{{os.path.join(CACHE_DIR, 'app.log')}}"
             )
         else:
             # Try to use system dialog
@@ -1147,21 +1147,28 @@ if __name__ == "__main__":
                 import ctypes
                 ctypes.windll.user32.MessageBoxW(
                     0,
-                    f"An error occurred while starting the application:\\n\\n{str(e)}\\n\\n" +
-                    f"Please check the log file at:\\n{os.path.join(CACHE_DIR, 'app.log')}",
-                    f"Error Starting {APP_NAME}",
+                    f"An error occurred while starting the application:\\n\\n{{str(e)}}\\n\\n" +
+                    f"Please check the log file at:\\n{{os.path.join(CACHE_DIR, 'app.log')}}",
+                    f"Error Starting {{APP_NAME}}",
                     0x10  # MB_ICONERROR
                 )
             else:
-                print(f"ERROR: {str(e)}")
-                print(f"See log file: {os.path.join(CACHE_DIR, 'app.log')}")
-""".format(
-        APP_NAME=APP_NAME,
-        APP_VERSION=APP_VERSION,
-        SERVER_URL=SERVER_URL,
-        ICON_FILE=ICON_FILE,
-        SPLASH_FILE=SPLASH_FILE
-    ))
+                print(f"ERROR: {{str(e)}}")
+                print(f"See log file: {{os.path.join(CACHE_DIR, 'app.log')}}")
+"""
+
+# Format the template with our variables
+formatted_content = template.format(
+    APP_NAME=APP_NAME,
+    APP_VERSION=APP_VERSION,
+    SERVER_URL=SERVER_URL,
+    ICON_FILE=ICON_FILE,
+    SPLASH_FILE=SPLASH_FILE
+)
+
+# Write the formatted content to file
+with open(MAIN_SCRIPT, "w", encoding="utf-8") as f:
+    f.write(formatted_content)
 
 print(f"Created {MAIN_SCRIPT}")
 
