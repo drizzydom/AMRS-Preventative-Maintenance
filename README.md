@@ -1,231 +1,390 @@
 # AMRS Preventative Maintenance System
 
-A comprehensive maintenance tracking and scheduling application for AMRS machines and equipment. This system helps maintenance teams track service schedules for machinery, generates alerts for overdue maintenance, and maintains a complete service history.
+A comprehensive desktop and web application for tracking and managing preventative maintenance for AMRS equipment. This system provides both online and offline functionality through an Electron packaged desktop application with a Flask backend.
 
-## 🌟 Features
+<p align="center">
+  <img src="static/img/logo.png" alt="AMRS Maintenance Tracker Logo" width="200"/>
+</p>
 
-- **Dashboard**: Overview of all maintenance tasks, with overdue and upcoming work
-- **Site Management**: Organize equipment by location/site
-- **Machine Tracking**: Track machines at each site with detailed information
-- **Parts Maintenance**: Schedule and record maintenance for individual machine parts
-- **Notification System**: Email alerts for upcoming and overdue maintenance
-- **User Management**: Role-based permissions system with granular access control
-- **Mobile-Friendly Interface**: Responsive design works on desktops, tablets, and phones
-- **Backup & Restore**: Database backup functionality for data protection
+## Table of Contents
 
-## 🔗 Live Application
+- [Overview](#overview)
+- [Repository Structure](#repository-structure)
+- [System Requirements](#system-requirements)
+- [Development Setup](#development-setup)
+  - [Python Environment](#python-environment)
+  - [Node.js Environment](#nodejs-environment)
+  - [Database Setup](#database-setup)
+  - [Database Migrations](#database-migrations)
+- [Running the Application](#running-the-application)
+  - [Development Mode](#development-mode)
+  - [Production Mode](#production-mode)
+- [Building the Desktop Application](#building-the-desktop-application)
+- [Architecture](#architecture)
+- [Customization](#customization)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License and Legal](#license-and-legal)
 
-The application is deployed and accessible at:
-https://amrs-preventative-maintenance.onrender.com
+## Overview
 
-Default login:
-- Username: **admin**
-- Password: **admin**
+AMRS Preventative Maintenance System combines a Flask web application with an Electron desktop wrapper to provide:
 
-⚠️ **Important**: Please change the default admin password after your first login.
+- Tracking of equipment maintenance schedules
+- Recording of maintenance activities
+- Visual indicators for overdue maintenance
+- Offline functionality with automatic syncing
+- User management with role-based permissions
+- Custom reporting capabilities
 
-## 🚀 Installation
+The system features dual-mode operation, working with both a local cache for offline use and connecting to a web server when online, with a visual indicator showing the current connection mode.
 
-### Web Application Setup
+## Repository Structure
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
-   cd AMRS-Preventative-Maintenance
-   ```
+```
+AMRS-Preventative-Maintenance/
+├── app.py                     # Main Flask application entry point
+├── models.py                  # Database models using SQLAlchemy
+├── add_password_reset_columns.py # Database migration script for password reset
+├── electron_app/             # Electron application files
+│   ├── main.js               # Main Electron process
+│   ├── preload.js            # Preload script for IPC
+│   ├── icons/                # Application icons
+│   └── utils/                # Electron utility modules
+├── static/                    # Static web assets (CSS, JS, images)
+├── templates/                 # HTML templates for Flask
+├── modules/                   # Additional Python modules
+├── package.json               # Node.js dependencies and scripts
+├── package-venv.bat           # Script for creating Python virtual environment
+├── flask-launcher.py          # Launcher script for Flask in packaged app
+├── requirements.txt           # Python dependencies
+└── instance/                  # Instance-specific data (DB)
+```
 
-2. Create and activate a virtual environment:
-   ```
+## System Requirements
+
+### Prerequisites
+
+- **Python 3.9+** - Backend server runtime
+- **Node.js 16+** - For Electron desktop application
+- **SQLite** - Database (included with Python)
+- **Git** - For version control
+- **Windows 10/11** - Primary target OS for desktop application
+
+### Space Requirements
+
+- 200MB disk space for application
+- Additional space for database growth (varies by usage)
+- 2GB RAM minimum, 4GB recommended
+
+## Development Setup
+
+### Python Environment
+
+1. **Create virtual environment**:
+
+   ```bash
+   # Windows
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   venv\Scripts\activate
+
+   # macOS/Linux
+   python -m venv venv
+   source venv/bin/activate
    ```
 
-3. Install required packages:
-   ```
+2. **Install Python dependencies**:
+
+   ```bash
    pip install -r requirements.txt
    ```
 
-4. Create a config.py file (copy from config.example.py) and configure your settings:
-   ```
-   cp config.example.py config.py
-   # Edit config.py with your settings
+   Key dependencies include:
+   - Flask
+   - SQLAlchemy
+   - pandas
+   - openpyxl
+   - Werkzeug
+   - Jinja2
+
+### Node.js Environment
+
+1. **Install Node.js dependencies**:
+
+   ```bash
+   npm install
    ```
 
-5. Run the application:
+   Key dependencies include:
+   - electron
+   - electron-builder
+   - electron-updater
+   - electron-log
+
+2. **Set up development tools**:
+
+   ```bash
+   npm install -g electron-packager
    ```
+
+### Database Setup
+
+1. **Initialize the database**:
+
+   ```bash
+   python -c "from app import db; db.create_all()"
+   ```
+
+2. **Run migration scripts if needed**:
+
+   ```bash
+   python add_password_reset_columns.py
+   ```
+
+### Database Migrations
+
+The repository includes database migration scripts to handle schema changes:
+
+#### Password Reset Migration
+
+The `add_password_reset_columns.py` script adds password reset functionality columns to the User table:
+
+```python
+# Script to add password reset columns to the User table
+# Run this script to fix the "no such column: user.reset_token" error
+
+def add_password_reset_columns():
+    """Add reset_token and reset_token_expiration columns to the user table."""
+    # Path to the SQLite database
+    db_path = os.path.join(os.path.dirname(__file__), 'instance', 'maintenance.db')
+    if not os.path.exists(db_path):
+        print(f"Database file not found at {db_path}")
+        return False
+        
+    try:
+        # Connect to the database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if columns already exist
+        cursor.execute("PRAGMA table_info(user)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        columns_added = False
+        
+        # Add reset_token column if it doesn't exist
+        if 'reset_token' not in columns:
+            print("Adding reset_token column to user table...")
+            cursor.execute("ALTER TABLE user ADD COLUMN reset_token VARCHAR(100)")
+            columns_added = True
+        else:
+            print("reset_token column already exists")
+            
+        # Add reset_token_expiration if it doesn't exist
+        if 'reset_token_expiration' not in columns:
+            print("Adding reset_token_expiration column to user table...")
+            cursor.execute("ALTER TABLE user ADD COLUMN reset_token_expiration DATETIME")
+            columns_added = True
+        else:
+            print("reset_token_expiration column already exists")
+        
+        # Commit changes and close connection
+        conn.commit()
+        conn.close()
+        
+        # Print status message
+        if columns_added:
+            print("Password reset columns added successfully!")
+        else:
+            print("No changes needed. Password reset columns already exist.")
+        
+        return True
+    except Exception as e:
+        print(f"Error adding password reset columns: {str(e)}")
+        return False
+```
+
+To run this migration:
+
+```bash
+python add_password_reset_columns.py
+```
+
+This script should be run when you encounter errors related to missing password reset columns.
+
+## Running the Application
+
+### Development Mode
+
+1. **Start Flask server**:
+
+   ```bash
    python app.py
    ```
 
-6. Access at http://localhost:10000
+2. **Start Electron app in development mode**:
 
-### Windows Desktop Application
-
-A Windows desktop application is available, which provides a native interface for the system:
-
-#### Standalone App Features
-
-- **Offline Mode**: The app works even without an internet connection, using cached data
-- **Embedded Browser**: View the application in its own window without a separate browser
-- **Automatic Syncing**: Changes made offline are automatically synced when online
-- **Multi-Browser Technology**: Uses multiple browser technologies for the best experience
-
-#### Building the Windows Client 
-
-1. **Prerequisites**:
-   - Python 3.8 or 3.9 (recommended for best compatibility)
-   - Basic Python packages (automatically installed by the build script)
-
-2. **Build Steps**:
-   - Open Command Prompt
-   - Navigate to the project directory:
-     ```
-     cd C:\path\to\AMRS-Preventative-Maintenance
-     ```
-   - Run the build script:
-     ```
-     python build_windows_app.py
-     ```
-   - The script will:
-     - Install necessary dependencies
-     - Create a standalone application with offline capabilities
-     - Generate an executable file in the `dist` folder
-
-3. **Running the Application**:
-   - Navigate to the `dist` folder
-   - Double-click `AMRSMaintenanceTracker.exe` to launch the application
-   - The app will automatically connect to the server if available
-   - When offline, the app will use cached data and sync when back online
-
-#### Troubleshooting Windows Build
-
-If you encounter issues with the build:
-
-1. **Browser Component Issues**:
-   - The app will automatically try different browser technologies
-   - If all browser components fail, it will fall back to a basic mode
-   - You can manually install components with:
-     ```
-     pip install PyQt5 PyQt5-WebEngine
-     # or
-     pip install cefpython3
-     ```
-
-2. **Dependency Issues**:
-   - Run the batch file in the `dist` folder if the EXE doesn't work
-   - The batch file will use Python's built-in modules as a fallback
-
-3. **Direct Browser Access**:
-   - As a last resort, you can always access the application directly at:
-   - https://amrs-preventative-maintenance.onrender.com
-
-## 💻 Development
-
-### Setup Development Environment
-
-1. Follow the installation steps above
-2. Additional development dependencies:
-   ```
-   pip install pytest pytest-flask flake8
+   ```bash
+   npm start
    ```
 
-3. Run tests:
+### Production Mode
+
+Use the packaged application or build it from source (see next section).
+
+## Building the Desktop Application
+
+### Build Process
+
+1. **Create Python virtual environment for distribution**:
+
+   ```bash
+   package-venv.bat
    ```
-   pytest
+
+   This script:
+   - Creates a Python virtual environment
+   - Installs required packages
+   - Prepares the environment for packaging
+
+2. **Build Electron application**:
+
+   ```bash
+   npm run dist
    ```
 
-### Building the Windows App
+   This creates:
+   - An installer in the `dist` folder
+   - A portable version for distribution
 
-1. **Clean Installation Method (Recommended)**:
-   
-   To ensure a clean build without dependency issues:
+### Customizing the Build
 
-   - Open Command Prompt as Administrator
-   - Create a new, clean virtual environment:
-     ```
-     mkdir amrs_build
-     cd amrs_build
-     python -m venv venv
-     venv\Scripts\activate
-     ```
-   - Install only the minimal required packages:
-     ```
-     pip install pyinstaller
-     pip install pillow
-     ```
-   - Copy the build script to this directory:
-     ```
-     copy \path\to\AMRS-Preventative-Maintenance\build_windows_app.py .
-     ```
-   - Run the build script:
-     ```
-     python build_windows_app.py
-     ```
-   - Find the executable in the `dist` folder
+Edit `package.json` in the `build` section to customize:
+- Application name and metadata
+- Icons and resources
+- Installer properties
+- File inclusions/exclusions
 
-2. **Troubleshooting Build Issues**:
+## Architecture
 
-   If you encounter build issues, try these solutions:
+### Three-Tier Architecture
 
-   - **Solution 1**: Install Visual C++ Build Tools
-     - Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/
-     - Choose "Desktop Development with C++" during installation
-     - Restart your command prompt and try building again
+1. **Data Layer**: SQLite database with SQLAlchemy ORM
+2. **Application Layer**: Flask backend providing API and business logic
+3. **Presentation Layer**: HTML/CSS/JS frontend within Electron shell
 
-   - **Solution 2**: Use a different Python version
-     - PyInstaller works best with Python 3.8 or 3.9
-     - Avoid Python 3.11+ for builds if experiencing issues
+### Connection States
 
-   - **Solution 3**: Manual PyInstaller command
-     ```
-     pyinstaller --onefile --windowed --name=AMRSMaintenanceTracker amrs_launcher_main.py
-     ```
+The application operates in three modes:
+1. **Connected to local cache** (green indicator): Working with local database
+2. **Connected to web server** (blue indicator): Working with remote server
+3. **Disconnected** (red indicator): Unable to connect to either source
 
-3. **Direct Executable Download**:
+### Key Components
 
-   For immediate use without building, download the pre-built executable from:
-   [Releases Page](https://github.com/yourusername/AMRS-Preventative-Maintenance/releases)
+- **Flask Application**: Handles database operations and business logic
+- **Electron Wrapper**: Creates desktop application experience
+- **Connection Manager**: Monitors and manages connection states
+- **Automatic Updater**: Handles application updates when available
 
-## 📊 Deployment
+## Customization
 
-### Deploying to Render
+### Flask Application Customization
 
-1. Fork this repository
-2. Create a new Web Service on Render
-3. Connect your GitHub repository
-4. Use these settings:
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `gunicorn wsgi:app`
-   - Add the environment variables specified in render.yaml
+- Routes defined in `app.py`
+- Templates in `templates/` directory
+- Static assets in `static/` directory
+- Database models in `models.py`
 
-## 🏗️ Architecture
+### Electron Application Customization
 
-- **Flask**: Web framework
-- **SQLAlchemy**: Database ORM
-- **Flask-Login**: Authentication
-- **Bootstrap**: Frontend framework
-- **SQLite**: Database (persistent storage on Render)
+- Main process in `electron_app/main.js`
+- IPC bridge in `electron_app/preload.js`
+- Connection status in `electron_app/utils/connectionStatus.js`
 
-## 📋 Data Model
+### Adding Features
 
-- **Sites**: Physical locations where equipment is housed
-- **Machines**: Individual pieces of equipment at sites
-- **Parts**: Components of machines that require maintenance
-- **Users**: System users with different access levels
-- **Roles**: User role categories with specific permissions
-- **Maintenance Records**: History of maintenance activities
+1. **New Database Model**:
+   - Add model class to `models.py`
+   - Create migration script similar to `add_password_reset_columns.py`
+   - Run migration script to update database
 
-## 🤝 Contributing
+2. **New Page/Feature**:
+   - Add route to `app.py`
+   - Create template in `templates/`
+   - Add any required static assets
+   - Link from existing navigation
+
+## Testing
+
+### Python Unit Tests
+
+```bash
+python -m unittest discover tests
+```
+
+### Electron Application Testing
+
+```bash
+npm test
+```
+
+## Troubleshooting
+
+### Database Issues
+
+For "no such column: user.reset_token" errors:
+
+```bash
+python add_password_reset_columns.py
+```
+
+This script adds missing password reset functionality columns to the User table.
+
+### Connection Issues
+
+- **Local Connection**: Check if Flask server is running
+- **Web Connection**: Verify network connectivity and server URL
+- **Indicator Missing**: Restart application or check console for errors
+
+### Build Problems
+
+- **Python Environment**: Run `package-venv.bat` to recreate environment
+- **Icon Errors**: Ensure icons are at least 256x256 pixels
+- **Missing Files**: Check `package.json` includes all necessary files
+- **Module Errors**: Run `npm install` and try again
+
+## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes
+4. Run tests to ensure functionality
+5. Submit a pull request
 
-## 📄 License
+## License and Legal
 
-[MIT License](LICENSE)
+### License
 
-## 📬 Contact
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-Project Link: [https://github.com/yourusername/AMRS-Preventative-Maintenance](https://github.com/yourusername/AMRS-Preventative-Maintenance)
+### Third-Party Software
+
+This application incorporates the following open source components:
+
+- **Flask**: BSD License - [https://flask.palletsprojects.com/](https://flask.palletsprojects.com/)
+- **SQLAlchemy**: MIT License - [https://www.sqlalchemy.org/](https://www.sqlalchemy.org/)
+- **Electron**: MIT License - [https://www.electronjs.org/](https://www.electronjs.org/)
+- **Bootstrap**: MIT License - [https://getbootstrap.com/](https://getbootstrap.com/)
+- **Font Awesome**: Font Awesome Free License - [https://fontawesome.com/](https://fontawesome.com/)
+
+For a complete list of dependencies and their licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+### Copyright Notice
+
+All code is free to be used or distributed within The MIT License: https://opensource.org/license/mit
+
+All published releases in this project are © 2025 Accurate Machine Repair LLC. All rights reserved.
+
+---
