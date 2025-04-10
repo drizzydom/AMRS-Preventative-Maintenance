@@ -37,7 +37,7 @@
           "!**/*.pyc"
         ]
       },
-      { 
+      {
         "from": "app.py",
         "to": "app.py"
       },
@@ -90,6 +90,7 @@
   },
   "dependencies": {
     "canvas": "^3.1.0",
+    "electron-updater": "^6.6.2",
     "icon-gen": "^5.0.0"
   }
 }
