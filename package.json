@@ -37,7 +37,7 @@
           "!**/*.pyc"
         ]
       },
-      { 
+      {
         "from": "app.py",
         "to": "app.py"
       },
@@ -90,15 +90,15 @@
     }
   },
   "author": "",
-  "license": "ISC","^6.1.7", 
-  "devDependencies": { "icon-gen": "^5.0.0"
-    "electron": "^28.0.0", }
-    "electron-builder": "^24.13.3"}
-
-
-
-
-
-
-
-}  }    "icon-gen": "^5.0.0"    "canvas": "^3.1.0",  "dependencies": {  },
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "canvas": "^3.1.0",
+    "electron-log": "^5.3.3",
+    "electron-updater": "^6.6.2",
+    "icon-gen": "^5.0.0"
+  }
+}

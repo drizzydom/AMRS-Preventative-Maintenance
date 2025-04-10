@@ -37,6 +37,25 @@ REM Deactivate virtual environment
 echo Deactivating virtual environment...
 deactivate
 
+REM Create icons directory if it doesn't exist
+if not exist electron_app\icons mkdir electron_app\icons
+echo Icons directory checked/created at electron_app\icons
+
+REM Ensure we have an application icon
+if not exist electron_app\icons\app.png (
+    echo Creating a placeholder application icon...
+    powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/electron/electron/main/default_app/icon.png' -OutFile 'electron_app\icons\app.png'"
+    echo Icon downloaded to electron_app\icons\app.png
+)
+
+REM Create modules directory if it doesn't exist
+if not exist modules mkdir modules
+echo Modules directory checked/created at modules
+
+REM Create an empty __init__.py in modules to make it a valid Python package
+echo # Python package > modules\__init__.py
+echo Created __init__.py in modules directory
+
 REM Copy to the venv directory for building
 echo Copying to build directory...
 if exist venv rmdir /s /q venv
