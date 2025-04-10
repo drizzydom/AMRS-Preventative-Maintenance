@@ -25,6 +25,7 @@ A comprehensive desktop and web application for tracking and managing preventati
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
+- [License and Legal](#license-and-legal)
 
 ## Overview
 
@@ -362,6 +363,28 @@ This script adds missing password reset functionality columns to the User table.
 4. Run tests to ensure functionality
 5. Submit a pull request
 
----
+## License and Legal
 
-&copy; 2023-2025 AMRS Maintenance. All rights reserved.
+### License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Third-Party Software
+
+This application incorporates the following open source components:
+
+- **Flask**: BSD License - [https://flask.palletsprojects.com/](https://flask.palletsprojects.com/)
+- **SQLAlchemy**: MIT License - [https://www.sqlalchemy.org/](https://www.sqlalchemy.org/)
+- **Electron**: MIT License - [https://www.electronjs.org/](https://www.electronjs.org/)
+- **Bootstrap**: MIT License - [https://getbootstrap.com/](https://getbootstrap.com/)
+- **Font Awesome**: Font Awesome Free License - [https://fontawesome.com/](https://fontawesome.com/)
+
+For a complete list of dependencies and their licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+### Copyright Notice
+
+All code is free to be used or distributed within The MIT License: https://opensource.org/license/mit
+
+All published releases in this project are © 2025 Accurate Machine Repair LLC. All rights reserved.
+
+---
