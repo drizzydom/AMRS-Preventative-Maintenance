@@ -5,6 +5,7 @@ import random
 import string
 import logging
 import signal
+import argparse
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -1529,6 +1530,12 @@ def maintenance_page():
 
 # Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
+    parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
+    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    args = parser.parse_args()
+    
     with app.app_context():
         # Create tables if they don't exist
         db.create_all()
@@ -1536,9 +1543,11 @@ if __name__ == '__main__':
         # Add default admin account if no users exist
         add_default_admin_if_needed()
     
-    # Get port from environment variable or use default
-    port = int(os.environ.get('PORT', 10000))
+    # Get port from command line argument, environment variable, or default
+    port = args.port or int(os.environ.get('PORT', 10000))
+    debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    
     print(f"[APP] Starting Flask server on port {port}")
     
     # Use host 0.0.0.0 to bind to all interfaces
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=debug)
