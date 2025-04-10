@@ -1,0 +1,104 @@
+{
+  "name": "amrs-preventative-maintenance",
+  "version": "1.0.0",
+  "description": "AMRS Maintenance Tracker",
+  "main": "electron_app/main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.amrs.maintenancetracker",
+    "productName": "AMRS Maintenance Tracker",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron_app/**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,__pycache__,thumbs.db,.gitignore,.gitattributes}",
+      "!**/node_modules/**/*",
+      "!**/__pycache__/*"
+    ],
+    "extraResources": [
+      {
+        "from": "venv",
+        "to": "venv",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/*",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "app.py",
+        "to": "app.py"
+      },
+      {
+        "from": "app-launcher.py",
+        "to": "app-launcher.py"
+      },
+      {
+        "from": "static",
+        "to": "static"
+      },
+      {
+        "from": "templates",
+        "to": "templates"
+      },
+      {
+        "from": "modules",
+        "to": "modules"
+      },
+      {
+        "from": "requirements.txt",
+        "to": "requirements.txt"
+      },
+      {
+        "from": "flask-launcher.py",
+        "to": "flask-launcher.py"
+      },
+      {
+        "from": "models.py",
+        "to": "models.py"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "drizzydom",
+        "repo": "AMRS-Preventative-Maintenance"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "electron_app/icons/app.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "canvas": "^3.1.0",
+    "electron-log": "^5.3.3",
+    "electron-updater": "^6.6.2",
+    "icon-gen": "^5.0.0"
+  }
+}
