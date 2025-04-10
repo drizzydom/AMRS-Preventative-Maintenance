@@ -7,6 +7,8 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+# Keep electron_app directory in git
+electron_app/
 
 # Unit test / coverage reports
 htmlcov/
@@ -24,6 +26,7 @@ env/
 .env
 venv_py310/
 venv_py39/
+venv_py39_electron/
 
 # IDE specific files
 .idea/
