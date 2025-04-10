@@ -8,8 +8,6 @@ import jwt
 import datetime
 from flask_login import current_user, login_required
 import os
-import socket
-import platform
 from app import app, db
 from app import User, Site, Machine, Part, MaintenanceLog
 
@@ -367,28 +365,6 @@ def health_check():
         'status': 'ok',
         'timestamp': datetime.datetime.utcnow().isoformat(),
         'version': '1.0.0'
-    })
-
-# Add a detailed server info endpoint for verification
-@api_bp.route('/server-info', methods=['GET'])
-def server_info():
-    """Detailed server information to verify connectivity"""
-    hostname = socket.gethostname()
-    try:
-        local_ip = socket.gethostbyname(hostname)
-    except:
-        local_ip = "Unable to determine"
-    
-    return jsonify({
-        'server_name': 'AMRS Maintenance Tracker API',
-        'hostname': hostname,
-        'local_ip': local_ip,
-        'platform': platform.platform(),
-        'python_version': platform.python_version(),
-        'flask_env': os.environ.get('FLASK_ENV', 'production'),
-        'timestamp': datetime.datetime.utcnow().isoformat(),
-        'process_id': os.getpid(),
-        'running_mode': 'electron' if os.environ.get('ELECTRON_RUN') else 'standalone'
     })
 
 # Register blueprint with app
