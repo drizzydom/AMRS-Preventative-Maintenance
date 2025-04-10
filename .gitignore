@@ -27,6 +27,10 @@ env/
 venv_py310/
 venv_py39/
 venv_py39_electron/
+dist-venv/
+
+# Node modules
+node_modules/
 
 
 # IDE specific files
