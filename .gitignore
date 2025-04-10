@@ -28,6 +28,7 @@ venv_py310/
 venv_py39/
 venv_py39_electron/
 
+
 # IDE specific files
 .idea/
 .vscode/
