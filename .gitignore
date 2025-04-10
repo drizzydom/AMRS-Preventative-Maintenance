@@ -22,6 +22,8 @@ venv/
 virtualenv/
 env/
 .env
+venv_py310/
+venv_py39/
 
 # IDE specific files
 .idea/
