@@ -115,6 +115,8 @@ def create_version_info():
     
     version_tuple = ', '.join(version_parts + ['0'])
     
+    # Using plain 'Copyright' text instead of the © symbol
+    # to avoid encoding issues
     version_content = f"""VSVersionInfo(
   ffi=FixedFileInfo(
     filevers=({version_tuple}),
@@ -135,7 +137,7 @@ def create_version_info():
         StringStruct(u'FileDescription', u'{APP_NAME} Desktop Application'),
         StringStruct(u'FileVersion', u'{APP_VERSION}'),
         StringStruct(u'InternalName', u'{APP_NAME.replace(" ", "")}'),
-        StringStruct(u'LegalCopyright', u'© 2023 AMRS'),
+        StringStruct(u'LegalCopyright', u'Copyright 2023 AMRS'),
         StringStruct(u'OriginalFilename', u'{APP_NAME.replace(" ", "")}.exe'),
         StringStruct(u'ProductName', u'{APP_NAME}'),
         StringStruct(u'ProductVersion', u'{APP_VERSION}')])
@@ -144,7 +146,8 @@ def create_version_info():
   ]
 )"""
     
-    with open("file_version_info.txt", "w") as f:
+    # Write the file with explicit encoding
+    with open("file_version_info.txt", "w", encoding="utf-8") as f:
         f.write(version_content)
     
     print(f"✓ Created version info file")
@@ -209,18 +212,33 @@ def create_spec_file(debug=False):
     main_script = os.path.join(script_dir, MAIN_SCRIPT)
     icon_path = os.path.join(script_dir, ICON_FILE)
     
+    # Convert paths to use forward slashes for the spec file
+    main_script_path = main_script.replace('\\', '/')
+    script_dir_path = script_dir.replace('\\', '/')
+    icon_path_spec = icon_path.replace('\\', '/')
+    
     # Check if icon exists
     icon_exists = os.path.exists(icon_path)
     
     # Create templates directory if it doesn't exist
     templates_dir = os.path.join(script_dir, "templates")
     os.makedirs(templates_dir, exist_ok=True)
+    templates_dir_path = templates_dir.replace('\\', '/')
     
     # Create static directory if it doesn't exist
     static_dir = os.path.join(script_dir, "static")
     os.makedirs(static_dir, exist_ok=True)
+    static_dir_path = static_dir.replace('\\', '/')
     
-    # Generate spec content
+    # Path to app.py
+    app_py_path = os.path.join(script_dir, "app.py").replace('\\', '/')
+    
+    # Path to models.py
+    models_py_path = os.path.join(script_dir, "models.py").replace('\\', '/')
+    
+    # Generate spec content with properly formatted and closed parentheses
+    debug_str = "True" if debug else "False"
+    
     spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 
 import os
@@ -233,24 +251,24 @@ datas = []
 
 # Include templates and static files
 datas.extend([
-    (r'{templates_dir.replace("\\", "\\\\")}', 'templates'),
-    (r'{static_dir.replace("\\", "\\\\")}', 'static')
+    (r'{templates_dir_path}', 'templates'),
+    (r'{static_dir_path}', 'static')
 ])
 
 # Include Flask data files
 datas.extend(collect_data_files('flask'))
 
 # Include the app.py file
-datas.append((r'{os.path.join(script_dir, "app.py").replace("\\", "\\\\")}', '.'))
+datas.append((r'{app_py_path}', '.'))
 
 # Include models.py file
-if os.path.exists(r'{os.path.join(script_dir, "models.py").replace("\\", "\\\\")}'):
-    datas.append((r'{os.path.join(script_dir, "models.py").replace("\\", "\\\\")}', '.'))
+if os.path.exists(r'{models_py_path}'):
+    datas.append((r'{models_py_path}', '.'))  # Fixed: properly closed parenthesis
 
 # Bundle the application
 a = Analysis(
-    [r'{main_script.replace("\\", "\\\\")}'],
-    pathex=[r'{script_dir.replace("\\", "\\\\")}'],
+    [r'{main_script_path}'],
+    pathex=[r'{script_dir_path}'],
     binaries=[],
     datas=datas,
     hiddenimports=[
@@ -282,17 +300,17 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='{APP_NAME.replace(" ", "")}',
-    debug={str(debug).lower()},
+    debug={debug_str},
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console={str(debug).lower()},
+    console={debug_str},
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon={f"r'{icon_path.replace('\\', '\\\\')}'" if icon_exists else 'None'},
+    icon={f"r'{icon_path_spec}'" if icon_exists else 'None'},
     version='file_version_info.txt',
 )
 
@@ -308,9 +326,9 @@ coll = COLLECT(
 )
 """
     
-    # Write spec file
+    # Write spec file with explicit encoding
     spec_file = f"{os.path.splitext(MAIN_SCRIPT)[0]}.spec"
-    with open(spec_file, "w") as f:
+    with open(spec_file, "w", encoding="utf-8") as f:
         f.write(spec_content)
     
     print(f"✓ Created spec file: {spec_file}")
