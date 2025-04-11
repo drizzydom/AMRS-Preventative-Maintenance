@@ -357,6 +357,16 @@ def record_maintenance(current_user):
         'next_maintenance': part.next_maintenance.isoformat()
     })
 
+# Add a health check endpoint
+@api_bp.route('/health', methods=['GET'])
+def health_check():
+    """Simple health check endpoint for the Electron app to verify server status"""
+    return jsonify({
+        'status': 'ok',
+        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'version': '1.0.0'
+    })
+
 # Register blueprint with app
 def register_api():
     app.register_blueprint(api_bp, url_prefix='/api')
