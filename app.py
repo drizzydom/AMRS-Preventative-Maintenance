@@ -24,6 +24,31 @@ from sqlalchemy import inspect  # Add import for inspect
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 
+# Verify persistent storage
+def check_persistent_storage():
+    """Verify persistent storage is working properly"""
+    if os.environ.get('RENDER', '').lower() == 'true':
+        data_dir = os.environ.get('DATA_DIR', '/var/data')
+        if not os.path.exists(data_dir):
+            print(f"WARNING: Persistent storage directory {data_dir} not found!")
+            return False
+            
+        # Write a test file to verify write access
+        test_file = os.path.join(data_dir, '.storage_test')
+        try:
+            with open(test_file, 'w') as f:
+                f.write(f"Storage test - {datetime.now().isoformat()}")
+            os.remove(test_file)
+            print(f"Persistent storage at {data_dir} is working properly")
+            return True
+        except Exception as e:
+            print(f"ERROR: Failed to write to persistent storage: {str(e)}")
+            return False
+    return True
+
+# Call this function before your database setup
+storage_ok = check_persistent_storage()
+
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
 
