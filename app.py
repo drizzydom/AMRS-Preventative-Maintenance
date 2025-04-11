@@ -346,12 +346,35 @@ def debug_info():
 # Add health check route for diagnostics
 @app.route('/health')
 def health_check():
-    return jsonify({
-        "status": "ok",
-        "timestamp": datetime.now().isoformat(),
-        "environment": os.environ.get('FLASK_ENV', 'production'),
-        "render": os.environ.get('RENDER', 'false')
-    })
+    """Simple health check endpoint for monitoring"""
+    try:
+        # Test database connection
+        from models import db
+        db.engine.execute("SELECT 1")
+        
+        # Check persistent storage
+        if os.environ.get('RENDER', '').lower() == 'true':
+            data_dir = os.environ.get('DATA_DIR', '/var/data')
+            if not os.path.exists(data_dir) or not os.access(data_dir, os.W_OK):
+                return jsonify({
+                    "status": "warning", 
+                    "message": "Application running but persistent storage issue detected",
+                    "storage": "unavailable"
+                }), 200
+
+        # Everything is good
+        return jsonify({
+            "status": "ok",
+            "version": "1.0.0",
+            "timestamp": datetime.now().isoformat(),
+            "environment": os.environ.get('FLASK_ENV', 'production'),
+            "storage": "available"
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 # Add password reset functionality
 @app.route('/forgot-password', methods=['GET', 'POST'])

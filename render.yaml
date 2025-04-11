@@ -20,6 +20,11 @@ services:
       gunicorn==21.2.0
       pandas==2.0.3
       numpy==1.24.3
+      
+      # Additional useful packages
+      python-dotenv==1.0.0
+      pytz==2023.3
+      requests==2.31.0
       # Add any other specific requirements your application needs
       EOL
       
@@ -45,22 +50,24 @@ services:
       else
         echo "Creating necessary directories..."
         mkdir -p /var/data/db
-        mkdir -p /var/data/backups
-        mkdir -p /var/data/uploads
+        mkdir -p /var/data/backupsg database..."
+        mkdir -p /var/data/uploadsy
         chmod -R 755 /var/data
-      fi
-      echo "Starting application..."
-      gunicorn wsgi:app
-    envVars:
+      fiStarting application..."
+      echo "Starting application..."p
+      gunicorn wsgi:app/health
+    healthCheckPath: /health
+    healthCheckTimeout: 5s
+    envVars:APP
       - key: FLASK_APP
-        value: app.py
+        value: app.pyFERED
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: RENDER
         value: "true"
-      - key: FLASK_DEBUG
-        value: "false"
-      - key: SECRET_KEY
+      - key: FLASK_DEBUGse"
+        value: "false"Y
+      - key: SECRET_KEYue: true
         generateValue: true
       - key: MAIL_SERVER
         sync: false
@@ -69,18 +76,26 @@ services:
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
-        sync: false
+        sync: false_DEFAULT_SENDER
       - key: MAIL_DEFAULT_SENDER
-        sync: false
+        sync: falseT_ADMIN_PASSWORD
       - key: DEFAULT_ADMIN_PASSWORD
         generateValue: true
       - key: PORT
         fromService:
-          type: web
-          name: maintenance-tracker
+          type: web name: maintenance-tracker
+          name: maintenance-trackerrKey: RENDER_PORT
           envVarKey: RENDER_PORT
       - key: DATA_DIR
-        value: /var/data
+        value: /var/data      - key: DATABASE_URL
+
+
+
+
+
+      name: maintenance-data      mountPath: /var/data      sizeGB: 2    disk:        value: sqlite:///var/data/db/maintenance.db
+      - key: LOG_LEVEL
+        value: INFO
     disk:
       sizeGB: 2
       mountPath: /var/data

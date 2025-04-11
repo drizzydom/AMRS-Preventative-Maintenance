@@ -17,10 +17,17 @@ try:
 except Exception as e:
     logger.warning(f"Failed to check package versions: {str(e)}")
 
-# Import directory check utility
+# Directory setup
 try:
-    from check_disk_setup import ensure_directories
-    ensure_directories()
+    data_dir = os.environ.get('DATA_DIR', '/var/data')
+    if not os.path.exists(data_dir):
+        logger.warning(f"Data directory {data_dir} does not exist!")
+    else:
+        for subdir in ['db', 'backups', 'uploads']:
+            full_path = os.path.join(data_dir, subdir)
+            if not os.path.exists(full_path):
+                os.makedirs(full_path, exist_ok=True)
+                logger.info(f"Created directory: {full_path}")
 except Exception as e:
     logger.error(f"Failed to set up directories: {str(e)}")
 
