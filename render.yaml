@@ -3,16 +3,10 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: |
-      echo "Installing dependencies with compatibility fixes..."
+      echo "Installing dependencies from render-requirements.txt..."
       pip install --upgrade pip
-      grep -v "Werkzeug==" requirements.txt > render-requirements.txt
-      echo "Flask==2.2.5" >> render-requirements.txt
-      echo "Werkzeug==2.2.3" >> render-requirements.txt
       pip install -r render-requirements.txt
-    startCommand: |
-      chmod +x startup.sh
-      ./startup.sh
-      gunicorn wsgi:app
+    startCommand: gunicorn wsgi:app
     envVars:
       - key: FLASK_APP
         value: app.py
@@ -34,7 +28,6 @@ services:
         sync: false
       - key: MAIL_DEFAULT_SENDER
         sync: false
-      # Add this environment variable to set a custom default admin password
       - key: DEFAULT_ADMIN_PASSWORD
         generateValue: true
       - key: PORT
@@ -45,6 +38,6 @@ services:
       - key: DATA_DIR
         value: /var/data
     disk:
-      sizeGB: 2  # Increased to 2GB for more storage space
+      sizeGB: 2
       mountPath: /var/data
       name: maintenance-data
