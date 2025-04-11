@@ -10,6 +10,13 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Check package compatibility
+try:
+    from check_versions import check_compatibility
+    check_compatibility()
+except Exception as e:
+    logger.warning(f"Failed to check package versions: {str(e)}")
+
 # Import directory check utility
 try:
     from check_disk_setup import ensure_directories
