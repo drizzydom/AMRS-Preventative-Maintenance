@@ -3,23 +3,16 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: |
-      echo "Installing dependencies directly from requirements.txt..."
       pip install --upgrade pip
-      pip install -r requirements.txt
+      # Install gunicorn first
       pip install gunicorn==21.2.0
-      
-      # Create the adapter file that Render is expecting
-      echo "Creating app.py adapter for Render..."
-      if [ -f "app_render.py" ]; then
-        cp app_render.py app.py
-        echo "app_render.py copied to app.py"
-      else
-        echo "from wsgi import app" > app.py
-        echo "Basic adapter created as app.py"
-      fi
-    startCommand: gunicorn app:app
-    healthCheckPath: /health
-    healthCheckTimeout: 5s
+      # Then install other dependencies
+      pip install -r requirements.txt
+      # Create directories needed
+      mkdir -p /var/data/db /var/data/backups /var/data/uploads
+      chmod -R 755 /var/data
+    # Let Render use the Procfile
+    # Don't specify startCommand so Render will use Procfile
     envVars:
       - key: FLASK_APP
         value: app.py
@@ -54,6 +47,8 @@ services:
         value: sqlite:///var/data/db/maintenance.db
       - key: LOG_LEVEL
         value: INFO
+      - key: PATH
+        value: /opt/render/project/python3/bin:/opt/render/project/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     disk:
       sizeGB: 2
       mountPath: /var/data
