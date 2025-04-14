@@ -6,6 +6,8 @@ services:
       echo "Installing dependencies directly from modified requirements.txt..."
       pip install --upgrade pip
       pip install -r requirements.txt
+      # Explicitly install gunicorn to ensure it's available
+      pip install gunicorn==21.2.0
     startCommand: |
       # Set up directories
       echo "Setting up directory structure..."
@@ -22,8 +24,9 @@ services:
       fi
       
       # Start the application
-      echo "Starting application..."
-      gunicorn wsgi:app
+      echo "Starting application with gunicorn..."
+      # Use the full path to gunicorn to ensure it's found
+      python -m gunicorn app:app
     healthCheckPath: /health
     healthCheckTimeout: 5s
     envVars:
