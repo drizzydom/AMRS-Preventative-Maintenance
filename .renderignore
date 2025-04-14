@@ -1,0 +1,9 @@
+# Windows-specific files
+requirements-windows.txt
+electron_app/
+node_modules/
+package.json
+package-lock.json
+*.bat
+# Other files not needed for web deployment
+venv/
