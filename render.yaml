@@ -25,8 +25,9 @@ services:
       
       # Start the application
       echo "Starting application with gunicorn..."
-      # Use the full path to gunicorn to ensure it's found
-      python -m gunicorn app:app
+      export PATH=$PATH:~/.local/bin
+      which gunicorn || echo "Gunicorn not found in PATH"
+      ~/.local/bin/gunicorn wsgi:app || python -m gunicorn wsgi:app
     healthCheckPath: /health
     healthCheckTimeout: 5s
     envVars:
