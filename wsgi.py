@@ -10,10 +10,24 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import directory check utility
+# Check package compatibility
 try:
-    from check_disk_setup import ensure_directories
-    ensure_directories()
+    from check_versions import check_compatibility
+    check_compatibility()
+except Exception as e:
+    logger.warning(f"Failed to check package versions: {str(e)}")
+
+# Directory setup
+try:
+    data_dir = os.environ.get('DATA_DIR', '/var/data')
+    if not os.path.exists(data_dir):
+        logger.warning(f"Data directory {data_dir} does not exist!")
+    else:
+        for subdir in ['db', 'backups', 'uploads']:
+            full_path = os.path.join(data_dir, subdir)
+            if not os.path.exists(full_path):
+                os.makedirs(full_path, exist_ok=True)
+                logger.info(f"Created directory: {full_path}")
 except Exception as e:
     logger.error(f"Failed to set up directories: {str(e)}")
 
