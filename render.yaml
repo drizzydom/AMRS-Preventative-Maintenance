@@ -3,12 +3,21 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: |
-      echo "Installing dependencies and preparing deployment..."
+      echo "Installing dependencies directly from requirements.txt..."
       pip install --upgrade pip
       pip install -r requirements.txt
       pip install gunicorn==21.2.0
-      chmod +x start.sh
-    startCommand: ./start.sh
+      
+      # Create the adapter file that Render is expecting
+      echo "Creating app.py adapter for Render..."
+      if [ -f "app_render.py" ]; then
+        cp app_render.py app.py
+        echo "app_render.py copied to app.py"
+      else
+        echo "from wsgi import app" > app.py
+        echo "Basic adapter created as app.py"
+      fi
+    startCommand: gunicorn app:app
     healthCheckPath: /health
     healthCheckTimeout: 5s
     envVars:
