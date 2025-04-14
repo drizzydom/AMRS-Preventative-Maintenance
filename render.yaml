@@ -3,31 +3,9 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: |
-      echo "Disabling automatic requirements.txt installation"
-      # Create a backup of original requirements.txt
-      if [ -f "requirements.txt" ]; then
-        cp requirements.txt requirements.orig.txt
-      fi
-      
-      # Create a simplified version of requirements.txt that won't conflict
-      cat > requirements.txt << EOL
-      # This file is temporarily modified during Render deployment
-      # The original requirements are in requirements.orig.txt
-      # See requirements-render.txt for actual dependencies used in production
-      EOL
-      
-      echo "Installing dependencies from requirements-render.txt..."
+      echo "Installing dependencies directly from modified requirements.txt..."
       pip install --upgrade pip
-      pip install -r requirements-render.txt
-      
-      # Restore original requirements.txt at the end of build
-      if [ -f "requirements.orig.txt" ]; then
-        mv requirements.orig.txt requirements.txt
-      fi
-      
-      echo "Installing dependencies from requirements-render.txt..."
-      pip install --upgrade pip
-      pip install -r requirements-render.txt
+      pip install -r requirements.txt
     startCommand: |
       # Set up directories
       echo "Setting up directory structure..."
