@@ -6,28 +6,9 @@ services:
       echo "Installing dependencies directly from modified requirements.txt..."
       pip install --upgrade pip
       pip install -r requirements.txt
-      # Explicitly install gunicorn to ensure it's available
       pip install gunicorn==21.2.0
-    startCommand: |
-      # Set up directories
-      echo "Setting up directory structure..."
-      mkdir -p /var/data/db
-      mkdir -p /var/data/backups
-      mkdir -p /var/data/uploads
-      chmod -R 755 /var/data
-      
-      # Initialize database if needed
-      echo "Checking database..."
-      if [ ! -f "/var/data/db/maintenance.db" ]; then
-        echo "Database not found, initializing..."
-        python -c "from models import db; from app import app; with app.app_context(): db.create_all()"
-      fi
-      
-      # Start the application
-      echo "Starting application with gunicorn..."
-      export PATH=$PATH:~/.local/bin
-      which gunicorn || echo "Gunicorn not found in PATH"
-      ~/.local/bin/gunicorn wsgi:app || python -m gunicorn wsgi:app
+      chmod +x start.sh
+    startCommand: ./start.sh
     healthCheckPath: /health
     healthCheckTimeout: 5s
     envVars:
