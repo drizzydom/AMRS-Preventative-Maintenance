@@ -3,7 +3,7 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: |
-      echo "Installing dependencies directly from modified requirements.txt..."
+      echo "Installing dependencies and preparing deployment..."
       pip install --upgrade pip
       pip install -r requirements.txt
       pip install gunicorn==21.2.0
