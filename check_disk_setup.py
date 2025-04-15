@@ -17,7 +17,6 @@ def ensure_directories():
     # Required subdirectories
     subdirs = [
         'db',
-        'backups',
         'uploads',
         'logs',
         'exports',
