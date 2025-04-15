@@ -7,7 +7,7 @@ services:
       pip install --upgrade pip
       pip install -r requirements.txt
       pip install gunicorn==21.2.0
-    startCommand: gunicorn render_app:app
+    startCommand: bash render-setup.sh && gunicorn render_app:app
     healthCheckPath: /health
     envVars:
       - key: FLASK_APP

@@ -1,17 +1,52 @@
 """
-This is a simple adapter file for Render.com deployments.
+Render.com app entry point.
 Since Render insists on running 'gunicorn app:app', this file
-redirects to the actual application in wsgi.py.
+acts as a bridge to import the actual Flask application.
 """
+
 import os
 import sys
+import logging
 
-print("Render adapter: Importing app from wsgi.py")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.info("Starting AMRS Maintenance application for Render.com")
 
-# Import the app from wsgi.py
-from wsgi import app
+# Import the app from the main app.py file
+try:
+    # First, try to import directly from app.py
+    logger.info("Attempting to import app from app module...")
+    from app import app
+    logger.info("Successfully imported app from app.py")
+except ImportError as e:
+    logger.error(f"Failed to import app from app.py: {e}")
+    
+    # Second option: try to import from wsgi.py
+    try:
+        logger.info("Attempting to import app from wsgi module...")
+        from wsgi import app
+        logger.info("Successfully imported app from wsgi.py")
+    except ImportError as e:
+        logger.error(f"Failed to import app from wsgi.py: {e}")
+        
+        # Third option: try to create a new app from flask_app
+        try:
+            logger.info("Attempting to import create_app from flask_app module...")
+            from flask_app import create_app
+            app = create_app()
+            logger.info("Successfully created app from flask_app.create_app()")
+        except ImportError as e:
+            logger.error(f"Failed to import create_app from flask_app: {e}")
+            raise RuntimeError("Could not initialize Flask app through any available method")
 
-# Log information for debugging
+# Log startup information for debugging
+logger.info(f"App initialized with name: {app.name}")
+logger.info(f"Available routes: {[str(rule) for rule in app.url_map.iter_rules()]}")
+
+# This is what Gunicorn will import
+# The variable must be named 'app' for 'gunicorn app:app' to work
 if __name__ == "__main__":
-    print(f"Running with Python {sys.version}")
-    print(f"App imported from: {app.__module__}")
+    port = int(os.environ.get("PORT", 5000))
+    logger.info(f"Starting development server on port {port}")
+    app.run(host="0.0.0.0", port=port)
