@@ -20,30 +20,26 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv  # Add the missing import for load_dotenv
 import secrets  # Add import for secrets used later in the code
 from sqlalchemy import inspect  # Add import for inspect
+import psycopg2  # Add PostgreSQL driver
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 
+# Define PostgreSQL database URI
+POSTGRESQL_DATABASE_URI = os.environ.get(
+    'DATABASE_URL', 
+    'postgresql://maintenance_tracker_data_user:mbVv4EmuXc0co5A0KcHe57SPhW7Kd0gi@dpg-cvv7vebe5dus73ec3ksg-a/maintenance_tracker_data'
+)
+
 # Verify persistent storage
 def check_persistent_storage():
     """Verify persistent storage is working properly"""
-    if os.environ.get('RENDER', '').lower() == 'true':
-        data_dir = os.environ.get('DATA_DIR', '/var/data')
-        if not os.path.exists(data_dir):
-            print(f"WARNING: Persistent storage directory {data_dir} not found!")
-            return False
-            
-        # Write a test file to verify write access
-        test_file = os.path.join(data_dir, '.storage_test')
-        try:
-            with open(test_file, 'w') as f:
-                f.write(f"Storage test - {datetime.now().isoformat()}")
-            os.remove(test_file)
-            print(f"Persistent storage at {data_dir} is working properly")
-            return True
-        except Exception as e:
-            print(f"ERROR: Failed to write to persistent storage: {str(e)}")
-            return False
+    # Since we're using PostgreSQL now, we can simplify this check
+    # We'll just ensure the DATABASE_URL environment variable is set
+    if os.environ.get('DATABASE_URL'):
+        print(f"[APP] Using database URL from environment: {os.environ.get('DATABASE_URL')}")
+    else:
+        print(f"[APP] Using default PostgreSQL database")
     return True
 
 # Call this function before your database setup
@@ -113,7 +109,7 @@ except ImportError as e:
     print(f"[APP] Error importing db_config: {str(e)}")
     # Define a simple fallback if import fails
     def configure_database(app):
-        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         return app
 
@@ -133,7 +129,7 @@ try:
 except Exception as e:
     print(f"[APP] Error configuring database: {str(e)}")
     # Set a fallback configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///maintenance.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
 
 # Initialize database
 print("[APP] Initializing SQLAlchemy...")
@@ -352,23 +348,12 @@ def health_check():
         from models import db
         db.engine.execute("SELECT 1")
         
-        # Check persistent storage
-        if os.environ.get('RENDER', '').lower() == 'true':
-            data_dir = os.environ.get('DATA_DIR', '/var/data')
-            if not os.path.exists(data_dir) or not os.access(data_dir, os.W_OK):
-                return jsonify({
-                    "status": "warning", 
-                    "message": "Application running but persistent storage issue detected",
-                    "storage": "unavailable"
-                }), 200
-
-        # Everything is good
         return jsonify({
             "status": "ok",
             "version": "1.0.0",
             "timestamp": datetime.now().isoformat(),
             "environment": os.environ.get('FLASK_ENV', 'production'),
-            "storage": "available"
+            "database": "PostgreSQL"
         }), 200
     except Exception as e:
         return jsonify({

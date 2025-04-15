@@ -16,6 +16,7 @@ A comprehensive desktop and web application for tracking and managing preventati
   - [Node.js Environment](#nodejs-environment)
   - [Database Setup](#database-setup)
   - [Database Migrations](#database-migrations)
+- [Database Configuration](#database-configuration)
 - [Running the Application](#running-the-application)
   - [Development Mode](#development-mode)
   - [Production Mode](#production-mode)
@@ -212,6 +213,16 @@ python add_password_reset_columns.py
 ```
 
 This script should be run when you encounter errors related to missing password reset columns.
+
+## Database Configuration
+
+The application uses PostgreSQL as its database backend. To configure the database connection:
+
+1. Copy `.env.example` to `.env`
+2. Update the DATABASE_URL setting with your PostgreSQL connection string.
+
+The default connection string is:
+```
 
 ## Running the Application
 
