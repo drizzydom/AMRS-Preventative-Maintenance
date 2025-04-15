@@ -16,7 +16,7 @@ try:
     if not os.path.exists(data_dir):
         logger.warning(f"Data directory {data_dir} does not exist!")
     else:
-        for subdir in ['db', 'backups', 'uploads']:
+        for subdir in ['db', 'uploads']:  # Removed 'backups'
             full_path = os.path.join(data_dir, subdir)
             if not os.path.exists(full_path):
                 os.makedirs(full_path, exist_ok=True)

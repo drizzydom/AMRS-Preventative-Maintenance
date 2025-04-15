@@ -890,30 +890,6 @@ def view_part_history(part_id):
         flash(f'Error loading maintenance history: {str(e)}', 'error')
         return redirect(url_for('maintenance_page'))
 
-@app.route('/admin/backups')
-@login_required
-def manage_backups():
-    """Database backup management page"""
-    if not current_user.is_admin:
-        flash('You do not have permission to access this page.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    # Import and use the backup_utils module to get backups
-    from backup_utils import list_backups
-    backups = list_backups()
-    
-    # Process the backup data for display
-    for backup in backups:
-        # Convert timestamp string to datetime if needed
-        if isinstance(backup.get('created'), str):
-            try:
-                backup['created'] = datetime.fromisoformat(backup['created'].replace('Z', '+00:00'))
-            except (ValueError, AttributeError):
-                # If conversion fails, use file creation time
-                backup['created'] = datetime.now()
-    
-    return render_template('admin_backups.html', backups=backups)
-
 def calculate_maintenance_days(frequency, unit):
     """Convert maintenance frequency into days"""
     if unit == 'day':
@@ -946,6 +922,9 @@ def admin():
     site_count = Site.query.count()
     machine_count = Machine.query.count()
     part_count = Part.query.count()
+    
+    # Add a notification about database backups being managed through Render
+    flash('Database backups are now managed directly through the Render platform.', 'info')
     
     return render_template('admin.html',
                           user_count=user_count,
@@ -997,8 +976,7 @@ def get_all_permissions():
         "delete_parts": "Delete Parts",
         "view_reports": "View Reports",
         "admin.users": "Manage Users",
-        "admin.roles": "Manage Roles",
-        "admin.backups": "Manage Backups"
+        "admin.roles": "Manage Roles"
     }
 
 # Site CRUD Operations
@@ -1422,76 +1400,6 @@ def add_role():
         flash(f'Error adding role: {str(e)}', 'error')
     
     return redirect(url_for('manage_roles'))
-
-# Backup Management Routes
-@app.route('/admin/backups/create', methods=['POST'])
-@login_required
-def create_backup():
-    """Create a new database backup"""
-    if not current_user.is_admin:
-        flash('You do not have permission to create backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        from backup_utils import create_backup as create_db_backup
-        success, message = create_db_backup()
-        
-        if success:
-            flash(f'Backup created successfully: {message}', 'success')
-        else:
-            flash(f'Backup failed: {message}', 'error')
-    except Exception as e:
-        flash(f'Error creating backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
-
-@app.route('/admin/backups/restore/<filename>', methods=['POST'])
-@login_required
-def restore_backup(filename):
-    """Restore database from a backup file"""
-    if not current_user.is_admin:
-        flash('You do not have permission to restore backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        from backup_utils import restore_backup as restore_db_backup
-        success, message = restore_db_backup(filename)
-        
-        if success:
-            flash(f'Database restored successfully: {message}', 'success')
-        else:
-            flash(f'Restore failed: {message}', 'error')
-    except Exception as e:
-        flash(f'Error restoring backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
-
-@app.route('/admin/backups/delete/<filename>', methods=['POST'])
-@login_required
-def delete_backup(filename):
-    """Delete a database backup file"""
-    if not current_user.is_admin:
-        flash('You do not have permission to delete backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        from backup_utils import get_backup_dir
-        import os
-        
-        backup_path = os.path.join(get_backup_dir(), filename)
-        if os.path.exists(backup_path):
-            os.remove(backup_path)
-            # Also remove info file if it exists
-            info_path = f"{backup_path}.info"
-            if os.path.exists(info_path):
-                os.remove(info_path)
-            flash(f'Backup "{filename}" has been deleted.', 'success')
-        else:
-            flash(f'Backup file not found.', 'error')
-    except Exception as e:
-        flash(f'Error deleting backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
 
 @app.route('/maintenance')
 @login_required
