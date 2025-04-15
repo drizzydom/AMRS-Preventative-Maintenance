@@ -3,16 +3,12 @@ services:
     name: maintenance-tracker
     env: python
     buildCommand: |
+      echo "Installing dependencies directly from requirements.txt..."
       pip install --upgrade pip
-      # Install gunicorn first
-      pip install gunicorn==21.2.0
-      # Then install other dependencies
       pip install -r requirements.txt
-      # Create directories needed
-      mkdir -p /var/data/db /var/data/backups /var/data/uploads
-      chmod -R 755 /var/data
-    # Let Render use the Procfile
-    # Don't specify startCommand so Render will use Procfile
+      pip install gunicorn==21.2.0
+    startCommand: gunicorn render_app:app
+    healthCheckPath: /health
     envVars:
       - key: FLASK_APP
         value: app.py
