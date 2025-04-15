@@ -1,66 +1,11 @@
 services:
   - type: web
-    name: maintenance-tracker
+    name: amrs-maintenance
     env: python
-    buildCommand: |
-      echo "Installing dependencies from requirements-render.txt..."
-      pip install --upgrade pip
-      pip install -r requirements-render.txt
-    startCommand: |
-      # Set up directories
-      echo "Setting up directory structure..."
-      mkdir -p /var/data/db
-      mkdir -p /var/data/backups
-      mkdir -p /var/data/uploads
-      chmod -R 755 /var/data
-      
-      # Initialize database if needed
-      echo "Checking database..."
-      if [ ! -f "/var/data/db/maintenance.db" ]; then
-        echo "Database not found, initializing..."
-        python -c "from models import db; from app import app; with app.app_context(): db.create_all()"
-      fi
-      
-      # Start the application
-      echo "Starting application..."
-      gunicorn wsgi:app
-    healthCheckPath: /health
-    healthCheckTimeout: 5s
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
       - key: FLASK_APP
         value: app.py
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: RENDER
-        value: "true"
-      - key: FLASK_DEBUG
-        value: "false"
-      - key: SECRET_KEY
-        generateValue: true
-      - key: MAIL_SERVER
-        sync: false
-      - key: MAIL_PORT
-        sync: false
-      - key: MAIL_USERNAME
-        sync: false
-      - key: MAIL_PASSWORD
-        sync: false
-      - key: MAIL_DEFAULT_SENDER
-        sync: false
-      - key: DEFAULT_ADMIN_PASSWORD
-        generateValue: true
-      - key: PORT
-        fromService:
-          type: web
-          name: maintenance-tracker
-          envVarKey: RENDER_PORT
-      - key: DATA_DIR
-        value: /var/data
-      - key: DATABASE_URL
-        value: sqlite:///var/data/db/maintenance.db
-      - key: LOG_LEVEL
-        value: INFO
-    disk:
-      sizeGB: 2
-      mountPath: /var/data
-      name: maintenance-data

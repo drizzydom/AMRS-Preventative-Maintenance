@@ -2,7 +2,9 @@ blinker==1.9.0
 click==8.1.7
 colorama==0.4.6
 et_xmlfile==2.0.0
-Flask==3.1.0
+# Core Flask dependencies with compatible versions - MODIFIED FOR RENDER COMPATIBILITY
+Flask==2.2.3
+Werkzeug==2.2.3
 importlib_metadata==8.6.1
 itsdangerous==2.1.2
 Jinja2==3.1.2
@@ -15,6 +17,14 @@ pytz==2025.2
 setuptools==78.1.0
 six==1.17.0
 tzdata==2025.2
-Werkzeug==2.3.7
 wheel==0.45.1
 zipp==3.21.0
+gunicorn==21.2.0
+flask-login==0.6.2
+flask-sqlalchemy==3.0.3
+flask-mail==0.9.1
+python-dotenv==1.0.0
+sqlalchemy==2.0.5.post1
+bleach==6.0.0
+PyJWT==2.6.0
+psycopg2-binary==2.9.5

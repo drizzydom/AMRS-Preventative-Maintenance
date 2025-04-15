@@ -10,13 +10,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Check package compatibility
-try:
-    from check_versions import check_compatibility
-    check_compatibility()
-except Exception as e:
-    logger.warning(f"Failed to check package versions: {str(e)}")
-
 # Directory setup
 try:
     data_dir = os.environ.get('DATA_DIR', '/var/data')
@@ -34,11 +27,14 @@ except Exception as e:
 logger.info(f"FLASK_APP: {os.environ.get('FLASK_APP', 'Not set')}")
 logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
 
-# Import and create Flask app
-from app import app as application
+# Import the real Flask application file
+# Instead of importing from app.py, import directly from the actual application module
+# Adjust this import to match your actual application structure
+import sys
+sys.path.insert(0, os.path.dirname(__file__))
+from flask_app import create_app  # Assuming your actual app is in flask_app.py
 
-# For Render compatibility
-app = application
+app = create_app()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
