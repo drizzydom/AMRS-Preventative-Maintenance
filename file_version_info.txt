@@ -18,7 +18,7 @@ VSVersionInfo(
         StringStruct(u'FileDescription', u'AMRS Maintenance Tracker Desktop Application'),
         StringStruct(u'FileVersion', u'1.0.0'),
         StringStruct(u'InternalName', u'AMRSMaintenanceTracker'),
-        StringStruct(u'LegalCopyright', u'Copyright 2023 AMRS'),
+        StringStruct(u'LegalCopyright', u'Copyright 2025 AMRS'),
         StringStruct(u'OriginalFilename', u'AMRSMaintenanceTracker.exe'),
         StringStruct(u'ProductName', u'AMRS Maintenance Tracker'),
         StringStruct(u'ProductVersion', u'1.0.0')])
