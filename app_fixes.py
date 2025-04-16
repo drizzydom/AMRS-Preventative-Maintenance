@@ -25,19 +25,22 @@ def fix_sqlalchemy():
 
 def fix_flask_routes(app):
     """
-    Fix Flask routing issues
+    Fix Flask routing issues - carefully check if routes already exist
     
     Args:
         app: Flask application instance
     """
     try:
-        # Check if the app has a login route
-        has_login_route = 'login' in app.view_functions
+        # Check existing routes
+        existing_endpoints = set(app.view_functions.keys())
+        existing_rules = set(rule.rule for rule in app.url_map.iter_rules())
         
-        # If no login route exists, create a simple one
-        if not has_login_route:
-            @app.route('/login', methods=['GET', 'POST'])
-            def login():
+        logger.info(f"Found existing endpoints: {', '.join(existing_endpoints)}")
+        
+        # Check if login route exists but only add if it doesn't exist
+        if 'login' not in existing_endpoints and '/login' not in existing_rules:
+            @app.route('/login', methods=['GET', 'POST'], endpoint='fix_login')
+            def fix_login():
                 """Simple login page"""
                 return """
                 <!DOCTYPE html>
@@ -99,60 +102,13 @@ def fix_flask_routes(app):
                 </html>
                 """
             
-            logger.info("Added simple login route")
+            logger.info("Added simple login route (endpoint: fix_login)")
+        else:
+            logger.info("Login route already exists, skipping")
         
-        # Make sure there's a root route
-        has_index_route = 'index' in app.view_functions or '/' in [rule.rule for rule in app.url_map.iter_rules()]
-        
-        if not has_index_route:
-            @app.route('/')
-            def index():
-                """Simple index/home page"""
-                try:
-                    from flask import redirect, url_for
-                    # Only redirect if login route exists
-                    if 'login' in app.view_functions:
-                        return redirect(url_for('login'))
-                except Exception:
-                    pass
-                    
-                # Fallback to a static page
-                return """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>AMRS Maintenance Tracker</title>
-                    <style>
-                        body { 
-                            font-family: Arial, sans-serif; 
-                            margin: 0;
-                            padding: 20px;
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                        }
-                        h1 { color: #333; }
-                        .button {
-                            background: #4285f4;
-                            color: white;
-                            text-decoration: none;
-                            padding: 10px 20px;
-                            border-radius: 4px;
-                            margin-top: 20px;
-                            display: inline-block;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <h1>AMRS Maintenance Tracker</h1>
-                    <p>Welcome to the AMRS Preventative Maintenance System</p>
-                    <p>Please log in to continue.</p>
-                    <a href="/login" class="button">Log In</a>
-                </body>
-                </html>
-                """
-            
-            logger.info("Added simple index route")
+        # Skip adding the root route since it already exists
+        if 'index' in existing_endpoints or '/' in existing_rules:
+            logger.info("Root route already exists, skipping")
         
         return True
     except Exception as e:

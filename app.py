@@ -1,4 +1,4 @@
-# Add this at the very top of app.py, before other imports
+# Add this at the very top before any other imports
 import sqlalchemy_compat  # This automatically applies SQLAlchemy patches
 
 # Standard library imports

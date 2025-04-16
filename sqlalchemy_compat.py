@@ -20,7 +20,7 @@ def patch_sqlalchemy():
         try:
             from sqlalchemy.engine import Engine
             
-            # Add execute method if it doesn't exist
+            # Only add the method if it doesn't already exist
             if not hasattr(Engine, "execute"):
                 def _execute(self, statement, *multiparams, **params):
                     """Compatibility execute method for SQLAlchemy 1.x code"""
@@ -30,19 +30,28 @@ def patch_sqlalchemy():
                     
                     # Execute using SQLAlchemy 2.0 style
                     with self.connect() as conn:
-                        result = conn.execute(statement, *multiparams, **params)
-                        conn.commit()
-                        return result
+                        try:
+                            result = conn.execute(statement, *multiparams, **params)
+                            conn.commit()
+                            return result
+                        except Exception as e:
+                            conn.rollback()
+                            logger.error(f"Error executing SQL: {e}")
+                            raise
                 
                 # Add the method to the Engine class
                 Engine.execute = _execute
                 logger.info(f"Patched SQLAlchemy {__version__} with compatibility execute() method")
                 return True
-            return False
+            else:
+                logger.info("Engine.execute() method already exists, no patching required")
+                return False
         except Exception as e:
             logger.error(f"Failed to patch SQLAlchemy: {e}")
             return False
-    return False
+    else:
+        logger.info(f"SQLAlchemy {__version__} does not require patching")
+        return False
 
 # Apply the patch when this module is imported
 is_patched = patch_sqlalchemy()
