@@ -27,6 +27,22 @@ from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 from db_config import configure_db, get_db_engine, configure_database
 from db_operations import init_db, execute_query
 
+# Add this at the top of your file to debug database issues
+try:
+    from db_debug import print_db_debug_info
+    print_db_debug_info()
+except ImportError:
+    print("[APP] Warning: Could not import db_debug module")
+
+# Make sure to import functions with the correct names
+try:
+    from db_config import configure_database
+    # configure_db is an alias for configure_database
+    # You can remove the references to configure_db if you want
+except ImportError as e:
+    print(f"[APP] Error importing from db_config: {e}")
+    raise
+
 # Define PostgreSQL database URI
 POSTGRESQL_DATABASE_URI = os.environ.get(
     'DATABASE_URL', 
@@ -113,16 +129,14 @@ except Exception as e:
     print(f"[APP] Database configuration error: {str(e)}")
     # Consider adding a fallback configuration here
 
-# Initialize SQLAlchemy with the app (only do this once)
-# This should not be necessary if configure_database has already called db.init_app(app)
-
-# Create tables within app context
+# Create database tables
 with app.app_context():
     try:
         db.create_all()
         print("[APP] Database tables created successfully")
     except Exception as e:
-        print(f"[APP] Error creating database tables: {str(e)}")
+        print(f"[APP] Error creating database tables: {e}")
+        raise
 
 # Initialize Flask-Login
 print("[APP] Initializing Flask-Login...")
