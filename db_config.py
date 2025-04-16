@@ -3,11 +3,9 @@ Database configuration for different environments
 """
 import os
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine
 from models import db
 
-def configure_db(app):
+def configure_database(app):
     """
     Configure the database connection based on environment
     
@@ -23,6 +21,8 @@ def configure_db(app):
     # Handle potential Heroku/Render PostgreSQL URL format issue
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
+    
+    print(f"[DB] Configuring database with URL: {database_url}")
     
     # Configure database
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
@@ -45,6 +45,8 @@ def get_db_engine():
     # Handle potential Heroku/Render PostgreSQL URL format issue
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
+    
+    from sqlalchemy import create_engine
     
     # Create engine with appropriate parameters for PostgreSQL
     connect_args = {}
