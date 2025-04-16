@@ -1,56 +1,64 @@
+"""
+Database configuration for different environments
+"""
 import os
 from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import create_engine
+from models import db
 
-def configure_database(app):
-    """Configure database settings for the application"""
-    try:
-        # Check if running on Render
-        if os.environ.get('RENDER', False):
-            # Use PostgreSQL configuration on Render
-            print("[DB_CONFIG] Running on Render platform, using PostgreSQL")
-            app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-                'DATABASE_URL', 
-                'postgresql://maintenance_tracker_data_user:mbVv4EmuXc0co5A0KcHe57SPhW7Kd0gi@dpg-cvv7vebe5dus73ec3ksg-a/maintenance_tracker_data'
-            )
+def configure_db(app):
+    """
+    Configure the database connection based on environment
+    
+    Args:
+        app: Flask application instance
         
-            # Set up database directory on persistent storage
-            if os.environ.get('RENDER_DATA_DIR'):
-                data_dir = os.environ.get('RENDER_DATA_DIR')
-                print(f"[DB_CONFIG] Using Render persistent storage: {data_dir}")
+    Returns:
+        Configured Flask application
+    """
+    # Get database URL from environment or use default
+    database_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/maintenance.db')
+    
+    # Handle potential Heroku/Render PostgreSQL URL format issue
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    
+    # Configure database
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Initialize the database with the app
+    db.init_app(app)
+    
+    return app
 
-                # Create uploads directory
-                uploads_dir = os.path.join(data_dir, 'uploads')
-                os.makedirs(uploads_dir, exist_ok=True)
-                app.config['UPLOAD_DIR'] = uploads_dir
-                print(f"[DB_CONFIG] Uploads will be stored at: {uploads_dir}")
-
-        else:
-            # Local development environment
-            print("[DB_CONFIG] Running in local environment")
-            
-            # Get instance path for database and other persistent data
-            instance_path = app.instance_path
-            os.makedirs(instance_path, exist_ok=True)
-            print(f"[DB_CONFIG] Using instance path: {instance_path}")
-            
-            # Create uploads directory
-            uploads_dir = os.path.join(instance_path, 'uploads')
-            os.makedirs(uploads_dir, exist_ok=True)
-            app.config['UPLOAD_DIR'] = uploads_dir
-            print(f"[DB_CONFIG] Using local uploads at: {uploads_dir}")
-            
-            # Use SQLite by default if no DATABASE_URL is set
-            if os.environ.get('DATABASE_URL'):
-                app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-                print(f"[DB_CONFIG] Using database from environment: {os.environ.get('DATABASE_URL')}")
-            else:
-                # Default to PostgreSQL for local development
-                app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://localhost/maintenance_tracker'
-                print("[DB_CONFIG] Using default PostgreSQL database")
-        
-        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        return app
-            
-    except Exception as e:
-        print(f"[DB_CONFIG] Error configuring database: {str(e)}")
-        raise
+def get_db_engine():
+    """
+    Create and return a SQLAlchemy engine based on environment
+    
+    Returns:
+        SQLAlchemy engine
+    """
+    database_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/maintenance.db')
+    
+    # Handle potential Heroku/Render PostgreSQL URL format issue
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    
+    # Create engine with appropriate parameters for PostgreSQL
+    connect_args = {}
+    if 'postgresql' in database_url:
+        connect_args = {
+            'client_encoding': 'utf8',
+            'connect_timeout': 15
+        }
+    
+    return create_engine(
+        database_url,
+        connect_args=connect_args,
+        pool_pre_ping=True,  # Verify connections before use
+        pool_recycle=300,    # Recycle connections every 5 minutes
+        pool_size=10,        # Maximum pool size
+        max_overflow=20      # Allow up to 20 connections to overflow
+    )

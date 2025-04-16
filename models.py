@@ -3,8 +3,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from datetime import datetime
 import uuid
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.future import engine
 
+# Initialize SQLAlchemy with future flag for 2.0 compatibility
 db = SQLAlchemy()
+Base = declarative_base()
 
 # Define the association table for many-to-many relationship between User and Site
 user_site = db.Table(
