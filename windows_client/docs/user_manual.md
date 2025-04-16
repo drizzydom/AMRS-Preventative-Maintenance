@@ -11,7 +11,7 @@ AMRS Maintenance Tracker is a desktop application that helps maintenance technic
 - Windows 10 or later
 - 4GB RAM (8GB recommended)
 - 500MB free disk space
-- .NET Framework 4.7.2 or later
+- Python 3.10+ (for building from source)
 - Internet connection for synchronization
 
 ### Installation Options
@@ -59,6 +59,38 @@ The main navigation menu allows access to:
 - **Maintenance History**: View completed maintenance activities
 - **Reports**: Generate and export reports
 - **Settings**: Configure application preferences
+
+## Advanced Features
+
+### Analytics and Reporting
+
+1. Navigate to the "Analytics" tab
+2. Use filters to view data by date range, site, or machine
+3. Generate visual charts for:
+   - Maintenance trends over time
+   - Maintenance by part or machine
+   - System health metrics
+4. Export reports in CSV or JSON format
+
+### Scheduled Maintenance Reminders
+
+1. Navigate to the "Maintenance" tab
+2. Select a part and click "Schedule Maintenance"
+3. Set the maintenance interval and next due date
+4. Customize reminder settings (e.g., 24 hours before due)
+5. Save the schedule to receive notifications
+
+### Localization and Accessibility
+
+1. Go to Settings > Display
+2. Select your preferred language from the dropdown
+3. Enable high contrast mode for improved visibility
+4. Use keyboard shortcuts for navigation:
+   - `Alt + 1`: Dashboard
+   - `Alt + 2`: Sites
+   - `Alt + 3`: Machines
+   - `Alt + 4`: Parts
+   - `Alt + 5`: Analytics
 
 ## Working Offline
 
@@ -177,7 +209,7 @@ If synchronization fails:
 If the application runs slowly:
 
 1. Ensure your device meets the minimum system requirements
-2. Check available disk space
+2. Optimize the database using the built-in tools
 3. Clear the application cache in Settings > Advanced
 4. Consider reducing the amount of data stored offline by adjusting data retention settings
 
