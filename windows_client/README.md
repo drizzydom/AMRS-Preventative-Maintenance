@@ -12,6 +12,10 @@ The Windows client application for the AMRS Preventative Maintenance System, des
 - **Visual Indicators**: Clear status indicators for maintenance items
 - **System Tray Integration**: Minimize to system tray for continuous background operation
 - **Dashboard View**: At-a-glance overview of maintenance status
+- **Analytics and Reporting**: Generate visual reports and trends for maintenance activities
+- **Scheduled Maintenance Reminders**: Notifications for upcoming and overdue maintenance
+- **Localization**: Multi-language support for global users
+- **Accessibility Features**: High contrast mode, keyboard navigation, and screen reader support
 
 ## Installation Options
 
@@ -35,47 +39,47 @@ On first run, you'll need to provide:
 2. **Username and Password**: Your login credentials
 3. Optional: Check "Remember my credentials" for automatic login
 
-## Usage Guide
+## Advanced Features
 
-### Dashboard
+### Analytics and Reporting
 
-The dashboard provides a quick overview of:
-- Overdue maintenance items
-- Maintenance due soon
-- Total parts in the system
+- Generate visual reports for maintenance trends and system health
+- View maintenance statistics by part, machine, or site
+- Export reports in CSV or JSON format
 
-### Maintenance Recording
+### Scheduled Maintenance Reminders
 
-1. Navigate to the "Maintenance" tab
-2. Filter items by site, machine, or status
-3. Select a part that needs maintenance
-4. Click "Record Maintenance" or double-click the part
-5. Enter maintenance notes and submit
+- Set up recurring maintenance schedules for parts
+- Receive notifications for upcoming and overdue maintenance
+- Customize reminder intervals and notification preferences
 
-### Offline Operation
+### Localization and Accessibility
 
-When working offline:
-1. An "OFFLINE MODE" indicator will appear in the status bar
-2. All maintenance records are saved locally
-3. When connection is restored, data will automatically sync with the server
-4. Use "Force Sync" button to manually trigger synchronization
+- Multi-language support with easy language switching
+- High contrast mode for improved visibility
+- Full keyboard navigation and screen reader compatibility
 
 ## Building from Source
 
 To build the Windows client from source:
 
-1. Clone the repository
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
+   cd AMRS-Preventative-Maintenance/windows_client
+   ```
+
 2. Install requirements:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. For portable executable:
+3. Build the application:
    ```bash
    python build.py
    ```
 
-4. The executable will be available in the `dist` folder
+4. The executable will be available in the `dist` folder.
 
 ## Troubleshooting
 
@@ -88,6 +92,11 @@ To build the Windows client from source:
 - Check the log files in `%USERPROFILE%\.amrs\logs` (installed version) or `logs` folder (portable version)
 - Try using "Force Sync" when connected
 - Restart the application if sync issues persist
+
+### Performance Issues
+- Ensure your device meets the minimum system requirements
+- Optimize the database using the built-in tools
+- Reduce the amount of data stored offline by adjusting data retention settings
 
 ## Log File Locations
 
