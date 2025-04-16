@@ -11,16 +11,15 @@ def configure_database(app):
     # Check if running on Render
     is_render = os.environ.get('RENDER', '') == 'true'
     
-    # Get database URL - use the specific PostgreSQL URL if on Render
+    # Get database URL depending on environment
     if is_render:
-        # First check the environment variable
+        # For Render deployment use the DATABASE_URL provided by Render
         database_url = os.environ.get('DATABASE_URL')
         
         if not database_url:
-            print("[DB] WARNING: No DATABASE_URL environment variable found on Render", file=sys.stderr)
-            print("[DB] Using the hardcoded PostgreSQL URL as fallback", file=sys.stderr)
-            # Use the hardcoded URL as fallback if needed
-            database_url = "postgresql://maintenance_tracker_data_user:mbVv4EmuXc0co5A0KcHe57SPhW7Kd0gi@dpg-cvv7vbe5dus73ec3ksg-a/maintenance_tracker_data"
+            print("[DB] ERROR: No DATABASE_URL provided by Render. This is required.", file=sys.stderr)
+            print("[DB] Falling back to in-memory SQLite as a last resort", file=sys.stderr)
+            database_url = 'sqlite:///:memory:'
     else:
         # For local development, use SQLite
         database_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/maintenance.db')
@@ -67,19 +66,16 @@ def get_db_engine():
     
     # Get database URL - use the specific PostgreSQL URL if on Render
     if is_render:
-        # First check the environment variable
         database_url = os.environ.get('DATABASE_URL')
-        
         if not database_url:
-            print("[DB] WARNING: No DATABASE_URL environment variable found on Render", file=sys.stderr)
-            print("[DB] Using the hardcoded PostgreSQL URL as fallback", file=sys.stderr)
-            # Use the hardcoded URL as fallback if needed
-            database_url = "postgresql://maintenance_tracker_data_user:mbVv4EmuXc0co5A0KcHe57SPhW7Kd0gi@dpg-cvv7vbe5dus73ec3ksg-a/maintenance_tracker_data"
+            print("[DB] ERROR: No DATABASE_URL provided by Render. This is required.", file=sys.stderr)
+            print("[DB] Falling back to in-memory SQLite as a last resort", file=sys.stderr)
+            database_url = 'sqlite:///:memory:'
     else:
         # For local development, use SQLite
         database_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/maintenance.db')
     
-    # Fix common issue with PostgreSQL URLs from Heroku/Render
+    # Fix common issue with PostgreSQL URLs
     if database_url and database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
         
