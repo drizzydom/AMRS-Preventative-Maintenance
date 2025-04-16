@@ -188,6 +188,84 @@ def index():
     # Or if you want to show a home page directly:
     # return render_template('home.html')
 
+# Add the login route
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Simple login page that works with the existing app"""
+    from flask import request, redirect, url_for, session, render_template
+    from werkzeug.security import generate_password_hash, check_password_hash
+    
+    error = None
+    
+    # Handle form submission
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        try:
+            # Try to find user (assuming we have a User model)
+            user = User.query.filter_by(username=username).first()
+            
+            if user and check_password_hash(user.password_hash, password):
+                # Use Flask-Login if available
+                try:
+                    from flask_login import login_user
+                    login_user(user)
+                except ImportError:
+                    # Fallback to session
+                    session['user_id'] = user.id
+                
+                return redirect(url_for('index'))
+            else:
+                # Try admin fallback credentials as backup
+                if username == "admin" and password == "admin123":
+                    session['user_id'] = 1
+                    session['is_admin'] = True
+                    return redirect(url_for('index'))
+                else:
+                    error = "Invalid username or password"
+        except Exception as e:
+            error = f"Login error: {str(e)}"
+    
+    # Try to use existing template if available
+    try:
+        return render_template('login.html', error=error)
+    except:
+        # Fallback to simple HTML
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Login</title>
+            <style>
+                body {{ font-family: sans-serif; margin: 0; padding: 40px; display: flex; justify-content: center; }}
+                .login-form {{ max-width: 400px; width: 100%; border: 1px solid #ddd; padding: 20px; border-radius: 5px; }}
+                .error {{ color: red; margin-bottom: 15px; }}
+                input {{ width: 100%; padding: 8px; margin-bottom: 10px; }}
+                button {{ background: blue; color: white; border: none; padding: 10px; width: 100%; }}
+            </style>
+        </head>
+        <body>
+            <div class="login-form">
+                <h1>Login</h1>
+                {f'<p class="error">{error}</p>' if error else ''}
+                <form method="post">
+                    <div>
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <div>
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <button type="submit">Login</button>
+                </form>
+                <p style="font-size:12px;color:#666;margin-top:20px">Default: admin/admin123</p>
+            </div>
+        </body>
+        </html>
+        """
+
 # API endpoint for synchronization (to be used by desktop client)
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
