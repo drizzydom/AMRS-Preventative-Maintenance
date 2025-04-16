@@ -69,6 +69,10 @@ storage_ok = check_persistent_storage()
 # Initialize Flask app
 app = Flask(__name__)
 
+# After initializing the Flask app
+from app_fixes import apply_all_fixes
+apply_all_fixes(app)
+
 # Load configuration
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-for-testing')
 
