@@ -33,6 +33,9 @@ def configure_database(app):
     
     return app
 
+# Alias for configure_database to handle different import names
+configure_db = configure_database
+
 def get_db_engine():
     """
     Create and return a SQLAlchemy engine based on environment
