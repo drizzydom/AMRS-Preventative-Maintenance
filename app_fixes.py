@@ -39,16 +39,78 @@ def fix_flask_routes(app):
         
         # Check if login route exists but only add if it doesn't exist
         if 'login' not in existing_endpoints and '/login' not in existing_rules:
+            from flask import request, redirect, url_for, flash, session
+            from werkzeug.security import check_password_hash, generate_password_hash
+            
+            # Create a simple login function that actually handles credentials
             @app.route('/login', methods=['GET', 'POST'], endpoint='login')
             def login():
-                """Simple login page"""
-                return """
+                """Simple login handler with default credentials"""
+                # Default credentials for emergency access
+                default_username = "admin"
+                default_password_hash = generate_password_hash("admin123")
+                error = None
+                
+                # Handle form submission
+                if request.method == 'POST':
+                    username = request.form.get('username')
+                    password = request.form.get('password')
+                    
+                    if not username:
+                        error = "Username is required."
+                    elif not password:
+                        error = "Password is required."
+                    # Check against default credentials
+                    elif username != default_username or not check_password_hash(default_password_hash, password):
+                        error = "Invalid credentials."
+                        logger.warning(f"Failed login attempt for user: {username}")
+                    
+                    if error is None:
+                        # Set session data for the user
+                        session.clear()
+                        session['user_id'] = 1
+                        session['username'] = username
+                        session['is_authenticated'] = True
+                        
+                        logger.info(f"User {username} successfully logged in")
+                        
+                        # Redirect to index if it exists, or just show welcome page
+                        try:
+                            return redirect(url_for('index'))
+                        except:
+                            return """
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <title>Welcome</title>
+                                <style>
+                                    body { 
+                                        font-family: Arial, sans-serif;
+                                        margin: 20px;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <h1>Login Successful</h1>
+                                <p>You have successfully logged in.</p>
+                            </body>
+                            </html>
+                            """
+                
+                # Always add the secret key if not set
+                if not app.secret_key:
+                    app.secret_key = os.urandom(24)
+                    logger.info("Added Flask secret_key for session support")
+                    
+                # Show login form for GET requests or if validation failed
+                error_html = f"<p style='color: red;'>{error}</p>" if error else ""
+                return f"""
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <title>Login</title>
                     <style>
-                        body { 
+                        body {{ 
                             font-family: Arial, sans-serif;
                             margin: 0;
                             padding: 20px;
@@ -56,36 +118,41 @@ def fix_flask_routes(app):
                             justify-content: center;
                             align-items: center;
                             height: 100vh;
-                        }
-                        .login-container {
+                        }}
+                        .login-container {{
                             padding: 20px;
                             border: 1px solid #ccc;
                             border-radius: 5px;
                             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                             width: 300px;
-                        }
-                        h1 { color: #333; }
-                        .form-group {
+                        }}
+                        h1 {{ color: #333; }}
+                        .form-group {{
                             margin-bottom: 15px;
-                        }
-                        input {
+                        }}
+                        input {{
                             width: 100%;
                             padding: 8px;
                             box-sizing: border-box;
-                        }
-                        button {
+                        }}
+                        button {{
                             background: #4285f4;
                             color: white;
                             border: none;
                             padding: 10px 15px;
                             border-radius: 4px;
                             cursor: pointer;
-                        }
+                        }}
+                        .error {{
+                            color: red;
+                            margin-bottom: 15px;
+                        }}
                     </style>
                 </head>
                 <body>
                     <div class="login-container">
                         <h1>Login</h1>
+                        {error_html}
                         <form method="post" action="/login">
                             <div class="form-group">
                                 <label for="username">Username:</label>
@@ -97,12 +164,15 @@ def fix_flask_routes(app):
                             </div>
                             <button type="submit">Login</button>
                         </form>
+                        <p style="margin-top: 15px; font-size: 12px; color: #666;">
+                            Use default credentials: admin / admin123
+                        </p>
                     </div>
                 </body>
                 </html>
                 """
             
-            logger.info("Added simple login route (endpoint: login)")
+            logger.info("Added simple login route with credential handling (endpoint: login)")
         else:
             logger.info("Login route already exists, skipping")
         
