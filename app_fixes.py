@@ -39,8 +39,8 @@ def fix_flask_routes(app):
         
         # Check if login route exists but only add if it doesn't exist
         if 'login' not in existing_endpoints and '/login' not in existing_rules:
-            @app.route('/login', methods=['GET', 'POST'], endpoint='fix_login')
-            def fix_login():
+            @app.route('/login', methods=['GET', 'POST'], endpoint='login')
+            def login():
                 """Simple login page"""
                 return """
                 <!DOCTYPE html>
@@ -102,13 +102,9 @@ def fix_flask_routes(app):
                 </html>
                 """
             
-            logger.info("Added simple login route (endpoint: fix_login)")
+            logger.info("Added simple login route (endpoint: login)")
         else:
             logger.info("Login route already exists, skipping")
-        
-        # Skip adding the root route since it already exists
-        if 'index' in existing_endpoints or '/' in existing_rules:
-            logger.info("Root route already exists, skipping")
         
         return True
     except Exception as e:
