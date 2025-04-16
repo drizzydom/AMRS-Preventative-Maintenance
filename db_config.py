@@ -11,14 +11,30 @@ def configure_database(app):
     # Check if running on Render
     is_render = os.environ.get('RENDER', '') == 'true'
     
-    # Get database URL depending on environment
+    # On Render, check for all possible environment variable names for database
     if is_render:
-        # For Render deployment use the DATABASE_URL provided by Render
-        database_url = os.environ.get('DATABASE_URL')
+        # Check for internal Render PostgreSQL - use all possible env var names
+        database_url = os.environ.get('DATABASE_URL') or os.environ.get('RENDER_DATABASE_URL') or os.environ.get('INTERNAL_DATABASE_URL')
         
+        # If Render PostgreSQL not found, use the external database URL if available
         if not database_url:
-            print("[DB] ERROR: No DATABASE_URL provided by Render. This is required.", file=sys.stderr)
-            print("[DB] Falling back to in-memory SQLite as a last resort", file=sys.stderr)
+            # Check for common PostgreSQL env vars
+            print("[DB] Checking for PostgreSQL environment variables...")
+            postgres_vars = ['POSTGRES_URL', 'PG_URL', 'POSTGRESQL_URL']
+            for var in postgres_vars:
+                if os.environ.get(var):
+                    database_url = os.environ.get(var)
+                    print(f"[DB] Using {var} for database connection")
+                    break
+                    
+        # If still no database URL found, log available env vars for debugging
+        if not database_url:
+            print("[DB] No database URL found in environment variables. Available env vars:")
+            for key in sorted(os.environ.keys()):
+                if 'DB' in key.upper() or 'SQL' in key.upper() or 'DATABASE' in key.upper() or 'POSTGRES' in key.upper():
+                    print(f"  - {key}")
+            
+            print("[DB] Falling back to in-memory SQLite as a last resort")
             database_url = 'sqlite:///:memory:'
     else:
         # For local development, use SQLite
@@ -40,10 +56,7 @@ def configure_database(app):
             'pool_pre_ping': True,
             'pool_recycle': 300,
             'pool_size': 10,
-            'max_overflow': 20,
-            'connect_args': {
-                'connect_timeout': 10
-            }
+            'max_overflow': 20
         }
     
     # Initialize the app with the database
@@ -64,12 +77,21 @@ def get_db_engine():
     # Check if running on Render
     is_render = os.environ.get('RENDER', '') == 'true'
     
-    # Get database URL - use the specific PostgreSQL URL if on Render
+    # Get database URL depending on environment
     if is_render:
-        database_url = os.environ.get('DATABASE_URL')
+        # Check for internal Render PostgreSQL
+        database_url = os.environ.get('DATABASE_URL') or os.environ.get('RENDER_DATABASE_URL') or os.environ.get('INTERNAL_DATABASE_URL')
+        
         if not database_url:
-            print("[DB] ERROR: No DATABASE_URL provided by Render. This is required.", file=sys.stderr)
-            print("[DB] Falling back to in-memory SQLite as a last resort", file=sys.stderr)
+            # Check other common PostgreSQL env vars
+            postgres_vars = ['POSTGRES_URL', 'PG_URL', 'POSTGRESQL_URL']
+            for var in postgres_vars:
+                if os.environ.get(var):
+                    database_url = os.environ.get(var)
+                    break
+                    
+        if not database_url:
+            print("[DB] No database URL found for engine creation. Using in-memory SQLite.")
             database_url = 'sqlite:///:memory:'
     else:
         # For local development, use SQLite
@@ -98,3 +120,28 @@ def get_db_engine():
     
     # Create and return engine
     return create_engine(database_url, **engine_options)
+
+def execute_query(query, params=None):
+    """
+    Execute a SQL query using SQLAlchemy 2.0 compatible methods
+    
+    Args:
+        query: SQL query string
+        params: Optional parameters for the query
+        
+    Returns:
+        Query results
+    """
+    from sqlalchemy import text
+    from models import db
+    
+    try:
+        with db.engine.connect() as conn:
+            if params:
+                result = conn.execute(text(query), params)
+            else:
+                result = conn.execute(text(query))
+            return result
+    except Exception as e:
+        print(f"[DB] Query execution error: {e}")
+        raise
