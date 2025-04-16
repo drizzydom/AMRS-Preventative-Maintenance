@@ -1,5 +1,5 @@
-# Add at the very beginning of the file
-import sqlalchemy_compat  # This will automatically patch SQLAlchemy
+# Add this at the very top of app.py, before other imports
+import sqlalchemy_compat  # This automatically applies SQLAlchemy patches
 
 # Standard library imports
 import os
@@ -170,6 +170,19 @@ def initialize_db_connection():
             print("[APP] Database connection established successfully")
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
+
+# Add this route handler if it doesn't exist
+@app.route('/')
+def index():
+    """Handle the root URL"""
+    # If login is required, redirect to login page
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))  # Redirect to dashboard for authenticated users
+    else:
+        return redirect(url_for('login'))  # Redirect to login page for unauthenticated users
+    
+    # Or if you want to show a home page directly:
+    # return render_template('home.html')
 
 # API endpoint for synchronization (to be used by desktop client)
 @app.route('/api/sync/status', methods=['GET'])

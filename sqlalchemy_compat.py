@@ -1,44 +1,47 @@
 """
-Simple compatibility patch for SQLAlchemy 2.0+
-
-This script adds back the execute() method that was removed in SQLAlchemy 2.0
-to maintain compatibility with code written for SQLAlchemy 1.x.
+SQLAlchemy 2.0 compatibility layer
 """
 import logging
-import sqlalchemy
+from sqlalchemy import text, __version__
 
+# Configure a logger
 logger = logging.getLogger("sqlalchemy_compat")
+
+# Check SQLAlchemy version
+IS_SQLALCHEMY_2 = __version__.startswith("2.")
+logger.info(f"SQLAlchemy version: {__version__}")
 
 def patch_sqlalchemy():
     """
-    Apply compatibility patches for SQLAlchemy 2.0+
+    Apply SQLAlchemy 2.0 compatibility patches
     """
-    # Only apply the patch if using SQLAlchemy 2.x
-    if sqlalchemy.__version__.startswith("2."):
-        logger.info(f"Patching SQLAlchemy {sqlalchemy.__version__} for backward compatibility")
-        
-        # Import the Engine class
+    if IS_SQLALCHEMY_2:
         from sqlalchemy.engine import Engine
         
-        # Only add the method if it doesn't already exist
+        # If Engine doesn't have execute method, add it
         if not hasattr(Engine, "execute"):
-            # Define a compatibility execute() method
+            # Define a compatibility method
             def _execute(self, statement, *multiparams, **params):
                 """
-                Compatibility method for SQLAlchemy 1.x-style execute()
+                Execute a statement and return a result object
                 
-                This mimics the behavior of the execute() method in SQLAlchemy 1.x
+                This emulates SQLAlchemy 1.x behavior on SQLAlchemy 2.x
                 """
+                # Convert string statements to text objects
+                if isinstance(statement, str):
+                    statement = text(statement)
+                
+                # Use the new execution style through a connection
                 with self.connect() as conn:
                     result = conn.execute(statement, *multiparams, **params)
                     return result
-                    
-            # Add the method to the Engine class
+                
+            # Add method to Engine class
             Engine.execute = _execute
-            logger.info("Added execute() method to Engine class")
+            logger.info("Added SQLAlchemy 2.0 compatibility execute() method to Engine class")
+            
             return True
-    
     return False
 
-# Apply the patch when this module is imported
-is_patched = patch_sqlalchemy()
+# Apply patch when module is imported
+patched = patch_sqlalchemy()
