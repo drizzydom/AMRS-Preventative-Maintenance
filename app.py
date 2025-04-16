@@ -1,3 +1,6 @@
+# Add at the very beginning of the file
+import sqlalchemy_compat  # This will automatically patch SQLAlchemy
+
 # Standard library imports
 import os
 import sys
