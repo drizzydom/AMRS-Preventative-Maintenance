@@ -24,6 +24,8 @@ import psycopg2  # Add PostgreSQL driver
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
+from db_config import configure_db, get_db_engine
+from db_operations import init_db, execute_query
 
 # Define PostgreSQL database URI
 POSTGRESQL_DATABASE_URI = os.environ.get(
@@ -47,6 +49,7 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+app = configure_db(app)
 
 # Set up logging
 logging.basicConfig(
@@ -253,7 +256,7 @@ if __name__ == '__main__':
     
     with app.app_context():
         # Create tables if they don't exist
-        db.create_all()
+        init_db()
         
         # Add default admin account if no users exist
         add_default_admin_if_needed()
