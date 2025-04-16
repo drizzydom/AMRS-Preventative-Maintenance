@@ -32,10 +32,16 @@ def patch_sqlalchemy():
                     with self.connect() as conn:
                         try:
                             result = conn.execute(statement, *multiparams, **params)
-                            conn.commit()
+                            try:
+                                conn.commit()
+                            except Exception:
+                                pass  # Some statements don't need commit
                             return result
                         except Exception as e:
-                            conn.rollback()
+                            try:
+                                conn.rollback()
+                            except Exception:
+                                pass  # Might fail if connection is closed
                             logger.error(f"Error executing SQL: {e}")
                             raise
                 
@@ -53,5 +59,24 @@ def patch_sqlalchemy():
         logger.info(f"SQLAlchemy {__version__} does not require patching")
         return False
 
-# Apply the patch when this module is imported
-is_patched = patch_sqlalchemy()
+# Handle exceptions during import
+try:
+    # Apply the patch when this module is imported
+    is_patched = patch_sqlalchemy()
+except Exception as e:
+    logger.error(f"Failed to apply SQLAlchemy patch: {e}")
+    is_patched = False
+
+# Log Flask exceptions
+try:
+    from flask import got_request_exception
+    
+    def log_exception(sender, exception, **extra):
+        logger.error(f"Flask exception: {exception}")
+    
+    got_request_exception.connect(log_exception)
+    logger.info("Connected Flask exception handler")
+except ImportError:
+    logger.info("Flask not available, skipping exception handler")
+except Exception as e:
+    logger.error(f"Error setting up Flask exception handler: {e}")
