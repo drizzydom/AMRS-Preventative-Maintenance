@@ -1,262 +1,282 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
-Build script for creating a portable Windows executable
+Build script for the AMRS Maintenance Tracker Windows client application.
+This script packages the application using PyInstaller and optionally
+creates an installer using Inno Setup.
 """
+
 import os
 import sys
-import subprocess
 import shutil
-from pathlib import Path
-import zipfile
 import argparse
-import datetime
-import json
-import platform
+import subprocess
+from pathlib import Path
 
-APP_NAME = "Maintenance Tracker"
+# Application information
+APP_NAME = "AMRS Maintenance Tracker"
 APP_VERSION = "1.0.0"
+PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
-def run_command(command, verbose=True):
-    """Run a shell command and print output"""
-    print(f"Running: {command}")
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description=f'Build {APP_NAME} {APP_VERSION}')
     
-    # For PyInstaller, we want to see all output for diagnostics
-    if verbose:
-        # Use Popen to capture output in real-time
-        process = subprocess.Popen(
-            command, 
-            shell=True, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT,
-            universal_newlines=True
-        )
-        
-        # Print output in real-time
-        for line in process.stdout:
-            print(line, end='')
-            
-        # Wait for process to complete
-        process.wait()
-        
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, command)
-        
-        return process
-    else:
-        # For other commands, just run and check result
-        result = subprocess.run(command, shell=True, check=True)
-        return result
+    parser.add_argument('--clean', action='store_true', help='Clean build directories before building')
+    parser.add_argument('--debug', action='store_true', help='Build with debug information')
+    parser.add_argument('--portable', action='store_true', help='Build portable version')
+    parser.add_argument('--installer', action='store_true', help='Create installer using Inno Setup')
+    parser.add_argument('--server-url', help='Pre-configure server URL')
+    parser.add_argument('--skip-deps', action='store_true', help='Skip installing dependencies')
+    parser.add_argument('--no-upx', action='store_true', help='Skip UPX compression')
+    
+    return parser.parse_args()
 
-def create_server_config(server_url):
-    """Create a server configuration file that will be included in the build"""
-    if server_url:
-        print(f"Creating build with pre-configured server URL: {server_url}")
-        config = {
-            "server_url": server_url,
-            "preconfigured": True
-        }
-        
-        # Write to a temporary file that will be included in the build
-        with open("server_config.json", "w") as f:
-            json.dump(config, f)
-        
-        return True
-    return False
-
-def create_executable(server_url=None):
-    """Create standalone executable with PyInstaller"""
-    print(f"Building {APP_NAME} v{APP_VERSION}...")
+def check_dependencies():
+    """Check and install required dependencies"""
+    print("Checking and installing required dependencies...")
     
-    # Create server config if URL provided
-    has_server_config = create_server_config(server_url)
-    
-    # Ensure dependencies are installed
-    try:
-        print("Checking and installing required dependencies...")
-        run_command("pip install -U pyinstaller", verbose=False)
-        run_command("pip install -U keyring", verbose=False)
-        
-        import PyInstaller
-        print(f"Using PyInstaller version: {PyInstaller.__version__}")
-    except ImportError as e:
-        print(f"Error importing required module: {e}")
-        print("Installing missing dependencies...")
-        run_command("pip install pyinstaller keyring", verbose=False)
-    
-    # Clean previous build
-    dist_dir = Path("dist")
-    build_dir = Path("build")
-    if dist_dir.exists():
-        shutil.rmtree(dist_dir)
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
-    
-    # Use the correct path separator for the platform
-    if platform.system() == "Windows":
-        path_sep = ";"
-    else:
-        path_sep = ":"
-    
-    # Create executable
-    cmd = [
-        "pyinstaller",
-        "--name", f"{APP_NAME.replace(' ', '')}",
-        "--onefile",  # Create a single executable
-        "--windowed", # Don't show console window
-        "--clean",    # Clean PyInstaller cache before building
-        "--log-level=DEBUG",  # More verbose logging
-        # Add hidden imports that PyInstaller might miss
-        "--hidden-import=keyring",
-        "--hidden-import=keyring.backends",
+    requirements = [
+        'PyQt6',
+        'PyQt6-WebEngine',
+        'requests',
+        'keyring',
+        'cryptography',
+        'psycopg2-binary',
+        'PyInstaller',
+        'pywin32; platform_system=="Windows"',
+        'pillow'
     ]
     
-    # Add data files with platform-specific separator
-    license_path = os.path.abspath("LICENSE")
-    if os.path.exists(license_path):
-        cmd.extend(["--add-data", f"{license_path}{path_sep}."]) 
-    else:
-        print("Warning: LICENSE file not found. Continuing without it.")
-    
-    # Add server config if created
-    if has_server_config:
-        config_path = os.path.abspath("server_config.json")
-        cmd.extend(["--add-data", f"{config_path}{path_sep}."])
-    
-    # Check for icon file and add it if it exists
-    icon_path = Path("app_icon.ico")
-    if icon_path.exists():
-        icon_abs_path = os.path.abspath(icon_path)
-        cmd.extend(["--icon", icon_abs_path])
-    
-    # Add main.py with absolute path
-    main_path = os.path.abspath("main.py")
-    cmd.append(main_path)
-    
-    # Run PyInstaller with command arguments
     try:
-        print("Starting PyInstaller build with arguments:")
-        for arg in cmd:
-            print(f"  {arg}")
-        
-        # On Windows, it's better to use subprocess with a list of arguments
-        # rather than a joined string
-        if platform.system() == "Windows":
-            run_command(cmd, verbose=True)
-        else:
-            run_command(" ".join(cmd), verbose=True)
-            
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--upgrade'] + requirements)
+        return True
     except subprocess.CalledProcessError as e:
-        print(f"PyInstaller build failed with exit code {e.returncode}")
-        print("Please check the output above for specific error messages.")
-        sys.exit(1)
-    
-    # Clean up temporary config file
-    if has_server_config and os.path.exists("server_config.json"):
-        os.remove("server_config.json")
-    
-    print("Executable build completed successfully!")
-    return Path("dist") / f"{APP_NAME.replace(' ', '')}.exe"
+        print(f"Error installing dependencies: {e}")
+        return False
 
-def create_portable_package(server_url=None):
-    """Create a portable package with all necessary files"""
+def clean_build_dirs():
+    """Clean build and dist directories"""
+    print("Cleaning build directories...")
+    
+    dirs_to_clean = ['build', 'dist']
+    for dir_name in dirs_to_clean:
+        if os.path.exists(dir_name):
+            shutil.rmtree(dir_name)
+            print(f"Removed {dir_name} directory")
+
+def create_server_config(server_url):
+    """Create a server configuration file"""
+    print(f"Creating server configuration for {server_url}")
+    
+    config_dir = Path('dist') / 'config'
+    os.makedirs(config_dir, exist_ok=True)
+    
+    config_path = config_dir / 'server_config.json'
+    with open(config_path, 'w') as f:
+        f.write(f'{{"server_url": "{server_url}", "preconfigured": true}}')
+
+def run_pyinstaller(args):
+    """Run PyInstaller to package the application"""
+    print("Running PyInstaller...")
+    
+    # Base PyInstaller command
+    pyinstaller_args = [
+        'pyinstaller',
+        '--name', 'MaintenanceTracker',
+        '--icon', 'resources/app_icon.ico',
+        '--noconfirm',
+    ]
+    
+    # Add windowed mode unless in debug mode
+    if not args.debug:
+        pyinstaller_args.append('--windowed')
+    else:
+        pyinstaller_args.append('--console')
+    
+    # Add UPX compression unless disabled
+    if not args.no_upx:
+        pyinstaller_args.extend(['--upx-dir', 'upx'])
+    
+    # Add hidden imports
+    pyinstaller_args.extend([
+        '--hidden-import=keyring.backends',
+        '--hidden-import=keyring.backends.Windows',
+        '--hidden-import=win32timezone',
+    ])
+    
+    # Add data files
+    pyinstaller_args.extend([
+        '--add-data', 'resources;resources',
+        '--add-data', '../static;static',
+    ])
+    
+    # Main script
+    if args.portable:
+        pyinstaller_args.append('desktop_app_portable.py')
+    else:
+        pyinstaller_args.append('desktop_app.py')
+    
+    # Run PyInstaller
+    subprocess.check_call(pyinstaller_args)
+
+def create_installer(args):
+    """Create Windows installer using Inno Setup"""
+    print("Creating Windows installer...")
+    
+    # Path to Inno Setup compiler
+    inno_setup_path = r'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+    
+    # If Inno Setup is not in the default location, try to find it
+    if not os.path.exists(inno_setup_path):
+        # Try Program Files location
+        alt_path = r'C:\Program Files\Inno Setup 6\ISCC.exe'
+        if os.path.exists(alt_path):
+            inno_setup_path = alt_path
+        else:
+            # Try to find it in PATH
+            try:
+                inno_setup_path = 'iscc.exe'
+                subprocess.check_call([inno_setup_path, '/?'], stdout=subprocess.DEVNULL)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                print("Inno Setup Compiler (ISCC.exe) not found. Please install Inno Setup or add it to PATH.")
+                return False
+    
+    # Run Inno Setup compiler
+    setup_script = 'installer/setup.iss'
+    if os.path.exists(setup_script):
+        try:
+            subprocess.check_call([inno_setup_path, setup_script])
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Error creating installer: {e}")
+            return False
+    else:
+        print(f"Setup script not found: {setup_script}")
+        return False
+
+def copy_portable_files(args):
+    """Prepare the portable version with additional files"""
     print("Creating portable package...")
     
-    # Create base portable directory
-    portable_dir = Path("dist") / f"{APP_NAME.replace(' ', '')}_Portable"
-    if portable_dir.exists():
-        shutil.rmtree(portable_dir)
-    portable_dir.mkdir(exist_ok=True)
+    # Create a portable directory
+    portable_dir = Path('dist') / 'MaintenanceTrackerPortable'
+    os.makedirs(portable_dir, exist_ok=True)
     
-    # Copy executable
-    exe_path = Path("dist") / f"{APP_NAME.replace(' ', '')}.exe"
-    if not exe_path.exists():
-        print("Error: Executable not found. Build it first.")
+    # Copy the built executable and supporting files
+    dist_files = Path('dist') / 'MaintenanceTracker'
+    if not dist_files.exists():
+        print("Built files not found. Make sure PyInstaller completed successfully.")
         return False
     
-    shutil.copy(exe_path, portable_dir / exe_path.name)
+    # Copy all files from dist to portable directory
+    shutil.copytree(dist_files, portable_dir, dirs_exist_ok=True)
     
-    # Create a portable marker file
-    with open(portable_dir / "portable.txt", "w") as f:
-        f.write(f"{APP_NAME} Portable Edition\nVersion: {APP_VERSION}\nCreated: {datetime.datetime.now()}")
+    # Create data and logs directories
+    os.makedirs(portable_dir / 'data', exist_ok=True)
+    os.makedirs(portable_dir / 'logs', exist_ok=True)
     
-    # Server info in README
+    # Create README file with information about portable mode
     server_info = ""
-    if server_url:
-        server_info = f"\nThis version is pre-configured to connect to: {server_url}"
+    if args.server_url:
+        server_info = f"\nThis version is pre-configured to connect to: {args.server_url}"
     
-    # Create README file
-    with open(portable_dir / "README.txt", "w") as f:
+    with open(portable_dir / 'README.txt', 'w') as f:
         f.write(f"""
-{APP_NAME} {APP_VERSION} - Portable Edition{server_info}
+AMRS Maintenance Tracker {APP_VERSION} - Portable Edition{server_info}
 
 ABOUT THIS APPLICATION
 =====================
-This is the portable version of {APP_NAME}, which can be run without installation.
-The application is designed to work offline and sync data when connected to the server.
+This is the portable version of AMRS Maintenance Tracker, which can run without installation.
+The application is designed to work offline and sync data when connected to a server.
 
 GETTING STARTED
 ==============
-1. Simply double-click the {APP_NAME.replace(' ', '')}.exe file to run the application
-2. On first run, enter your username and password{'' if server_url else ' and server URL'}
-3. Check "Remember my credentials" to enable automatic login
+1. Simply double-click the MaintenanceTracker.exe file to run the application
+2. On first run, enter your server URL, username and password
+3. The application will work offline when no server connection is available
 
 DATA STORAGE
-===========
-Even in portable mode, the application stores its data in these locations:
-- User settings: %APPDATA%\\{APP_NAME} or in the data folder next to the executable
-- Logs: In the logs folder next to the executable
+==========
+In portable mode, the application stores data in these locations:
+- Database: data/offline_data.db
+- Logs: logs/
+- Configuration: config/
 
-SUPPORT
-=======
-For support or to report issues, please contact your system administrator.
+This allows you to run the application from external media like USB drives.
+
+Built with Python {PYTHON_VERSION}
+(c) AMRS Technologies
 """)
     
-    # Create ZIP file with timestamp and server info
-    zip_name = f"{APP_NAME.replace(' ', '')}_Portable_{APP_VERSION}"
+    # Create a batch file to launch the application
+    with open(portable_dir / 'Launch.bat', 'w') as f:
+        f.write('@echo off\r\n')
+        f.write('echo Launching AMRS Maintenance Tracker...\r\n')
+        f.write('start "" "%~dp0MaintenanceTracker.exe"\r\n')
     
-    if server_url:
-        # Add server domain to filename (safely)
-        try:
-            from urllib.parse import urlparse
-            domain = urlparse(server_url).netloc
-            if domain:
-                # Remove port numbers and special chars for filename safety
-                domain = domain.split(':')[0].replace('.', '-')
-                zip_name += f"_{domain}"
-        except:
-            pass
+    print(f"Portable package created in {portable_dir}")
+    return True
+
+def create_zip_archive(portable_dir):
+    """Create a ZIP archive of the portable version"""
+    print("Creating ZIP archive...")
     
-    timestamp = datetime.datetime.now().strftime("%Y%m%d")
-    zip_name += f"_{timestamp}.zip"
-    zip_path = Path("dist") / zip_name
+    import zipfile
     
-    print(f"Creating ZIP archive at: {zip_path}")
+    zip_path = f"{portable_dir}.zip"
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for file in portable_dir.glob("**/*"):
-            zipf.write(file, file.relative_to(portable_dir))
+        for root, _, files in os.walk(portable_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                zipf.write(file_path, os.path.relpath(file_path, os.path.dirname(portable_dir)))
     
-    print(f"Portable package created successfully at: {portable_dir}")
-    print(f"Portable ZIP created at: {zip_path}")
+    print(f"ZIP archive created: {zip_path}")
     return True
 
 def main():
-    """Main build process"""
-    parser = argparse.ArgumentParser(description=f"Build {APP_NAME} as a portable application")
-    parser.add_argument('--exe-only', action='store_true', help="Only create the executable without portable package")
-    parser.add_argument('--server-url', help="Pre-configure the application with a specific server URL")
-    args = parser.parse_args()
+    """Main build function"""
+    print(f"===== Building {APP_NAME} {APP_VERSION} =====")
     
-    # Build the executable with server URL if provided
-    create_executable(args.server_url)
+    args = parse_arguments()
     
-    if not args.exe_only:
-        # Create the portable package
-        create_portable_package(args.server_url)
-        
-    print("Build process completed!")
+    # Clean build directories if requested
+    if args.clean:
+        clean_build_dirs()
     
+    # Check and install dependencies unless skipped
+    if not args.skip_deps:
+        if not check_dependencies():
+            print("Failed to install dependencies. Aborting build.")
+            return 1
+    
+    # Create server configuration if specified
     if args.server_url:
-        print(f"Application was pre-configured to use server: {args.server_url}")
+        create_server_config(args.server_url)
+    
+    # Run PyInstaller
+    try:
+        run_pyinstaller(args)
+    except subprocess.CalledProcessError as e:
+        print(f"Error running PyInstaller: {e}")
+        return 1
+    
+    # Create portable package if requested
+    if args.portable:
+        if not copy_portable_files(args):
+            print("Failed to create portable package")
+            return 1
+        
+        # Create ZIP archive of portable version
+        create_zip_archive(Path('dist') / 'MaintenanceTrackerPortable')
+    
+    # Create installer if requested
+    if args.installer:
+        if not create_installer(args):
+            print("Failed to create installer")
+            return 1
+    
+    print(f"===== Build completed successfully =====")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
