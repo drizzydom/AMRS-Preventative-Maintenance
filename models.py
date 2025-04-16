@@ -3,9 +3,34 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from datetime import datetime
 import uuid
+from sqlalchemy import text
 
 # Initialize SQLAlchemy
 db = SQLAlchemy()
+
+# Add compatibility methods for SQLAlchemy 2.0
+def execute_sql(query, params=None):
+    """
+    Execute SQL query in a SQLAlchemy version-compatible way
+    
+    Args:
+        query: SQL query string
+        params: Optional parameters for the query
+        
+    Returns:
+        Query result
+    """
+    sql = text(query) if isinstance(query, str) else query
+    
+    with db.engine.connect() as conn:
+        if params:
+            result = conn.execute(sql, params)
+        else:
+            result = conn.execute(sql)
+        return result
+
+# Attach the method to the db object for convenience
+db.execute_sql = execute_sql
 
 # Define the association table for many-to-many relationship between User and Site
 user_site = db.Table(
