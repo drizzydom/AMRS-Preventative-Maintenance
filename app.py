@@ -64,9 +64,11 @@ def check_persistent_storage():
 storage_ok = check_persistent_storage()
 
 # Initialize Flask app
-app = Flask(__name__, instance_relative_config=True)
+app = Flask(__name__)
 
 # Load configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-for-testing')
+
 # Set up logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -110,7 +112,7 @@ ensure_env_file()
 ensure_email_templates()
 
 # Print debug info about environment
-print(f"[APP] Running in environment: {'RENDER' if os.environ.get('RENDER') else 'LOCAL'}")
+print(f"[APP] Running in environment: {os.environ.get('RENDER', 'LOCAL')}")
 print(f"[APP] Working directory: {os.getcwd()}")
 print(f"[APP] Base directory: {BASE_DIR}")
 
@@ -126,8 +128,8 @@ try:
     app = configure_database(app)
     print("[APP] Database configuration successful")
 except Exception as e:
-    print(f"[APP] Database configuration error: {str(e)}")
-    # Consider adding a fallback configuration here
+    print(f"[APP] Database configuration error: {str(e)}", file=sys.stderr)
+    raise
 
 # Create database tables
 with app.app_context():
@@ -135,7 +137,10 @@ with app.app_context():
         db.create_all()
         print("[APP] Database tables created successfully")
     except Exception as e:
-        print(f"[APP] Error creating database tables: {e}")
+        print(f"[APP] Error creating database tables: {str(e)}", file=sys.stderr)
+        if "unable to open database file" in str(e) and os.environ.get('RENDER'):
+            print("[APP] This error is likely due to missing DATABASE_URL on Render")
+            print("[APP] Please add a PostgreSQL database and set DATABASE_URL in environment variables")
         raise
 
 # Initialize Flask-Login
