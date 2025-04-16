@@ -1,7 +1,6 @@
 """
 Database operations module that handles SQLAlchemy compatibility across versions
 """
-from sqlalchemy.orm import Session
 from models import db
 
 def execute_query(query, params=None):
@@ -16,7 +15,7 @@ def execute_query(query, params=None):
         Result of the query execution
     """
     try:
-        # SQLAlchemy 2.x method using a session
+        # Use SQLAlchemy 2.x method with session
         with db.session() as session:
             if params:
                 result = session.execute(query, params)
@@ -24,19 +23,22 @@ def execute_query(query, params=None):
                 result = session.execute(query)
             session.commit()
             return result
+    except AttributeError:
+        # Fallback to SQLAlchemy 1.x method
+        conn = db.engine.connect()
+        try:
+            if params:
+                result = conn.execute(query, params)
+            else:
+                result = conn.execute(query)
+            return result
+        finally:
+            conn.close()
     except Exception as e:
-        db.session.rollback()
+        if hasattr(db, 'session'):
+            db.session.rollback()
         raise e
 
 def init_db():
     """Initialize the database, creating all tables"""
     db.create_all()
-    
-def get_engine_connection():
-    """
-    Get a connection from the engine in a version-compatible way
-    
-    Returns:
-        Connection object that can be used with execute()
-    """
-    return db.session.connection()

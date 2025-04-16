@@ -24,7 +24,7 @@ import psycopg2  # Add PostgreSQL driver
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
-from db_config import configure_db, get_db_engine
+from db_config import configure_db, get_db_engine, configure_database
 from db_operations import init_db, execute_query
 
 # Define PostgreSQL database URI
@@ -49,8 +49,8 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
-app = configure_db(app)
 
+# Load configuration
 # Set up logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -105,38 +105,24 @@ except ImportError:
     print("[APP] Warning: cache_config module not found")
     configure_caching = None
 
+# Configure the database - do this BEFORE registering blueprints or other extensions
 try:
-    # Import database configuration
-    from db_config import configure_database
-except ImportError as e:
-    print(f"[APP] Error importing db_config: {str(e)}")
-    # Define a simple fallback if import fails
-    def configure_database(app):
-        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        return app
-
-# Initialize Flask app with better error handling
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
-app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')
-app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '/')
-app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
-
-# Ensure URLs work with and without trailing slashes
-app.url_map.strict_slashes = False
-
-# Configure the database
-try:
-    print("[APP] Configuring database...")
-    configure_database(app)
+    app = configure_database(app)
+    print("[APP] Database configuration successful")
 except Exception as e:
-    print(f"[APP] Error configuring database: {str(e)}")
-    # Set a fallback configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+    print(f"[APP] Database configuration error: {str(e)}")
+    # Consider adding a fallback configuration here
 
-# Initialize database
-print("[APP] Initializing SQLAlchemy...")
-db.init_app(app)
+# Initialize SQLAlchemy with the app (only do this once)
+# This should not be necessary if configure_database has already called db.init_app(app)
+
+# Create tables within app context
+with app.app_context():
+    try:
+        db.create_all()
+        print("[APP] Database tables created successfully")
+    except Exception as e:
+        print(f"[APP] Error creating database tables: {str(e)}")
 
 # Initialize Flask-Login
 print("[APP] Initializing Flask-Login...")
