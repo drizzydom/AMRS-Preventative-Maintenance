@@ -1,47 +1,48 @@
 """
-SQLAlchemy 2.0 compatibility layer
+Simple SQLAlchemy 2.x compatibility patch
+
+This adds the execute() method back to the Engine class for compatibility with code
+written for SQLAlchemy 1.x
 """
 import logging
 from sqlalchemy import text, __version__
 
-# Configure a logger
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='[SQLALCHEMY_COMPAT] %(message)s')
 logger = logging.getLogger("sqlalchemy_compat")
-
-# Check SQLAlchemy version
-IS_SQLALCHEMY_2 = __version__.startswith("2.")
-logger.info(f"SQLAlchemy version: {__version__}")
 
 def patch_sqlalchemy():
     """
-    Apply SQLAlchemy 2.0 compatibility patches
+    Patch SQLAlchemy 2.x to add back the execute() method on Engine objects
     """
-    if IS_SQLALCHEMY_2:
-        from sqlalchemy.engine import Engine
-        
-        # If Engine doesn't have execute method, add it
-        if not hasattr(Engine, "execute"):
-            # Define a compatibility method
-            def _execute(self, statement, *multiparams, **params):
-                """
-                Execute a statement and return a result object
-                
-                This emulates SQLAlchemy 1.x behavior on SQLAlchemy 2.x
-                """
-                # Convert string statements to text objects
-                if isinstance(statement, str):
-                    statement = text(statement)
-                
-                # Use the new execution style through a connection
-                with self.connect() as conn:
-                    result = conn.execute(statement, *multiparams, **params)
-                    return result
-                
-            # Add method to Engine class
-            Engine.execute = _execute
-            logger.info("Added SQLAlchemy 2.0 compatibility execute() method to Engine class")
+    # Only patch if using SQLAlchemy 2.x
+    if __version__.startswith("2."):
+        try:
+            from sqlalchemy.engine import Engine
             
-            return True
+            # Add execute method if it doesn't exist
+            if not hasattr(Engine, "execute"):
+                def _execute(self, statement, *multiparams, **params):
+                    """Compatibility execute method for SQLAlchemy 1.x code"""
+                    # Convert string queries to text objects
+                    if isinstance(statement, str):
+                        statement = text(statement)
+                    
+                    # Execute using SQLAlchemy 2.0 style
+                    with self.connect() as conn:
+                        result = conn.execute(statement, *multiparams, **params)
+                        conn.commit()
+                        return result
+                
+                # Add the method to the Engine class
+                Engine.execute = _execute
+                logger.info(f"Patched SQLAlchemy {__version__} with compatibility execute() method")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to patch SQLAlchemy: {e}")
+            return False
     return False
 
-# Apply patch when module is imported
-patched = patch_sqlalchemy()
+# Apply the patch when this module is imported
+is_patched = patch_sqlalchemy()
