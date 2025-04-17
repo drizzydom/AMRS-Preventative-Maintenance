@@ -254,6 +254,40 @@ def dashboard():
         app.logger.error(f"Error rendering dashboard: {e}")
         return render_template('errors/500.html'), 500
 
+# Add the missing manage_sites route that's referenced in the dashboard template
+@app.route('/sites', methods=['GET', 'POST'])
+@login_required
+def manage_sites():
+    """View and manage sites."""
+    try:
+        # Get all sites from the database
+        sites = Site.query.all()
+        
+        # Handle form submission for adding new sites
+        if request.method == 'POST':
+            name = request.form.get('name')
+            location = request.form.get('location')
+            description = request.form.get('description')
+            
+            if name and location:
+                new_site = Site(
+                    name=name, 
+                    location=location, 
+                    description=description
+                )
+                db.session.add(new_site)
+                db.session.commit()
+                flash('Site added successfully!', 'success')
+                return redirect(url_for('manage_sites'))
+            else:
+                flash('Name and location are required!', 'danger')
+        
+        return render_template('sites.html', sites=sites)
+    except Exception as e:
+        app.logger.error(f"Error in manage_sites: {e}")
+        flash('An error occurred while loading sites.', 'danger')
+        return redirect(url_for('dashboard'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login."""
