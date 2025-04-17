@@ -257,12 +257,12 @@ def additional_setup():
     """Additional setup tasks."""
     ensure_maintenance_records_schema()
 
-# Enhance models dynamically
+# Enhance models dynamically with proper method binding
 @app.before_first_request
 def enhance_models():
-    """Add helper methods to models dynamically."""
+    """Add helper methods to models dynamically using types.MethodType."""
+    import types
     
-    # Define a standalone function with proper self parameter
     def get_parts_status(self):
         """Get status of parts for a site's machines."""
         try:
@@ -293,8 +293,10 @@ def enhance_models():
             app.logger.error(f"Error in get_parts_status: {e}")
             return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
     
-    # Add the method directly to the class (not as a lambda)
-    Site.get_parts_status = get_parts_status
+    # Properly bind the method to the class using types.MethodType
+    # This creates a bound method that correctly receives self as first argument
+    for instance in Site.query.all():
+        instance.get_parts_status = types.MethodType(get_parts_status, instance)
 
 # Add root route handler
 @app.route('/')
@@ -696,6 +698,30 @@ def admin():
     except Exception as e:
         app.logger.error(f"Error in admin panel: {e}")
         flash('An error occurred in the admin panel.', 'danger')
+        return redirect(url_for('dashboard'))
+
+# Add the manage_roles route directly
+@app.route('/manage/roles')
+@login_required
+def manage_roles():
+    """Manage roles directly."""
+    # This is the specific endpoint referenced in the admin template
+    try:
+        # Check if user has admin role
+        is_admin = False
+        if hasattr(current_user, 'role'):
+            is_admin = current_user.role == 'admin' or current_user.role == 'ADMIN'
+        
+        if not is_admin and current_user.username != 'admin':
+            flash('You do not have permission to access this page.', 'danger')
+            return redirect(url_for('dashboard'))
+            
+        # Get all roles for management
+        roles = Role.query.all()
+        return render_template('admin.html', users=User.query.all(), roles=roles, section='roles')
+    except Exception as e:
+        app.logger.error(f"Error in manage_roles: {e}")
+        flash('An error occurred in the roles management panel.', 'danger')
         return redirect(url_for('dashboard'))
 
 # Replace the manage_users route with a more direct approach
