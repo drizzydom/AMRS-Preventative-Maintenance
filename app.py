@@ -1141,6 +1141,391 @@ def forbidden(e):
     except:
         return '<h1>Forbidden</h1><p>You do not have permission to access this resource.</p>', 403
 
+@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    """Edit a specific user."""
+    try:
+        # Check admin permissions
+        if not is_admin_user(current_user):
+            flash('You do not have permission to edit users.', 'danger')
+            return redirect(url_for('dashboard'))
+        
+        # Get the user to edit
+        user = User.query.get_or_404(user_id)
+        
+        # Handle form submission
+        if request.method == 'POST':
+            username = request.form.get('username')
+            email = request.form.get('email')
+            role = request.form.get('role')
+            reset_password = request.form.get('reset_password') == 'yes'
+            
+            # Update user details
+            if username and username != user.username:
+                # Check if username already exists
+                if User.query.filter(User.username == username, User.id != user_id).first():
+                    flash('Username already exists.', 'danger')
+                    return redirect(url_for('edit_user', user_id=user_id))
+                user.username = username
+            
+            if email and email != user.email:
+                # Check if email already exists
+                if User.query.filter(User.email == email, User.id != user_id).first():
+                    flash('Email already exists.', 'danger')
+                    return redirect(url_for('edit_user', user_id=user_id))
+                user.email = email
+            
+            if role:
+                user.role = role
+            
+            # Reset password if requested
+            if reset_password:
+                new_password = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+                user.password_hash = generate_password_hash(new_password)
+                flash(f'Password reset for {user.username}. New password: {new_password}', 'info')
+            
+            db.session.commit()
+            flash(f'User {user.username} updated successfully.', 'success')
+            return redirect(url_for('admin'))
+        
+        # GET request - display the edit form
+        return render_template('edit_user.html', user=user) if os.path.exists(os.path.join('templates', 'edit_user.html')) else '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Edit User</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-5">
+                <h1>Edit User</h1>
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" value="''' + user.username + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="''' + user.email + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Role</label>
+                        <select class="form-control" id="role" name="role">
+                            <option value="user" ''' + ('selected' if user.role == 'user' else '') + '''>User</option>
+                            <option value="admin" ''' + ('selected' if user.role == 'admin' else '') + '''>Admin</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="reset_password" name="reset_password" value="yes">
+                        <label class="form-check-label" for="reset_password">Reset Password</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="''' + url_for('admin') + '''" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        app.logger.error(f"Error in edit_user: {e}")
+        flash('An error occurred while editing the user.', 'danger')
+        return redirect(url_for('admin'))
+
+@app.route('/admin/roles/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+def edit_role(role_id):
+    """Edit a specific role."""
+    try:
+        # Check admin permissions
+        if not is_admin_user(current_user):
+            flash('You do not have permission to edit roles.', 'danger')
+            return redirect(url_for('dashboard'))
+        
+        # Get the role to edit
+        role = Role.query.get_or_404(role_id)
+        
+        # Handle form submission
+        if request.method == 'POST':
+            name = request.form.get('name')
+            description = request.form.get('description')
+            
+            # Update role details
+            if name and name != role.name:
+                # Check if role name already exists
+                if Role.query.filter(Role.name == name, Role.id != role_id).first():
+                    flash('Role name already exists.', 'danger')
+                    return redirect(url_for('edit_role', role_id=role_id))
+                role.name = name
+            
+            if description:
+                role.description = description
+            
+            db.session.commit()
+            flash(f'Role {role.name} updated successfully.', 'success')
+            return redirect(url_for('manage_roles'))
+        
+        # GET request - display the edit form
+        return render_template('edit_role.html', role=role) if os.path.exists(os.path.join('templates', 'edit_role.html')) else '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Edit Role</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-5">
+                <h1>Edit Role</h1>
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Role Name</label>
+                        <input type="text" class="form-control" id="name" name="name" value="''' + role.name + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">''' + (role.description or '') + '''</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="''' + url_for('manage_roles') + '''" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        app.logger.error(f"Error in edit_role: {e}")
+        flash('An error occurred while editing the role.', 'danger')
+        return redirect(url_for('manage_roles'))
+
+@app.route('/sites/edit/<int:site_id>', methods=['GET', 'POST'])
+@login_required
+def edit_site(site_id):
+    """Edit a specific site."""
+    try:
+        # Get the site to edit
+        site = Site.query.get_or_404(site_id)
+        
+        # Handle form submission
+        if request.method == 'POST':
+            name = request.form.get('name')
+            location = request.form.get('location')
+            description = request.form.get('description')
+            
+            # Update site details
+            if name:
+                site.name = name
+            if location:
+                site.location = location
+            if description is not None:  # Allow empty description
+                site.description = description
+            
+            db.session.commit()
+            flash(f'Site {site.name} updated successfully.', 'success')
+            return redirect(url_for('manage_sites'))
+        
+        # GET request - display the edit form
+        return render_template('edit_site.html', site=site) if os.path.exists(os.path.join('templates', 'edit_site.html')) else '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Edit Site</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-5">
+                <h1>Edit Site</h1>
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Site Name</label>
+                        <input type="text" class="form-control" id="name" name="name" value="''' + site.name + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="location" class="form-label">Location</label>
+                        <input type="text" class="form-control" id="location" name="location" value="''' + site.location + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">''' + (site.description or '') + '''</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="''' + url_for('manage_sites') + '''" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        app.logger.error(f"Error in edit_site: {e}")
+        flash('An error occurred while editing the site.', 'danger')
+        return redirect(url_for('manage_sites'))
+
+@app.route('/machines/edit/<int:machine_id>', methods=['GET', 'POST'])
+@login_required
+def edit_machine(machine_id):
+    """Edit a specific machine."""
+    try:
+        # Get the machine to edit
+        machine = Machine.query.get_or_404(machine_id)
+        
+        # Get all sites for dropdown
+        sites = Site.query.all()
+        
+        # Handle form submission
+        if request.method == 'POST':
+            name = request.form.get('name')
+            model = request.form.get('model')
+            site_id = request.form.get('site_id')
+            serial_number = request.form.get('serial_number')
+            description = request.form.get('description')
+            
+            # Update machine details
+            if name:
+                machine.name = name
+            if model:
+                machine.model = model
+            if site_id:
+                machine.site_id = site_id
+            if serial_number is not None:  # Allow empty serial number
+                machine.serial_number = serial_number
+            if description is not None:  # Allow empty description
+                machine.description = description
+            
+            db.session.commit()
+            flash(f'Machine {machine.name} updated successfully.', 'success')
+            return redirect(url_for('manage_machines'))
+        
+        # GET request - display the edit form
+        return render_template('edit_machine.html', machine=machine, sites=sites) if os.path.exists(os.path.join('templates', 'edit_machine.html')) else '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Edit Machine</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-5">
+                <h1>Edit Machine</h1>
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Machine Name</label>
+                        <input type="text" class="form-control" id="name" name="name" value="''' + machine.name + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="model" class="form-label">Model</label>
+                        <input type="text" class="form-control" id="model" name="model" value="''' + machine.model + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="site_id" class="form-label">Site</label>
+                        <select class="form-control" id="site_id" name="site_id" required>
+                            ''' + ''.join([f'<option value="{site.id}" {"selected" if site.id == machine.site_id else ""}>{site.name}</option>' for site in sites]) + '''
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="serial_number" class="form-label">Serial Number</label>
+                        <input type="text" class="form-control" id="serial_number" name="serial_number" value="''' + (machine.serial_number or '') + '''">
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">''' + (machine.description or '') + '''</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="''' + url_for('manage_machines') + '''" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        app.logger.error(f"Error in edit_machine: {e}")
+        flash('An error occurred while editing the machine.', 'danger')
+        return redirect(url_for('manage_machines'))
+
+@app.route('/parts/edit/<int:part_id>', methods=['GET', 'POST'])
+@login_required
+def edit_part(part_id):
+    """Edit a specific part."""
+    try:
+        # Get the part to edit
+        part = Part.query.get_or_404(part_id)
+        
+        # Get all machines for dropdown
+        machines = Machine.query.all()
+        
+        # Handle form submission
+        if request.method == 'POST':
+            name = request.form.get('name')
+            part_number = request.form.get('part_number')
+            machine_id = request.form.get('machine_id')
+            quantity = request.form.get('quantity', 0)
+            description = request.form.get('description')
+            
+            try:
+                quantity = int(quantity)
+            except ValueError:
+                quantity = 0
+            
+            # Update part details
+            if name:
+                part.name = name
+            if part_number:
+                part.part_number = part_number
+            if machine_id:
+                part.machine_id = machine_id
+            part.quantity = quantity
+            if description is not None:  # Allow empty description
+                part.description = description
+            
+            db.session.commit()
+            flash(f'Part {part.name} updated successfully.', 'success')
+            return redirect(url_for('manage_parts'))
+        
+        # GET request - display the edit form
+        return render_template('edit_part.html', part=part, machines=machines) if os.path.exists(os.path.join('templates', 'edit_part.html')) else '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Edit Part</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-5">
+                <h1>Edit Part</h1>
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Part Name</label>
+                        <input type="text" class="form-control" id="name" name="name" value="''' + part.name + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="part_number" class="form-label">Part Number</label>
+                        <input type="text" class="form-control" id="part_number" name="part_number" value="''' + part.part_number + '''" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="machine_id" class="form-label">Machine</label>
+                        <select class="form-control" id="machine_id" name="machine_id">
+                            <option value="">None</option>
+                            ''' + ''.join([f'<option value="{machine.id}" {"selected" if machine.id == part.machine_id else ""}>{machine.name}</option>' for machine in machines]) + '''
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" value="''' + str(part.quantity) + '''" min="0">
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">''' + (part.description or '') + '''</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="''' + url_for('manage_parts') + '''" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        app.logger.error(f"Error in edit_part: {e}")
+        flash('An error occurred while editing the part.', 'danger')
+        return redirect(url_for('manage_parts'))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
