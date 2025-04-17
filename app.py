@@ -160,6 +160,89 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
+# Add root route handler
+@app.route('/')
+def index():
+    """Homepage route that redirects to dashboard if logged in or shows login page."""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return render_template('login.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    """Main dashboard view after login."""
+    try:
+        return render_template('dashboard.html')
+    except Exception as e:
+        app.logger.error(f"Error rendering dashboard: {e}")
+        return render_template('errors/500.html'), 500
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handle user login."""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'danger')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Handle user logout."""
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
+
+# Add a debug route to see all available routes
+@app.route('/debug-info')
+def debug_info():
+    """Display debug information including all available routes."""
+    if not app.debug:
+        return "Debug mode is disabled", 403
+        
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': ','.join(rule.methods),
+            'route': str(rule)
+        })
+        
+    return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
+
+# Add function to create default admin (referenced in __main__ block)
+def add_default_admin_if_needed():
+    """Add a default admin user if no users exist in the database."""
+    try:
+        user_count = User.query.count()
+        if user_count == 0:
+            print("[APP] No users found, creating default admin user")
+            admin = User(
+                username='admin',
+                email='admin@example.com',
+                password_hash=generate_password_hash('admin'),
+                role='admin'
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("[APP] Default admin user created")
+    except Exception as e:
+        print(f"[APP] Error creating default admin: {e}")
+
 # API endpoint for synchronization (to be used by desktop client)
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
