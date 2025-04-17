@@ -5,6 +5,7 @@ import os
 import psycopg2
 from datetime import datetime
 from flask import current_app
+from sqlalchemy import text
 
 def get_db_connection():
     """Get a connection to the PostgreSQL database"""
@@ -17,6 +18,37 @@ def get_db_connection():
     # Connect to the database
     conn = psycopg2.connect(db_url)
     return conn
+
+def execute_sql(sql_statement, params=None):
+    """
+    Execute SQL with proper connection handling for SQLAlchemy 2.0+
+    
+    Args:
+        sql_statement: SQL query string or SQLAlchemy text object
+        params: Optional parameters for the query
+    
+    Returns:
+        Result of the execution
+    """
+    from app import db
+    
+    # Convert string to text object if needed
+    if isinstance(sql_statement, str):
+        sql_statement = text(sql_statement)
+    
+    # Execute with proper connection handling
+    with db.engine.connect() as conn:
+        result = conn.execute(sql_statement, parameters=params or {})
+        return result
+        
+def check_connection():
+    """Test database connection"""
+    try:
+        execute_sql("SELECT 1")
+        return True
+    except Exception as e:
+        current_app.logger.error(f"Database connection error: {e}")
+        return False
 
 def check_database_status():
     """Check if the database is available and connected"""
