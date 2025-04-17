@@ -7,25 +7,25 @@ Run this script to add the new table for tracking maintenance history.
 import sqlite3
 import os
 from app import db, app
+from db_utils import execute_sql
+from sqlalchemy import text
 
 def create_maintenance_log_table():
     """Create the maintenance_log table in the SQLite database."""
     try:
         with app.app_context():
             # Try SQLAlchemy method first
-            db.engine.execute(db.text('''
+            execute_sql('''
                 CREATE TABLE IF NOT EXISTS maintenance_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    machine_id INTEGER NOT NULL,
+                    id SERIAL PRIMARY KEY,
                     part_id INTEGER NOT NULL,
-                    performed_by VARCHAR(100) NOT NULL,
-                    invoice_number VARCHAR(50),
-                    maintenance_date DATETIME NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    timestamp TIMESTAMP NOT NULL,
                     notes TEXT,
-                    FOREIGN KEY (machine_id) REFERENCES machine (id),
-                    FOREIGN KEY (part_id) REFERENCES part (id)
+                    FOREIGN KEY (part_id) REFERENCES part (id),
+                    FOREIGN KEY (user_id) REFERENCES user (id)
                 )
-            '''))
+            ''')
             print("Successfully created maintenance_log table using SQLAlchemy")
             return True
     except Exception as e:

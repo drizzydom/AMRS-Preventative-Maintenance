@@ -154,8 +154,8 @@ def initialize_db_connection():
     """Initialize database connection."""
     try:
         # Test database connection
-        with app.app_context():
-            db.engine.execute("SELECT 1")
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
             print("[APP] Database connection established successfully")
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
@@ -206,6 +206,18 @@ def sync_data():
             return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
             
     except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/health-check')
+def health_check():
+    """Basic health check endpoint."""
+    try:
+        # Update to use connection-based execute pattern
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        app.logger.error(f"Health check failed: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # Add error handlers with fallbacks
