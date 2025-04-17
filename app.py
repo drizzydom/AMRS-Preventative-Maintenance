@@ -580,7 +580,7 @@ def admin():
     except Exception as e:
         app.logger.error(f"Error in admin panel: {e}")
         flash('An error occurred in the admin panel.', 'danger')
-        return redirect(url_for('dashboard')
+        return redirect(url_for('dashboard'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
