@@ -440,6 +440,60 @@ def maintenance_page():
         flash('An error occurred while loading maintenance records.', 'danger')
         return redirect(url_for('dashboard'))
 
+# Add the missing user_profile route that's referenced in the dashboard template
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def user_profile():
+    """View and edit user profile."""
+    try:
+        user = User.query.get(current_user.id)
+        
+        if request.method == 'POST':
+            # Get form data
+            email = request.form.get('email')
+            current_password = request.form.get('current_password')
+            new_password = request.form.get('new_password')
+            confirm_password = request.form.get('confirm_password')
+            
+            # Check if email is already in use by another user
+            if email != user.email and User.query.filter_by(email=email).first():
+                flash('Email is already in use by another account.', 'danger')
+                return redirect(url_for('user_profile'))
+                
+            # Update email if it changed
+            if email and email != user.email:
+                user.email = email
+                db.session.commit()
+                flash('Email updated successfully!', 'success')
+            
+            # Update password if provided
+            if current_password and new_password:
+                # Verify current password is correct
+                if not check_password_hash(user.password_hash, current_password):
+                    flash('Current password is incorrect.', 'danger')
+                    return redirect(url_for('user_profile'))
+                    
+                # Validate new password
+                if len(new_password) < 8:
+                    flash('New password must be at least 8 characters long.', 'danger')
+                    return redirect(url_for('user_profile'))
+                    
+                # Confirm passwords match
+                if new_password != confirm_password:
+                    flash('New passwords do not match.', 'danger')
+                    return redirect(url_for('user_profile'))
+                    
+                # Update password
+                user.password_hash = generate_password_hash(new_password)
+                db.session.commit()
+                flash('Password updated successfully!', 'success')
+                
+        return render_template('profile.html', user=user)
+    except Exception as e:
+        app.logger.error(f"Error in user_profile: {e}")
+        flash('An error occurred while loading your profile.', 'danger')
+        return redirect(url_for('dashboard'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login."""
