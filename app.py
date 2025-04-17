@@ -52,8 +52,8 @@ def parts_status(self):
 
 # Directly add method to Site class - renamed to avoid signature conflicts
 Site.parts_status = parts_status
-# Add an alias for backward compatibility, but make it a property to avoid calling with arguments
-Site.get_parts_status = property(lambda self: self.parts_status())
+# Make get_parts_status a method instead of a property to fix the 'dict' object is not callable error
+Site.get_parts_status = parts_status
 
 # Define PostgreSQL database URI
 POSTGRESQL_DATABASE_URI = os.environ.get(
@@ -178,6 +178,34 @@ def load_user(user_id):
     # This must return None or a User object
     return User.query.get(int(user_id)) if user_id else None
 
+# Standardized function to check admin status
+def is_admin_user(user):
+    """Standardized function to check if a user has admin privileges."""
+    if not user or not user.is_authenticated:
+        return False
+        
+    # Check role field (normalized to lowercase)
+    if hasattr(user, 'role'):
+        if isinstance(user.role, str) and user.role.lower() == 'admin':
+            return True
+    
+    # Check by username as fallback
+    if user.username == 'admin':
+        return True
+        
+    return False
+
+# Database connection checker
+def check_db_connection():
+    """Check if database connection is working and reconnect if needed."""
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception as e:
+        app.logger.error(f"Database connection error: {e}")
+        return False
+
 # Function to ensure database schema matches models
 def ensure_db_schema():
     """Ensure database schema matches the models by adding missing columns."""
@@ -286,6 +314,18 @@ def setup_application():
 def additional_setup():
     """Additional setup tasks."""
     ensure_maintenance_records_schema()
+
+# Add database connection check before requests
+@app.before_request
+def ensure_db_connection():
+    """Ensure database connection is working before each request."""
+    # Skip for static files and health checks
+    if request.path.startswith('/static/') or request.path == '/health-check':
+        return
+        
+    # Check DB connection for routes that need it
+    if request.endpoint not in ['static', 'health_check'] and not check_db_connection():
+        return jsonify({'error': 'Database connection failure'}), 500
 
 # Replace the enhance_models function with a template context processor
 @app.context_processor
@@ -455,7 +495,6 @@ def maintenance_page():
         flash('An error occurred while loading maintenance records.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the missing manage_sites route that's referenced in the dashboard template
 @app.route('/sites', methods=['GET', 'POST'])
 @login_required
 def manage_sites():
@@ -485,11 +524,11 @@ def manage_sites():
         
         return render_template('sites.html', sites=sites)
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in manage_sites: {e}")
         flash('An error occurred while loading sites.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the missing manage_machines route that's referenced in the dashboard template
 @app.route('/machines', methods=['GET', 'POST'])
 @login_required
 def manage_machines():
@@ -526,11 +565,11 @@ def manage_machines():
         
         return render_template('machines.html', machines=machines, sites=sites)
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in manage_machines: {e}")
         flash('An error occurred while loading machines.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the missing manage_parts route that's referenced in the dashboard template
 @app.route('/parts', methods=['GET', 'POST'])
 @login_required
 def manage_parts():
@@ -572,11 +611,11 @@ def manage_parts():
         
         return render_template('parts.html', parts=parts, machines=machines)
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in manage_parts: {e}")
         flash('An error occurred while loading parts.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the missing user_profile route that's referenced in the dashboard template
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def user_profile():
@@ -630,25 +669,13 @@ def user_profile():
         flash('An error occurred while loading your profile.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the missing admin route that's referenced in the dashboard template
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 def admin():
     """Admin dashboard for system management."""
     try:
-        # Fix admin role check - use more flexible check for admin permission
-        is_admin = False
-        if hasattr(current_user, 'role'):
-            is_admin = current_user.role == 'admin' or current_user.role == 'ADMIN'
-        
-        # If admin status is stored differently, check if the username is 'admin'
-        if not is_admin and current_user.username == 'admin':
-            is_admin = True
-            
-        # Print debug info about user role
-        app.logger.info(f"Admin access check - User: {current_user.username}, Role: {getattr(current_user, 'role', 'unknown')}, Is admin: {is_admin}")
-        
-        if not is_admin:
+        # Use standardized admin check
+        if not is_admin_user(current_user):
             flash('You do not have permission to access the admin panel.', 'danger')
             return redirect(url_for('dashboard'))
         
@@ -725,11 +752,11 @@ def admin():
                         
         return render_template('admin.html', users=users)
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in admin panel: {e}")
         flash('An error occurred in the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the missing routes for role management to handle all possible URL patterns
 @app.route('/roles')
 @login_required
 def roles_index():
@@ -741,12 +768,8 @@ def roles_index():
 def manage_roles():
     """Manage roles directly."""
     try:
-        # Check if user has admin role
-        is_admin = False
-        if hasattr(current_user, 'role'):
-            is_admin = current_user.role == 'admin' or current_user.role == 'ADMIN'
-        
-        if not is_admin and current_user.username != 'admin':
+        # Use standardized admin check
+        if not is_admin_user(current_user):
             flash('You do not have permission to access this page.', 'danger')
             return redirect(url_for('dashboard'))
             
@@ -754,6 +777,7 @@ def manage_roles():
         roles = Role.query.all()
         return render_template('admin.html', users=User.query.all(), roles=roles, section='roles')
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in manage_roles: {e}")
         flash('An error occurred in the roles management panel.', 'danger')
         return redirect(url_for('dashboard'))
@@ -764,14 +788,12 @@ def roles_manage():
     """Another alias for managing roles."""
     return redirect(url_for('manage_roles'))
 
-# Replace the manage_users route with a proper route decorator
 @app.route('/users/manage')
 @login_required
 def manage_users():
     """Manage users directly."""
     return redirect(url_for('admin'))
 
-# Add extra route variant to ensure all possible URLs are covered
 @app.route('/manage/users')
 @login_required
 def manage_users_alt():
@@ -934,7 +956,6 @@ def reset_password(token):
     </html>
     '''
 
-# Add a debug route to see all available routes
 @app.route('/debug-info')
 def debug_info():
     """Display debug information including all available routes."""
@@ -951,7 +972,6 @@ def debug_info():
         
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
 
-# Add function to create default admin (referenced in __main__ block)
 def add_default_admin_if_needed():
     """Add a default admin user if no users exist in the database."""
     try:
@@ -977,7 +997,6 @@ def add_default_admin_if_needed():
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
 
-# API endpoint for synchronization (to be used by desktop client)
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
     """Get synchronization status information."""
@@ -1037,13 +1056,11 @@ def health_check():
         app.logger.error(f"Health check failed: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# Add error handlers with fallbacks
 @app.errorhandler(404)
 def page_not_found(e):
     try:
         return render_template('errors/404.html'), 404
     except:
-        # Fallback to simple HTML response if template is missing
         return '''
         <!DOCTYPE html>
         <html>
@@ -1060,7 +1077,6 @@ def server_error(e):
     try:
         return render_template('errors/500.html'), 500
     except:
-        # Fallback to simple HTML response if template is missing
         return '''
         <!DOCTYPE html>
         <html>
@@ -1072,29 +1088,60 @@ def server_error(e):
         </html>
         ''', 500
 
-# Make sure we can run the app directly for both development and production
+@app.errorhandler(400)
+def bad_request(e):
+    app.logger.warning(f"400 Bad Request: {request.path} - {e}")
+    try:
+        return render_template('errors/400.html'), 400
+    except:
+        return '<h1>Bad Request</h1><p>The request could not be understood by the server.</p>', 400
+
+@app.errorhandler(401)
+def unauthorized(e):
+    app.logger.warning(f"401 Unauthorized: {request.path} - {e}")
+    try:
+        return render_template('errors/401.html'), 401
+    except:
+        return '<h1>Unauthorized</h1><p>Login required.</p>', 401
+
+@app.errorhandler(403)
+def forbidden(e):
+    app.logger.warning(f"403 Forbidden: {request.path} - {e}")
+    try:
+        return render_template('errors/403.html'), 403
+    except:
+        return '<h1>Forbidden</h1><p>You do not have permission to access this resource.</p>', 403
+
 if __name__ == '__main__':
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
     args = parser.parse_args()
     
     with app.app_context():
-        # Create tables if they don't exist
         db.create_all()
-        
-        # Ensure all columns exist in the tables
         ensure_db_schema()
-        
-        # Add default admin account if no users exist
         add_default_admin_if_needed()
+        
+        try:
+            print("[APP] Performing database integrity checks...")
+            admin_users = User.query.filter(or_(
+                User.role.ilike('admin'),
+                User.username == 'admin'
+            )).all()
+            
+            for user in admin_users:
+                if user.role != 'admin':
+                    user.role = 'admin'
+                    print(f"[APP] Fixed admin role for user {user.username}")
+            
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"[APP] Error performing database integrity checks: {e}")
     
-    # Get port from command line argument, environment variable, or default
     port = args.port or int(os.environ.get('PORT', 10000))
     debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     
     print(f"[APP] Starting Flask server on port {port}")
-    
-    # Use host 0.0.0.0 to bind to all interfaces
     app.run(host='0.0.0.0', port=port, debug=debug)
