@@ -329,6 +329,52 @@ def manage_machines():
         flash('An error occurred while loading machines.', 'danger')
         return redirect(url_for('dashboard'))
 
+# Add the missing manage_parts route that's referenced in the dashboard template
+@app.route('/parts', methods=['GET', 'POST'])
+@login_required
+def manage_parts():
+    """View and manage parts."""
+    try:
+        # Get all machines for the dropdown
+        machines = Machine.query.all()
+        
+        # Get all parts from the database
+        parts = Part.query.all()
+        
+        # Handle form submission for adding new parts
+        if request.method == 'POST':
+            name = request.form.get('name')
+            part_number = request.form.get('part_number')
+            machine_id = request.form.get('machine_id')
+            quantity = request.form.get('quantity', 0)
+            description = request.form.get('description', '')
+            
+            try:
+                quantity = int(quantity)
+            except ValueError:
+                quantity = 0
+                
+            if name and part_number:
+                new_part = Part(
+                    name=name,
+                    part_number=part_number,
+                    machine_id=machine_id if machine_id else None,
+                    quantity=quantity,
+                    description=description
+                )
+                db.session.add(new_part)
+                db.session.commit()
+                flash('Part added successfully!', 'success')
+                return redirect(url_for('manage_parts'))
+            else:
+                flash('Name and part number are required!', 'danger')
+        
+        return render_template('parts.html', parts=parts, machines=machines)
+    except Exception as e:
+        app.logger.error(f"Error in manage_parts: {e}")
+        flash('An error occurred while loading parts.', 'danger')
+        return redirect(url_for('dashboard')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login."""
