@@ -148,6 +148,34 @@ def load_user(user_id):
     # This must return None or a User object
     return User.query.get(int(user_id)) if user_id else None
 
+# Function to ensure database schema matches models
+def ensure_db_schema():
+    """Ensure database schema matches the models by adding missing columns."""
+    try:
+        print("[APP] Checking database schema...")
+        # Create a connection and inspect the database
+        inspector = inspect(db.engine)
+        
+        # Check User table for missing columns
+        existing_columns = {column['name'] for column in inspector.get_columns('users')}
+        required_columns = {
+            'last_login': 'TIMESTAMP',
+            'reset_token': 'VARCHAR(100)',
+            'reset_token_expiration': 'TIMESTAMP'
+        }
+        
+        # Add any missing columns
+        with db.engine.connect() as conn:
+            for column_name, column_type in required_columns.items():
+                if column_name not in existing_columns:
+                    print(f"[APP] Adding missing column {column_name} to users table")
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
+                    conn.commit()
+        
+        print("[APP] Database schema check completed")
+    except Exception as e:
+        print(f"[APP] Error checking database schema: {e}")
+
 # Initialize database connection for API endpoints
 @app.before_first_request
 def initialize_db_connection():
@@ -160,52 +188,53 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
-@app.before_first_requestr initialize_db_connection
-def setup_application():chema():
-    """Setup everything needed before handling the first request."""e database schema matches the models by adding missing columns."""
+# Setup application before first request
+@app.before_first_request
+def setup_application():
+    """Setup everything needed before handling the first request."""
     initialize_db_connection()
-    ensure_db_schema()e schema...")
+    ensure_db_schema()
 
-# Add root route handlerspect the database
-@app.route('/')            inspector = inspect(db.engine)
+# Add root route handler
+@app.route('/')
 def index():
-    """Homepage route that redirects to dashboard if logged in or shows login page."""heck User table for missing columns
-    if current_user.is_authenticated:ting_columns = {column['name'] for column in inspector.get_columns('users')}
+    """Homepage route that redirects to dashboard if logged in or shows login page."""
+    if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    return render_template('login.html')        'last_login': 'TIMESTAMP',
+    return render_template('login.html')
 
-@app.route('/dashboard')en_expiration': 'TIMESTAMP'
+@app.route('/dashboard')
 @login_required
 def dashboard():
-    """Main dashboard view after login."""            # Add any missing columns
+    """Main dashboard view after login."""
     try:
-        return render_template('dashboard.html')    for column_name, column_type in required_columns.items():
-    except Exception as e:n_name not in existing_columns:
-        app.logger.error(f"Error rendering dashboard: {e}") Adding missing column {column_name} to users table")
-        return render_template('errors/500.html'), 500LTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
-                conn.commit()
+        return render_template('dashboard.html')
+    except Exception as e:
+        app.logger.error(f"Error rendering dashboard: {e}")
+        return render_template('errors/500.html'), 500
+
 @app.route('/login', methods=['GET', 'POST'])
-def login():completed")
+def login():
     """Handle user login."""
-    if current_user.is_authenticated:print(f"[APP] Error checking database schema: {e}")
+    if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        ot route handler
+        
     if request.method == 'POST':
         username = request.form.get('username')
-        password = request.form.get('password')d if logged in or shows login page."""
+        password = request.form.get('password')
         
-        user = User.query.filter_by(username=username).first()n redirect(url_for('dashboard'))
+        user = User.query.filter_by(username=username).first()
         
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
-            next_page = request.args.get('next')@login_required
+            next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard'))
-        else:hboard view after login."""
+        else:
             flash('Invalid username or password', 'danger')
-    e('dashboard.html')
-    return render_template('login.html')ion as e:
-shboard: {e}")
-@app.route('/logout')s/500.html'), 500
+    
+    return render_template('login.html')
+
+@app.route('/logout')
 @login_required
 def logout():
     """Handle user logout."""
@@ -214,83 +243,83 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
-def forgot_password():name')
+def forgot_password():
     """Handle password reset request."""
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))ser.query.filter_by(username=username).first()
+        return redirect(url_for('dashboard'))
         
-    if request.method == 'POST':rd_hash, password):
+    if request.method == 'POST':
         email = request.form.get('email')
-        user = User.query.filter_by(email=email).first()next_page = request.args.get('next')
-         or url_for('dashboard'))
+        user = User.query.filter_by(email=email).first()
+        
         if user:
-            # Generate a password reset token 'danger')
+            # Generate a password reset token
             reset_token = secrets.token_urlsafe(32)
-            expires = datetime.now() + timedelta(hours=24)ender_template('login.html')
+            expires = datetime.now() + timedelta(hours=24)
             
             # Store token in database
             user.reset_token = reset_token
             user.reset_token_expiration = expires
-            db.session.commit()e user logout."""
+            db.session.commit()
             
             # In a production app, you would send an email with the reset link
             # For now, just flash a message with the token (for demonstration)
             reset_url = url_for('reset_password', token=reset_token, _external=True)
             flash(f'Password reset link: {reset_url}', 'info')
-            ():
-        # Always show this message to prevent user enumerationdle password reset request."""
-        flash('If an account with that email exists, a password reset link has been sent.', 'info')rent_user.is_authenticated:
-        return redirect(url_for('login'))oard'))
+            
+        # Always show this message to prevent user enumeration
+        flash('If an account with that email exists, a password reset link has been sent.', 'info')
+        return redirect(url_for('login'))
         
-    return render_template('forgot_password.html') if os.path.exists(os.path.join('templates', 'forgot_password.html')) else '''est.method == 'POST':
-    <!DOCTYPE html>ail = request.form.get('email')
-    <html>email=email).first()
+    return render_template('forgot_password.html') if os.path.exists(os.path.join('templates', 'forgot_password.html')) else '''
+    <!DOCTYPE html>
+    <html>
     <head>
         <title>Forgot Password</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">t token
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     </head>
-    <body>a(hours=24)
+    <body>
         <div class="container mt-5">
             <div class="row justify-content-center">
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">Reset Password</div>
                         <div class="card-body">
-                            <form method="post">you would send an email with the reset link
-                                <div class="mb-3">th the token (for demonstration)
+                            <form method="post">
+                                <div class="mb-3">
                                     <label for="email" class="form-label">Email</label>
-                                    <input type="email" class="form-control" id="email" name="email" required> link: {reset_url}', 'info')
+                                    <input type="email" class="form-control" id="email" name="email" required>
                                 </div>
-                                <button type="submit" class="btn btn-primary">Send Reset Link</button> message to prevent user enumeration
-                            </form>ccount with that email exists, a password reset link has been sent.', 'info')
-                            <div class="mt-3">irect(url_for('login'))
+                                <button type="submit" class="btn btn-primary">Send Reset Link</button>
+                            </form>
+                            <div class="mt-3">
                                 <a href="/login" class="text-decoration-none">Back to Login</a>
-                            </div>render_template('forgot_password.html') if os.path.exists(os.path.join('templates', 'forgot_password.html')) else '''
-                        </div>PE html>
-                    </div>ml>
-                </div>    <head>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>//cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        </div>
     </body>
     </html>
     '''
-    <div class="row justify-content-center">
+
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
-def reset_password(token):                <div class="card">
-    """Handle password reset with token."""er">Reset Password</div>
+def reset_password(token):
+    """Handle password reset with token."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
         
-    user = User.query.filter_by(reset_token=token).first()                            <label for="email" class="form-label">Email</label>
-        <input type="email" class="form-control" id="email" name="email" required>
+    user = User.query.filter_by(reset_token=token).first()
+    
     # Check if token is valid and not expired
-    if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):n btn-primary">Send Reset Link</button>
-        flash('The password reset link is invalid or has expired.', 'danger')                    </form>
-        return redirect(url_for('forgot_password'))>
-        e">Back to Login</a>
+    if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
+        flash('The password reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('forgot_password'))
+        
     if request.method == 'POST':
         password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')       </div>
+        confirm_password = request.form.get('confirm_password')
         
         if not password or len(password) < 8:
             flash('Password must be at least 8 characters long.', 'danger')
@@ -298,27 +327,27 @@ def reset_password(token):                <div class="card">
             flash('Passwords do not match.', 'danger')
         else:
             # Update password and clear reset token
-            user.password_hash = generate_password_hash(password)=['GET', 'POST'])
-            user.reset_token = Nonessword(token):
+            user.password_hash = generate_password_hash(password)
+            user.reset_token = None
             user.reset_token_expiration = None
-            db.session.commit().is_authenticated:
-            turn redirect(url_for('dashboard'))
-            flash('Your password has been updated. Please log in.', 'success')
-            return redirect(url_for('login'))_token=token).first()
+            db.session.commit()
             
-    return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else ''' if token is valid and not expired
-    <!DOCTYPE html> user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
-    <html>nk is invalid or has expired.', 'danger')
+            flash('Your password has been updated. Please log in.', 'success')
+            return redirect(url_for('login'))
+            
+    return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
+    <!DOCTYPE html>
+    <html>
     <head>
         <title>Reset Password</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     </head>
-    <body>nfirm_password')
+    <body>
         <div class="container mt-5">
             <div class="row justify-content-center">
                 <div class="col-md-6">
                     <div class="card">
-                        <div class="card-header">Reset Password</div>tch.', 'danger')
+                        <div class="card-header">Reset Password</div>
                         <div class="card-body">
                             <form method="post">
                                 <div class="mb-3">
@@ -326,35 +355,35 @@ def reset_password(token):                <div class="card">
                                     <input type="password" class="form-control" id="password" name="password" required>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="confirm_password" class="form-label">Confirm Password</label>ssword has been updated. Please log in.', 'success')
-                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>irect(url_for('login'))
+                                    <label for="confirm_password" class="form-label">Confirm Password</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
                                 </div>
-                                <button type="submit" class="btn btn-primary">Reset Password</button>der_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
-                            </form>PE html>
+                                <button type="submit" class="btn btn-primary">Reset Password</button>
+                            </form>
                         </div>
-                    </div>ad>
-                </div>        <title>Reset Password</title>
-            </div>m/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+                    </div>
+                </div>
+            </div>
         </div>
     </body>
     </html>
-    '''s="row justify-content-center">
+    '''
 
-# Add a debug route to see all available routes            <div class="card">
-@app.route('/debug-info')         <div class="card-header">Reset Password</div>
-def debug_info():body">
-    """Display debug information including all available routes."""     <form method="post">
-    if not app.debug:lass="mb-3">
-        return "Debug mode is disabled", 403="password" class="form-label">New Password</label>
-              <input type="password" class="form-control" id="password" name="password" required>
-    routes = []                      </div>
-    for rule in app.url_map.iter_rules():                        <div class="mb-3">
+# Add a debug route to see all available routes
+@app.route('/debug-info')
+def debug_info():
+    """Display debug information including all available routes."""
+    if not app.debug:
+        return "Debug mode is disabled", 403
+        
+    routes = []
+    for rule in app.url_map.iter_rules():
         routes.append({
-            'endpoint': rule.endpoint,                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+            'endpoint': rule.endpoint,
             'methods': ','.join(rule.methods),
-            'route': str(rule)utton type="submit" class="btn btn-primary">Reset Password</button>
+            'route': str(rule)
         })
-                        </div>
+        
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
 
 # Add function to create default admin (referenced in __main__ block)
@@ -363,138 +392,109 @@ def add_default_admin_if_needed():
     try:
         user_count = User.query.count()
         if user_count == 0:
-            print("[APP] No users found, creating default admin user") route to see all available routes
+            print("[APP] No users found, creating default admin user")
             admin = User(
                 username='admin',
-                email='admin@example.com',ble routes."""
+                email='admin@example.com',
                 password_hash=generate_password_hash('admin'),
                 role='admin'
-            )        
+            )
             db.session.add(admin)
             db.session.commit()
-            print("[APP] Default admin user created")end({
+            print("[APP] Default admin user created")
     except Exception as e:
-        print(f"[APP] Error creating default admin: {e}")    'methods': ','.join(rule.methods),
+        print(f"[APP] Error creating default admin: {e}")
 
 # API endpoint for synchronization (to be used by desktop client)
 @app.route('/api/sync/status', methods=['GET'])
-def sync_status():outes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
+def sync_status():
     """Get synchronization status information."""
-    try:tion to create default admin (referenced in __main__ block)
-        # Basic information about the server stateeeded():
-        return jsonify({""
-            'status': 'online',    try:
+    try:
+        # Basic information about the server state
+        return jsonify({
+            'status': 'online',
             'server_time': datetime.now().isoformat(),
-            'version': '1.0.0'_count == 0:
-        })t("[APP] No users found, creating default admin user")
+            'version': '1.0.0'
+        })
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500        username='admin',
-n@example.com',
-@app.route('/api/sync/data', methods=['POST'])te_password_hash('admin'),
-@login_required        role='admin'
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/sync/data', methods=['POST'])
+@login_required
 def sync_data():
     """Handle data synchronization requests from desktop clients."""
     try:
         data = request.json
-        sync_type = data.get('type')xception as e:
-        ing default admin: {e}")
+        sync_type = data.get('type')
+        
         if sync_type == 'push':
-            # Handle data being pushed from client to serverop client)
+            # Handle data being pushed from client to server
             # Process items from the client
             return jsonify({'status': 'success', 'message': 'Data received successfully'})
-            ynchronization status information."""
+            
         elif sync_type == 'pull':
-            # Handle client requesting data from serverabout the server state
+            # Handle client requesting data from server
             # Return requested data based on parameters
-            entity_type = data.get('entity_type')line',
-            timestamp = data.get('last_sync')).isoformat(),
+            entity_type = data.get('entity_type')
+            timestamp = data.get('last_sync')
             
             # This is simplified - in a real implementation you would fetch actual data
-            return jsonify({eption as e:
-                'status': 'success',rn jsonify({'status': 'error', 'message': str(e)}), 500
+            return jsonify({
+                'status': 'success',
                 'data': {
                     'type': entity_type,
-                    'items': []  # Actual data would go herered
+                    'items': []  # Actual data would go here
                 }
-            })"
-                try:
-        else:
-            return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400 data.get('type')
+            })
             
-    except Exception as e:if sync_type == 'push':
-        return jsonify({'status': 'error', 'message': str(e)}), 500rver
-nt
-@app.route('/health-check')cess', 'message': 'Data received successfully'})
-def health_check():
-    """Basic health check endpoint."""'pull':
-    try:er
-        # Update to use connection-based execute pattern
-        with db.engine.connect() as conn:            entity_type = data.get('entity_type')
-            conn.execute(text("SELECT 1"))ast_sync')
-        return jsonify({'status': 'ok'}), 200
-    except Exception as e:simplified - in a real implementation you would fetch actual data
-        app.logger.error(f"Health check failed: {e}")    return jsonify({
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
+            
+    except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-     'data': {
+
+@app.route('/health-check')
+def health_check():
+    """Basic health check endpoint."""
+    try:
+        # Update to use connection-based execute pattern
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        app.logger.error(f"Health check failed: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 # Add error handlers with fallbacks
-@app.errorhandler(404)  'items': []  # Actual data would go here
+@app.errorhandler(404)
 def page_not_found(e):
     try:
         return render_template('errors/404.html'), 404
     except:
-        # Fallback to simple HTML response if template is missing'Invalid sync type'}), 400
+        # Fallback to simple HTML response if template is missing
         return '''
-        <!DOCTYPE html>ption as e:
-        <html>jsonify({'status': 'error', 'message': str(e)}), 500
+        <!DOCTYPE html>
+        <html>
         <head><title>Page Not Found</title></head>
-        <body style="font-family:Arial; text-align:center; padding:50px;">@app.route('/health-check')
+        <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Page Not Found</h1>
-            <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>check endpoint."""
+            <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
-        </html>rn
-        ''', 404h db.engine.connect() as conn:
+        </html>
+        ''', 404
 
-@app.errorhandler(500)nify({'status': 'ok'}), 200
-def server_error(e): e:
-    try:gger.error(f"Health check failed: {e}")
-        return render_template('errors/500.html'), 500age': str(e)}), 500
+@app.errorhandler(500)
+def server_error(e):
+    try:
+        return render_template('errors/500.html'), 500
     except:
         # Fallback to simple HTML response if template is missing
         return '''
-        <!DOCTYPE html>und(e):
+        <!DOCTYPE html>
         <html>
-        <head><title>Server Error</title></head>ender_template('errors/404.html'), 404
-        <body style="font-family:Arial; text-align:center; padding:50px;">    except:
+        <head><title>Server Error</title></head>
+        <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Server Error</h1>
-            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
-        </body>
-        </html>
-        ''', 500
-
-# Make sure we can run the app directly for both development and productionFE7900;">Page Not Found</h1>
-if __name__ == '__main__':        <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
-    parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
-    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
-    args = parser.parse_args()
-    
-    with app.app_context():try:
-        # Create tables if they don't exist
-        db.create_all()
-        
-        # Add default admin account if no users exist    return '''
-        add_default_admin_if_needed()
-        <html>
-    # Get port from command line argument, environment variable, or default
-    port = args.port or int(os.environ.get('PORT', 10000))center; padding:50px;">
-
-
-
-
-
-
-    app.run(host='0.0.0.0', port=port, debug=debug)    # Use host 0.0.0.0 to bind to all interfaces        print(f"[APP] Starting Flask server on port {port}")        debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'            <h1 style="color:#FE7900;">Server Error</h1>
             <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
