@@ -207,6 +207,133 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Handle password reset request."""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            # Generate a password reset token
+            reset_token = secrets.token_urlsafe(32)
+            expires = datetime.now() + timedelta(hours=24)
+            
+            # Store token in database
+            user.reset_token = reset_token
+            user.reset_token_expiration = expires
+            db.session.commit()
+            
+            # In a production app, you would send an email with the reset link
+            # For now, just flash a message with the token (for demonstration)
+            reset_url = url_for('reset_password', token=reset_token, _external=True)
+            flash(f'Password reset link: {reset_url}', 'info')
+            
+        # Always show this message to prevent user enumeration
+        flash('If an account with that email exists, a password reset link has been sent.', 'info')
+        return redirect(url_for('login'))
+        
+    return render_template('forgot_password.html') if os.path.exists(os.path.join('templates', 'forgot_password.html')) else '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Forgot Password</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Reset Password</div>
+                        <div class="card-body">
+                            <form method="post">
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="email" name="email" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Send Reset Link</button>
+                            </form>
+                            <div class="mt-3">
+                                <a href="/login" class="text-decoration-none">Back to Login</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """Handle password reset with token."""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    user = User.query.filter_by(reset_token=token).first()
+    
+    # Check if token is valid and not expired
+    if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
+        flash('The password reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('forgot_password'))
+        
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not password or len(password) < 8:
+            flash('Password must be at least 8 characters long.', 'danger')
+        elif password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+        else:
+            # Update password and clear reset token
+            user.password_hash = generate_password_hash(password)
+            user.reset_token = None
+            user.reset_token_expiration = None
+            db.session.commit()
+            
+            flash('Your password has been updated. Please log in.', 'success')
+            return redirect(url_for('login'))
+            
+    return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Reset Password</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Reset Password</div>
+                        <div class="card-body">
+                            <form method="post">
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">New Password</label>
+                                    <input type="password" class="form-control" id="password" name="password" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="confirm_password" class="form-label">Confirm Password</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Reset Password</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
 # Add a debug route to see all available routes
 @app.route('/debug-info')
 def debug_info():
