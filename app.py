@@ -27,32 +27,37 @@ from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
-def parts_status(self):
-    """Method directly added to Site class."""
-    machines = Machine.query.filter_by(site_id=self.id).all()
-    total_parts = 0
-    low_stock = 0
-    out_of_stock = 0
+def parts_status(self, current_date=None):
+    """
+    Get maintenance status of all parts at this site
+    Returns dictionary with 'overdue' and 'due_soon' lists
+    """
+    if current_date is None:
+        current_date = datetime.now()
     
-    for machine in machines:
-        parts = Part.query.filter_by(machine_id=machine.id).all()
-        total_parts += len(parts)
-        
-        for part in parts:
-            if part.quantity == 0:
-                out_of_stock += 1
-            elif part.quantity < 5:
-                low_stock += 1
+    overdue = []
+    due_soon = []
+    threshold = self.notification_threshold or 30  # Default to 30 days if not set
+    
+    # Loop through all machines at this site
+    for machine in self.machines:
+        for part in machine.parts:
+            days_until = (part.next_maintenance - current_date).days
+            
+            # Overdue parts
+            if days_until < 0:
+                overdue.append(part)
+            # Due soon parts within threshold
+            elif days_until <= threshold:
+                due_soon.append(part)
     
     return {
-        'total': total_parts,
-        'low_stock': low_stock,
-        'out_of_stock': out_of_stock
+        'overdue': overdue,
+        'due_soon': due_soon
     }
 
-# Directly add method to Site class - renamed to avoid signature conflicts
+# Update the function assignments
 Site.parts_status = parts_status
-# Make get_parts_status a method instead of a property to fix the 'dict' object is not callable error
 Site.get_parts_status = parts_status
 
 # Define PostgreSQL database URI
