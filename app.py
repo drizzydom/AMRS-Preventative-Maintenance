@@ -257,11 +257,10 @@ def additional_setup():
     """Additional setup tasks."""
     ensure_maintenance_records_schema()
 
-# Enhance models dynamically with proper method binding
+# Enhance models dynamically - attach the method to the class ITSELF, not instances
 @app.before_first_request
 def enhance_models():
-    """Add helper methods to models dynamically using types.MethodType."""
-    import types
+    """Add helper methods to models dynamically - use direct class attachment."""
     
     def get_parts_status(self):
         """Get status of parts for a site's machines."""
@@ -293,10 +292,11 @@ def enhance_models():
             app.logger.error(f"Error in get_parts_status: {e}")
             return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
     
-    # Properly bind the method to the class using types.MethodType
-    # This creates a bound method that correctly receives self as first argument
-    for instance in Site.query.all():
-        instance.get_parts_status = types.MethodType(get_parts_status, instance)
+    # Add the method DIRECTLY to the class itself, not to instances
+    # This is the key difference from previous attempts
+    Site.get_parts_status = get_parts_status
+    
+    print("[APP] Enhanced Site model with get_parts_status method")
 
 # Add root route handler
 @app.route('/')
@@ -700,12 +700,17 @@ def admin():
         flash('An error occurred in the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the manage_roles route directly
+# Add the missing routes for role management to handle all possible URL patterns
+@app.route('/roles')
+@login_required
+def roles_index():
+    """Main roles management endpoint"""
+    return redirect(url_for('manage_roles'))
+
 @app.route('/manage/roles')
 @login_required
 def manage_roles():
     """Manage roles directly."""
-    # This is the specific endpoint referenced in the admin template
     try:
         # Check if user has admin role
         is_admin = False
