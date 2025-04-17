@@ -27,7 +27,7 @@ from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
-def get_parts_status(self):
+def parts_status(self):
     """Method directly added to Site class."""
     machines = Machine.query.filter_by(site_id=self.id).all()
     total_parts = 0
@@ -50,8 +50,10 @@ def get_parts_status(self):
         'out_of_stock': out_of_stock
     }
 
-# Directly add method to Site class
-Site.get_parts_status = get_parts_status
+# Directly add method to Site class - renamed to avoid signature conflicts
+Site.parts_status = parts_status
+# Add an alias for backward compatibility, but make it a property to avoid calling with arguments
+Site.get_parts_status = property(lambda self: self.parts_status())
 
 # Define PostgreSQL database URI
 POSTGRESQL_DATABASE_URI = os.environ.get(
@@ -762,16 +764,17 @@ def roles_manage():
     """Another alias for managing roles."""
     return redirect(url_for('manage_roles'))
 
-# Replace the manage_users route with a more direct approach
-def manage_users():
-    """Manage users directly."""
-    # This is likely what's being referenced in the admin template
-    return redirect(url_for('admin'))
-
-# Add extra route variant that might be referenced
+# Replace the manage_users route with a proper route decorator
 @app.route('/users/manage')
 @login_required
-def users_manage():
+def manage_users():
+    """Manage users directly."""
+    return redirect(url_for('admin'))
+
+# Add extra route variant to ensure all possible URLs are covered
+@app.route('/manage/users')
+@login_required
+def manage_users_alt():
     """Alternative route for managing users."""
     return redirect(url_for('admin'))
 
