@@ -288,6 +288,47 @@ def manage_sites():
         flash('An error occurred while loading sites.', 'danger')
         return redirect(url_for('dashboard'))
 
+# Add the missing manage_machines route that's referenced in the dashboard template
+@app.route('/machines', methods=['GET', 'POST'])
+@login_required
+def manage_machines():
+    """View and manage machines."""
+    try:
+        # Get all sites for the dropdown
+        sites = Site.query.all()
+        
+        # Get all machines from the database
+        machines = Machine.query.all()
+        
+        # Handle form submission for adding new machines
+        if request.method == 'POST':
+            name = request.form.get('name')
+            model = request.form.get('model')
+            site_id = request.form.get('site_id')
+            serial_number = request.form.get('serial_number', '')
+            description = request.form.get('description', '')
+            
+            if name and model and site_id:
+                new_machine = Machine(
+                    name=name,
+                    model=model,
+                    site_id=site_id,
+                    serial_number=serial_number,
+                    description=description
+                )
+                db.session.add(new_machine)
+                db.session.commit()
+                flash('Machine added successfully!', 'success')
+                return redirect(url_for('manage_machines'))
+            else:
+                flash('Name, model, and site are required!', 'danger')
+        
+        return render_template('machines.html', machines=machines, sites=sites)
+    except Exception as e:
+        app.logger.error(f"Error in manage_machines: {e}")
+        flash('An error occurred while loading machines.', 'danger')
+        return redirect(url_for('dashboard'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login."""
