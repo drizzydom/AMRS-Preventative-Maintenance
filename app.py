@@ -161,7 +161,9 @@ def ensure_db_schema():
         required_columns = {
             'last_login': 'TIMESTAMP',
             'reset_token': 'VARCHAR(100)',
-            'reset_token_expiration': 'TIMESTAMP'
+            'reset_token_expiration': 'TIMESTAMP',
+            'created_at': 'TIMESTAMP',
+            'updated_at': 'TIMESTAMP'
         }
         
         # Add any missing columns
@@ -171,6 +173,15 @@ def ensure_db_schema():
                     print(f"[APP] Adding missing column {column_name} to users table")
                     conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
                     conn.commit()
+            
+            # Initialize created_at and updated_at with current timestamp if they were just added
+            if 'created_at' in required_columns and 'created_at' not in existing_columns:
+                conn.execute(text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                conn.commit()
+                
+            if 'updated_at' in required_columns and 'updated_at' not in existing_columns:
+                conn.execute(text("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                conn.commit()
         
         print("[APP] Database schema check completed")
     except Exception as e:
