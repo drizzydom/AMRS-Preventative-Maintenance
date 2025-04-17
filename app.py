@@ -373,7 +373,7 @@ def manage_parts():
     except Exception as e:
         app.logger.error(f"Error in manage_parts: {e}")
         flash('An error occurred while loading parts.', 'danger')
-        return redirect(url_for('dashboard')
+        return redirect(url_for('dashboard'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
