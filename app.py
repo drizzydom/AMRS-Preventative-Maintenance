@@ -156,32 +156,47 @@ def ensure_db_schema():
         # Create a connection and inspect the database
         inspector = inspect(db.engine)
         
-        # Check User table for missing columns
-        existing_columns = {column['name'] for column in inspector.get_columns('users')}
-        required_columns = {
-            'last_login': 'TIMESTAMP',
-            'reset_token': 'VARCHAR(100)',
-            'reset_token_expiration': 'TIMESTAMP',
-            'created_at': 'TIMESTAMP',
-            'updated_at': 'TIMESTAMP'
+        # Define table schemas
+        table_schemas = {
+            'users': {
+                'last_login': 'TIMESTAMP',
+                'reset_token': 'VARCHAR(100)',
+                'reset_token_expiration': 'TIMESTAMP',
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'roles': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            }
         }
         
-        # Add any missing columns
+        # Check each table and add missing columns
         with db.engine.connect() as conn:
-            for column_name, column_type in required_columns.items():
-                if column_name not in existing_columns:
-                    print(f"[APP] Adding missing column {column_name} to users table")
-                    conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
-                    conn.commit()
-            
-            # Initialize created_at and updated_at with current timestamp if they were just added
-            if 'created_at' in required_columns and 'created_at' not in existing_columns:
-                conn.execute(text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
-                conn.commit()
-                
-            if 'updated_at' in required_columns and 'updated_at' not in existing_columns:
-                conn.execute(text("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
-                conn.commit()
+            for table, columns in table_schemas.items():
+                # Check if table exists
+                if inspector.has_table(table):
+                    print(f"[APP] Checking {table} table schema...")
+                    existing_columns = {column['name'] for column in inspector.get_columns(table)}
+                    
+                    # Add any missing columns
+                    for column_name, column_type in columns.items():
+                        if column_name not in existing_columns:
+                            print(f"[APP] Adding missing column {column_name} to {table} table")
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
+                            conn.commit()
+                    
+                    # Initialize timestamp columns with current timestamp if they were just added
+                    if table == 'users' or table == 'roles':
+                        if 'created_at' in columns and 'created_at' not in existing_columns:
+                            conn.execute(text(f"UPDATE {table} SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                            conn.commit()
+                        
+                        if 'updated_at' in columns and 'updated_at' not in existing_columns:
+                            conn.execute(text(f"UPDATE {table} SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                            conn.commit()
+                else:
+                    print(f"[APP] Table {table} does not exist - will be created by db.create_all()")
         
         print("[APP] Database schema check completed")
     except Exception as e:
