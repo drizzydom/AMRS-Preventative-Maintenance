@@ -375,6 +375,71 @@ def manage_parts():
         flash('An error occurred while loading parts.', 'danger')
         return redirect(url_for('dashboard'))
 
+# Add the missing maintenance_page route that's referenced in the dashboard template
+@app.route('/maintenance', methods=['GET', 'POST'])
+@login_required
+def maintenance_page():
+    """View and manage maintenance records."""
+    try:
+        # Get all machines, parts, and sites for the form
+        machines = Machine.query.all()
+        parts = Part.query.all()
+        sites = Site.query.all()
+        
+        # Get all maintenance records with related data
+        maintenance_records = MaintenanceRecord.query.order_by(MaintenanceRecord.date.desc()).all()
+        
+        # Handle form submission for adding new maintenance records
+        if request.method == 'POST':
+            machine_id = request.form.get('machine_id')
+            maintenance_type = request.form.get('maintenance_type')
+            description = request.form.get('description')
+            date_str = request.form.get('date')
+            performed_by = request.form.get('performed_by', '')
+            status = request.form.get('status', 'completed')
+            notes = request.form.get('notes', '')
+            parts_used = request.form.getlist('parts_used')  # Get multiple selected parts
+            
+            # Validate required fields
+            if not machine_id or not maintenance_type or not description or not date_str:
+                flash('Machine, maintenance type, description, and date are required!', 'danger')
+            else:
+                try:
+                    # Parse date (expecting format like YYYY-MM-DD)
+                    maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    
+                    # Create new maintenance record
+                    new_record = MaintenanceRecord(
+                        machine_id=machine_id,
+                        maintenance_type=maintenance_type,
+                        description=description,
+                        date=maintenance_date,
+                        performed_by=performed_by,
+                        status=status,
+                        notes=notes
+                    )
+                    
+                    db.session.add(new_record)
+                    db.session.commit()
+                    
+                    # Associate parts with the maintenance record if needed
+                    # This would require a many-to-many relationship in your model
+                    
+                    flash('Maintenance record added successfully!', 'success')
+                    return redirect(url_for('maintenance_page'))
+                except ValueError:
+                    flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
+        
+        return render_template('maintenance.html', 
+                              maintenance_records=maintenance_records,
+                              machines=machines,
+                              parts=parts,
+                              sites=sites)
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_page: {e}")
+        flash('An error occurred while loading maintenance records.', 'danger')
+        return redirect(url_for('dashboard'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login."""
