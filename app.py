@@ -261,12 +261,12 @@ def additional_setup():
 @app.before_first_request
 def enhance_models():
     """Add helper methods to models dynamically."""
-    # Add get_parts_status method to Site model
-    def get_parts_status(self):
+    # Define the method outside the class first
+    def get_parts_status_impl(instance):
         """Get status of parts for a site's machines."""
         try:
             # Get all machines at this site
-            machines = Machine.query.filter_by(site_id=self.id).all()
+            machines = Machine.query.filter_by(site_id=instance.id).all()
             
             # Count parts
             total_parts = 0
@@ -292,8 +292,9 @@ def enhance_models():
             app.logger.error(f"Error in get_parts_status: {e}")
             return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
     
-    # Add the method to the Site class - proper way to add an instance method
-    setattr(Site, 'get_parts_status', get_parts_status)
+    # Correctly bind the method to the class using types.MethodType
+    import types
+    Site.get_parts_status = lambda self: get_parts_status_impl(self)
 
 # Add root route handler
 @app.route('/')
@@ -696,6 +697,15 @@ def admin():
         app.logger.error(f"Error in admin panel: {e}")
         flash('An error occurred in the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
+
+# Add the missing manage_users route used in admin panel
+@app.route('/admin/users', methods=['GET', 'POST'])
+@login_required
+def manage_users():
+    """Manage users - redirects to admin panel."""
+    # This route is referenced in admin.html but not defined
+    # Simply redirect to the admin route
+    return redirect(url_for('admin'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
