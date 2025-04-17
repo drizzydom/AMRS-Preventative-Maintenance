@@ -217,6 +217,21 @@ def ensure_db_schema():
     except Exception as e:
         print(f"[APP] Error checking database schema: {e}")
 
+# Ensure maintenance_records table has client_id column
+def ensure_maintenance_records_schema():
+    """Ensure maintenance_records table has client_id column."""
+    try:
+        inspector = inspect(db.engine)
+        if inspector.has_table('maintenance_records'):
+            columns = [column['name'] for column in inspector.get_columns('maintenance_records')]
+            if 'client_id' not in columns:
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS client_id INTEGER"))
+                    conn.commit()
+                print("[APP] Added client_id column to maintenance_records table")
+    except Exception as e:
+        print(f"[APP] Error ensuring maintenance_records schema: {e}")
+
 # Initialize database connection for API endpoints
 @app.before_first_request
 def initialize_db_connection():
@@ -236,6 +251,50 @@ def setup_application():
     initialize_db_connection()
     ensure_db_schema()
 
+# Add additional setup tasks
+@app.before_first_request
+def additional_setup():
+    """Additional setup tasks."""
+    ensure_maintenance_records_schema()
+
+# Enhance models dynamically
+@app.before_first_request
+def enhance_models():
+    """Add helper methods to models dynamically."""
+    # Add get_parts_status method to Site model
+    def get_parts_status(self):
+        """Get status of parts for a site's machines."""
+        try:
+            # Get all machines at this site
+            machines = Machine.query.filter_by(site_id=self.id).all()
+            
+            # Count parts
+            total_parts = 0
+            low_stock = 0
+            out_of_stock = 0
+            
+            for machine in machines:
+                parts = Part.query.filter_by(machine_id=machine.id).all()
+                total_parts += len(parts)
+                
+                for part in parts:
+                    if part.quantity == 0:
+                        out_of_stock += 1
+                    elif part.quantity < 5:  # Assume 5 is the low stock threshold
+                        low_stock += 1
+            
+            return {
+                'total': total_parts,
+                'low_stock': low_stock,
+                'out_of_stock': out_of_stock
+            }
+        except Exception as e:
+            app.logger.error(f"Error in get_parts_status: {e}")
+            return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
+    
+    # Add the method to the Site class
+    Site.get_parts_status = get_parts_status
+
 # Add root route handler
 @app.route('/')
 def index():
@@ -253,6 +312,116 @@ def dashboard():
     except Exception as e:
         app.logger.error(f"Error rendering dashboard: {e}")
         return render_template('errors/500.html'), 500
+
+@app.route('/machines/delete/<int:machine_id>', methods=['POST'])
+@login_required
+def delete_machine(machine_id):
+    """Delete a machine."""
+    try:
+        machine = Machine.query.get_or_404(machine_id)
+        
+        # Check for associated maintenance records and parts before deleting
+        maintenance_records = MaintenanceRecord.query.filter_by(machine_id=machine_id).all()
+        parts = Part.query.filter_by(machine_id=machine_id).all()
+        
+        if maintenance_records:
+            flash(f'Cannot delete machine: It has {len(maintenance_records)} maintenance records. Delete those first.', 'danger')
+        elif parts:
+            flash(f'Cannot delete machine: It has {len(parts)} associated parts. Delete or reassign those first.', 'danger')
+        else:
+            db.session.delete(machine)
+            db.session.commit()
+            flash(f'Machine "{machine.name}" deleted successfully.', 'success')
+        
+        return redirect(url_for('manage_machines'))
+    except Exception as e:
+        app.logger.error(f"Error deleting machine: {e}")
+        flash('An error occurred while deleting the machine.', 'danger')
+        return redirect(url_for('manage_machines'))
+
+@app.route('/parts/delete/<int:part_id>', methods=['POST'])
+@login_required
+def delete_part(part_id):
+    """Delete a part."""
+    try:
+        part = Part.query.get_or_404(part_id)
+        
+        # Delete the part
+        db.session.delete(part)
+        db.session.commit()
+        flash(f'Part "{part.name}" deleted successfully.', 'success')
+        
+        return redirect(url_for('manage_parts'))
+    except Exception as e:
+        app.logger.error(f"Error deleting part: {e}")
+        flash('An error occurred while deleting the part.', 'danger')
+        return redirect(url_for('manage_parts'))
+
+@app.route('/maintenance', methods=['GET', 'POST'])
+@login_required
+def maintenance_page():
+    """View and manage maintenance records."""
+    try:
+        # Get all machines, parts, and sites for the form
+        machines = Machine.query.all()
+        parts = Part.query.all()
+        sites = Site.query.all()
+        
+        # Get all maintenance records with related data
+        maintenance_records = MaintenanceRecord.query.order_by(MaintenanceRecord.date.desc()).all()
+        
+        # Handle form submission for adding new maintenance records
+        if request.method == 'POST':
+            machine_id = request.form.get('machine_id')
+            maintenance_type = request.form.get('maintenance_type')
+            description = request.form.get('description')
+            date_str = request.form.get('date')
+            performed_by = request.form.get('performed_by', '')
+            status = request.form.get('status', 'completed')
+            notes = request.form.get('notes', '')
+            client_id = request.form.get('client_id')  # Get client_id from form
+            parts_used = request.form.getlist('parts_used')  # Get multiple selected parts
+            
+            # Validate required fields
+            if not machine_id or not maintenance_type or not description or not date_str:
+                flash('Machine, maintenance type, description, and date are required!', 'danger')
+            else:
+                try:
+                    # Parse date (expecting format like YYYY-MM-DD)
+                    maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    
+                    # Create new maintenance record with client_id
+                    new_record = MaintenanceRecord(
+                        machine_id=machine_id,
+                        maintenance_type=maintenance_type,
+                        description=description,
+                        date=maintenance_date,
+                        performed_by=performed_by,
+                        status=status,
+                        notes=notes,
+                        client_id=client_id if client_id else None  # Handle client_id
+                    )
+                    
+                    db.session.add(new_record)
+                    db.session.commit()
+                    
+                    # Associate parts with the maintenance record if needed
+                    # This would require a many-to-many relationship in your model
+                    
+                    flash('Maintenance record added successfully!', 'success')
+                    return redirect(url_for('maintenance_page'))
+                except ValueError:
+                    flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
+        
+        return render_template('maintenance.html', 
+                              maintenance_records=maintenance_records,
+                              machines=machines,
+                              parts=parts,
+                              sites=sites)
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_page: {e}")
+        flash('An error occurred while loading maintenance records.', 'danger')
+        return redirect(url_for('dashboard'))
 
 # Add the missing manage_sites route that's referenced in the dashboard template
 @app.route('/sites', methods=['GET', 'POST'])
@@ -373,71 +542,6 @@ def manage_parts():
     except Exception as e:
         app.logger.error(f"Error in manage_parts: {e}")
         flash('An error occurred while loading parts.', 'danger')
-        return redirect(url_for('dashboard'))
-
-# Add the missing maintenance_page route that's referenced in the dashboard template
-@app.route('/maintenance', methods=['GET', 'POST'])
-@login_required
-def maintenance_page():
-    """View and manage maintenance records."""
-    try:
-        # Get all machines, parts, and sites for the form
-        machines = Machine.query.all()
-        parts = Part.query.all()
-        sites = Site.query.all()
-        
-        # Get all maintenance records with related data
-        maintenance_records = MaintenanceRecord.query.order_by(MaintenanceRecord.date.desc()).all()
-        
-        # Handle form submission for adding new maintenance records
-        if request.method == 'POST':
-            machine_id = request.form.get('machine_id')
-            maintenance_type = request.form.get('maintenance_type')
-            description = request.form.get('description')
-            date_str = request.form.get('date')
-            performed_by = request.form.get('performed_by', '')
-            status = request.form.get('status', 'completed')
-            notes = request.form.get('notes', '')
-            parts_used = request.form.getlist('parts_used')  # Get multiple selected parts
-            
-            # Validate required fields
-            if not machine_id or not maintenance_type or not description or not date_str:
-                flash('Machine, maintenance type, description, and date are required!', 'danger')
-            else:
-                try:
-                    # Parse date (expecting format like YYYY-MM-DD)
-                    maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
-                    
-                    # Create new maintenance record
-                    new_record = MaintenanceRecord(
-                        machine_id=machine_id,
-                        maintenance_type=maintenance_type,
-                        description=description,
-                        date=maintenance_date,
-                        performed_by=performed_by,
-                        status=status,
-                        notes=notes
-                    )
-                    
-                    db.session.add(new_record)
-                    db.session.commit()
-                    
-                    # Associate parts with the maintenance record if needed
-                    # This would require a many-to-many relationship in your model
-                    
-                    flash('Maintenance record added successfully!', 'success')
-                    return redirect(url_for('maintenance_page'))
-                except ValueError:
-                    flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
-        
-        return render_template('maintenance.html', 
-                              maintenance_records=maintenance_records,
-                              machines=machines,
-                              parts=parts,
-                              sites=sites)
-    except Exception as e:
-        app.logger.error(f"Error in maintenance_page: {e}")
-        flash('An error occurred while loading maintenance records.', 'danger')
         return redirect(url_for('dashboard'))
 
 # Add the missing user_profile route that's referenced in the dashboard template
