@@ -434,6 +434,30 @@ def delete_part(part_id):
         flash('An error occurred while deleting the part.', 'danger')
         return redirect(url_for('manage_parts'))
 
+@app.route('/sites/delete/<int:site_id>', methods=['POST'])
+@login_required
+def delete_site(site_id):
+    """Delete a site."""
+    try:
+        site = Site.query.get_or_404(site_id)
+        
+        # Check for associated machines before deleting
+        machines = Machine.query.filter_by(site_id=site_id).all()
+        
+        if machines:
+            flash(f'Cannot delete site: It has {len(machines)} associated machines. Delete or reassign those first.', 'danger')
+        else:
+            db.session.delete(site)
+            db.session.commit()
+            flash(f'Site "{site.name}" deleted successfully.', 'success')
+        
+        return redirect(url_for('manage_sites'))
+    except Exception as e:
+        app.logger.error(f"Error deleting site: {e}")
+        db.session.rollback()
+        flash('An error occurred while deleting the site.', 'danger')
+        return redirect(url_for('manage_sites'))
+
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
 def maintenance_page():
