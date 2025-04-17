@@ -25,6 +25,34 @@ import psycopg2  # Add PostgreSQL driver
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
 
+# Then patch the Site class directly as a monkey patch
+# This must be outside any function to execute immediately
+def get_parts_status(self):
+    """Method directly added to Site class."""
+    machines = Machine.query.filter_by(site_id=self.id).all()
+    total_parts = 0
+    low_stock = 0
+    out_of_stock = 0
+    
+    for machine in machines:
+        parts = Part.query.filter_by(machine_id=machine.id).all()
+        total_parts += len(parts)
+        
+        for part in parts:
+            if part.quantity == 0:
+                out_of_stock += 1
+            elif part.quantity < 5:
+                low_stock += 1
+    
+    return {
+        'total': total_parts,
+        'low_stock': low_stock,
+        'out_of_stock': out_of_stock
+    }
+
+# Directly add method to Site class
+Site.get_parts_status = get_parts_status
+
 # Define PostgreSQL database URI
 POSTGRESQL_DATABASE_URI = os.environ.get(
     'DATABASE_URL', 
@@ -257,16 +285,15 @@ def additional_setup():
     """Additional setup tasks."""
     ensure_maintenance_records_schema()
 
-# Enhance models dynamically - attach the method to the class ITSELF, not instances
-@app.before_first_request
-def enhance_models():
-    """Add helper methods to models dynamically - use direct class attachment."""
-    
-    def get_parts_status(self):
+# Replace the enhance_models function with a template context processor
+@app.context_processor
+def inject_site_helpers():
+    """Add helper functions to templates without modifying models."""
+    def get_site_parts_status(site):
         """Get status of parts for a site's machines."""
         try:
             # Get all machines at this site
-            machines = Machine.query.filter_by(site_id=self.id).all()
+            machines = Machine.query.filter_by(site_id=site.id).all()
             
             # Count parts
             total_parts = 0
@@ -289,14 +316,14 @@ def enhance_models():
                 'out_of_stock': out_of_stock
             }
         except Exception as e:
-            app.logger.error(f"Error in get_parts_status: {e}")
+            app.logger.error(f"Error in get_site_parts_status: {e}")
             return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
     
-    # Add the method DIRECTLY to the class itself, not to instances
-    # This is the key difference from previous attempts
-    Site.get_parts_status = get_parts_status
-    
-    print("[APP] Enhanced Site model with get_parts_status method")
+    # Return both names to support multiple template patterns
+    return {
+        'get_parts_status': get_site_parts_status,
+        'get_site_parts_status': get_site_parts_status
+    }
 
 # Add root route handler
 @app.route('/')
@@ -729,9 +756,13 @@ def manage_roles():
         flash('An error occurred in the roles management panel.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Replace the manage_users route with a more direct approach
-@app.route('/manage/users')
+@app.route('/roles/manage')
 @login_required
+def roles_manage():
+    """Another alias for managing roles."""
+    return redirect(url_for('manage_roles'))
+
+# Replace the manage_users route with a more direct approach
 def manage_users():
     """Manage users directly."""
     # This is likely what's being referenced in the admin template
