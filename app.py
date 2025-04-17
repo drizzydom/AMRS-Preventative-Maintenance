@@ -494,6 +494,94 @@ def user_profile():
         flash('An error occurred while loading your profile.', 'danger')
         return redirect(url_for('dashboard'))
 
+# Add the missing admin route that's referenced in the dashboard template
+@app.route('/admin', methods=['GET', 'POST'])
+@login_required
+def admin():
+    """Admin dashboard for system management."""
+    try:
+        # Check if user has admin role
+        if current_user.role != 'admin':
+            flash('You do not have permission to access the admin panel.', 'danger')
+            return redirect(url_for('dashboard'))
+        
+        # Get all users for user management
+        users = User.query.all()
+        
+        # Handle user management form submission
+        if request.method == 'POST':
+            action = request.form.get('action')
+            
+            # Handle different admin actions based on form submission
+            if action == 'add_user':
+                username = request.form.get('username')
+                email = request.form.get('email')
+                password = request.form.get('password')
+                role = request.form.get('role', 'user')
+                
+                # Check if username or email already exists
+                if User.query.filter(or_(User.username == username, User.email == email)).first():
+                    flash('Username or email already exists.', 'danger')
+                elif username and email and password:
+                    new_user = User(
+                        username=username,
+                        email=email,
+                        password_hash=generate_password_hash(password),
+                        role=role
+                    )
+                    db.session.add(new_user)
+                    db.session.commit()
+                    flash(f'User {username} added successfully.', 'success')
+                    return redirect(url_for('admin'))
+                else:
+                    flash('All fields are required.', 'danger')
+            
+            elif action == 'edit_user':
+                user_id = request.form.get('user_id')
+                email = request.form.get('email')
+                role = request.form.get('role')
+                reset_password = request.form.get('reset_password') == 'yes'
+                
+                user = User.query.get(user_id)
+                if user:
+                    # Update user details
+                    user.email = email if email else user.email
+                    user.role = role if role else user.role
+                    
+                    # Reset password if requested
+                    if reset_password:
+                        new_password = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+                        user.password_hash = generate_password_hash(new_password)
+                        flash(f'Password reset for {user.username}. New password: {new_password}', 'info')
+                    
+                    db.session.commit()
+                    flash(f'User {user.username} updated successfully.', 'success')
+                    return redirect(url_for('admin'))
+                else:
+                    flash('User not found.', 'danger')
+            
+            elif action == 'delete_user':
+                user_id = request.form.get('user_id')
+                
+                # Prevent deleting the current user
+                if int(user_id) == current_user.id:
+                    flash('You cannot delete your own account.', 'danger')
+                else:
+                    user = User.query.get(user_id)
+                    if user:
+                        db.session.delete(user)
+                        db.session.commit()
+                        flash(f'User {user.username} deleted successfully.', 'success')
+                        return redirect(url_for('admin'))
+                    else:
+                        flash('User not found.', 'danger')
+                        
+        return render_template('admin.html', users=users)
+    except Exception as e:
+        app.logger.error(f"Error in admin panel: {e}")
+        flash('An error occurred in the admin panel.', 'danger')
+        return redirect(url_for('dashboard')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login."""
