@@ -261,12 +261,13 @@ def additional_setup():
 @app.before_first_request
 def enhance_models():
     """Add helper methods to models dynamically."""
-    # Define the method outside the class first
-    def get_parts_status_impl(instance):
+    
+    # Define a standalone function with proper self parameter
+    def get_parts_status(self):
         """Get status of parts for a site's machines."""
         try:
             # Get all machines at this site
-            machines = Machine.query.filter_by(site_id=instance.id).all()
+            machines = Machine.query.filter_by(site_id=self.id).all()
             
             # Count parts
             total_parts = 0
@@ -292,9 +293,8 @@ def enhance_models():
             app.logger.error(f"Error in get_parts_status: {e}")
             return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
     
-    # Correctly bind the method to the class using types.MethodType
-    import types
-    Site.get_parts_status = lambda self: get_parts_status_impl(self)
+    # Add the method directly to the class (not as a lambda)
+    Site.get_parts_status = get_parts_status
 
 # Add root route handler
 @app.route('/')
@@ -698,13 +698,19 @@ def admin():
         flash('An error occurred in the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
 
-# Add the missing manage_users route used in admin panel
-@app.route('/admin/users', methods=['GET', 'POST'])
+# Replace the manage_users route with a more direct approach
+@app.route('/manage/users')
 @login_required
 def manage_users():
-    """Manage users - redirects to admin panel."""
-    # This route is referenced in admin.html but not defined
-    # Simply redirect to the admin route
+    """Manage users directly."""
+    # This is likely what's being referenced in the admin template
+    return redirect(url_for('admin'))
+
+# Add extra route variant that might be referenced
+@app.route('/users/manage')
+@login_required
+def users_manage():
+    """Alternative route for managing users."""
     return redirect(url_for('admin'))
 
 @app.route('/login', methods=['GET', 'POST'])
