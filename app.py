@@ -168,6 +168,22 @@ def ensure_db_schema():
             'roles': {
                 'created_at': 'TIMESTAMP',
                 'updated_at': 'TIMESTAMP'
+            },
+            'sites': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'machines': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'parts': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'maintenance_records': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
             }
         }
         
@@ -187,14 +203,13 @@ def ensure_db_schema():
                             conn.commit()
                     
                     # Initialize timestamp columns with current timestamp if they were just added
-                    if table == 'users' or table == 'roles':
-                        if 'created_at' in columns and 'created_at' not in existing_columns:
-                            conn.execute(text(f"UPDATE {table} SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
-                            conn.commit()
-                        
-                        if 'updated_at' in columns and 'updated_at' not in existing_columns:
-                            conn.execute(text(f"UPDATE {table} SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
-                            conn.commit()
+                    if 'created_at' in columns and 'created_at' not in existing_columns:
+                        conn.execute(text(f"UPDATE {table} SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                        conn.commit()
+                    
+                    if 'updated_at' in columns and 'updated_at' not in existing_columns:
+                        conn.execute(text(f"UPDATE {table} SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                        conn.commit()
                 else:
                     print(f"[APP] Table {table} does not exist - will be created by db.create_all()")
         
