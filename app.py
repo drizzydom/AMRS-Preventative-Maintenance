@@ -292,8 +292,8 @@ def enhance_models():
             app.logger.error(f"Error in get_parts_status: {e}")
             return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
     
-    # Add the method to the Site class
-    Site.get_parts_status = get_parts_status
+    # Add the method to the Site class - proper way to add an instance method
+    setattr(Site, 'get_parts_status', get_parts_status)
 
 # Add root route handler
 @app.route('/')
@@ -604,8 +604,19 @@ def user_profile():
 def admin():
     """Admin dashboard for system management."""
     try:
-        # Check if user has admin role
-        if current_user.role != 'admin':
+        # Fix admin role check - use more flexible check for admin permission
+        is_admin = False
+        if hasattr(current_user, 'role'):
+            is_admin = current_user.role == 'admin' or current_user.role == 'ADMIN'
+        
+        # If admin status is stored differently, check if the username is 'admin'
+        if not is_admin and current_user.username == 'admin':
+            is_admin = True
+            
+        # Print debug info about user role
+        app.logger.info(f"Admin access check - User: {current_user.username}, Role: {getattr(current_user, 'role', 'unknown')}, Is admin: {is_admin}")
+        
+        if not is_admin:
             flash('You do not have permission to access the admin panel.', 'danger')
             return redirect(url_for('dashboard'))
         
@@ -870,13 +881,20 @@ def add_default_admin_if_needed():
                 username='admin',
                 email='admin@example.com',
                 password_hash=generate_password_hash('admin'),
-                role='admin'
+                role='admin'  # Make sure role is lowercase 'admin'
             )
             db.session.add(admin)
             db.session.commit()
             print("[APP] Default admin user created")
+        else:
+            # Ensure existing admin user has correct role
+            admin_user = User.query.filter_by(username='admin').first()
+            if admin_user and admin_user.role != 'admin':
+                print(f"[APP] Fixing admin role (currently: {admin_user.role})")
+                admin_user.role = 'admin'
+                db.session.commit()
     except Exception as e:
-        print(f"[APP] Error creating default admin: {e}")
+        print(f"[APP] Error creating/updating default admin: {e}")
 
 # API endpoint for synchronization (to be used by desktop client)
 @app.route('/api/sync/status', methods=['GET'])
