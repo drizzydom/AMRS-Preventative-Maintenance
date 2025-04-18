@@ -1175,19 +1175,17 @@ def manage_parts():
             try:
                 name = request.form['name']
                 description = request.form.get('description', '')
-                # Still collect these form values even if we don't use them in the constructor
+                # Collect form values but don't use invalid ones in constructor
                 part_number = request.form.get('part_number', '')  
                 machine_id = request.form['machine_id']
                 quantity = request.form.get('quantity', 0)  
                 notes = request.form.get('notes', '')
                 
-                # Create new part with only valid fields
+                # Create new part with only what appear to be valid fields
                 new_part = Part(
                     name=name,
                     description=description,
-                    machine_id=machine_id if machine_id else None,
-                    notes=notes
-                    # part_number and quantity removed as they're causing errors
+                    machine_id=machine_id if machine_id else None
                 )
                 
                 # Add part to database
