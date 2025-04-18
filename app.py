@@ -439,13 +439,22 @@ def admin():
         machine_count = Machine.query.count()
         part_count = Part.query.count()
         
-        # Create safe URLs for admin navigation
+        # Create safe URLs for admin navigation - provide ALL possible links needed by template
         admin_links = {
             'users': '/admin/users',
             'roles': '/admin/roles',
             'sites': '/sites',
             'machines': '/machines',
-            'parts': '/parts'
+            'parts': '/parts',
+            'dashboard': '/dashboard',
+            'profile': '/profile',
+            'maintenance': '/maintenance',
+            'manage_users': '/admin/users',  # Add this specifically since it's being referenced
+            'manage_sites': '/sites',
+            'manage_machines': '/machines',
+            'manage_parts': '/parts',
+            'admin_users': '/admin/users',
+            'admin_roles': '/admin/roles'
         }
         
         # Render admin dashboard view with safe navigation links
@@ -455,13 +464,13 @@ def admin():
                               sites_count=sites_count,
                               machine_count=machine_count,
                               part_count=part_count,
-                              admin_links=admin_links,  # Add safe links
+                              admin_links=admin_links,
                               section='dashboard',
                               active_section='dashboard')
     except Exception as e:
         app.logger.error(f"Error in admin route: {e}")
         flash('An error occurred while loading the admin dashboard.', 'danger')
-        return redirect(url_for('dashboard'))
+        return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
 
 @app.route('/admin/users')
 @login_required
