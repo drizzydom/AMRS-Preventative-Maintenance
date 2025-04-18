@@ -634,7 +634,7 @@ def delete_site(site_id):
         app.logger.error(f"Error deleting site: {e}")
         db.session.rollback()
         flash('An error occurred while deleting the site.', 'danger')
-        return redirect(url_for('manage_sites'))
+        return redirect(url_for('manage_sites')
 
 @app.route('/role/delete/<int:role_id>', methods=['POST'])
 @login_required
@@ -1452,8 +1452,53 @@ def create_user():
         flash('You do not have permission to create users.', 'danger')
         return redirect(url_for('dashboard'))
     
-    # For simplicity, redirect to admin_users which should handle user creation
-    return redirect(url_for('admin_users'))
+    # Handle form submission for creating a new user
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username')
+            email = request.form.get('email')
+            password = request.form.get('password')
+            role = request.form.get('role', '')
+            
+            # Validate required fields
+            if not username or not email or not password:
+                flash('Username, email, and password are required.', 'danger')
+                return redirect('/admin/users')
+            
+            # Check if username or email already exist
+            if User.query.filter_by(username=username).first():
+                flash(f'Username "{username}" is already taken.', 'danger')
+                return redirect('/admin/users')
+                
+            if User.query.filter_by(email=email).first():
+                flash(f'Email "{email}" is already registered.', 'danger')
+                return redirect('/admin/users')
+            
+            # Validate password length
+            if len(password) < 8:
+                flash('Password must be at least 8 characters long.', 'danger')
+                return redirect('/admin/users')
+            
+            # Create new user
+            new_user = User(
+                username=username,
+                email=email,
+                password_hash=generate_password_hash(password),
+                role=role
+            )
+            
+            # Add user to database
+            db.session.add(new_user)
+            db.session.commit()
+            
+            flash(f'User "{username}" created successfully.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating user: {e}")
+            flash(f'Error creating user: {str(e)}', 'danger')
+    
+    # For GET or after POST processing, redirect to admin_users
+    return redirect('/admin/users')
 
 @app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
