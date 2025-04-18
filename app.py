@@ -1064,52 +1064,72 @@ def manage_sites():
 @login_required
 def manage_machines():
     """Handle machine management page and machine creation"""
-    site_id = request.args.get('site_id', type=int)
-    
-    # Filter machines by site if site_id is provided
-    if site_id:
-        machines = Machine.query.filter_by(site_id=site_id).all()
-        title = f"Machines for {Site.query.get_or_404(site_id).name}"
-    else:
-        machines = Machine.query.all()
-        title = "Machines"
-    
-    sites = Site.query.all()
-    
-    # Handle form submission for adding a new machine
-    if request.method == 'POST':
-        try:
-            name = request.form['name']
-            model = request.form.get('model', '')
-            machine_number = request.form.get('machine_number', '')
-            serial_number = request.form.get('serial_number', '')
-            site_id = request.form['site_id']
-            
-            # Create new machine with minimal required fields only
-            new_machine = Machine(
-                name=name,
-                model=model,
-                machine_number=machine_number,
-                serial_number=serial_number,
-                site_id=site_id
-            )
-            
-            # Add machine to database
-            db.session.add(new_machine)
-            db.session.commit()
-            
-            flash(f'Machine "{name}" has been added successfully.', 'success')
-            return redirect(url_for('manage_machines', site_id=site_id))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error adding machine: {str(e)}', 'error')
-    
-    return render_template('admin/machines.html', 
-                          machines=machines,
-                          sites=sites,
-                          site_id=site_id,
-                          title=title,
-                          now=datetime.now())
+    try:
+        site_id = request.args.get('site_id', type=int)
+        
+        # Filter machines by site if site_id is provided
+        if site_id:
+            machines = Machine.query.filter_by(site_id=site_id).all()
+            title = f"Machines for {Site.query.get_or_404(site_id).name}"
+        else:
+            machines = Machine.query.all()
+            title = "Machines"
+        
+        sites = Site.query.all()
+        
+        # Pre-generate URLs for the template to use
+        safe_urls = {
+            'add_machine': '/machines',
+            'back_to_sites': '/sites',
+            'dashboard': '/dashboard',
+            'admin': '/admin'
+        }
+        
+        # Generate URLs for each machine's actions
+        for machine in machines:
+            machine.delete_url = f'/machines/delete/{machine.id}'
+            machine.edit_url = f'/machine/edit/{machine.id}'
+            machine.parts_url = f'/parts?machine_id={machine.id}'
+        
+        # Handle form submission for adding a new machine
+        if request.method == 'POST':
+            try:
+                name = request.form['name']
+                model = request.form.get('model', '')
+                machine_number = request.form.get('machine_number', '')
+                serial_number = request.form.get('serial_number', '')
+                site_id = request.form['site_id']
+                
+                # Create new machine with minimal required fields only
+                new_machine = Machine(
+                    name=name,
+                    model=model,
+                    machine_number=machine_number,
+                    serial_number=serial_number,
+                    site_id=site_id
+                )
+                
+                # Add machine to database
+                db.session.add(new_machine)
+                db.session.commit()
+                
+                flash(f'Machine "{name}" has been added successfully.', 'success')
+                return redirect(url_for('manage_machines', site_id=site_id))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error adding machine: {str(e)}', 'error')
+        
+        return render_template('admin/machines.html', 
+                              machines=machines,
+                              sites=sites,
+                              site_id=site_id,
+                              title=title,
+                              safe_urls=safe_urls,
+                              now=datetime.now())
+    except Exception as e:
+        app.logger.error(f"Error in manage_machines route: {e}")
+        flash('An error occurred while loading the machines page.', 'danger')
+        return redirect('/dashboard')
 
 @app.route('/parts', methods=['GET', 'POST'])
 @login_required
