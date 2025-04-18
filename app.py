@@ -1091,7 +1091,8 @@ def manage_machines():
             'add_machine': '/machines',
             'back_to_sites': '/sites',
             'dashboard': '/dashboard',
-            'admin': '/admin'
+            'admin': '/admin',
+            'machine_history': '/maintenance'  # Add a default history URL
         }
         
         # Generate URLs for each machine's actions
@@ -1099,6 +1100,8 @@ def manage_machines():
             machine.delete_url = f'/machines/delete/{machine.id}'
             machine.edit_url = f'/machine/edit/{machine.id}'
             machine.parts_url = f'/parts?machine_id={machine.id}'
+            # Add history URL too which is likely referenced in the template
+            machine.history_url = f'/maintenance?machine_id={machine.id}'
         
         # Handle form submission for adding a new machine
         if request.method == 'POST':
