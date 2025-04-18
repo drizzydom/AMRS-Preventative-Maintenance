@@ -489,17 +489,42 @@ def admin_users():
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     
-    # Get all users and roles for the template
-    users = User.query.all()
-    roles = Role.query.all()
-    sites = Site.query.all()
-    
-    # Use the specific template instead of the generic admin.html
-    return render_template('admin/users.html', 
-                          users=users,
-                          roles=roles,
-                          sites=sites,
-                          current_user=current_user)
+    try:
+        # Get all users and roles for the template
+        users = User.query.all()
+        roles = Role.query.all()
+        sites = Site.query.all()
+        
+        # Pre-generate safe URLs for actions on each user
+        user_actions = {}
+        for user in users:
+            user_actions[user.id] = {
+                'edit': f'/user/edit/{user.id}',
+                'delete': f'/user/delete/{user.id}',
+                'reset_password': f'/user/reset-password/{user.id}'
+            }
+        
+        # Safe URLs for general actions
+        safe_urls = {
+            'create_user': '/user/create',
+            'users_list': '/admin/users',
+            'roles_list': '/admin/roles',
+            'dashboard': '/dashboard',
+            'admin': '/admin'
+        }
+        
+        # Use the specific template instead of the generic admin.html
+        return render_template('admin/users.html', 
+                              users=users,
+                              roles=roles,
+                              sites=sites,
+                              current_user=current_user,
+                              user_actions=user_actions,
+                              safe_urls=safe_urls)
+    except Exception as e:
+        app.logger.error(f"Error in admin_users route: {e}")
+        flash('An error occurred while loading the users page.', 'danger')
+        return redirect('/admin')  # Use direct URL to avoid potential circular errors
 
 @app.route('/admin/roles')
 @login_required
