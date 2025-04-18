@@ -636,6 +636,34 @@ def delete_site(site_id):
         flash('An error occurred while deleting the site.', 'danger')
         return redirect(url_for('manage_sites'))
 
+@app.route('/role/delete/<int:role_id>', methods=['POST'])
+@login_required
+def delete_role(role_id):
+    """Delete a role - admin only."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to delete roles.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        role = Role.query.get_or_404(role_id)
+        
+        # Check if the role is assigned to any users before deleting
+        users_with_role = User.query.filter_by(role=role.name).all()
+        
+        if users_with_role:
+            flash(f'Cannot delete role: It is assigned to {len(users_with_role)} users. Reassign those users first.', 'danger')
+        else:
+            db.session.delete(role)
+            db.session.commit()
+            flash(f'Role "{role.name}" has been deleted successfully.', 'success')
+        
+        return redirect('/admin/roles')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting role: {e}")
+        flash('An error occurred while deleting the role.', 'danger')
+        return redirect('/admin/roles')
+
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
 def maintenance_page():
