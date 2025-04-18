@@ -1132,7 +1132,7 @@ def manage_parts():
         try:
             name = request.form['name']
             description = request.form.get('description', '')
-            part_number = request.form.get('part_number', '')
+            part_number = request.form.get('part_number', '')  # Still get it from form
             machine_id = request.form['machine_id']
             quantity = request.form.get('quantity', 0)
             notes = request.form.get('notes', '')
@@ -1142,14 +1142,10 @@ def manage_parts():
             except ValueError:
                 quantity = 0
             
-            if part_number:
-                part_number = part_number.strip()
-                
-            # Create new part
+            # Create new part - omit part_number since it's not a valid field
             new_part = Part(
                 name=name,
                 description=description,
-                part_number=part_number,
                 machine_id=machine_id if machine_id else None,
                 quantity=quantity,
                 notes=notes
