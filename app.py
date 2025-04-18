@@ -664,6 +664,38 @@ def delete_role(role_id):
         flash('An error occurred while deleting the role.', 'danger')
         return redirect('/admin/roles')
 
+@app.route('/user/delete/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    """Delete a user - admin only."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to delete users.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Don't allow deleting your own account
+        if user_id == current_user.id:
+            flash('You cannot delete your own account.', 'danger')
+            return redirect('/admin/users')
+            
+        user = User.query.get_or_404(user_id)
+        
+        # Don't allow deleting the main admin account
+        if user.username == 'admin':
+            flash('The main admin account cannot be deleted.', 'danger')
+            return redirect('/admin/users')
+            
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'User "{user.username}" has been deleted successfully.', 'success')
+        
+        return redirect('/admin/users')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting user: {e}")
+        flash('An error occurred while deleting the user.', 'danger')
+        return redirect('/admin/users')
+
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
 def maintenance_page():
