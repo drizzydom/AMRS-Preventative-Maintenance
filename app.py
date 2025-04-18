@@ -634,7 +634,7 @@ def delete_site(site_id):
         app.logger.error(f"Error deleting site: {e}")
         db.session.rollback()
         flash('An error occurred while deleting the site.', 'danger')
-        return redirect(url_for('manage_sites')
+        return redirect(url_for('manage_sites'))
 
 @app.route('/role/delete/<int:role_id>', methods=['POST'])
 @login_required
