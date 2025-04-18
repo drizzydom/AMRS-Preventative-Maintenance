@@ -510,14 +510,38 @@ def admin_roles():
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     
-    # Get all roles and permissions
-    roles = Role.query.all()
-    all_permissions = get_all_permissions()
-    
-    # Use the specific template instead of the generic admin.html
-    return render_template('admin/roles.html',
-                          roles=roles,
-                          all_permissions=all_permissions)
+    try:
+        # Get all roles and permissions
+        roles = Role.query.all()
+        all_permissions = get_all_permissions()
+        
+        # Pre-generate safe URLs for actions on each role
+        role_actions = {}
+        for role in roles:
+            role_actions[role.id] = {
+                'edit': f'/role/edit/{role.id}',
+                'delete': f'/role/delete/{role.id}'
+            }
+        
+        # Safe URLs for general actions
+        safe_urls = {
+            'create_role': '/role/create',
+            'roles_list': '/admin/roles',
+            'users_list': '/admin/users',
+            'dashboard': '/dashboard',
+            'admin': '/admin'
+        }
+        
+        # Use the specific template instead of the generic admin.html
+        return render_template('admin/roles.html',
+                              roles=roles,
+                              all_permissions=all_permissions,
+                              role_actions=role_actions,
+                              safe_urls=safe_urls)
+    except Exception as e:
+        app.logger.error(f"Error in admin_roles route: {e}")
+        flash('An error occurred while loading the roles page.', 'danger')
+        return redirect('/admin')  # Use direct URL to avoid potential circular errors
 
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
