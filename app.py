@@ -431,22 +431,37 @@ def admin():
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
     
-    # Get stats for admin dashboard
-    user_count = User.query.count()
-    roles_count = Role.query.count()
-    sites_count = Site.query.count()
-    machine_count = Machine.query.count()
-    part_count = Part.query.count()
-    
-    # Render admin dashboard view
-    return render_template('admin.html',
-                          user_count=user_count,
-                          roles_count=roles_count,
-                          sites_count=sites_count,
-                          machine_count=machine_count,
-                          part_count=part_count,
-                          section='dashboard',
-                          active_section='dashboard')
+    try:
+        # Get stats for admin dashboard
+        user_count = User.query.count()
+        roles_count = Role.query.count()
+        sites_count = Site.query.count()
+        machine_count = Machine.query.count()
+        part_count = Part.query.count()
+        
+        # Create safe URLs for admin navigation
+        admin_links = {
+            'users': '/admin/users',
+            'roles': '/admin/roles',
+            'sites': '/sites',
+            'machines': '/machines',
+            'parts': '/parts'
+        }
+        
+        # Render admin dashboard view with safe navigation links
+        return render_template('admin.html',
+                              user_count=user_count,
+                              roles_count=roles_count,
+                              sites_count=sites_count,
+                              machine_count=machine_count,
+                              part_count=part_count,
+                              admin_links=admin_links,  # Add safe links
+                              section='dashboard',
+                              active_section='dashboard')
+    except Exception as e:
+        app.logger.error(f"Error in admin route: {e}")
+        flash('An error occurred while loading the admin dashboard.', 'danger')
+        return redirect(url_for('dashboard'))
 
 @app.route('/admin/users')
 @login_required
