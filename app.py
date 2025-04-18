@@ -1502,8 +1502,45 @@ def create_role():
         flash('You do not have permission to create roles.', 'danger')
         return redirect(url_for('dashboard'))
     
-    # For simplicity, redirect to admin_roles
-    return redirect(url_for('admin_roles'))
+    # Handle form submission for creating a new role
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name')
+            description = request.form.get('description', '')
+            
+            if not name:
+                flash('Role name is required.', 'danger')
+                return redirect('/admin/roles')
+                
+            # Check if role name already exists
+            existing_role = Role.query.filter_by(name=name).first()
+            if existing_role:
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect('/admin/roles')
+            
+            # Create new role
+            new_role = Role(
+                name=name,
+                description=description
+            )
+            
+            # Add permissions if provided
+            permissions = request.form.getlist('permissions')
+            if permissions:
+                new_role.permissions = ','.join(permissions)
+            
+            # Add role to database
+            db.session.add(new_role)
+            db.session.commit()
+            
+            flash(f'Role "{name}" created successfully.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating role: {e}")
+            flash(f'Error creating role: {str(e)}', 'danger')
+    
+    # For GET or after POST processing, redirect to admin_roles
+    return redirect('/admin/roles')
 
 @app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
