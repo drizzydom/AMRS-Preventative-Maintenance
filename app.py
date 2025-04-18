@@ -1179,6 +1179,119 @@ def get_all_permissions():
     }
     return permissions
 
+@app.route('/site/create', methods=['GET', 'POST'])
+@login_required
+def create_site():
+    """Create a new site"""
+    # For simplicity, redirect to manage_sites which already handles creation
+    return redirect(url_for('manage_sites'))
+
+@app.route('/site/edit/<int:site_id>', methods=['GET', 'POST'])
+@login_required
+def edit_site(site_id):
+    """Edit an existing site"""
+    site = Site.query.get_or_404(site_id)
+    
+    if request.method == 'POST':
+        try:
+            site.name = request.form.get('name', site.name)
+            site.location = request.form.get('location', site.location)
+            site.contact_email = request.form.get('contact_email', site.contact_email)
+            site.notification_threshold = request.form.get('notification_threshold', site.notification_threshold)
+            site.enable_notifications = 'enable_notifications' in request.form
+            
+            db.session.commit()
+            flash(f'Site "{site.name}" has been updated successfully.', 'success')
+            return redirect(url_for('manage_sites'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating site: {str(e)}', 'danger')
+    
+    # For GET requests, redirect to manage_sites for now
+    # In a real implementation, you'd render an edit form
+    return redirect(url_for('manage_sites'))
+
+@app.route('/user/create', methods=['GET', 'POST'])
+@login_required
+def create_user():
+    """Create a new user - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to create users.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # For simplicity, redirect to admin_users which should handle user creation
+    return redirect(url_for('admin_users'))
+
+@app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    """Edit an existing user - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to edit users.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # For simplicity, redirect to admin_users
+    return redirect(url_for('admin_users'))
+
+@app.route('/machine/create', methods=['GET', 'POST'])
+@login_required
+def create_machine():
+    """Create a new machine"""
+    # For simplicity, redirect to manage_machines which already handles creation
+    return redirect(url_for('manage_machines'))
+
+@app.route('/machine/edit/<int:machine_id>', methods=['GET', 'POST'])
+@login_required
+def edit_machine(machine_id):
+    """Edit an existing machine"""
+    # For simplicity, redirect to manage_machines
+    return redirect(url_for('manage_machines'))
+
+@app.route('/part/create', methods=['GET', 'POST'])
+@login_required
+def create_part():
+    """Create a new part"""
+    # For simplicity, redirect to manage_parts which already handles creation
+    return redirect(url_for('manage_parts'))
+
+@app.route('/part/edit/<int:part_id>', methods=['GET', 'POST'])
+@login_required
+def edit_part(part_id):
+    """Edit an existing part"""
+    # For simplicity, redirect to manage_parts
+    return redirect(url_for('manage_parts'))
+
+@app.route('/role/create', methods=['GET', 'POST'])
+@login_required
+def create_role():
+    """Create a new role - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to create roles.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # For simplicity, redirect to admin_roles
+    return redirect(url_for('admin_roles'))
+
+@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+def edit_role(role_id):
+    """Edit an existing role - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to edit roles.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # For simplicity, redirect to admin_roles
+    return redirect(url_for('admin_roles'))
+
+# Add current_user.is_admin property for template compatibility
+@property
+def is_admin(self):
+    """Add is_admin property to User class for template compatibility"""
+    return is_admin_user(self)
+
+# Apply the property to the User class
+User.is_admin = is_admin
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
