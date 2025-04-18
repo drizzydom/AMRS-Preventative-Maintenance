@@ -548,7 +548,7 @@ def delete_site(site_id):
         app.logger.error(f"Error deleting site: {e}")
         db.session.rollback()
         flash('An error occurred while deleting the site.', 'danger')
-        return redirect(url_for('manage_sites')
+        return redirect(url_for('manage_sites'))  # Fixed missing parenthesis
 
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
@@ -1064,16 +1064,16 @@ def manage_machines():
             machine_number = request.form.get('machine_number', '')
             serial_number = request.form.get('serial_number', '')
             site_id = request.form['site_id']
-            description = request.form.get('description', '')
+            description = request.form.get('description', '')ing description form field but storing in notes
             
-            # Create new machine
+            # Create new machine - without the 'description' field which doesn't exist in the model
             new_machine = Machine(
                 name=name,
                 model=model,
                 machine_number=machine_number,
                 serial_number=serial_number,
                 site_id=site_id,
-                description=description
+                description=descriptionscription in notes field
             )
             
             # Add machine to database
