@@ -537,8 +537,13 @@ def admin_users():
         # Get all users for user management
         users = User.query.all()
         
-        # Render the same template as admin, but with users section active
-        return render_template('admin.html', users=users, section='users')
+        # Pass both users and roles but specify users as the active section
+        return render_template('admin.html', 
+                              users=users, 
+                              roles=Role.query.all(),
+                              active_section='users',
+                              section='users',
+                              title='User Management')
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in admin_users: {e}")
@@ -557,7 +562,14 @@ def admin_roles():
             
         # Get all roles for management
         roles = Role.query.all()
-        return render_template('admin.html', users=User.query.all(), roles=roles, section='roles')
+        
+        # Pass both users and roles but specify roles as the active section
+        return render_template('admin.html', 
+                              users=User.query.all(), 
+                              roles=roles, 
+                              active_section='roles',
+                              section='roles',
+                              title='Role Management')
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in admin_roles: {e}")
@@ -577,8 +589,13 @@ def admin_sites():
         # Get all sites from the database
         sites = Site.query.all()
         
-        # Render the same template as manage_sites
-        return render_template('sites.html', sites=sites, is_admin=True)
+        # Pass additional parameters to help template differentiate
+        return render_template('sites.html', 
+                              sites=sites, 
+                              is_admin=True, 
+                              admin_view=True,
+                              active_section='sites',
+                              title='Site Management')
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in admin_sites: {e}")
@@ -601,8 +618,14 @@ def admin_machines():
         # Get all machines from the database
         machines = Machine.query.all()
         
-        # Render the same template as manage_machines
-        return render_template('machines.html', machines=machines, sites=sites, is_admin=True)
+        # Pass additional parameters to help template differentiate
+        return render_template('machines.html', 
+                              machines=machines, 
+                              sites=sites, 
+                              is_admin=True, 
+                              admin_view=True,
+                              active_section='machines',
+                              title='Machine Management')
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in admin_machines: {e}")
@@ -625,8 +648,14 @@ def admin_parts():
         # Get all parts from the database
         parts = Part.query.all()
         
-        # Render the same template as manage_parts
-        return render_template('parts.html', parts=parts, machines=machines, is_admin=True)
+        # Pass additional parameters to help template differentiate
+        return render_template('parts.html', 
+                              parts=parts, 
+                              machines=machines, 
+                              is_admin=True, 
+                              admin_view=True,
+                              active_section='parts',
+                              title='Part Management')
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in admin_parts: {e}")
@@ -636,8 +665,39 @@ def admin_parts():
 @app.route('/admin')
 @login_required
 def admin():
-    """Redirect to admin users page."""
-    return redirect(url_for('admin_users'))
+    """Main admin dashboard with overview information."""
+    try:
+        # Use standardized admin check
+        if not is_admin_user(current_user):
+            flash('You do not have permission to access the admin panel.', 'danger')
+            return redirect(url_for('dashboard'))
+        
+        # Get summary counts
+        users_count = User.query.count()
+        roles_count = Role.query.count()
+        sites_count = Site.query.count()
+        machines_count = Machine.query.count()
+        parts_count = Part.query.count()
+        
+        # Pass data for a true dashboard overview
+        return render_template('admin.html',
+                              users=User.query.all(),
+                              roles=Role.query.all(),
+                              active_section='dashboard',
+                              section='dashboard',
+                              title='Admin Dashboard',
+                              summary={
+                                  'users': users_count,
+                                  'roles': roles_count,
+                                  'sites': sites_count,
+                                  'machines': machines_count,
+                                  'parts': parts_count
+                              })
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error in admin dashboard: {e}")
+        flash('An error occurred in the admin dashboard.', 'danger')
+        return redirect(url_for('dashboard'))
 
 @app.route('/manage/roles')
 @login_required
@@ -704,7 +764,10 @@ def manage_sites():
             else:
                 flash('Name and location are required!', 'danger')
         
-        return render_template('sites.html', sites=sites)
+        return render_template('sites.html', 
+                              sites=sites, 
+                              is_admin=False,
+                              admin_view=False)
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in manage_sites: {e}")
@@ -751,7 +814,11 @@ def manage_machines():
             else:
                 flash('Name, model, and site are required!', 'danger')
         
-        return render_template('machines.html', machines=machines, sites=sites)
+        return render_template('machines.html', 
+                              machines=machines, 
+                              sites=sites, 
+                              is_admin=False,
+                              admin_view=False)
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in manage_machines: {e}")
@@ -803,7 +870,11 @@ def manage_parts():
             else:
                 flash('Name and part number are required!', 'danger')
         
-        return render_template('parts.html', parts=parts, machines=machines)
+        return render_template('parts.html', 
+                              parts=parts, 
+                              machines=machines, 
+                              is_admin=False,
+                              admin_view=False)
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in manage_parts: {e}")
