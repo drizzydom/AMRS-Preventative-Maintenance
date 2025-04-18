@@ -150,7 +150,6 @@ except ImportError as e:
 
 # Initialize Flask app with better error handling
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
-app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')
 app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '/')
 app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
 
@@ -388,16 +387,22 @@ def url_for_safe(endpoint, **values):
     """A safe wrapper for url_for that won't raise exceptions."""
     try:
         return url_for(endpoint, **values)
-    except:
-        # If the endpoint doesn't exist, return a fallback URL
-        if endpoint == 'admin_dashboard':
-            return url_for('admin')
+    except Exception as e:
+        app.logger.warning(f"URL building error for endpoint '{endpoint}': {e}")
+        
+        # Simple fallbacks for common routes
+        if endpoint == 'manage_machines':
+            return '/machines'
+        elif endpoint == 'manage_sites':
+            return '/sites'  
+        elif endpoint == 'manage_parts':
+            return '/parts'
+        elif endpoint == 'admin_dashboard':
+            return '/admin'
         elif endpoint.startswith('admin_'):
-            # Try the base admin endpoint for any admin_* references
-            return url_for('admin')
+            return '/admin'
         else:
-            # For any other missing endpoints, return to dashboard
-            return url_for('dashboard')
+            return '/dashboard'
 
 # Add root route handler
 @app.route('/')
