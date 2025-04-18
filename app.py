@@ -1064,17 +1064,14 @@ def manage_machines():
             machine_number = request.form.get('machine_number', '')
             serial_number = request.form.get('serial_number', '')
             site_id = request.form['site_id']
-            description = request.form.get('description', '')  # Get description from form
             
-            # Create new machine with only valid fields
-            # Don't use 'notes' as it's not a valid field
+            # Create new machine with minimal required fields only
             new_machine = Machine(
                 name=name,
                 model=model,
                 machine_number=machine_number,
                 serial_number=serial_number,
-                site_id=site_id,
-                description=description  # Use description field instead of notes
+                site_id=site_id
             )
             
             # Add machine to database
