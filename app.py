@@ -1064,16 +1064,17 @@ def manage_machines():
             machine_number = request.form.get('machine_number', '')
             serial_number = request.form.get('serial_number', '')
             site_id = request.form['site_id']
-            notes = request.form.get('description', '')  # Using description form field but storing in notes field
+            description = request.form.get('description', '')  # Get description from form
             
-            # Create new machine - without the 'description' field which doesn't exist in the model
+            # Create new machine with only valid fields
+            # Don't use 'notes' as it's not a valid field
             new_machine = Machine(
                 name=name,
                 model=model,
                 machine_number=machine_number,
                 serial_number=serial_number,
                 site_id=site_id,
-                notes=notes  # Store description in notes field
+                description=description  # Use description field instead of notes
             )
             
             # Add machine to database
