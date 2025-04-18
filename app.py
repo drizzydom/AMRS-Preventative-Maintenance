@@ -372,6 +372,33 @@ def inject_site_helpers():
         'get_site_parts_status': get_site_parts_status
     }
 
+# Add this context processor before other route definitions
+
+@app.context_processor
+def inject_common_variables():
+    """Inject common variables into all templates."""
+    return {
+        'is_admin_user': is_admin_user(current_user) if current_user.is_authenticated else False,
+        'url_for_safe': url_for_safe,  # Add a safe url_for wrapper
+        'datetime': datetime,
+        'now': datetime.now()
+    }
+
+def url_for_safe(endpoint, **values):
+    """A safe wrapper for url_for that won't raise exceptions."""
+    try:
+        return url_for(endpoint, **values)
+    except:
+        # If the endpoint doesn't exist, return a fallback URL
+        if endpoint == 'admin_dashboard':
+            return url_for('admin')
+        elif endpoint.startswith('admin_'):
+            # Try the base admin endpoint for any admin_* references
+            return url_for('admin')
+        else:
+            # For any other missing endpoints, return to dashboard
+            return url_for('dashboard')
+
 # Add root route handler
 @app.route('/')
 def index():
@@ -521,7 +548,7 @@ def delete_site(site_id):
         app.logger.error(f"Error deleting site: {e}")
         db.session.rollback()
         flash('An error occurred while deleting the site.', 'danger')
-        return redirect(url_for('manage_sites'))
+        return redirect(url_for('manage_sites')
 
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
@@ -1010,16 +1037,16 @@ def manage_sites():
     return render_template('admin/sites.html', 
                           sites=sites,
                           users=users,
-                          is_admin=current_user.is_admin,
+                          is_admin=current_user.is_admin,t the description field but store as notes
                           now=datetime.now())
-
+ - removed 'description' as it's not in the model
 @app.route('/machines', methods=['GET', 'POST'])
 @login_required
 def manage_machines():
     """Handle machine management page and machine creation"""
     site_id = request.args.get('site_id', type=int)
     
-    # Filter machines by site if site_id is provided
+    # Filter machines by site if site_id is provideds field instead of description
     if site_id:
         machines = Machine.query.filter_by(site_id=site_id).all()
         title = f"Machines for {Site.query.get_or_404(site_id).name}"
