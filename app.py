@@ -394,11 +394,15 @@ def url_for_safe(endpoint, **values):
         if endpoint == 'manage_machines':
             return '/machines'
         elif endpoint == 'manage_sites':
-            return '/sites'
+            return '/sites'  
         elif endpoint == 'manage_parts':
             return '/parts'
-        elif endpoint == 'manage_users':  # Add this specific case
+        elif endpoint == 'manage_users':
             return '/admin/users'
+        elif endpoint == 'update_maintenance' and 'part_id' in values:
+            return f'/update-maintenance/{values["part_id"]}'
+        elif endpoint == 'machine_history' and 'machine_id' in values:  # Add this case
+            return f'/machine-history/{values["machine_id"]}'
         elif endpoint == 'admin_dashboard':
             return '/admin'
         elif endpoint.startswith('admin_'):
@@ -646,6 +650,30 @@ def maintenance_page():
         app.logger.error(f"Error in maintenance_page: {e}")
         flash('An error occurred while loading maintenance records.', 'danger')
         return redirect(url_for('dashboard'))
+
+@app.route('/update-maintenance/<int:part_id>')
+@login_required
+def update_maintenance(part_id):
+    """Endpoint for updating maintenance - redirects to maintenance page with part ID."""
+    try:
+        part = Part.query.get_or_404(part_id)
+        return redirect(f'/maintenance?part_id={part_id}')
+    except Exception as e:
+        app.logger.error(f"Error in update_maintenance: {e}")
+        flash('An error occurred while accessing the maintenance page.', 'danger')
+        return redirect('/maintenance')
+
+@app.route('/machine-history/<int:machine_id>')
+@login_required
+def machine_history(machine_id):
+    """Endpoint for viewing machine maintenance history."""
+    try:
+        machine = Machine.query.get_or_404(machine_id)
+        return redirect(f'/maintenance?machine_id={machine_id}')
+    except Exception as e:
+        app.logger.error(f"Error in machine_history: {e}")
+        flash('An error occurred while accessing the machine history.', 'danger')
+        return redirect('/maintenance')
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
