@@ -394,9 +394,11 @@ def url_for_safe(endpoint, **values):
         if endpoint == 'manage_machines':
             return '/machines'
         elif endpoint == 'manage_sites':
-            return '/sites'  
+            return '/sites'
         elif endpoint == 'manage_parts':
             return '/parts'
+        elif endpoint == 'manage_users':  # Add this specific case
+            return '/admin/users'
         elif endpoint == 'admin_dashboard':
             return '/admin'
         elif endpoint.startswith('admin_'):
@@ -1366,6 +1368,16 @@ def edit_role(role_id):
     
     # For simplicity, redirect to admin_roles
     return redirect(url_for('admin_roles'))
+
+@app.route('/manage/users')
+@login_required
+def manage_users():
+    """Alternative route for user management - redirects to admin users page."""
+    # This is a fallback route for templates that might reference 'manage_users'
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect('/dashboard')
+    return redirect('/admin/users')
 
 # Add current_user.is_admin property for template compatibility
 @property
