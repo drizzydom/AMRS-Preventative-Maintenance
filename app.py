@@ -390,6 +390,71 @@ def dashboard():
         app.logger.error(f"Error rendering dashboard: {e}")
         return render_template('errors/500.html'), 500
 
+@app.route('/admin')
+@login_required
+def admin():
+    """Admin dashboard with overview information."""
+    # Use standardized admin check
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access the admin panel.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Get stats for admin dashboard
+    user_count = User.query.count()
+    roles_count = Role.query.count()
+    sites_count = Site.query.count()
+    machine_count = Machine.query.count()
+    part_count = Part.query.count()
+    
+    # Render admin dashboard view
+    return render_template('admin.html',
+                          user_count=user_count,
+                          roles_count=roles_count,
+                          sites_count=sites_count,
+                          machine_count=machine_count,
+                          part_count=part_count,
+                          section='dashboard',
+                          active_section='dashboard')
+
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    """User management page."""
+    # Use standardized admin check
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Get all users and roles for the template
+    users = User.query.all()
+    roles = Role.query.all()
+    sites = Site.query.all()
+    
+    # Use the specific template instead of the generic admin.html
+    return render_template('admin/users.html', 
+                          users=users,
+                          roles=roles,
+                          sites=sites,
+                          current_user=current_user)
+
+@app.route('/admin/roles')
+@login_required
+def admin_roles():
+    """Role management page."""
+    # Use standardized admin check
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Get all roles and permissions
+    roles = Role.query.all()
+    all_permissions = get_all_permissions()
+    
+    # Use the specific template instead of the generic admin.html
+    return render_template('admin/roles.html',
+                          roles=roles,
+                          all_permissions=all_permissions)
+
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
 def delete_machine(machine_id):
@@ -524,363 +589,6 @@ def maintenance_page():
         flash('An error occurred while loading maintenance records.', 'danger')
         return redirect(url_for('dashboard'))
 
-@app.route('/admin/users')
-@login_required
-def admin_users():
-    """Admin dashboard for user management."""
-    try:
-        # Use standardized admin check
-        if not is_admin_user(current_user):
-            flash('You do not have permission to access the admin panel.', 'danger')
-            return redirect(url_for('dashboard'))
-        
-        # Get all users for user management
-        users = User.query.all()
-        
-        # Pass both users and roles but specify users as the active section
-        return render_template('admin.html', 
-                              users=users, 
-                              roles=Role.query.all(),
-                              active_section='users',
-                              section='users',
-                              title='User Management')
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in admin_users: {e}")
-        flash('An error occurred in the user management panel.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/admin/roles')
-@login_required
-def admin_roles():
-    """Admin dashboard for role management."""
-    try:
-        # Use standardized admin check
-        if not is_admin_user(current_user):
-            flash('You do not have permission to access this page.', 'danger')
-            return redirect(url_for('dashboard'))
-            
-        # Get all roles for management
-        roles = Role.query.all()
-        
-        # Pass both users and roles but specify roles as the active section
-        return render_template('admin.html', 
-                              users=User.query.all(), 
-                              roles=roles, 
-                              active_section='roles',
-                              section='roles',
-                              title='Role Management')
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in admin_roles: {e}")
-        flash('An error occurred in the roles management panel.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/admin/sites')
-@login_required
-def admin_sites():
-    """Admin dashboard for site management."""
-    try:
-        # Use standardized admin check
-        if not is_admin_user(current_user):
-            flash('You do not have permission to access this page.', 'danger')
-            return redirect(url_for('dashboard'))
-        
-        # Get all sites from the database
-        sites = Site.query.all()
-        
-        # Pass additional parameters to help template differentiate
-        return render_template('sites.html', 
-                              sites=sites, 
-                              is_admin=True, 
-                              admin_view=True,
-                              active_section='sites',
-                              title='Site Management')
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in admin_sites: {e}")
-        flash('An error occurred while loading sites.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/admin/machines')
-@login_required
-def admin_machines():
-    """Admin dashboard for machine management."""
-    try:
-        # Use standardized admin check
-        if not is_admin_user(current_user):
-            flash('You do not have permission to access this page.', 'danger')
-            return redirect(url_for('dashboard'))
-        
-        # Get all sites for the dropdown
-        sites = Site.query.all()
-        
-        # Get all machines from the database
-        machines = Machine.query.all()
-        
-        # Pass additional parameters to help template differentiate
-        return render_template('machines.html', 
-                              machines=machines, 
-                              sites=sites, 
-                              is_admin=True, 
-                              admin_view=True,
-                              active_section='machines',
-                              title='Machine Management')
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in admin_machines: {e}")
-        flash('An error occurred while loading machines.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/admin/parts')
-@login_required
-def admin_parts():
-    """Admin dashboard for part management."""
-    try:
-        # Use standardized admin check
-        if not is_admin_user(current_user):
-            flash('You do not have permission to access this page.', 'danger')
-            return redirect(url_for('dashboard'))
-        
-        # Get all machines for the dropdown
-        machines = Machine.query.all()
-        
-        # Get all parts from the database
-        parts = Part.query.all()
-        
-        # Pass additional parameters to help template differentiate
-        return render_template('parts.html', 
-                              parts=parts, 
-                              machines=machines, 
-                              is_admin=True, 
-                              admin_view=True,
-                              active_section='parts',
-                              title='Part Management')
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in admin_parts: {e}")
-        flash('An error occurred while loading parts.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/admin')
-@login_required
-def admin():
-    """Main admin dashboard with overview information."""
-    try:
-        # Use standardized admin check
-        if not is_admin_user(current_user):
-            flash('You do not have permission to access the admin panel.', 'danger')
-            return redirect(url_for('dashboard'))
-        
-        # Get summary counts
-        users_count = User.query.count()
-        roles_count = Role.query.count()
-        sites_count = Site.query.count()
-        machines_count = Machine.query.count()
-        parts_count = Part.query.count()
-        
-        # Pass data for a true dashboard overview
-        return render_template('admin.html',
-                              users=User.query.all(),
-                              roles=Role.query.all(),
-                              active_section='dashboard',
-                              section='dashboard',
-                              title='Admin Dashboard',
-                              summary={
-                                  'users': users_count,
-                                  'roles': roles_count,
-                                  'sites': sites_count,
-                                  'machines': machines_count,
-                                  'parts': parts_count
-                              })
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in admin dashboard: {e}")
-        flash('An error occurred in the admin dashboard.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/manage/roles')
-@login_required
-def manage_roles():
-    """Redirect to admin roles page."""
-    return redirect(url_for('admin_roles'))
-
-@app.route('/roles')
-@login_required
-def roles_index():
-    """Redirect to admin roles page."""
-    return redirect(url_for('admin_roles'))
-
-@app.route('/roles/manage')
-@login_required
-def roles_manage():
-    """Redirect to admin roles page."""
-    return redirect(url_for('admin_roles'))
-
-@app.route('/users/manage')
-@login_required
-def manage_users():
-    """Redirect to admin users page."""
-    return redirect(url_for('admin_users'))
-
-@app.route('/manage/users')
-@login_required
-def manage_users_alt():
-    """Redirect to admin users page."""
-    return redirect(url_for('admin_users'))
-
-@app.route('/sites', methods=['GET', 'POST'])
-@login_required
-def manage_sites():
-    """View and manage sites. Redirects to admin page for admin users."""
-    # If admin user, redirect to admin sites page
-    if is_admin_user(current_user) and request.method == 'GET':
-        return redirect(url_for('admin_sites'))
-    
-    # Original functionality for non-admin users or for POST requests
-    try:
-        sites = Site.query.all()
-        
-        # Handle form submission for adding new sites
-        if request.method == 'POST':
-            name = request.form.get('name')
-            location = request.form.get('location')
-            description = request.form.get('description')
-            
-            if name and location:
-                new_site = Site(
-                    name=name, 
-                    location=location, 
-                    description=description
-                )
-                db.session.add(new_site)
-                db.session.commit()
-                flash('Site added successfully!', 'success')
-                
-                # Redirect admin users to admin sites page after form submission
-                if is_admin_user(current_user):
-                    return redirect(url_for('admin_sites'))
-                return redirect(url_for('manage_sites'))
-            else:
-                flash('Name and location are required!', 'danger')
-        
-        return render_template('sites.html', 
-                              sites=sites, 
-                              is_admin=False,
-                              admin_view=False)
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in manage_sites: {e}")
-        flash('An error occurred while loading sites.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/machines', methods=['GET', 'POST'])
-@login_required
-def manage_machines():
-    """View and manage machines. Redirects to admin page for admin users."""
-    # If admin user, redirect to admin machines page
-    if is_admin_user(current_user) and request.method == 'GET':
-        return redirect(url_for('admin_machines'))
-    
-    # Original functionality for non-admin users or for POST requests
-    try:
-        sites = Site.query.all()
-        machines = Machine.query.all()
-        
-        # Handle form submission
-        if request.method == 'POST':
-            name = request.form.get('name')
-            model = request.form.get('model')
-            site_id = request.form.get('site_id')
-            serial_number = request.form.get('serial_number', '')
-            description = request.form.get('description', '')
-            
-            if name and model and site_id:
-                new_machine = Machine(
-                    name=name,
-                    model=model,
-                    site_id=site_id,
-                    serial_number=serial_number,
-                    description=description
-                )
-                db.session.add(new_machine)
-                db.session.commit()
-                flash('Machine added successfully!', 'success')
-                
-                # Redirect admin users to admin machines page after form submission
-                if is_admin_user(current_user):
-                    return redirect(url_for('admin_machines'))
-                return redirect(url_for('manage_machines'))
-            else:
-                flash('Name, model, and site are required!', 'danger')
-        
-        return render_template('machines.html', 
-                              machines=machines, 
-                              sites=sites, 
-                              is_admin=False,
-                              admin_view=False)
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in manage_machines: {e}")
-        flash('An error occurred while loading machines.', 'danger')
-        return redirect(url_for('dashboard'))
-
-@app.route('/parts', methods=['GET', 'POST'])
-@login_required
-def manage_parts():
-    """View and manage parts. Redirects to admin page for admin users."""
-    # If admin user, redirect to admin parts page
-    if is_admin_user(current_user) and request.method == 'GET':
-        return redirect(url_for('admin_parts'))
-    
-    # Original functionality for non-admin users or for POST requests
-    try:
-        machines = Machine.query.all()
-        parts = Part.query.all()
-        
-        # Handle form submission
-        if request.method == 'POST':
-            name = request.form.get('name')
-            part_number = request.form.get('part_number')
-            machine_id = request.form.get('machine_id')
-            quantity = request.form.get('quantity', 0)
-            description = request.form.get('description', '')
-            
-            try:
-                quantity = int(quantity)
-            except ValueError:
-                quantity = 0
-                
-            if name and part_number:
-                new_part = Part(
-                    name=name,
-                    part_number=part_number,
-                    machine_id=machine_id if machine_id else None,
-                    quantity=quantity,
-                    description=description
-                )
-                db.session.add(new_part)
-                db.session.commit()
-                flash('Part added successfully!', 'success')
-                
-                # Redirect admin users to admin parts page after form submission
-                if is_admin_user(current_user):
-                    return redirect(url_for('admin_parts'))
-                return redirect(url_for('manage_parts'))
-            else:
-                flash('Name and part number are required!', 'danger')
-        
-        return render_template('parts.html', 
-                              parts=parts, 
-                              machines=machines, 
-                              is_admin=False,
-                              admin_view=False)
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error in manage_parts: {e}")
-        flash('An error occurred while loading parts.', 'danger')
-        return redirect(url_for('dashboard'))
-
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def user_profile():
@@ -899,7 +607,7 @@ def user_profile():
             if email != user.email and User.query.filter_by(email=email).first():
                 flash('Email is already in use by another account.', 'danger')
                 return redirect(url_for('user_profile'))
-                
+            
             # Update email if it changed
             if email and email != user.email:
                 user.email = email
@@ -991,7 +699,6 @@ def forgot_password():
         # Always show this message to prevent user enumeration
         flash('If an account with that email exists, a password reset link has been sent.', 'info')
         return redirect(url_for('login'))
-        
     return render_template('forgot_password.html') if os.path.exists(os.path.join('templates', 'forgot_password.html')) else '''
     <!DOCTYPE html>
     <html>
@@ -1030,14 +737,12 @@ def reset_password(token):
     """Handle password reset with token."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
     user = User.query.filter_by(reset_token=token).first()
     
     # Check if token is valid and not expired
     if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
         flash('The password reset link is invalid or has expired.', 'danger')
         return redirect(url_for('forgot_password'))
-        
     if request.method == 'POST':
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
@@ -1055,7 +760,6 @@ def reset_password(token):
             
             flash('Your password has been updated. Please log in.', 'success')
             return redirect(url_for('login'))
-            
     return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
     <!DOCTYPE html>
     <html>
@@ -1103,7 +807,6 @@ def debug_info():
             'methods': ','.join(rule.methods),
             'route': str(rule)
         })
-        
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
 
 def add_default_admin_if_needed():
@@ -1171,10 +874,8 @@ def sync_data():
                     'items': []  # Actual data would go here
                 }
             })
-            
         else:
             return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
-            
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
