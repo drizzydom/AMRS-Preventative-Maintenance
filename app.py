@@ -1144,58 +1144,69 @@ def manage_machines():
 @login_required
 def manage_parts():
     """Handle parts management page and part creation"""
-    machine_id = request.args.get('machine_id', type=int)
-    
-    # Filter parts by machine if machine_id is provided
-    if machine_id:
-        parts = Part.query.filter_by(machine_id=machine_id).all()
-        title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
-    else:
-        parts = Part.query.all()
-        title = "Parts"
-    
-    machines = Machine.query.all()
-    
-    # Handle form submission for adding a new part
-    if request.method == 'POST':
-        try:
-            name = request.form['name']
-            description = request.form.get('description', '')
-            part_number = request.form.get('part_number', '')  # Still get it from form
-            machine_id = request.form['machine_id']
-            quantity = request.form.get('quantity', 0)
-            notes = request.form.get('notes', '')
-            
+    try:
+        machine_id = request.args.get('machine_id', type=int)
+        
+        # Filter parts by machine if machine_id is provided
+        if machine_id:
+            parts = Part.query.filter_by(machine_id=machine_id).all()
+            title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
+        else:
+            parts = Part.query.all()
+            title = "Parts"
+        
+        machines = Machine.query.all()
+        
+        # Pre-generate URLs for template use
+        safe_urls = {
+            'add_part': '/parts',
+            'back_to_machines': '/machines',
+            'dashboard': '/dashboard',
+            'admin': '/admin'
+        }
+        
+        # Handle form submission for adding a new part
+        if request.method == 'POST':
             try:
-                quantity = int(quantity)
-            except ValueError:
-                quantity = 0
-            
-            # Create new part - omit part_number since it's not a valid field
-            new_part = Part(
-                name=name,
-                description=description,
-                machine_id=machine_id if machine_id else None,
-                quantity=quantity,
-                notes=notes
-            )
-            
-            # Add part to database
-            db.session.add(new_part)
-            db.session.commit()
-            
-            flash(f'Part "{name}" has been added successfully.', 'success')
-            return redirect(url_for('manage_parts'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error adding part: {str(e)}', 'error')
-    
-    return render_template('admin/parts.html', 
-                          parts=parts,
-                          machines=machines,
-                          machine_id=machine_id,
-                          title=title,
-                          now=datetime.now())
+                name = request.form['name']
+                description = request.form.get('description', '')
+                # Still collect these form values even if we don't use them in the constructor
+                part_number = request.form.get('part_number', '')  
+                machine_id = request.form['machine_id']
+                quantity = request.form.get('quantity', 0)  
+                notes = request.form.get('notes', '')
+                
+                # Create new part with only valid fields
+                new_part = Part(
+                    name=name,
+                    description=description,
+                    machine_id=machine_id if machine_id else None,
+                    notes=notes
+                    # part_number and quantity removed as they're causing errors
+                )
+                
+                # Add part to database
+                db.session.add(new_part)
+                db.session.commit()
+                
+                flash(f'Part "{name}" has been added successfully.', 'success')
+                return redirect('/parts')  # Using direct URL to avoid potential errors
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error adding part: {e}")
+                flash(f'Error adding part: {str(e)}', 'error')
+        
+        return render_template('admin/parts.html', 
+                            parts=parts,
+                            machines=machines,
+                            machine_id=machine_id,
+                            title=title,
+                            safe_urls=safe_urls,
+                            now=datetime.now())
+    except Exception as e:
+        app.logger.error(f"Error in manage_parts route: {e}")
+        flash('An error occurred while loading the parts page.', 'danger')
+        return redirect('/dashboard')
 
 @app.route('/admin/sites')
 @login_required
