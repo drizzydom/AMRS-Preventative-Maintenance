@@ -947,6 +947,238 @@ def forbidden(e):
     except:
         return '<h1>Forbidden</h1><p>You do not have permission to access this resource.</p>', 403
 
+@app.route('/admin/<section>')
+@login_required
+def admin_section(section):
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access the admin panel.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    if section == 'users':
+        return render_template('admin/users.html', users=User.query.all())
+    elif section == 'roles':
+        return render_template('admin/roles.html', roles=Role.query.all())
+    # Handle other sections...
+
+@app.route('/sites', methods=['GET', 'POST'])
+@login_required
+def manage_sites():
+    """Handle site management page and site creation"""
+    sites = Site.query.all()  
+    
+    # Handle form submission for adding a new site
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            location = request.form.get('location', '')
+            contact_email = request.form.get('contact_email', '')
+            notification_threshold = request.form.get('notification_threshold', 30)
+            enable_notifications = 'enable_notifications' in request.form
+            
+            # Create new site
+            new_site = Site(
+                name=name,
+                location=location,
+                contact_email=contact_email,
+                notification_threshold=notification_threshold,
+                enable_notifications=enable_notifications
+            )
+            
+            # Add site to database
+            db.session.add(new_site)
+            db.session.commit()
+            
+            # Handle user assignments if admin
+            if current_user.is_admin:
+                user_ids = request.form.getlist('user_ids')
+                if user_ids:
+                    for user_id in user_ids:
+                        user = User.query.get(int(user_id))
+                        if user:
+                            new_site.users.append(user)
+                    db.session.commit()
+            
+            flash(f'Site "{name}" has been added successfully.', 'success')
+            return redirect(url_for('manage_sites'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding site: {str(e)}', 'error')
+    
+    # For GET request or if POST processing fails
+    users = User.query.all() if current_user.is_admin else None
+    
+    return render_template('admin/sites.html', 
+                          sites=sites,
+                          users=users,
+                          is_admin=current_user.is_admin,
+                          now=datetime.now())
+
+@app.route('/machines', methods=['GET', 'POST'])
+@login_required
+def manage_machines():
+    """Handle machine management page and machine creation"""
+    site_id = request.args.get('site_id', type=int)
+    
+    # Filter machines by site if site_id is provided
+    if site_id:
+        machines = Machine.query.filter_by(site_id=site_id).all()
+        title = f"Machines for {Site.query.get_or_404(site_id).name}"
+    else:
+        machines = Machine.query.all()
+        title = "Machines"
+    
+    sites = Site.query.all()
+    
+    # Handle form submission for adding a new machine
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            model = request.form.get('model', '')
+            machine_number = request.form.get('machine_number', '')
+            serial_number = request.form.get('serial_number', '')
+            site_id = request.form['site_id']
+            description = request.form.get('description', '')
+            
+            # Create new machine
+            new_machine = Machine(
+                name=name,
+                model=model,
+                machine_number=machine_number,
+                serial_number=serial_number,
+                site_id=site_id,
+                description=description
+            )
+            
+            # Add machine to database
+            db.session.add(new_machine)
+            db.session.commit()
+            
+            flash(f'Machine "{name}" has been added successfully.', 'success')
+            return redirect(url_for('manage_machines', site_id=site_id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding machine: {str(e)}', 'error')
+    
+    return render_template('admin/machines.html', 
+                          machines=machines,
+                          sites=sites,
+                          site_id=site_id,
+                          title=title,
+                          now=datetime.now())
+
+@app.route('/parts', methods=['GET', 'POST'])
+@login_required
+def manage_parts():
+    """Handle parts management page and part creation"""
+    machine_id = request.args.get('machine_id', type=int)
+    
+    # Filter parts by machine if machine_id is provided
+    if machine_id:
+        parts = Part.query.filter_by(machine_id=machine_id).all()
+        title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
+    else:
+        parts = Part.query.all()
+        title = "Parts"
+    
+    machines = Machine.query.all()
+    
+    # Handle form submission for adding a new part
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            description = request.form.get('description', '')
+            part_number = request.form.get('part_number', '')
+            machine_id = request.form['machine_id']
+            quantity = request.form.get('quantity', 0)
+            notes = request.form.get('notes', '')
+            
+            try:
+                quantity = int(quantity)
+            except ValueError:
+                quantity = 0
+            
+            if part_number:
+                part_number = part_number.strip()
+                
+            # Create new part
+            new_part = Part(
+                name=name,
+                description=description,
+                part_number=part_number,
+                machine_id=machine_id if machine_id else None,
+                quantity=quantity,
+                notes=notes
+            )
+            
+            # Add part to database
+            db.session.add(new_part)
+            db.session.commit()
+            
+            flash(f'Part "{name}" has been added successfully.', 'success')
+            return redirect(url_for('manage_parts'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding part: {str(e)}', 'error')
+    
+    return render_template('admin/parts.html', 
+                          parts=parts,
+                          machines=machines,
+                          machine_id=machine_id,
+                          title=title,
+                          now=datetime.now())
+
+@app.route('/admin/sites')
+@login_required
+def admin_sites():
+    """Admin page for managing sites."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('manage_sites'))
+
+@app.route('/admin/machines')
+@login_required
+def admin_machines():
+    """Admin page for managing machines."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('manage_machines'))
+
+@app.route('/admin/parts')
+@login_required
+def admin_parts():
+    """Admin page for managing parts."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('manage_parts'))
+
+@app.route('/get_all_permissions')
+def get_all_permissions():
+    """Return a dictionary of all available permissions."""
+    permissions = {
+        'admin.view': 'View Admin Panel',
+        'admin.users': 'Manage Users',
+        'admin.roles': 'Manage Roles',
+        'sites.view': 'View Sites',
+        'sites.create': 'Create Sites',
+        'sites.edit': 'Edit Sites',
+        'sites.delete': 'Delete Sites',
+        'machines.view': 'View Machines',
+        'machines.create': 'Create Machines',
+        'machines.edit': 'Edit Machines',
+        'machines.delete': 'Delete Machines',
+        'parts.view': 'View Parts',
+        'parts.create': 'Create Parts',
+        'parts.edit': 'Edit Parts',
+        'parts.delete': 'Delete Parts',
+        'maintenance.record': 'Record Maintenance',
+        'maintenance.view': 'View Maintenance Records',
+        'reports.view': 'View Reports'
+    }
+    return permissions
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
