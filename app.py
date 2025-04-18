@@ -480,7 +480,7 @@ def admin():
         flash('An error occurred while loading the admin dashboard.', 'danger')
         return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
 
-@app.route('/admin/users')
+@app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
 def admin_users():
     """User management page."""
@@ -489,6 +489,53 @@ def admin_users():
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     
+    # Handle form submission for creating a new user
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username')
+            email = request.form.get('email')
+            password = request.form.get('password')
+            role = request.form.get('role', '')
+            
+            # Validate required fields
+            if not username or not email or not password:
+                flash('Username, email, and password are required.', 'danger')
+                return redirect('/admin/users')
+            
+            # Check if username or email already exist
+            if User.query.filter_by(username=username).first():
+                flash(f'Username "{username}" is already taken.', 'danger')
+                return redirect('/admin/users')
+                
+            if User.query.filter_by(email=email).first():
+                flash(f'Email "{email}" is already registered.', 'danger')
+                return redirect('/admin/users')
+            
+            # Validate password length
+            if len(password) < 8:
+                flash('Password must be at least 8 characters long.', 'danger')
+                return redirect('/admin/users')
+            
+            # Create new user
+            new_user = User(
+                username=username,
+                email=email,
+                password_hash=generate_password_hash(password),
+                role=role
+            )
+            
+            # Add user to database
+            db.session.add(new_user)
+            db.session.commit()
+            
+            flash(f'User "{username}" created successfully.', 'success')
+            return redirect('/admin/users')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating user: {e}")
+            flash(f'Error creating user: {str(e)}', 'danger')
+    
+    # For GET requests or after POST processing
     try:
         # Get all users and roles for the template
         users = User.query.all()
@@ -506,7 +553,7 @@ def admin_users():
         
         # Safe URLs for general actions
         safe_urls = {
-            'create_user': '/user/create',
+            'create_user': '/admin/users',  # Updated to point to this route
             'users_list': '/admin/users',
             'roles_list': '/admin/roles',
             'dashboard': '/dashboard',
@@ -524,7 +571,7 @@ def admin_users():
     except Exception as e:
         app.logger.error(f"Error in admin_users route: {e}")
         flash('An error occurred while loading the users page.', 'danger')
-        return redirect('/admin')  # Use direct URL to avoid potential circular errors
+        return redirect('/admin')
 
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
