@@ -548,7 +548,7 @@ def delete_site(site_id):
         app.logger.error(f"Error deleting site: {e}")
         db.session.rollback()
         flash('An error occurred while deleting the site.', 'danger')
-        return redirect(url_for('manage_sites'))  # Fixed missing parenthesis
+        return redirect(url_for('manage_sites'))
 
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
@@ -1037,16 +1037,16 @@ def manage_sites():
     return render_template('admin/sites.html', 
                           sites=sites,
                           users=users,
-                          is_admin=current_user.is_admin,t the description field but store as notes
+                          is_admin=current_user.is_admin,
                           now=datetime.now())
- - removed 'description' as it's not in the model
+
 @app.route('/machines', methods=['GET', 'POST'])
 @login_required
 def manage_machines():
     """Handle machine management page and machine creation"""
     site_id = request.args.get('site_id', type=int)
     
-    # Filter machines by site if site_id is provideds field instead of description
+    # Filter machines by site if site_id is provided
     if site_id:
         machines = Machine.query.filter_by(site_id=site_id).all()
         title = f"Machines for {Site.query.get_or_404(site_id).name}"
@@ -1064,7 +1064,7 @@ def manage_machines():
             machine_number = request.form.get('machine_number', '')
             serial_number = request.form.get('serial_number', '')
             site_id = request.form['site_id']
-            description = request.form.get('description', '')ing description form field but storing in notes
+            notes = request.form.get('description', '')  # Using description form field but storing in notes field
             
             # Create new machine - without the 'description' field which doesn't exist in the model
             new_machine = Machine(
@@ -1073,7 +1073,7 @@ def manage_machines():
                 machine_number=machine_number,
                 serial_number=serial_number,
                 site_id=site_id,
-                description=descriptionscription in notes field
+                notes=notes  # Store description in notes field
             )
             
             # Add machine to database
