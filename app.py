@@ -399,6 +399,8 @@ def url_for_safe(endpoint, **values):
             return '/parts'
         elif endpoint == 'manage_users':
             return '/admin/users'
+        elif endpoint == 'manage_roles':  # Add this case
+            return '/admin/roles'
         elif endpoint == 'update_maintenance' and 'part_id' in values:
             return f'/update-maintenance/{values["part_id"]}'
         elif endpoint == 'machine_history' and 'machine_id' in values:  # Add this case
@@ -583,7 +585,7 @@ def delete_site(site_id):
         app.logger.error(f"Error deleting site: {e}")
         db.session.rollback()
         flash('An error occurred while deleting the site.', 'danger')
-        return redirect(url_for('manage_sites'))
+        return redirect(url_for('manage_sites')
 
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
@@ -1265,6 +1267,16 @@ def admin_parts():
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     return redirect(url_for('manage_parts'))
+
+@app.route('/manage/roles')
+@login_required
+def manage_roles():
+    """Alternative route for role management - redirects to admin roles page."""
+    # This is a fallback route for templates that might reference 'manage_roles'
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect('/dashboard')
+    return redirect('/admin/roles')
 
 @app.route('/get_all_permissions')
 def get_all_permissions():
