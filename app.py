@@ -1688,11 +1688,15 @@ def edit_role(role_id):
     # For simplicity, redirect to admin_roles
     return redirect(url_for('admin_roles'))
 
-@app.route('/manage/users')
+@app.route('/manage/users', methods=['GET', 'POST'])
 @login_required
 def manage_users():
     """Alternative route for user management - redirects to admin users page."""
-    # This is a fallback route for templates that might reference 'manage_users'
+    # If this is a POST request, forward it to the admin_users function
+    if request.method == 'POST':
+        return admin_users()
+        
+    # For GET requests, continue with normal redirect logic
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect('/dashboard')
