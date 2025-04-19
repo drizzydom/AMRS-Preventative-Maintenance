@@ -634,9 +634,9 @@ def admin_roles():
                 'delete': f'/role/delete/{role.id}'
             }
         
-        # Safe URLs for general actions
+        # Safe URLs for general actions - UPDATE THIS LINE
         safe_urls = {
-            'create_role': '/role/create',
+            'create_role': '/admin/roles',  # Changed from '/role/create' to '/admin/roles'
             'roles_list': '/admin/roles',
             'users_list': '/admin/users',
             'dashboard': '/dashboard',
