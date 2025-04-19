@@ -1665,13 +1665,15 @@ def create_role():
             db.session.commit()
             
             flash(f'Role "{name}" created successfully.', 'success')
+            return redirect('/admin/roles')  # Add explicit return statement
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Error creating role: {e}")
             flash(f'Error creating role: {str(e)}', 'danger')
+            return redirect('/admin/roles')  # Add explicit return for error case
     
-    # For GET or after POST processing, redirect to admin_roles
-    return redirect('/admin/roles')
+    # For GET requests, redirect to admin_roles
+    return redirect('/admin/roles')  # Handle GET requests explicitly
 
 @app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
