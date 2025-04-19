@@ -1578,13 +1578,15 @@ def create_user():
             db.session.commit()
             
             flash(f'User "{username}" created successfully.', 'success')
+            return redirect('/admin/users')  # Add explicit return here
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Error creating user: {e}")
             flash(f'Error creating user: {str(e)}', 'danger')
+            return redirect('/admin/users')  # Add explicit return for error case
     
-    # For GET or after POST processing, redirect to admin_users
-    return redirect('/admin/users')
+    # For GET requests, redirect to admin_users page
+    return redirect('/admin/users')  # Handle GET requests explicitly
 
 @app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
