@@ -1463,11 +1463,15 @@ def admin_parts():
         return redirect(url_for('dashboard'))
     return redirect(url_for('manage_parts'))
 
-@app.route('/manage/roles')
+@app.route('/manage/roles', methods=['GET', 'POST'])
 @login_required
 def manage_roles():
     """Alternative route for role management - redirects to admin roles page."""
-    # This is a fallback route for templates that might reference 'manage_roles'
+    # If this is a POST request, forward it to the admin_roles function
+    if request.method == 'POST':
+        return admin_roles()
+        
+    # For GET requests, continue with normal redirect logic
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect('/dashboard')
