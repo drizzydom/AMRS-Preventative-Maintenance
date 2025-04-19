@@ -735,7 +735,7 @@ def delete_role(role_id):
         
         # Check if the role is assigned to any users before deleting
         # Using filter() instead of filter_by() for more explicit comparison
-        users_with_role = User.query.filter(User.role == role.name).all()
+        users_with_role = User.query.filter_by(role=role.name).all()
         
         if users_with_role:
             flash(f'Cannot delete role: It is assigned to {len(users_with_role)} users. Reassign those users first.', 'danger')
