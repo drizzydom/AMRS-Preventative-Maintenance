@@ -495,7 +495,7 @@ def admin_users():
             username = request.form.get('username')
             email = request.form.get('email')
             password = request.form.get('password')
-            role = request.form.get('role', '')
+            role_name = request.form.get('role', '')
             
             # Validate required fields
             if not username or not email or not password:
@@ -516,12 +516,12 @@ def admin_users():
                 flash('Password must be at least 8 characters long.', 'danger')
                 return redirect('/admin/users')
             
-            # Create new user
+            # Create new user with role as string
             new_user = User(
                 username=username,
                 email=email,
                 password_hash=generate_password_hash(password),
-                role=role
+                role=role_name  # Use role_name as a string, not a Role object
             )
             
             # Add user to database
@@ -1569,12 +1569,12 @@ def create_user():
                 flash('Password must be at least 8 characters long.', 'danger')
                 return redirect('/admin/users')
             
-            # Create new user
+            # Create new user - using role_name directly as a string instead of Role object
             new_user = User(
                 username=username,
                 email=email,
                 password_hash=generate_password_hash(password),
-                role=role
+                role=role_name  # Assuming User.role is a string field, not a relationship
             )
             
             # Add user to database
