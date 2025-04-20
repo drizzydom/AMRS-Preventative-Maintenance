@@ -1,73 +1,88 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 
-{% block title %}Edit Site - Maintenance Tracker{% endblock %}
-
-{% block header_title %}Edit Site: {{ site.name }}{% endblock %}
-
-{% block header_actions %}
-<a href="{{ url_for('manage_sites') }}" class="btn btn-secondary">
-    <i class="fas fa-arrow-left"></i> Back to Sites
-</a>
-{% endblock %}
+{% block title %}Edit Site - {{ site.name }}{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-8 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Edit Site Information</h5>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col">
+            <h1>Edit Site</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('manage_sites') }}">Sites</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Edit {{ site.name }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Edit Site Information</div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('edit_site', site_id=site.id) }}">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Site Name *</label>
+                            <input type="text" class="form-control" id="name" name="name" value="{{ site.name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="location" class="form-label">Location</label>
+                            <input type="text" class="form-control" id="location" name="location" value="{{ site.location or '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="contact_email" class="form-label">Contact Email</label>
+                            <input type="email" class="form-control" id="contact_email" name="contact_email" value="{{ site.contact_email or '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="notification_threshold" class="form-label">Notification Threshold (days)</label>
+                            <input type="number" class="form-control" id="notification_threshold" name="notification_threshold" value="{{ site.notification_threshold or 30 }}">
+                            <div class="form-text">Days before maintenance is due to send notifications</div>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="enable_notifications" name="enable_notifications" {% if site.enable_notifications %}checked{% endif %}>
+                            <label class="form-check-label" for="enable_notifications">Enable Notifications</label>
+                        </div>
+
+                        {% if is_admin and users %}
+                        <div class="mb-3">
+                            <label for="user_ids" class="form-label">Assign Users</label>
+                            <select class="form-select" id="user_ids" name="user_ids" multiple>
+                                {% for user in users %}
+                                <option value="{{ user.id }}" {% if user.id in assigned_users %}selected{% endif %}>{{ user.username }} ({{ user.email }})</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple users</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('manage_sites') }}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="post" action="{{ url_for('edit_site', site_id=site.id) }}">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Site Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ site.name }}" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="location" class="form-label">Location</label>
-                        <input type="text" class="form-control" id="location" name="location" value="{{ site.location }}">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="contact_email" class="form-label">Contact Email</label>
-                        <input type="email" class="form-control" id="contact_email" name="contact_email" value="{{ site.contact_email }}">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="notification_threshold" class="form-label">Notification Threshold (Days)</label>
-                        <input type="number" class="form-control" id="notification_threshold" name="notification_threshold" 
-                               value="{{ site.notification_threshold }}" min="1" max="365">
-                        <div class="form-text">Days before due date when notifications should be sent</div>
-                    </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="enable_notifications" name="enable_notifications" 
-                               {% if site.enable_notifications %}checked{% endif %}>
-                        <label class="form-check-label" for="enable_notifications">Enable notifications for this site</label>
-                    </div>
-                    
-                    {% if is_admin and users %}
-                    <div class="mb-3">
-                        <label for="user_ids" class="form-label">Assigned Users</label>
-                        <select multiple class="form-select" id="user_ids" name="user_ids">
-                            {% for user in users %}
-                            <option value="{{ user.id }}" {% if user in site.users %}selected{% endif %}>
-                                {{ user.username }} ({{ user.full_name or 'No Name' }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text">Hold Ctrl/Cmd to select multiple users</div>
-                    </div>
-                    {% endif %}
-                    
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{{ url_for('manage_sites') }}" class="btn btn-secondary me-md-2">Cancel</a>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
-                </form>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Site Information</div>
+                <div class="card-body">
+                    <p><strong>Created:</strong> {{ site.created_at.strftime('%Y-%m-%d') if site.created_at }}</p>
+                    <p><strong>Last Updated:</strong> {{ site.updated_at.strftime('%Y-%m-%d') if site.updated_at }}</p>
+                    <p><strong>Machines:</strong> {{ site.machines|length }}</p>
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Any JavaScript needed for the page
+    });
+</script>
 {% endblock %}
