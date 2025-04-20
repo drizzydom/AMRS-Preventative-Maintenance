@@ -698,6 +698,71 @@ def admin_users():
         flash('An error occurred while loading the users page.', 'danger')
         return redirect('/admin')
 
+@app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    """Edit an existing user - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to edit users.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    user = User.query.get_or_404(user_id)
+    roles = Role.query.all()
+    sites = Site.query.all()
+    
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username')
+            email = request.form.get('email')
+            full_name = request.form.get('full_name', '')
+            role_name = request.form.get('role', '')
+            
+            # Check if username already exists for another user
+            existing_user = User.query.filter(User.username == username, User.id != user_id).first()
+            if existing_user:
+                flash(f'Username "{username}" is already taken.', 'danger')
+                return redirect(url_for('edit_user', user_id=user_id))
+                
+            # Check if email already exists for another user  
+            existing_user = User.query.filter(User.email == email, User.id != user_id).first()
+            if existing_user:
+                flash(f'Email "{email}" is already registered.', 'danger')
+                return redirect(url_for('edit_user', user_id=user_id))
+            
+            # Update user details
+            user.username = username
+            user.email = email
+            user.full_name = full_name
+            user.role = role_name  # Store role as string
+            
+            # Update site assignments if provided
+            if 'site_ids' in request.form:
+                # Clear existing site associations
+                user.sites = []
+                
+                # Add selected sites
+                site_ids = request.form.getlist('site_ids')
+                for site_id in site_ids:
+                    site = Site.query.get(int(site_id))
+                    if site:
+                        user.sites.append(site)
+            
+            db.session.commit()
+            flash(f'User "{username}" updated successfully.', 'success')
+            return redirect(url_for('admin_users'))
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating user: {e}")
+            flash(f'Error updating user: {str(e)}', 'danger')
+    
+    # For GET request, show the edit form
+    return render_template('edit_user.html', 
+                          user=user,
+                          roles=roles,
+                          sites=sites,
+                          assigned_sites=[site.id for site in user.sites])
+
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
 def admin_roles():
@@ -778,6 +843,52 @@ def admin_roles():
         app.logger.error(f"Error in admin_roles route: {e}")
         flash('An error occurred while loading the roles page.', 'danger')
         return redirect('/admin')  # Use direct URL to avoid potential circular errors
+
+@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+def edit_role(role_id):
+    """Edit an existing role - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to edit roles.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    role = Role.query.get_or_404(role_id)
+    all_permissions = get_all_permissions()
+    
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name')
+            description = request.form.get('description', '')
+            
+            # Check if name is changed and already exists
+            if name != role.name and Role.query.filter_by(name=name).first():
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect(url_for('edit_role', role_id=role_id))
+            
+            # Update role details
+            role.name = name
+            role.description = description
+            
+            # Update permissions
+            permissions = request.form.getlist('permissions')
+            role.permissions = ','.join(permissions) if permissions else ''
+            
+            db.session.commit()
+            flash(f'Role "{name}" updated successfully.', 'success')
+            return redirect(url_for('admin_roles'))
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating role: {e}")
+            flash(f'Error updating role: {str(e)}', 'danger')
+    
+    # For GET requests, render the edit form with role's current permissions
+    current_permissions = role.permissions.split(',') if role.permissions else []
+    
+    return render_template('edit_role.html', 
+                          role=role,
+                          all_permissions=all_permissions,
+                          current_permissions=current_permissions)
 
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
@@ -1556,7 +1667,10 @@ def edit_machine(machine_id):
             machine.model = request.form.get('model', '')
             machine.machine_number = request.form.get('machine_number', '')
             machine.serial_number = request.form.get('serial_number', '')
-            machine.site_id = request.form['site_id']
+            
+            # Convert site_id to integer
+            site_id = int(request.form['site_id'])
+            machine.site_id = site_id
             
             db.session.commit()
             flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
@@ -1724,7 +1838,7 @@ def create_user():
             username = request.form.get('username')
             email = request.form.get('email')
             password = request.form.get('password')
-            role = request.form.get('role', '')  # Getting role from form
+            role_name = request.form.get('role', '')  # Getting role from form
             
             # Validate required fields
             if not username or not email or not password:
@@ -1750,7 +1864,7 @@ def create_user():
                 username=username,
                 email=email,
                 password_hash=generate_password_hash(password),
-                role=role  # Use 'role' instead of 'role_name'
+                role=role_name  # Use role_name as a string
             )
             
             # Add user to database
@@ -1767,71 +1881,6 @@ def create_user():
     
     # For GET requests, redirect to admin_users page
     return redirect('/admin/users')
-
-@app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
-@login_required
-def edit_user(user_id):
-    """Edit an existing user - admin only"""
-    if not is_admin_user(current_user):
-        flash('You do not have permission to edit users.', 'danger')
-        return redirect(url_for('dashboard'))
-    
-    user = User.query.get_or_404(user_id)
-    roles = Role.query.all()
-    sites = Site.query.all()
-    
-    if request.method == 'POST':
-        try:
-            username = request.form.get('username')
-            email = request.form.get('email')
-            full_name = request.form.get('full_name', '')
-            role = request.form.get('role', '')
-            
-            # Check if username already exists for another user
-            existing_user = User.query.filter(User.username == username, User.id != user_id).first()
-            if existing_user:
-                flash(f'Username "{username}" is already taken.', 'danger')
-                return redirect(url_for('edit_user', user_id=user_id))
-                
-            # Check if email already exists for another user  
-            existing_user = User.query.filter(User.email == email, User.id != user_id).first()
-            if existing_user:
-                flash(f'Email "{email}" is already registered.', 'danger')
-                return redirect(url_for('edit_user', user_id=user_id))
-            
-            # Update user details
-            user.username = username
-            user.email = email
-            user.full_name = full_name
-            user.role = role
-            
-            # Update site assignments if provided
-            if 'site_ids' in request.form:
-                # First remove all site associations
-                user.sites = []
-                
-                # Add selected sites
-                site_ids = request.form.getlist('site_ids')
-                for site_id in site_ids:
-                    site = Site.query.get(int(site_id))
-                    if site:
-                        user.sites.append(site)
-            
-            db.session.commit()
-            flash(f'User "{username}" updated successfully.', 'success')
-            return redirect(url_for('admin_users'))
-            
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error updating user: {e}")
-            flash(f'Error updating user: {str(e)}', 'danger')
-    
-    # For GET request, show the edit form
-    return render_template('edit_user.html', 
-                          user=user,
-                          roles=roles,
-                          sites=sites,
-                          assigned_sites=[site.id for site in user.sites])
 
 @app.route('/machine/create', methods=['GET', 'POST'])
 @login_required
@@ -1858,28 +1907,32 @@ def edit_part(part_id):
         try:
             part.name = request.form['name']
             part.description = request.form.get('description', '')
-            part.machine_id = request.form['machine_id']
+            
+            # Convert machine_id to integer
+            if request.form.get('machine_id'):
+                part.machine_id = int(request.form['machine_id'])
             
             # Handle maintenance frequency and unit
-            maintenance_frequency = request.form.get('maintenance_frequency', 30)
+            maintenance_frequency = request.form.get('maintenance_frequency')
             maintenance_unit = request.form.get('maintenance_unit', 'day')
             
-            part.maintenance_frequency = int(maintenance_frequency)
-            part.maintenance_unit = maintenance_unit
-            
-            # Calculate maintenance_days based on frequency and unit
-            if maintenance_unit == 'day':
-                part.maintenance_days = part.maintenance_frequency
-            elif maintenance_unit == 'week':
-                part.maintenance_days = part.maintenance_frequency * 7
-            elif maintenance_unit == 'month':
-                part.maintenance_days = part.maintenance_frequency * 30
-            elif maintenance_unit == 'year':
-                part.maintenance_days = part.maintenance_frequency * 365
-            
-            # Update next_maintenance date based on last_maintenance and maintenance_days
-            if part.last_maintenance:
-                part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_days)
+            if maintenance_frequency:
+                part.maintenance_frequency = int(maintenance_frequency)
+                part.maintenance_unit = maintenance_unit
+                
+                # Calculate maintenance_days based on frequency and unit
+                if maintenance_unit == 'day':
+                    part.maintenance_days = part.maintenance_frequency
+                elif maintenance_unit == 'week':
+                    part.maintenance_days = part.maintenance_frequency * 7
+                elif maintenance_unit == 'month':
+                    part.maintenance_days = part.maintenance_frequency * 30
+                elif maintenance_unit == 'year':
+                    part.maintenance_days = part.maintenance_frequency * 365
+                
+                # Update next_maintenance date based on last_maintenance and maintenance_days
+                if part.last_maintenance:
+                    part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_days)
             
             db.session.commit()
             flash(f'Part "{part.name}" has been updated successfully.', 'success')
@@ -1943,52 +1996,6 @@ def create_role():
     
     # For GET requests, redirect to admin_roles
     return redirect('/admin/roles')  # Handle GET requests explicitly
-
-@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
-@login_required
-def edit_role(role_id):
-    """Edit an existing role - admin only"""
-    if not is_admin_user(current_user):
-        flash('You do not have permission to edit roles.', 'danger')
-        return redirect(url_for('dashboard'))
-    
-    role = Role.query.get_or_404(role_id)
-    all_permissions = get_all_permissions()
-    
-    if request.method == 'POST':
-        try:
-            name = request.form.get('name')
-            description = request.form.get('description', '')
-            
-            # Check if name is changed and already exists
-            if name != role.name and Role.query.filter_by(name=name).first():
-                flash(f'A role with the name "{name}" already exists.', 'danger')
-                return redirect(url_for('edit_role', role_id=role_id))
-            
-            # Update role details
-            role.name = name
-            role.description = description
-            
-            # Update permissions
-            permissions = request.form.getlist('permissions')
-            role.permissions = ','.join(permissions) if permissions else ''
-            
-            db.session.commit()
-            flash(f'Role "{name}" updated successfully.', 'success')
-            return redirect(url_for('admin_roles'))
-            
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error updating role: {e}")
-            flash(f'Error updating role: {str(e)}', 'danger')
-    
-    # For GET requests, render the edit form with role's current permissions
-    current_permissions = role.permissions.split(',') if role.permissions else []
-    
-    return render_template('edit_role.html', 
-                          role=role,
-                          all_permissions=all_permissions,
-                          current_permissions=current_permissions)
 
 @app.route('/manage/users', methods=['GET', 'POST'])
 @login_required
