@@ -184,7 +184,8 @@ function areAllPartsShowing() {
     if (partRows.length === 0) return false;
     
     for (const row of partRows) {
-        if (row.style.display !== 'table-row') {
+        // Check if the row has the Bootstrap 'show' class
+        if (!row.classList.contains('show')) {
             return false;
         }
     }
@@ -193,9 +194,20 @@ function areAllPartsShowing() {
 
 // Hide all machine parts
 function hideAllParts() {
-    // Hide all part rows
+    // Hide all part rows using Bootstrap's collapse
     document.querySelectorAll('.machine-parts-row').forEach(function(row) {
-        row.style.display = 'none';
+        if (bootstrap && bootstrap.Collapse) {
+            const bsCollapse = bootstrap.Collapse.getInstance(row);
+            if (bsCollapse) {
+                bsCollapse.hide();
+            } else {
+                // Fallback to direct style manipulation if no collapse instance exists
+                row.classList.remove('show');
+            }
+        } else {
+            // Fallback in case bootstrap is not available
+            row.style.display = 'none';
+        }
     });
     
     // Reset toggle buttons
@@ -210,9 +222,16 @@ function hideAllParts() {
 
 // Show all machine parts
 function showAllParts() {
-    // Show all part rows
+    // Show all part rows using Bootstrap's collapse
     document.querySelectorAll('.machine-parts-row').forEach(function(row) {
-        row.style.display = 'table-row';
+        if (bootstrap && bootstrap.Collapse) {
+            const bsCollapse = bootstrap.Collapse.getInstance(row) || new bootstrap.Collapse(row, { toggle: false });
+            bsCollapse.show();
+        } else {
+            // Fallback in case bootstrap is not available
+            row.classList.add('show');
+            row.style.display = 'table-row';
+        }
     });
     
     // Update toggle buttons
@@ -255,16 +274,22 @@ function setupPartToggles() {
             const targetRow = document.querySelector(targetId);
             if (!targetRow) return;
             
-            // Toggle row visibility
-            if (targetRow.style.display === 'table-row') {
-                targetRow.style.display = 'none';
-                this.setAttribute('aria-expanded', 'false');
-                this.classList.remove('active');
-            } else {
-                targetRow.style.display = 'table-row';
+            // Use Bootstrap's collapse functionality
+            const bsCollapse = new bootstrap.Collapse(targetRow, {
+                toggle: true
+            });
+            
+            // Update the button state based on the row's visibility
+            // We need to use an event listener because Bootstrap toggle is asynchronous
+            targetRow.addEventListener('shown.bs.collapse', () => {
                 this.setAttribute('aria-expanded', 'true');
                 this.classList.add('active');
-            }
+            });
+            
+            targetRow.addEventListener('hidden.bs.collapse', () => {
+                this.setAttribute('aria-expanded', 'false');
+                this.classList.remove('active');
+            });
         });
     });
 }
