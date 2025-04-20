@@ -164,6 +164,7 @@ class MaintenanceRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     part_id = db.Column(db.Integer, db.ForeignKey('parts.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=True)  # Add machine_id field
     date = db.Column(db.DateTime, default=datetime.utcnow)
     comments = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -171,6 +172,9 @@ class MaintenanceRecord(db.Model):
     
     # Add client identifier for synchronization
     client_id = db.Column(db.String(36), default=lambda: str(uuid.uuid4()))
+    
+    # Add relationship to Machine
+    machine = db.relationship('Machine', backref=db.backref('maintenance_records', lazy=True))
     
     def __repr__(self):
         return f'<MaintenanceRecord {self.id} for Part {self.part_id}>'
