@@ -279,18 +279,50 @@ def ensure_db_schema():
     except Exception as e:
         print(f"[APP] Error checking database schema: {e}")
 
-# Ensure maintenance_records table has client_id column
+# Ensure maintenance_records table has necessary columns
 def ensure_maintenance_records_schema():
-    """Ensure maintenance_records table has client_id column."""
+    """Ensure maintenance_records table has necessary columns."""
     try:
         inspector = inspect(db.engine)
         if inspector.has_table('maintenance_records'):
             columns = [column['name'] for column in inspector.get_columns('maintenance_records')]
+            
+            # Add client_id column if missing
             if 'client_id' not in columns:
                 with db.engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS client_id INTEGER"))
+                    conn.execute(text("ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS client_id VARCHAR(36)"))
                     conn.commit()
                 print("[APP] Added client_id column to maintenance_records table")
+            
+            # Add machine_id column if missing (to fix delete machine error)
+            if 'machine_id' not in columns:
+                print("[APP] Adding missing machine_id column to maintenance_records table")
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS machine_id INTEGER"))
+                    conn.commit()
+                
+                # Populate machine_id from associated part's machine_id
+                maintenance_records = MaintenanceRecord.query.all()
+                for record in maintenance_records:
+                    if record.part:
+                        record.machine_id = record.part.machine_id
+                
+                db.session.commit()
+                print("[APP] Populated machine_id values in maintenance_records table")
+                
+                # Try to add foreign key constraint but don't fail if it doesn't work
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(text("""
+                            ALTER TABLE maintenance_records 
+                            ADD CONSTRAINT fk_maintenance_records_machine_id 
+                            FOREIGN KEY (machine_id) REFERENCES machines (id)
+                        """))
+                        conn.commit()
+                    print("[APP] Added foreign key constraint to machine_id column")
+                except Exception as e:
+                    print(f"[APP] Note: Could not add foreign key constraint: {str(e)}")
+                    print("[APP] This is not critical, the column is still usable.")
     except Exception as e:
         print(f"[APP] Error ensuring maintenance_records schema: {e}")
 
