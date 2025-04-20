@@ -1425,6 +1425,50 @@ def manage_sites():
                           can_edit=True,
                           can_delete=True)
 
+@app.route('/site/edit/<int:site_id>', methods=['GET', 'POST'])
+@login_required
+def edit_site(site_id):
+    """Edit an existing site"""
+    site = Site.query.get_or_404(site_id)
+    users = User.query.all() if current_user.is_admin else None
+    
+    if request.method == 'POST':
+        try:
+            site.name = request.form['name']
+            site.location = request.form.get('location', '')
+            site.contact_email = request.form.get('contact_email', '')
+            site.notification_threshold = request.form.get('notification_threshold', 30)
+            site.enable_notifications = 'enable_notifications' in request.form
+            
+            # Handle user assignments if admin
+            if current_user.is_admin:
+                # First remove all user associations
+                for user in site.users:
+                    site.users.remove(user)
+                
+                # Then add selected users
+                user_ids = request.form.getlist('user_ids')
+                if user_ids:
+                    for user_id in user_ids:
+                        user = User.query.get(int(user_id))
+                        if user:
+                            site.users.append(user)
+            
+            db.session.commit()
+            flash(f'Site "{site.name}" has been updated successfully.', 'success')
+            return redirect(url_for('manage_sites'))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating site: {e}")
+            flash(f'Error updating site: {str(e)}', 'danger')
+    
+    # For GET requests, render the edit form
+    return render_template('edit_site.html', 
+                          site=site,
+                          users=users,
+                          is_admin=current_user.is_admin,
+                          assigned_users=[user.id for user in site.users])
+
 @app.route('/machines', methods=['GET', 'POST'])
 @login_required
 def manage_machines():
@@ -1498,6 +1542,34 @@ def manage_machines():
         app.logger.error(f"Error in manage_machines route: {e}")
         flash('An error occurred while loading the machines page.', 'danger')
         return redirect('/dashboard')
+
+@app.route('/machine/edit/<int:machine_id>', methods=['GET', 'POST'])
+@login_required
+def edit_machine(machine_id):
+    """Edit an existing machine"""
+    machine = Machine.query.get_or_404(machine_id)
+    sites = Site.query.all()
+    
+    if request.method == 'POST':
+        try:
+            machine.name = request.form['name']
+            machine.model = request.form.get('model', '')
+            machine.machine_number = request.form.get('machine_number', '')
+            machine.serial_number = request.form.get('serial_number', '')
+            machine.site_id = request.form['site_id']
+            
+            db.session.commit()
+            flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
+            return redirect(url_for('manage_machines'))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating machine: {e}")
+            flash(f'Error updating machine: {str(e)}', 'danger')
+    
+    # For GET requests, render the edit form
+    return render_template('edit_machine.html', 
+                          machine=machine,
+                          sites=sites)
 
 @app.route('/parts', methods=['GET', 'POST'])
 @login_required
@@ -1638,31 +1710,6 @@ def create_site():
     # For simplicity, redirect to manage_sites which already handles creation
     return redirect(url_for('manage_sites'))
 
-@app.route('/site/edit/<int:site_id>', methods=['GET', 'POST'])
-@login_required
-def edit_site(site_id):
-    """Edit an existing site"""
-    site = Site.query.get_or_404(site_id)
-    
-    if request.method == 'POST':
-        try:
-            site.name = request.form.get('name', site.name)
-            site.location = request.form.get('location', site.location)
-            site.contact_email = request.form.get('contact_email', site.contact_email)
-            site.notification_threshold = request.form.get('notification_threshold', site.notification_threshold)
-            site.enable_notifications = 'enable_notifications' in request.form
-            
-            db.session.commit()
-            flash(f'Site "{site.name}" has been updated successfully.', 'success')
-            return redirect(url_for('manage_sites'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating site: {str(e)}', 'danger')
-    
-    # For GET requests, redirect to manage_sites for now
-    # In a real implementation, you'd render an edit form
-    return redirect(url_for('manage_sites'))
-
 @app.route('/user/create', methods=['GET', 'POST'])
 @login_required
 def create_user():
@@ -1677,7 +1724,7 @@ def create_user():
             username = request.form.get('username')
             email = request.form.get('email')
             password = request.form.get('password')
-            role = request.form.get('role', '')
+            role = request.form.get('role', '')  # Getting role from form
             
             # Validate required fields
             if not username or not email or not password:
@@ -1698,12 +1745,12 @@ def create_user():
                 flash('Password must be at least 8 characters long.', 'danger')
                 return redirect('/admin/users')
             
-            # Create new user - using role_name directly as a string instead of Role object
+            # Create new user with role as string
             new_user = User(
                 username=username,
                 email=email,
                 password_hash=generate_password_hash(password),
-                role=role_name  # Assuming User.role is a string field, not a relationship
+                role=role  # Use 'role' instead of 'role_name'
             )
             
             # Add user to database
@@ -1711,15 +1758,15 @@ def create_user():
             db.session.commit()
             
             flash(f'User "{username}" created successfully.', 'success')
-            return redirect('/admin/users')  # Add explicit return here
+            return redirect('/admin/users')
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Error creating user: {e}")
             flash(f'Error creating user: {str(e)}', 'danger')
-            return redirect('/admin/users')  # Add explicit return for error case
+            return redirect('/admin/users')
     
     # For GET requests, redirect to admin_users page
-    return redirect('/admin/users')  # Handle GET requests explicitly
+    return redirect('/admin/users')
 
 @app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
@@ -1729,21 +1776,68 @@ def edit_user(user_id):
         flash('You do not have permission to edit users.', 'danger')
         return redirect(url_for('dashboard'))
     
-    # For simplicity, redirect to admin_users
-    return redirect(url_for('admin_users'))
+    user = User.query.get_or_404(user_id)
+    roles = Role.query.all()
+    sites = Site.query.all()
+    
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username')
+            email = request.form.get('email')
+            full_name = request.form.get('full_name', '')
+            role = request.form.get('role', '')
+            
+            # Check if username already exists for another user
+            existing_user = User.query.filter(User.username == username, User.id != user_id).first()
+            if existing_user:
+                flash(f'Username "{username}" is already taken.', 'danger')
+                return redirect(url_for('edit_user', user_id=user_id))
+                
+            # Check if email already exists for another user  
+            existing_user = User.query.filter(User.email == email, User.id != user_id).first()
+            if existing_user:
+                flash(f'Email "{email}" is already registered.', 'danger')
+                return redirect(url_for('edit_user', user_id=user_id))
+            
+            # Update user details
+            user.username = username
+            user.email = email
+            user.full_name = full_name
+            user.role = role
+            
+            # Update site assignments if provided
+            if 'site_ids' in request.form:
+                # First remove all site associations
+                user.sites = []
+                
+                # Add selected sites
+                site_ids = request.form.getlist('site_ids')
+                for site_id in site_ids:
+                    site = Site.query.get(int(site_id))
+                    if site:
+                        user.sites.append(site)
+            
+            db.session.commit()
+            flash(f'User "{username}" updated successfully.', 'success')
+            return redirect(url_for('admin_users'))
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating user: {e}")
+            flash(f'Error updating user: {str(e)}', 'danger')
+    
+    # For GET request, show the edit form
+    return render_template('edit_user.html', 
+                          user=user,
+                          roles=roles,
+                          sites=sites,
+                          assigned_sites=[site.id for site in user.sites])
 
 @app.route('/machine/create', methods=['GET', 'POST'])
 @login_required
 def create_machine():
     """Create a new machine"""
     # For simplicity, redirect to manage_machines which already handles creation
-    return redirect(url_for('manage_machines'))
-
-@app.route('/machine/edit/<int:machine_id>', methods=['GET', 'POST'])
-@login_required
-def edit_machine(machine_id):
-    """Edit an existing machine"""
-    # For simplicity, redirect to manage_machines
     return redirect(url_for('manage_machines'))
 
 @app.route('/part/create', methods=['GET', 'POST'])
@@ -1757,8 +1851,48 @@ def create_part():
 @login_required
 def edit_part(part_id):
     """Edit an existing part"""
-    # For simplicity, redirect to manage_parts
-    return redirect(url_for('manage_parts'))
+    part = Part.query.get_or_404(part_id)
+    machines = Machine.query.all()
+    
+    if request.method == 'POST':
+        try:
+            part.name = request.form['name']
+            part.description = request.form.get('description', '')
+            part.machine_id = request.form['machine_id']
+            
+            # Handle maintenance frequency and unit
+            maintenance_frequency = request.form.get('maintenance_frequency', 30)
+            maintenance_unit = request.form.get('maintenance_unit', 'day')
+            
+            part.maintenance_frequency = int(maintenance_frequency)
+            part.maintenance_unit = maintenance_unit
+            
+            # Calculate maintenance_days based on frequency and unit
+            if maintenance_unit == 'day':
+                part.maintenance_days = part.maintenance_frequency
+            elif maintenance_unit == 'week':
+                part.maintenance_days = part.maintenance_frequency * 7
+            elif maintenance_unit == 'month':
+                part.maintenance_days = part.maintenance_frequency * 30
+            elif maintenance_unit == 'year':
+                part.maintenance_days = part.maintenance_frequency * 365
+            
+            # Update next_maintenance date based on last_maintenance and maintenance_days
+            if part.last_maintenance:
+                part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_days)
+            
+            db.session.commit()
+            flash(f'Part "{part.name}" has been updated successfully.', 'success')
+            return redirect(url_for('manage_parts', machine_id=part.machine_id))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating part: {e}")
+            flash(f'Error updating part: {str(e)}', 'danger')
+    
+    # For GET requests, render the edit form
+    return render_template('edit_part.html', 
+                          part=part,
+                          machines=machines)
 
 @app.route('/role/create', methods=['GET', 'POST'])
 @login_required
@@ -1818,8 +1952,43 @@ def edit_role(role_id):
         flash('You do not have permission to edit roles.', 'danger')
         return redirect(url_for('dashboard'))
     
-    # For simplicity, redirect to admin_roles
-    return redirect(url_for('admin_roles'))
+    role = Role.query.get_or_404(role_id)
+    all_permissions = get_all_permissions()
+    
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name')
+            description = request.form.get('description', '')
+            
+            # Check if name is changed and already exists
+            if name != role.name and Role.query.filter_by(name=name).first():
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect(url_for('edit_role', role_id=role_id))
+            
+            # Update role details
+            role.name = name
+            role.description = description
+            
+            # Update permissions
+            permissions = request.form.getlist('permissions')
+            role.permissions = ','.join(permissions) if permissions else ''
+            
+            db.session.commit()
+            flash(f'Role "{name}" updated successfully.', 'success')
+            return redirect(url_for('admin_roles'))
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating role: {e}")
+            flash(f'Error updating role: {str(e)}', 'danger')
+    
+    # For GET requests, render the edit form with role's current permissions
+    current_permissions = role.permissions.split(',') if role.permissions else []
+    
+    return render_template('edit_role.html', 
+                          role=role,
+                          all_permissions=all_permissions,
+                          current_permissions=current_permissions)
 
 @app.route('/manage/users', methods=['GET', 'POST'])
 @login_required
