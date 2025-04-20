@@ -425,10 +425,101 @@ def index():
 def dashboard():
     """Main dashboard view after login."""
     try:
-        return render_template('dashboard.html')
+        # Get upcoming and overdue maintenance across all sites the user has access to
+        if current_user.is_admin:
+            # Admins can see all sites
+            sites = Site.query.all()
+        else:
+            # Non-admins can only see sites they're assigned to
+            sites = current_user.sites
+            
+        # Get all machines across accessible sites
+        machines = []
+        site_ids = [site.id for site in sites]
+        if site_ids:
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        # Get all parts that need maintenance soon or are overdue
+        parts = []
+        machine_ids = [machine.id for machine in machines]
+        if machine_ids:
+            # Get all parts for these machines
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
+            
+        # Get statistics
+        stats = {
+            'sites_count': len(sites),
+            'machines_count': len(machines),
+            'parts_count': len(parts),
+            'overdue_count': 0,
+            'due_soon_count': 0
+        }
+        
+        # Process parts for maintenance status
+        now = datetime.now()
+        overdue_parts = []
+        due_soon_parts = []
+        ok_count = 0
+        
+        for part in parts:
+            days_until = (part.next_maintenance - now).days
+            
+            if days_until < 0:
+                # Part is overdue
+                overdue_parts.append({
+                    'id': part.id,
+                    'name': part.name,
+                    'machine': part.machine.name,
+                    'site': part.machine.site.name,
+                    'days_overdue': abs(days_until),
+                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
+                })
+                stats['overdue_count'] += 1
+            elif days_until <= 30:  # Due within 30 days
+                # Part is due soon
+                due_soon_parts.append({
+                    'id': part.id,
+                    'name': part.name,
+                    'machine': part.machine.name,
+                    'site': part.machine.site.name,
+                    'days_until': days_until,
+                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
+                })
+                stats['due_soon_count'] += 1
+            else:
+                ok_count += 1
+        
+        # Sort parts by urgency
+        overdue_parts.sort(key=lambda x: x['days_overdue'], reverse=True)
+        due_soon_parts.sort(key=lambda x: x['days_until'])
+        
+        return render_template('dashboard.html',
+                              sites=sites,
+                              machines=machines,
+                              parts=parts,
+                              stats=stats,
+                              overdue_parts=overdue_parts,
+                              due_soon_parts=due_soon_parts,
+                              overdue_count=stats['overdue_count'],
+                              due_soon_count=stats['due_soon_count'],
+                              ok_count=ok_count,
+                              now=now)
     except Exception as e:
         app.logger.error(f"Error rendering dashboard: {e}")
-        return render_template('errors/500.html'), 500
+        # Log the error details for debugging
+        print(f"Dashboard error: {str(e)}")
+        # Return an empty dashboard as fallback
+        return render_template('dashboard.html', 
+                              sites=[], 
+                              machines=[], 
+                              parts=[], 
+                              stats={'sites_count': 0, 'machines_count': 0, 'parts_count': 0, 'overdue_count': 0, 'due_soon_count': 0},
+                              overdue_parts=[],
+                              due_soon_parts=[],
+                              overdue_count=0,
+                              due_soon_count=0,
+                              ok_count=0,
+                              now=datetime.now())
 
 @app.route('/admin')
 @login_required
@@ -443,7 +534,8 @@ def admin():
         # Get stats for admin dashboard
         user_count = User.query.count()
         roles_count = Role.query.count()
-        sites_count = Site.query.count()
+        site_count = Site.query.count()  # Keep this as site_count
+        sites_count = site_count  # Add this line to have both variable names
         machine_count = Machine.query.count()
         part_count = Part.query.count()
         
@@ -469,7 +561,8 @@ def admin():
         return render_template('admin.html',
                               user_count=user_count,
                               roles_count=roles_count,
-                              sites_count=sites_count,
+                              site_count=site_count,
+                              sites_count=sites_count,  # Include both variables
                               machine_count=machine_count,
                               part_count=part_count,
                               admin_links=admin_links,
