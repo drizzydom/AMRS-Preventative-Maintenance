@@ -1291,11 +1291,14 @@ def manage_sites():
     # For GET request or if POST processing fails
     users = User.query.all() if current_user.is_admin else None
     
-    return render_template('admin/sites.html', 
+    return render_template('sites.html', 
                           sites=sites,
                           users=users,
                           is_admin=current_user.is_admin,
-                          now=datetime.now())
+                          now=datetime.now(),
+                          can_create=True,
+                          can_edit=True,
+                          can_delete=True)
 
 @app.route('/machines', methods=['GET', 'POST'])
 @login_required
