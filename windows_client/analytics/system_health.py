@@ -64,16 +64,16 @@ class SystemHealthAnalytics:
             tables = cursor.fetchall()
             table_names = [table[0] for table in tables]
             
-            # Whitelist allowed table names for safety
-            allowed_tables = {'user', 'site', 'machine', 'part', 'maintenance_record', 'machines'}
+            # Whitelist for allowed table names
+            ALLOWED_TABLES = {'user', 'site', 'machine', 'part', 'maintenance_record', 'pending_operations', 'cached_data', 'notification_history', 'maintenance_schedule'}
             
             # Get row counts for each table
             table_stats = []
             total_rows = 0
             
             for table in table_names:
-                if table not in allowed_tables:
-                    continue  # Skip any table not explicitly allowed
+                if table not in ALLOWED_TABLES:
+                    continue
                 try:
                     cursor.execute(f"SELECT COUNT(*) FROM {table}")
                     row_count = cursor.fetchone()[0]
