@@ -260,12 +260,6 @@
                                 <span class="sidebar-link-text">Admin</span>
                             </a>
                         </li>
-                        <li class="sidebar-nav-item">
-                            <a href="{{ url_for('test_email') }}" class="sidebar-link {% if request.endpoint == 'test_email' %}active{% endif %}">
-                                <i class="sidebar-icon fas fa-envelope"></i>
-                                <span class="sidebar-link-text">Test Email</span>
-                            </a>
-                        </li>
                         {% endif %}
                         {% if current_user.is_authenticated and (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'audits.access' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))) %}
                         <li class="sidebar-nav-item">
