@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, date
 from functools import wraps
 
 # Third-party imports
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
 import bleach
@@ -82,6 +82,17 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Configure Flask-Mail
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.example.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'your-email@example.com')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', 'your-password')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'your-email@example.com')
+
+# Initialize Flask-Mail
+mail = Mail(app)
 
 # Set up logging
 logging.basicConfig(
@@ -612,6 +623,27 @@ def admin():
         app.logger.error(f"Error in admin route: {e}")
         flash('An error occurred while loading the admin dashboard.', 'danger')
         return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
+
+@app.route('/test-email', methods=['GET', 'POST'])
+@login_required
+def test_email():
+    if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        recipient = request.form.get('recipient') or current_user.email
+        try:
+            msg = Message(
+                subject='Test Email from AMRS Maintenance Tracker',
+                recipients=[recipient],
+                html=render_template('email/test_email.html', user=current_user),
+                sender=current_app.config['MAIL_DEFAULT_SENDER']
+            )
+            mail.send(msg)
+            flash(f'Test email sent to {recipient}', 'success')
+        except Exception as e:
+            flash(f'Failed to send test email: {e}', 'danger')
+    return render_template('admin/test_email.html')
 
 @app.route('/audits', methods=['GET', 'POST'])
 @login_required
