@@ -326,6 +326,9 @@ class DatabaseOptimizer:
         Returns:
             Dictionary with pruning results
         """
+        # Whitelist for allowed table names
+        ALLOWED_TABLES = {'user', 'site', 'machine', 'part', 'maintenance_record', 'pending_operations', 'cached_data', 'notification_history', 'maintenance_schedule'}
+        
         results = {"pruned_count": 0}
         
         try:
@@ -349,6 +352,9 @@ class DatabaseOptimizer:
             for table in tables_to_prune:
                 name = table["name"]
                 timestamp_field = table["timestamp_field"]
+                
+                if name not in ALLOWED_TABLES:
+                    continue
                 
                 try:
                     # Check if table exists

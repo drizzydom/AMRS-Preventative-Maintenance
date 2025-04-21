@@ -225,6 +225,19 @@ def check_db_connection():
         app.logger.error(f"Database connection error: {e}")
         return False
 
+# Whitelist allowed table and column names for schema changes
+ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions'}
+ALLOWED_COLUMNS = {
+    'users': {'last_login', 'reset_token', 'reset_token_expiration', 'created_at', 'updated_at'},
+    'roles': {'created_at', 'updated_at'},
+    'sites': {'created_at', 'updated_at'},
+    'machines': {'created_at', 'updated_at'},
+    'parts': {'created_at', 'updated_at'},
+    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id'},
+    'audit_tasks': {'created_at', 'updated_at'},
+    'audit_task_completions': {'created_at', 'updated_at'}
+}
+
 # Function to ensure database schema matches models
 def ensure_db_schema():
     """Ensure database schema matches the models by adding missing columns."""
@@ -275,6 +288,8 @@ def ensure_db_schema():
         # Check each table and add missing columns
         with db.engine.connect() as conn:
             for table, columns in table_schemas.items():
+                if table not in ALLOWED_TABLES:
+                    continue
                 # Check if table exists
                 if inspector.has_table(table):
                     print(f"[APP] Checking {table} table schema...")
@@ -282,6 +297,8 @@ def ensure_db_schema():
                     
                     # Add any missing columns
                     for column_name, column_type in columns.items():
+                        if column_name not in ALLOWED_COLUMNS.get(table, set()):
+                            continue
                         if column_name not in existing_columns:
                             print(f"[APP] Adding missing column {column_name} to {table} table")
                             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
