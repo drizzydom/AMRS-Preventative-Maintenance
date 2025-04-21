@@ -13,18 +13,21 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
-import bleach
-import jwt  # Added for password reset tokens
-from sqlalchemy import or_, text  # Added text for SQL execution
+from sqlalchemy import or_, text
 from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv  # Add the missing import for load_dotenv
-import secrets  # Add import for secrets used later in the code
-from sqlalchemy import inspect  # Add import for inspect
-import psycopg2  # Add PostgreSQL driver
-from flask_wtf import CSRFProtect  # Import CSRF protection
+from dotenv import load_dotenv
+import secrets
+from sqlalchemy import inspect
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
+
+# Patch is_admin property to User class immediately after import
+@property
+def is_admin(self):
+    """Add is_admin property to User class for template compatibility"""
+    return is_admin_user(self)
+User.is_admin = is_admin
 
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
@@ -83,9 +86,6 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
-
-# Initialize CSRF protection
-csrf = CSRFProtect(app)
 
 # Configure Flask-Mail
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.example.com')
@@ -484,6 +484,36 @@ def url_for_safe(endpoint, **values):
         else:
             return '/dashboard'
 
+def get_all_permissions():
+    """Return a dictionary of all available permissions."""
+    permissions = {
+        'admin.view': 'View Admin Panel',
+        'admin.users': 'Manage Users',
+        'admin.roles': 'Manage Roles',
+        'sites.view': 'View Sites',
+        'sites.create': 'Create Sites',
+        'sites.edit': 'Edit Sites',
+        'sites.delete': 'Delete Sites',
+        'machines.view': 'View Machines',
+        'machines.create': 'Create Machines',
+        'machines.edit': 'Edit Machines',
+        'machines.delete': 'Delete Machines',
+        'parts.view': 'View Parts',
+        'parts.create': 'Create Parts',
+        'parts.edit': 'Edit Parts',
+        'parts.delete': 'Delete Parts',
+        'maintenance.record': 'Record Maintenance',
+        'maintenance.view': 'View Maintenance Records',
+        'reports.view': 'View Reports',
+        # Audits permissions
+        'audits.view': 'View Audits',
+        'audits.create': 'Create Audit Tasks',
+        'audits.edit': 'Edit Audit Tasks',
+        'audits.delete': 'Delete Audit Tasks',
+        'audits.access': 'Access Audits Page'
+    }
+    return permissions
+
 # Add root route handler
 @app.route('/')
 def index():
@@ -674,7 +704,9 @@ def audits_page():
         flash('You do not have permission to access the Audits page.', 'danger')
         return redirect(url_for('dashboard'))
     user_role = Role.query.filter_by(name=current_user.role).first()
-    if not user_role or 'audits.access' not in (user_role.permissions or ''):
+    # Fix: Split permissions string and check as a list
+    permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+    if not user_role or 'audits.access' not in permissions:
         flash('You do not have permission to access the Audits page.', 'danger')
         return redirect(url_for('dashboard'))
 
@@ -1951,37 +1983,6 @@ def manage_roles():
         return redirect('/dashboard')
     return redirect('/admin/roles')
 
-@app.route('/get_all_permissions')
-def get_all_permissions():
-    """Return a dictionary of all available permissions."""
-    permissions = {
-        'admin.view': 'View Admin Panel',
-        'admin.users': 'Manage Users',
-        'admin.roles': 'Manage Roles',
-        'sites.view': 'View Sites',
-        'sites.create': 'Create Sites',
-        'sites.edit': 'Edit Sites',
-        'sites.delete': 'Delete Sites',
-        'machines.view': 'View Machines',
-        'machines.create': 'Create Machines',
-        'machines.edit': 'Edit Machines',
-        'machines.delete': 'Delete Machines',
-        'parts.view': 'View Parts',
-        'parts.create': 'Create Parts',
-        'parts.edit': 'Edit Parts',
-        'parts.delete': 'Delete Parts',
-        'maintenance.record': 'Record Maintenance',
-        'maintenance.view': 'View Maintenance Records',
-        'reports.view': 'View Reports',
-        # Audits permissions
-        'audits.view': 'View Audits',
-        'audits.create': 'Create Audit Tasks',
-        'audits.edit': 'Edit Audit Tasks',
-        'audits.delete': 'Delete Audit Tasks',
-        'audits.access': 'Access Audits Page'
-    }
-    return permissions
-
 @app.route('/site/create', methods=['GET', 'POST'])
 @login_required
 def create_site():
@@ -2175,15 +2176,6 @@ def manage_users():
         flash('You do not have permission to access this page.', 'danger')
         return redirect('/dashboard')
     return redirect('/admin/users')
-
-# Add current_user.is_admin property for template compatibility
-@property
-def is_admin(self):
-    """Add is_admin property to User class for template compatibility"""
-    return is_admin_user(self)
-
-# Apply the property to the User class
-User.is_admin = is_admin
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
