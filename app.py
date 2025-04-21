@@ -21,6 +21,7 @@ from dotenv import load_dotenv  # Add the missing import for load_dotenv
 import secrets  # Add import for secrets used later in the code
 from sqlalchemy import inspect  # Add import for inspect
 import psycopg2  # Add PostgreSQL driver
+from flask_wtf import CSRFProtect  # Import CSRF protection
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
@@ -82,6 +83,9 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
 
 # Configure Flask-Mail
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.example.com')
