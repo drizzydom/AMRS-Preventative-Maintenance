@@ -678,7 +678,8 @@ def admin():
 @app.route('/test-email', methods=['GET', 'POST'])
 @login_required
 def test_email():
-    if not current_user.is_admin:
+    # Always allow admins
+    if not (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'test_email' in getattr(current_user.role, 'permissions', ''))):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
@@ -699,16 +700,19 @@ def test_email():
 @app.route('/audits', methods=['GET', 'POST'])
 @login_required
 def audits_page():
-    # Only users with audits.access permission can access
-    if not current_user.is_authenticated or not (hasattr(current_user, 'role') and current_user.role):
-        flash('You do not have permission to access the Audits page.', 'danger')
-        return redirect(url_for('dashboard'))
-    user_role = Role.query.filter_by(name=current_user.role).first()
-    # Fix: Split permissions string and check as a list
-    permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-    if not user_role or 'audits.access' not in permissions:
-        flash('You do not have permission to access the Audits page.', 'danger')
-        return redirect(url_for('dashboard'))
+    # Always allow admins
+    if current_user.is_admin:
+        user_role = None
+        permissions = []
+    else:
+        if not current_user.is_authenticated or not (hasattr(current_user, 'role') and current_user.role):
+            flash('You do not have permission to access the Audits page.', 'danger')
+            return redirect(url_for('dashboard'))
+        user_role = Role.query.filter_by(name=current_user.role).first()
+        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+        if not user_role or 'audits.access' not in permissions:
+            flash('You do not have permission to access the Audits page.', 'danger')
+            return redirect(url_for('dashboard'))
 
     # Handle audit task creation (admin only)
     if current_user.is_admin and request.method == 'POST' and 'create_audit' in request.form:
