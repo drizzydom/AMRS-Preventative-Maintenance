@@ -50,7 +50,6 @@ logs/
 log.txt
 
 # Sensitive configuration files
-config.py
 .env
 secrets.py
 credentials.py
