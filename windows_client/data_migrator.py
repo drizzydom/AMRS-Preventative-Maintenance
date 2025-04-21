@@ -12,6 +12,9 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QProgressBar,
                            QHBoxLayout, QCheckBox, QGroupBox)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
+# Whitelist for allowed table names
+ALLOWED_TABLES = {'user', 'site', 'machine', 'part', 'maintenance_record', 'pending_operations', 'cached_data', 'notification_history', 'maintenance_schedule'}
+
 class MigrationWorker(QThread):
     """Worker thread for database migration tasks"""
     
@@ -65,6 +68,8 @@ class MigrationWorker(QThread):
             
             # Process each table
             for i, table in enumerate(self.tables):
+                if table not in ALLOWED_TABLES:
+                    continue
                 self.update_progress.emit(i, total_tables, f"Processing table {table}...")
                 
                 # Get table schema
@@ -106,6 +111,8 @@ class MigrationWorker(QThread):
                 
                 # Copy data if requested
                 if self.include_data:
+                    if table not in ALLOWED_TABLES:
+                        continue
                     # Get data from SQLite
                     sqlite_cursor.execute(f"SELECT * FROM {table}")
                     rows = sqlite_cursor.fetchall()
@@ -175,6 +182,8 @@ class MigrationWorker(QThread):
             
             # Process each table
             for i, table in enumerate(self.tables):
+                if table not in ALLOWED_TABLES:
+                    continue
                 self.update_progress.emit(i, total_tables, f"Processing table {table}...")
                 
                 # Get table schema from PostgreSQL
@@ -232,6 +241,8 @@ class MigrationWorker(QThread):
                 
                 # Copy data if requested
                 if self.include_data:
+                    if table not in ALLOWED_TABLES:
+                        continue
                     # Get data from PostgreSQL
                     column_list = ", ".join(column_names)
                     pg_cursor.execute(f"SELECT {column_list} FROM {table}")
