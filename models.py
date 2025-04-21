@@ -3,6 +3,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from datetime import datetime
 import uuid
+from sqlalchemy.dialects.postgresql import JSON as PG_JSON
+from sqlalchemy.types import JSON as SA_JSON
+from sqlalchemy import Table, Column, Integer, ForeignKey, Date, Boolean
 
 db = SQLAlchemy()
 
@@ -11,6 +14,13 @@ user_site = db.Table(
     'user_site',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('site_id', db.Integer, db.ForeignKey('sites.id'), primary_key=True)
+)
+
+# Association table for AuditTask <-> Machine
+machine_audit_task = Table(
+    'machine_audit_task', db.Model.metadata,
+    Column('audit_task_id', Integer, ForeignKey('audit_tasks.id'), primary_key=True),
+    Column('machine_id', Integer, ForeignKey('machines.id'), primary_key=True)
 )
 
 class User(UserMixin, db.Model):
@@ -29,6 +39,11 @@ class User(UserMixin, db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     reset_token = db.Column(db.String(100), default=None)
     reset_token_expiration = db.Column(db.DateTime, default=None)
+    notification_preferences = db.Column(
+        PG_JSON().with_variant(SA_JSON(), 'sqlite'),
+        nullable=True,
+        default=None
+    )
     
     # Define the relationship with Role
     role = db.relationship('Role', backref='users', lazy='joined')
@@ -60,6 +75,25 @@ class User(UserMixin, db.Model):
         
         # Check if the user's role has the permission
         return self.role.has_permission(permission)
+    
+    def get_notification_preferences(self):
+        default = {
+            'enable_email': True,
+            'notification_frequency': 'weekly',
+            'email_format': 'html',
+            'notification_types': ['overdue', 'due_soon']
+        }
+        if not self.notification_preferences:
+            return default
+        prefs = self.notification_preferences.copy()
+        for k, v in default.items():
+            if k not in prefs:
+                prefs[k] = v
+        return prefs
+
+    def set_notification_preferences(self, prefs):
+        self.notification_preferences = prefs
+        db.session.commit()
     
     def __repr__(self):
         return f'<User {self.username}>'
@@ -178,3 +212,25 @@ class MaintenanceRecord(db.Model):
     
     def __repr__(self):
         return f'<MaintenanceRecord {self.id} for Part {self.part_id}>'
+
+class AuditTask(db.Model):
+    __tablename__ = 'audit_tasks'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    site_id = db.Column(db.Integer, db.ForeignKey('sites.id'), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    machines = db.relationship('Machine', secondary=machine_audit_task, backref='audit_tasks')
+    completions = db.relationship('AuditTaskCompletion', backref='audit_task', lazy=True, cascade="all, delete-orphan")
+
+class AuditTaskCompletion(db.Model):
+    __tablename__ = 'audit_task_completions'
+    id = db.Column(db.Integer, primary_key=True)
+    audit_task_id = db.Column(db.Integer, db.ForeignKey('audit_tasks.id'), nullable=False)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    completed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    completed_at = db.Column(db.DateTime)

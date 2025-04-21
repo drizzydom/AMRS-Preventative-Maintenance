@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Audits - Maintenance Tracker{% endblock %}
+
+{% block header_title %}Audits{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 mb-4">
+            <h2 class="h4">Audit Tasks for {{ today.strftime('%Y-%m-%d') }}</h2>
+        </div>
+        {% if current_user.is_admin %}
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Create New Audit Task</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <input type="hidden" name="create_audit" value="1">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Task Name</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="site_id" class="form-label">Site</label>
+                            <select class="form-select" id="site_id" name="site_id" required>
+                                <option value="">Select a site</option>
+                                {% for site in sites %}
+                                <option value="{{ site.id }}">{{ site.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Machines</label>
+                            <div class="row">
+                                {% for site in sites %}
+                                <div class="col-12 mb-2">
+                                    <strong>{{ site.name }}</strong>
+                                    <div class="row">
+                                        {% for machine in site.machines %}
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="machine_ids" id="machine_{{ machine.id }}" value="{{ machine.id }}">
+                                                <label class="form-check-label" for="machine_{{ machine.id }}">{{ machine.name }}</label>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Audit Task</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="col-12">
+            <form method="post">
+                <input type="hidden" name="checkoff" value="1">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Today's Audit Tasks</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if audit_tasks %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Task</th>
+                                        <th>Site</th>
+                                        <th>Description</th>
+                                        <th>Machines</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for task in audit_tasks %}
+                                    <tr>
+                                        <td>{{ task.name }}</td>
+                                        <td>{{ task.site_id and sites|selectattr('id', 'equalto', task.site_id)|first.name }}</td>
+                                        <td>{{ task.description }}</td>
+                                        <td>
+                                            <div class="row">
+                                                {% for machine in task.machines %}
+                                                <div class="col-md-6 col-lg-4 mb-2">
+                                                    <div class="d-flex align-items-center">
+                                                        <input type="checkbox" class="form-check-input me-2" name="complete_{{ task.id }}_{{ machine.id }}" id="complete_{{ task.id }}_{{ machine.id }}" {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}checked disabled{% endif %}>
+                                                        <label class="form-check-label" for="complete_{{ task.id }}_{{ machine.id }}">
+                                                            {{ machine.name }}
+                                                            {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}
+                                                                <span class="badge bg-success ms-2">Checked Off</span>
+                                                            {% else %}
+                                                                <span class="badge bg-warning text-dark ms-2">Pending</span>
+                                                            {% endif %}
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-3">
+                            <button type="submit" class="btn btn-success">Save Check-Offs</button>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">No audit tasks found.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

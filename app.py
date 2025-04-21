@@ -6,7 +6,7 @@ import string
 import logging
 import signal
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from functools import wraps
 
 # Third-party imports
@@ -23,7 +23,7 @@ from sqlalchemy import inspect  # Add import for inspect
 import psycopg2  # Add PostgreSQL driver
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
 
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
@@ -244,6 +244,14 @@ def ensure_db_schema():
                 'updated_at': 'TIMESTAMP'
             },
             'maintenance_records': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'audit_tasks': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'audit_task_completions': {
                 'created_at': 'TIMESTAMP',
                 'updated_at': 'TIMESTAMP'
             }
@@ -604,6 +612,84 @@ def admin():
         app.logger.error(f"Error in admin route: {e}")
         flash('An error occurred while loading the admin dashboard.', 'danger')
         return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
+
+@app.route('/audits', methods=['GET', 'POST'])
+@login_required
+def audits_page():
+    # Only users with audits.access permission can access
+    if not current_user.is_authenticated or not (hasattr(current_user, 'role') and current_user.role):
+        flash('You do not have permission to access the Audits page.', 'danger')
+        return redirect(url_for('dashboard'))
+    user_role = Role.query.filter_by(name=current_user.role).first()
+    if not user_role or 'audits.access' not in (user_role.permissions or ''):
+        flash('You do not have permission to access the Audits page.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # Handle audit task creation (admin only)
+    if current_user.is_admin and request.method == 'POST' and 'create_audit' in request.form:
+        name = request.form.get('name')
+        description = request.form.get('description')
+        site_id = request.form.get('site_id')
+        machine_ids = request.form.getlist('machine_ids')
+        if name and site_id and machine_ids:
+            audit_task = AuditTask(
+                name=name,
+                description=description,
+                site_id=site_id,
+                created_by=current_user.id
+            )
+            for mid in machine_ids:
+                machine = Machine.query.get(int(mid))
+                if machine:
+                    audit_task.machines.append(machine)
+            db.session.add(audit_task)
+            db.session.commit()
+            flash('Audit task created.', 'success')
+            return redirect(url_for('audits_page'))
+        else:
+            flash('Please provide all required fields.', 'danger')
+
+    # Handle daily check-off
+    if request.method == 'POST' and 'checkoff' in request.form:
+        for key, value in request.form.items():
+            if key.startswith('complete_'):
+                _, audit_task_id, machine_id = key.split('_')
+                audit_task_id = int(audit_task_id)
+                machine_id = int(machine_id)
+                today = date.today()
+                completion = AuditTaskCompletion.query.filter_by(
+                    audit_task_id=audit_task_id, machine_id=machine_id, date=today
+                ).first()
+                if not completion:
+                    completion = AuditTaskCompletion(
+                        audit_task_id=audit_task_id,
+                        machine_id=machine_id,
+                        date=today,
+                        completed=True,
+                        completed_by=current_user.id,
+                        completed_at=datetime.utcnow()
+                    )
+                    db.session.add(completion)
+                else:
+                    completion.completed = True
+                    completion.completed_by = current_user.id
+                    completion.completed_at = datetime.utcnow()
+        db.session.commit()
+        flash('Audit tasks updated for today.', 'success')
+        return redirect(url_for('audits_page'))
+
+    # Show all audit tasks for sites the user can access
+    if current_user.is_admin:
+        audit_tasks = AuditTask.query.all()
+        sites = Site.query.all()
+    else:
+        # Show only audit tasks for user's sites
+        user_site_ids = [site.id for site in current_user.sites]
+        audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(user_site_ids)).all()
+        sites = current_user.sites
+    today = date.today()
+    completions = {(c.audit_task_id, c.machine_id): c for c in AuditTaskCompletion.query.filter_by(date=today).all()}
+    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today)
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
@@ -1161,6 +1247,26 @@ def user_profile():
         app.logger.error(f"Error in user_profile: {e}")
         flash('An error occurred while loading your profile.', 'danger')
         return redirect(url_for('dashboard'))
+
+@app.route('/update_notification_preferences', methods=['POST'])
+@login_required
+def update_notification_preferences():
+    user = current_user
+    prefs = user.get_notification_preferences()
+    enable_email = request.form.get('enable_email') == 'on'
+    notification_frequency = request.form.get('notification_frequency', 'weekly')
+    email_format = request.form.get('email_format', 'html')
+    audit_reminders = request.form.get('audit_reminders') == 'on'
+    # 'none' disables email
+    if notification_frequency == 'none':
+        enable_email = False
+    prefs['enable_email'] = enable_email
+    prefs['notification_frequency'] = notification_frequency
+    prefs['email_format'] = email_format
+    prefs['audit_reminders'] = audit_reminders
+    user.set_notification_preferences(prefs)
+    flash('Notification preferences updated.', 'success')
+    return redirect(url_for('user_profile'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1813,7 +1919,13 @@ def get_all_permissions():
         'parts.delete': 'Delete Parts',
         'maintenance.record': 'Record Maintenance',
         'maintenance.view': 'View Maintenance Records',
-        'reports.view': 'View Reports'
+        'reports.view': 'View Reports',
+        # Audits permissions
+        'audits.view': 'View Audits',
+        'audits.create': 'Create Audit Tasks',
+        'audits.edit': 'Edit Audit Tasks',
+        'audits.delete': 'Delete Audit Tasks',
+        'audits.access': 'Access Audits Page'
     }
     return permissions
 
