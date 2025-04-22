@@ -2220,8 +2220,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     with app.app_context():
-        run_startup_migrations()
+        # Ensure all tables are created before running migrations and admin creation
         db.create_all()
+        run_startup_migrations()
         add_default_admin_if_needed()
         
         try:
