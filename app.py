@@ -8,6 +8,7 @@ import signal
 import argparse
 from datetime import datetime, timedelta, date
 from functools import wraps
+import traceback
 
 # Third-party imports
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app
@@ -1207,7 +1208,6 @@ def delete_user(user_id):
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
 def maintenance_page():
-    """View and manage maintenance records."""
     try:
         # Restrict sites for non-admins
         if current_user.is_admin:
@@ -1272,6 +1272,8 @@ def maintenance_page():
                               sites=sites)
     except Exception as e:
         app.logger.error(f"Error in maintenance_page: {e}")
+        print("[MAINTENANCE ERROR] Exception occurred in maintenance_page:")
+        traceback.print_exc()
         flash('An error occurred while loading maintenance records.', 'danger')
         return redirect(url_for('dashboard'))
 
