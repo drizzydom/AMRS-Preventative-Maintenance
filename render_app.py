@@ -16,3 +16,7 @@ except ImportError as e:
     print(f"Python path: {sys.path}")
     print("Fatal error: Could not import application!")
     raise
+
+from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine, Part, MaintenanceRecord
+with app.app_context():
+    db.create_all()
