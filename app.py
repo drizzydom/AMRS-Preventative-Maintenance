@@ -1556,6 +1556,31 @@ def add_default_admin_if_needed():
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
 
+def run_startup_migrations():
+    """Run all migration/update scripts and log results"""
+    import subprocess
+    import sys
+    migration_scripts = [
+        'add_password_reset_columns.py',
+        'add_maintenance_unit.py',
+        'update_schema.py',
+        'create_maintenance_table.py',
+        'add_notification_preferences.py',
+    ]
+    for script in migration_scripts:
+        script_path = os.path.join(os.path.dirname(__file__), script)
+        if os.path.exists(script_path):
+            print(f"[STARTUP] Running migration: {script}")
+            try:
+                result = subprocess.run([sys.executable, script_path], capture_output=True, text=True)
+                print(f"[STARTUP] {script} output:\n{result.stdout}")
+                if result.stderr:
+                    print(f"[STARTUP] {script} errors:\n{result.stderr}")
+            except Exception as e:
+                print(f"[STARTUP] Failed to run {script}: {e}")
+        else:
+            print(f"[STARTUP] Migration script not found: {script}")
+
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
     """Get synchronization status information."""
@@ -2195,8 +2220,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     with app.app_context():
+        run_startup_migrations()
         db.create_all()
-        ensure_db_schema()
         add_default_admin_if_needed()
         
         try:
@@ -2215,6 +2240,17 @@ if __name__ == '__main__':
         except Exception as e:
             db.session.rollback()
             print(f"[APP] Error performing database integrity checks: {e}")
+        
+        # Healthcheck log
+        try:
+            from simple_healthcheck import check_database
+            print("[STARTUP] Running healthcheck...")
+            if check_database():
+                print("[STARTUP] Healthcheck PASSED: Database is ready.")
+            else:
+                print("[STARTUP] Healthcheck FAILED: Database is not ready.")
+        except Exception as e:
+            print(f"[STARTUP] Healthcheck error: {e}")
     
     port = args.port or int(os.environ.get('PORT', 10000))
     debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
