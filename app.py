@@ -18,6 +18,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
+import smtplib
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
@@ -91,6 +92,35 @@ app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() == '
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
+
+# Checklist for email environment variables:
+# MAIL_SERVER (e.g. smtp.ionos.com)
+# MAIL_PORT (e.g. 587)
+# MAIL_USE_TLS (true/false)
+# MAIL_USERNAME (your email address)
+# MAIL_PASSWORD (your email password)
+# MAIL_DEFAULT_SENDER (your email address)
+
+# Optional: SMTP connectivity test for debugging
+def test_smtp_connection():
+    try:
+        server = os.environ.get('MAIL_SERVER')
+        port = int(os.environ.get('MAIL_PORT', 587))
+        username = os.environ.get('MAIL_USERNAME')
+        password = os.environ.get('MAIL_PASSWORD')
+        use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+        print(f"Testing SMTP connection to {server}:{port} as {username} (TLS={use_tls})")
+        smtp = smtplib.SMTP(server, port, timeout=10)
+        if use_tls:
+            smtp.starttls()
+        smtp.login(username, password)
+        smtp.quit()
+        print("SMTP connection successful!")
+    except Exception as e:
+        print(f"SMTP connection failed: {e}")
+
+# Uncomment to test SMTP connectivity at startup
+# test_smtp_connection()
 
 # Initialize Flask-Mail
 mail = Mail(app)
@@ -2219,7 +2249,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     with app.app_context():
-        # Ensure all tables are created before running migrations and admin creation
+        # Import all models before creating tables
+        from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
         db.create_all()
         run_startup_migrations()
         add_default_admin_if_needed()
