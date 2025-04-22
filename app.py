@@ -420,6 +420,11 @@ def additional_setup():
     """Additional setup tasks."""
     ensure_maintenance_records_schema()
 
+@app.before_first_request
+def ensure_tables_exist():
+    from models import db
+    db.create_all()
+
 # Add database connection check before requests
 @app.before_request
 def ensure_db_connection():
