@@ -64,11 +64,8 @@ def parts_status(self, current_date=None):
 Site.parts_status = parts_status
 Site.get_parts_status = parts_status
 
-# Define PostgreSQL database URI
-POSTGRESQL_DATABASE_URI = os.environ.get(
-    'DATABASE_URL', 
-    'postgresql://maintenance_tracker_data_user:mbVv4EmuXc0co5A0KcHe57SPhW7Kd0gi@dpg-cvv7vebe5dus73ec3ksg-a/maintenance_tracker_data'
-)
+# Define PostgreSQL database URI from environment only
+POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
 
 # Verify persistent storage
 def check_persistent_storage():
@@ -87,16 +84,19 @@ storage_ok = check_persistent_storage()
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
 
-# Configure Flask-Mail
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.example.com')
+# Email configuration (all secrets from environment)
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'your-email@example.com')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', 'your-password')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'your-email@example.com')
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
 
 # Initialize Flask-Mail
 mail = Mail(app)
+
+# Secret key from environment only
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
 # Set up logging
 logging.basicConfig(
@@ -164,7 +164,6 @@ except ImportError as e:
         return app
 
 # Initialize Flask app with better error handling
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '/')
 app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
 
