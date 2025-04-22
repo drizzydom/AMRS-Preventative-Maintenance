@@ -201,6 +201,7 @@ class MaintenanceRecord(db.Model):
     machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=True)  # Add machine_id field
     date = db.Column(db.DateTime, default=datetime.utcnow)
     comments = db.Column(db.Text)
+    maintenance_type = db.Column(db.String(50), nullable=True)  # Added for clarity and migration safety
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
