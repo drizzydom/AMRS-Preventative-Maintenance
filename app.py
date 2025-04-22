@@ -551,6 +551,7 @@ def get_all_permissions():
         'audits.create': 'Create Audit Tasks',
         'audits.edit': 'Edit Audit Tasks',
         'audits.delete': 'Delete Audit Tasks',
+        'audits.complete': 'Complete Audit Tasks',
         'audits.access': 'Access Audits Page'
     }
     return permissions
@@ -741,85 +742,53 @@ def test_email():
 @app.route('/audits', methods=['GET', 'POST'])
 @login_required
 def audits_page():
-    # Always allow admins
+    # Permission checks
+    can_delete_audits = False
+    can_complete_audits = False
     if current_user.is_admin:
-        user_role = None
-        permissions = []
+        can_delete_audits = True
+        can_complete_audits = True
     else:
-        if not current_user.is_authenticated or not (hasattr(current_user, 'role') and current_user.role):
-            flash('You do not have permission to access the Audits page.', 'danger')
-            return redirect(url_for('dashboard'))
-        user_role = Role.query.filter_by(name=current_user.role).first()
+        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
         permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-        if not user_role or 'audits.access' not in permissions:
-            flash('You do not have permission to access the Audits page.', 'danger')
-            return redirect(url_for('dashboard'))
+        can_delete_audits = 'audits.delete' in permissions
+        can_complete_audits = 'audits.complete' in permissions
 
-    # Handle audit task creation (admin only)
-    if current_user.is_admin and request.method == 'POST' and 'create_audit' in request.form:
-        name = request.form.get('name')
-        description = request.form.get('description')
-        site_id = request.form.get('site_id')
-        machine_ids = request.form.getlist('machine_ids')
-        if name and site_id and machine_ids:
-            audit_task = AuditTask(
-                name=name,
-                description=description,
-                site_id=site_id,
-                created_by=current_user.id
-            )
-            for mid in machine_ids:
-                machine = Machine.query.get(int(mid))
-                if machine:
-                    audit_task.machines.append(machine)
-            db.session.add(audit_task)
-            db.session.commit()
-            flash('Audit task created.', 'success')
-            return redirect(url_for('audits_page'))
-        else:
-            flash('Please provide all required fields.', 'danger')
-
-    # Handle daily check-off
-    if request.method == 'POST' and 'checkoff' in request.form:
-        for key, value in request.form.items():
-            if key.startswith('complete_'):
-                _, audit_task_id, machine_id = key.split('_')
-                audit_task_id = int(audit_task_id)
-                machine_id = int(machine_id)
-                today = date.today()
-                completion = AuditTaskCompletion.query.filter_by(
-                    audit_task_id=audit_task_id, machine_id=machine_id, date=today
-                ).first()
-                if not completion:
-                    completion = AuditTaskCompletion(
-                        audit_task_id=audit_task_id,
-                        machine_id=machine_id,
-                        date=today,
-                        completed=True,
-                        completed_by=current_user.id,
-                        completed_at=datetime.utcnow()
-                    )
-                    db.session.add(completion)
-                else:
-                    completion.completed = True
-                    completion.completed_by = current_user.id
-                    completion.completed_at = datetime.utcnow()
-        db.session.commit()
-        flash('Audit tasks updated for today.', 'success')
-        return redirect(url_for('audits_page'))
-
-    # Show all audit tasks for sites the user can access
+    # Restrict sites for non-admins
     if current_user.is_admin:
         audit_tasks = AuditTask.query.all()
         sites = Site.query.all()
     else:
-        # Show only audit tasks for user's sites
         user_site_ids = [site.id for site in current_user.sites]
         audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(user_site_ids)).all()
         sites = current_user.sites
+
     today = date.today()
     completions = {(c.audit_task_id, c.machine_id): c for c in AuditTaskCompletion.query.filter_by(date=today).all()}
-    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today)
+    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits)
+
+@app.route('/audit_tasks/delete/<int:audit_task_id>', methods=['POST'])
+@login_required
+def delete_audit_task(audit_task_id):
+    can_delete_audits = False
+    if current_user.is_admin:
+        can_delete_audits = True
+    else:
+        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
+        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+        can_delete_audits = 'audits.delete' in permissions
+    if not can_delete_audits:
+        flash('You do not have permission to delete audit tasks.', 'danger')
+        return redirect(url_for('audits_page'))
+    try:
+        task = AuditTask.query.get_or_404(audit_task_id)
+        db.session.delete(task)
+        db.session.commit()
+        flash('Audit task deleted successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting audit task: {str(e)}', 'danger')
+    return redirect(url_for('audits_page'))
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
@@ -1240,13 +1209,18 @@ def delete_user(user_id):
 def maintenance_page():
     """View and manage maintenance records."""
     try:
+        # Restrict sites for non-admins
+        if current_user.is_admin:
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+
         # Get all machines, parts, and sites for the form
-        machines = Machine.query.all()
-        parts = Part.query.all()
-        sites = Site.query.all()
+        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in sites])).all()
+        parts = Part.query.filter(Part.machine_id.in_([machine.id for machine in machines])).all()
         
         # Get all maintenance records with related data
-        maintenance_records = MaintenanceRecord.query.order_by(MaintenanceRecord.date.desc()).all()
+        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_([machine.id for machine in machines])).order_by(MaintenanceRecord.date.desc()).all()
         
         # Handle form submission for adding new maintenance records
         if request.method == 'POST':
@@ -1746,7 +1720,7 @@ def admin_section(section):
 @login_required
 def manage_sites():
     """Handle site management page and site creation"""
-    sites = Site.query.all()  
+    sites = current_user.sites if not current_user.is_admin else Site.query.all()
     
     # Handle form submission for adding a new site
     if request.method == 'POST':
@@ -1854,10 +1828,11 @@ def manage_machines():
             machines = Machine.query.filter_by(site_id=site_id).all()
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
-            machines = Machine.query.all()
+            site_ids = [site.id for site in current_user.sites] if not current_user.is_admin else None
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else Machine.query.all()
             title = "Machines"
         
-        sites = Site.query.all()
+        sites = current_user.sites if not current_user.is_admin else Site.query.all()
         
         # Pre-generate URLs for the template to use
         safe_urls = {
@@ -1921,7 +1896,7 @@ def manage_machines():
 def edit_machine(machine_id):
     """Edit an existing machine"""
     machine = Machine.query.get_or_404(machine_id)
-    sites = Site.query.all()
+    sites = current_user.sites if not current_user.is_admin else Site.query.all()
     
     if request.method == 'POST':
         try:
@@ -1959,10 +1934,11 @@ def manage_parts():
             parts = Part.query.filter_by(machine_id=machine_id).all()
             title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
         else:
-            parts = Part.query.all()
+            machine_ids = [machine.id for machine in Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all()] if not current_user.is_admin else None
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else Part.query.all()
             title = "Parts"
         
-        machines = Machine.query.all()
+        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all() if not current_user.is_admin else Machine.query.all()
         
         # Pre-generate URLs for template use
         safe_urls = {
@@ -2138,7 +2114,7 @@ def create_part():
 def edit_part(part_id):
     """Edit an existing part"""
     part = Part.query.get_or_404(part_id)
-    machines = Machine.query.all()
+    machines = Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all() if not current_user.is_admin else Machine.query.all()
     
     if request.method == 'POST':
         try:

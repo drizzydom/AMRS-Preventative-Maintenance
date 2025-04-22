@@ -48,6 +48,19 @@
                             <input type="date" class="form-control" id="date" name="date" value="{{ now.strftime('%Y-%m-%d') }}" required>
                         </div>
                     </div>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="maintenance_type" class="form-label">Maintenance Type</label>
+                            <select class="form-select" id="maintenance_type" name="maintenance_type" required>
+                                <option value="">Select Type</option>
+                                <option value="Routine">Routine</option>
+                                <option value="Repair">Repair</option>
+                                <option value="Inspection">Inspection</option>
+                                <option value="Upgrade">Upgrade</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="2" placeholder="Describe the maintenance performed" required></textarea>
