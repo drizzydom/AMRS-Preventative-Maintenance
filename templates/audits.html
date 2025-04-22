@@ -89,7 +89,10 @@
                                     {% for task in audit_tasks %}
                                     <tr>
                                         <td>{{ task.name }}</td>
-                                        <td>{{ task.site_id and sites|selectattr('id', 'equalto', task.site_id)|first.name }}</td>
+                                        <td>
+                                            {% set site = (sites | selectattr('id', 'equalto', task.site_id) | first) %}
+                                            {{ site.name if site else '' }}
+                                        </td>
                                         <td>{{ task.description }}</td>
                                         <td>
                                             <div class="row">
