@@ -1390,6 +1390,7 @@ def update_notification_preferences():
     prefs['email_format'] = email_format
     prefs['audit_reminders'] = audit_reminders
     user.set_notification_preferences(prefs)
+    db.session.commit()  # Ensure changes are saved
     flash('Notification preferences updated.', 'success')
     return redirect(url_for('user_profile'))
 
