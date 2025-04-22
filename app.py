@@ -263,7 +263,7 @@ ALLOWED_COLUMNS = {
     'sites': {'created_at', 'updated_at'},
     'machines': {'created_at', 'updated_at'},
     'parts': {'created_at', 'updated_at'},
-    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type'},
+    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description'},
     'audit_tasks': {'created_at', 'updated_at'},
     'audit_task_completions': {'created_at', 'updated_at'}
 }
@@ -306,7 +306,8 @@ def ensure_db_schema():
                 'updated_at': 'TIMESTAMP',
                 'client_id': 'VARCHAR(36)',
                 'machine_id': 'INTEGER',
-                'maintenance_type': 'VARCHAR(50)'
+                'maintenance_type': 'VARCHAR(50)',
+                'description': 'TEXT'
             },
             'audit_tasks': {
                 'created_at': 'TIMESTAMP',
