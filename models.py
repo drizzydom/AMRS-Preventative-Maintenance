@@ -203,6 +203,7 @@ class MaintenanceRecord(db.Model):
     comments = db.Column(db.Text)
     maintenance_type = db.Column(db.String(50), nullable=True)  # Added for clarity and migration safety
     description = db.Column(db.Text, nullable=True)  # Add this field for maintenance description
+    performed_by = db.Column(db.String(100), nullable=True)  # Add this field for the user who performed the maintenance
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
