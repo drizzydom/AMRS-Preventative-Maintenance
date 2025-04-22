@@ -1232,41 +1232,47 @@ def maintenance_page():
         # Handle form submission for adding new maintenance records
         if request.method == 'POST':
             machine_id = request.form.get('machine_id')
+            part_id = request.form.get('part_id')
+            user_id = current_user.id
             maintenance_type = request.form.get('maintenance_type')
             description = request.form.get('description')
             date_str = request.form.get('date')
             performed_by = request.form.get('performed_by', '')
             status = request.form.get('status', 'completed')
             notes = request.form.get('notes', '')
-            client_id = request.form.get('client_id')  # Get client_id from form
-            parts_used = request.form.getlist('parts_used')  # Get multiple selected parts
-            
+            client_id = request.form.get('client_id')
+            parts_used = request.form.getlist('parts_used')
+
+            # Validate and cast to int
+            try:
+                machine_id = int(machine_id)
+                part_id = int(part_id)
+                user_id = int(user_id)
+            except (TypeError, ValueError):
+                flash('Invalid machine, part, or user selection.', 'danger')
+                return redirect(url_for('maintenance_page'))
+
             # Validate required fields
-            if not machine_id or not maintenance_type or not description or not date_str:
-                flash('Machine, maintenance type, description, and date are required!', 'danger')
+            if not machine_id or not part_id or not user_id or not maintenance_type or not description or not date_str:
+                flash('Machine, part, user, maintenance type, description, and date are required!', 'danger')
+                return redirect(url_for('maintenance_page'))
             else:
                 try:
-                    # Parse date (expecting format like YYYY-MM-DD)
                     maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
-                    
-                    # Create new maintenance record with client_id
                     new_record = MaintenanceRecord(
                         machine_id=machine_id,
+                        part_id=part_id,
+                        user_id=user_id,
                         maintenance_type=maintenance_type,
                         description=description,
                         date=maintenance_date,
                         performed_by=performed_by,
                         status=status,
                         notes=notes,
-                        client_id=client_id if client_id else None  # Handle client_id
+                        client_id=client_id if client_id else None
                     )
-                    
                     db.session.add(new_record)
                     db.session.commit()
-                    
-                    # Associate parts with the maintenance record if needed
-                    # This would require a many-to-many relationship in your model
-                    
                     flash('Maintenance record added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
                 except ValueError:
