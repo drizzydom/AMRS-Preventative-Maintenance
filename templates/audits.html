@@ -77,6 +77,7 @@
                     </div>
                     <div class="card-body">
                         {% if audit_tasks %}
+                        <p class="mb-2 text-info"><strong>Check off completed audit tasks below and click <span class="badge bg-success">Save Check-Offs</span> to record your progress for today.</strong></p>
                         <div class="table-responsive">
                             <table class="table table-bordered align-middle">
                                 <thead>
@@ -101,8 +102,8 @@
                                                 {% for machine in task.machines %}
                                                 <div class="col-md-6 col-lg-4 mb-2">
                                                     <div class="d-flex align-items-center">
-                                                        <input type="checkbox" class="form-check-input me-2" name="complete_{{ task.id }}_{{ machine.id }}" id="complete_{{ task.id }}_{{ machine.id }}" {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}checked disabled{% endif %}>
-                                                        <label class="form-check-label" for="complete_{{ task.id }}_{{ machine.id }}">
+                                                        <input type="checkbox" class="form-check-input me-2 audit-checkoff" name="complete_{{ task.id }}_{{ machine.id }}" id="complete_{{ task.id }}_{{ machine.id }}" {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}checked disabled{% endif %}>
+                                                        <label class="form-check-label fw-bold" for="complete_{{ task.id }}_{{ machine.id }}">
                                                             {{ machine.name }}
                                                             {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}
                                                                 <span class="badge bg-success ms-2">Checked Off</span>
@@ -121,7 +122,7 @@
                             </table>
                         </div>
                         <div class="text-end mt-3">
-                            <button type="submit" class="btn btn-success">Save Check-Offs</button>
+                            <button type="submit" class="btn btn-success btn-lg">Save Check-Offs</button>
                         </div>
                         {% else %}
                         <div class="alert alert-info">No audit tasks found.</div>
