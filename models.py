@@ -202,6 +202,7 @@ class MaintenanceRecord(db.Model):
     date = db.Column(db.DateTime, default=datetime.utcnow)
     comments = db.Column(db.Text)
     maintenance_type = db.Column(db.String(50), nullable=True)  # Added for clarity and migration safety
+    description = db.Column(db.Text, nullable=True)  # Add this field for maintenance description
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
