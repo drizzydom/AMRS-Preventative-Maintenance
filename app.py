@@ -270,13 +270,10 @@ ALLOWED_COLUMNS = {
 
 # Function to ensure database schema matches models
 def ensure_db_schema():
-    """Ensure database schema matches the models by adding missing columns."""
+    """Ensure database schema matches the models by adding missing columns and fixing column types."""
     try:
         print("[APP] Checking database schema...")
-        # Create a connection and inspect the database
         inspector = inspect(db.engine)
-        
-        # Define table schemas
         table_schemas = {
             'users': {
                 'last_login': 'TIMESTAMP',
@@ -321,18 +318,13 @@ def ensure_db_schema():
                 'updated_at': 'TIMESTAMP'
             }
         }
-        
-        # Check each table and add missing columns
         with db.engine.connect() as conn:
             for table, columns in table_schemas.items():
                 if table not in ALLOWED_TABLES:
                     continue
-                # Check if table exists
                 if inspector.has_table(table):
                     print(f"[APP] Checking {table} table schema...")
-                    existing_columns = {column['name'] for column in inspector.get_columns(table)}
-                    
-                    # Add any missing columns
+                    existing_columns = {column['name']: column for column in inspector.get_columns(table)}
                     for column_name, column_type in columns.items():
                         if column_name not in ALLOWED_COLUMNS.get(table, set()):
                             continue
@@ -340,8 +332,18 @@ def ensure_db_schema():
                             print(f"[APP] Adding missing column {column_name} to {table} table")
                             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
                             conn.commit()
-                    
-                    # Initialize timestamp columns with current timestamp if they were just added
+                        else:
+                            # Check and fix type for client_id in maintenance_records
+                            if table == 'maintenance_records' and column_name == 'client_id':
+                                db_type = existing_columns[column_name]['type']
+                                # Only fix if not already VARCHAR/CHAR/TEXT
+                                if not (hasattr(db_type, 'length') and db_type.length == 36) and 'char' not in str(db_type).lower() and 'text' not in str(db_type).lower():
+                                    print("[APP] Altering client_id column type to VARCHAR(36) in maintenance_records table")
+                                    try:
+                                        conn.execute(text("ALTER TABLE maintenance_records ALTER COLUMN client_id TYPE VARCHAR(36) USING client_id::text"))
+                                        conn.commit()
+                                    except Exception as e:
+                                        print(f"[APP] Could not alter client_id column type: {e}")
                     if 'created_at' in columns and 'created_at' not in existing_columns:
                         conn.execute(text(f"UPDATE {table} SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
                         conn.commit()
