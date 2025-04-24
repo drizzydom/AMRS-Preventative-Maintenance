@@ -5,6 +5,15 @@
 {% block header_title %}User Profile{% endblock %}
 
 {% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <ul id="flashes">
+    {% for category, message in messages %}
+      <li class="flash {{ category }}">{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
 <div class="row mx-0 w-100">
   <div class="col-12 px-0">
     <div class="row">

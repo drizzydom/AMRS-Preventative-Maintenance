@@ -743,6 +743,16 @@ def admin_audit_history():
     users = {u.id: u for u in User.query.all()}
     return render_template('admin/audit_history.html', completions=completions, audit_tasks=audit_tasks, machines=machines, users=users)
 
+@app.route('/admin/excel-import', methods=['GET'])
+@login_required
+def admin_excel_import():
+    """Admin page for Excel data import."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    # You can render a template or just show a simple message for now
+    return render_template('admin/excel_import.html') if os.path.exists(os.path.join('templates', 'admin', 'excel_import.html')) else "<h1>Excel Import Page</h1>"
+
 @app.route('/test-email', methods=['GET', 'POST'])
 @login_required
 def test_email():
@@ -1528,20 +1538,22 @@ def user_profile():
     try:
         user = User.query.get(current_user.id)
         if request.method == 'POST':
-            # Get form data
             email = request.form.get('email')
             current_password = request.form.get('current_password')
             new_password = request.form.get('new_password')
             confirm_password = request.form.get('confirm_password')
             email_changed = email and email != user.email
             password_changed = current_password and new_password
+
             # Check if email is already in use by another user
             if email_changed and User.query.filter_by(email=email).first():
                 flash('Email is already in use by another account.', 'danger')
                 return redirect(url_for('user_profile'))
+
             # Update email if it changed
             if email_changed:
                 user.email = email
+
             # Update password if provided
             if password_changed:
                 if not check_password_hash(user.password_hash, current_password):
@@ -1554,9 +1566,12 @@ def user_profile():
                     flash('New passwords do not match.', 'danger')
                     return redirect(url_for('user_profile'))
                 user.password_hash = generate_password_hash(new_password)
+
             if email_changed or password_changed:
                 db.session.commit()
                 flash('Profile updated successfully!', 'success')
+                return redirect(url_for('user_profile'))  # <-- Ensure redirect after update
+
         return render_template('profile.html', user=user)
     except Exception as e:
         app.logger.error(f"Error in user_profile: {e}")
@@ -1936,9 +1951,8 @@ def admin_section(section):
     if not is_admin_user(current_user):
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
-    
     if section == 'users':
-        return render_template('admin/users.html', users=User.query.all())
+        return render_template('admin/users.html',users=User.query.all())
     elif section == 'roles':
         return render_template('admin/roles.html', roles=Role.query.all())
     # Handle other sections...
@@ -2104,7 +2118,7 @@ def manage_machines():
                 return redirect(url_for('manage_machines', site_id=site_id))
             except Exception as e:
                 db.session.rollback()
-                flash(f'Error adding machine: {str(e)}', 'error')
+                flash(f'Error adding machine: {str(e)}', 'danger')
         
         return render_template('admin/machines.html', 
                               machines=machines,
@@ -2202,7 +2216,7 @@ def manage_parts():
             except Exception as e:
                 db.session.rollback()
                 app.logger.error(f"Error adding part: {e}")
-                flash(f'Error adding part: {str(e)}', 'error')
+                flash(f'Error adding part: {str(e)}', 'danger')
         
         return render_template('admin/parts.html', 
                             parts=parts,
@@ -2361,7 +2375,7 @@ def edit_part(part_id):
                 part.maintenance_frequency = int(maintenance_frequency)
                 part.maintenance_unit = maintenance_unit
                 
-                # Calculate maintenance_days based on frequency and unit
+                # Calculate maintenance_days based on frequency
                 if maintenance_unit == 'day':
                     part.maintenance_days = part.maintenance_frequency
                 elif maintenance_unit == 'week':
@@ -2451,6 +2465,65 @@ def manage_users():
         flash('You do not have permission to access this page.', 'danger')
         return redirect('/dashboard')
     return redirect('/admin/users')
+
+@app.route('/import_excel', methods=['GET', 'POST'])
+@login_required
+def import_excel_route():
+    """Handle Excel file imports to add data to the system."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to import data.', 'danger')
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            flash('No file part', 'danger')
+            flash('Import complete', 'info')
+            return redirect(request.referrer or url_for('admin_excel_import'))
+            
+        file = request.files['file']
+        
+        if file.filename == '':
+            flash('No selected file', 'danger')
+            flash('Import complete', 'info')
+            return redirect(request.referrer or url_for('admin_excel_import'))
+            
+        if file and '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ['xlsx', 'xls']:
+            try:
+                # Save the uploaded file temporarily
+                import tempfile
+                from excel_importer import import_excel
+                
+                # Create a temporary file
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+                file.save(temp_file.name)
+                temp_file.close()
+                
+                # Import data from the Excel file
+                try:
+                    stats = import_excel(temp_file.name)
+                    # Remove the temporary file
+                    import os
+                    os.unlink(temp_file.name)
+                    # Display import results
+                    success_message = f"Data imported successfully! Added {stats['sites_added']} sites, {stats['machines_added']} machines, and {stats['parts_added']} parts."
+                    flash(success_message, 'success')
+                except Exception as e:
+                    flash(f'Error importing data: {str(e)}', 'danger')
+                flash('Import complete', 'info')
+                return redirect(url_for('admin_excel_import'))
+            except Exception as e:
+                app.logger.error(f"Excel import error: {e}")
+                flash(f'Error importing data: {str(e)}', 'danger')
+                flash('Import complete', 'info')
+                return redirect(url_for('admin_excel_import'))
+        else:
+            flash('Invalid file type. Please upload an Excel file (.xlsx, .xls)', 'danger')
+            flash('Import complete', 'info')
+            return redirect(url_for('admin_excel_import'))
+            
+    # GET request - redirect to the Excel import page
+    return redirect(url_for('admin_excel_import'))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')

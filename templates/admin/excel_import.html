@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+
+{% block title %}Excel Import{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0 text-gray-800">Excel Data Import</h1>
+            <p class="mb-4">Upload an Excel file to import sites, machines, and parts.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Upload Excel File</h6>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('import_excel_route') }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="file" class="form-label">Excel File (*.xlsx, *.xls)</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required>
+                            <div class="form-text">Upload an Excel file with sites, machines, and parts data.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Import Data</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Instructions</h6>
+                </div>
+                <div class="card-body">
+                    <h5>File Format</h5>
+                    <p>Your Excel file should have the following sheets:</p>
+                    <ul>
+                        <li><strong>Sites</strong> - with columns: Name, Location, Contact Email</li>
+                        <li><strong>Machines</strong> - with columns: Name, Model, Site Name, Serial Number</li>
+                        <li><strong>Parts</strong> - with columns: Name, Machine Name, Description</li>
+                    </ul>
+                    <p>Download a <a href="#" class="text-primary">sample template</a> to get started.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
