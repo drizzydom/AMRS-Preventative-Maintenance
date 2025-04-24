@@ -1,6 +1,5 @@
 from models import db
 from sqlalchemy import inspect, text
-from app import app
 
 EXPECTED_SCHEMA = {
     'audit_tasks': {
@@ -23,6 +22,7 @@ def add_missing_columns(engine, table, columns):
                     print(f"Error adding column {col} to {table}: {e}")
 
 def run_auto_migration():
+    from app import app  # Import here to avoid circular import
     with app.app_context():
         db.create_all()
         for table, columns in EXPECTED_SCHEMA.items():
