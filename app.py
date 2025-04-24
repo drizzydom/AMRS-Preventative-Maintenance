@@ -1464,68 +1464,35 @@ def machine_history(machine_id):
 def user_profile():
     """View and edit user profile."""
     try:
-        # Get the username from the form data or current user
-        username = request.form.get('username', current_user.username)
-        app.logger.debug(f"Processing profile update for username={username}")
-        
-        # Find the user object - use the username from the login session
-        # For testing consistency, use the username in the POST form data if provided
-        user = User.query.filter_by(username=username).first()
-        
-        if not user:
-            app.logger.error(f"User with username '{username}' not found!")
-            flash('User not found.', 'danger')
-            return redirect(url_for('dashboard'))
-        
+        user = current_user  # Always use the logged-in user
         if request.method == 'POST':
             form_type = request.form.get('form_type')
-            
             # Profile form submission
             if form_type == 'profile':
                 email = request.form.get('email')
                 full_name = request.form.get('full_name')
-                
                 # Validate email input
                 if not email or '@' not in email:
                     flash('Please enter a valid email address.', 'danger')
                     return redirect(url_for('user_profile'))
-                
-                # Log the state before changes
-                app.logger.debug(f"BEFORE UPDATE: username={username}, current email={user.email}, new email={email}")
                 email_changed = email != user.email
-
                 # Check if email is already in use by another user
                 if email_changed and User.query.filter(User.email == email, User.id != user.id).first():
                     flash('Email is already in use by another account.', 'danger')
                     return redirect(url_for('user_profile'))
-
-                # Update email 
                 if email_changed:
-                    old_email = user.email
                     user.email = email
-                    app.logger.debug(f"Updated email for {username} from '{old_email}' to '{email}'")
-
-                # Update full name if provided
                 if full_name is not None:
                     user.full_name = full_name
-
-                # Force commit with explicit transaction  
                 try:
                     db.session.add(user)
                     db.session.commit()
-                    
-                    # Verify the change by fetching fresh user data
-                    fresh_user = User.query.filter_by(username=username).first()
-                    app.logger.debug(f"AFTER COMMIT: username={username}, email={fresh_user.email}")
-                    
                     flash('Profile updated successfully!', 'success')
                 except Exception as e:
                     db.session.rollback()
                     app.logger.error(f"Database error updating profile: {e}")
                     flash('Error updating profile.', 'danger')
-                
                 return redirect(url_for('user_profile'))
-            
             # Password form submission
             elif form_type == 'password':
                 current_password = request.form.get('current_password')
@@ -1965,7 +1932,7 @@ def server_error(e):
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Server Error</h1>
             <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
-        </body>
+               </body>
         </html>
         ''', 500
 
@@ -2351,6 +2318,20 @@ def import_excel_route():
             
     # GET request - redirect to the Excel import page
     return redirect(url_for('admin_excel_import'))
+
+@app.route('/part/edit/<int:part_id>', methods=['GET', 'POST'])
+@login_required
+def edit_part(part_id):
+    part = Part.query.get_or_404(part_id)
+    machines = Machine.query.all()
+    if request.method == 'POST':
+        part.name = request.form.get('name', part.name)
+        part.description = request.form.get('description', part.description)
+        part.machine_id = request.form.get('machine_id', part.machine_id)
+        db.session.commit()
+        flash('Part updated successfully.', 'success')
+        return redirect(url_for('manage_parts'))
+    return render_template('edit_part.html', part=part, machines=machines)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
