@@ -2,7 +2,7 @@
 API endpoints for the maintenance tracker application.
 These enable the desktop client to interact with the system via HTTP requests.
 """
-from flask import jsonify, request, Blueprint
+from flask import jsonify, request, Blueprint, abort
 from functools import wraps
 import jwt
 import datetime
@@ -135,7 +135,9 @@ def get_sites(current_user):
 @token_required
 def get_site(current_user, site_id):
     """API endpoint to get site details"""
-    site = Site.query.get_or_404(site_id)
+    site = db.session.get(Site, site_id)
+    if not site:
+        abort(404)
     
     # Check if user has access to this site
     if not current_user.is_admin and site not in current_user.sites:
@@ -201,7 +203,9 @@ def get_machines(current_user):
 @token_required
 def get_machine(current_user, machine_id):
     """API endpoint to get machine details with parts"""
-    machine = Machine.query.get_or_404(machine_id)
+    machine = db.session.get(Machine, machine_id)
+    if not machine:
+        abort(404)
     site = Site.query.get(machine.site_id)
     
     # Check if user has access to this machine's site
@@ -321,7 +325,9 @@ def record_maintenance(current_user):
     part_id = data.get('part_id')
     notes = data.get('notes', '')
     
-    part = Part.query.get_or_404(part_id)
+    part = db.session.get(Part, part_id)
+    if not part:
+        abort(404)
     machine = Machine.query.get(part.machine_id)
     
     # Check if user has access to this machine's site
