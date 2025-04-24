@@ -4,6 +4,7 @@ from app import app as flask_app, db as _db, ensure_db_schema
 from models import User, Role, Site, Machine, Part, MaintenanceRecord
 from flask import template_rendered
 from contextlib import contextmanager
+from auto_migrate import run_auto_migration
 
 @pytest.fixture(scope='session')
 def app():
@@ -13,7 +14,8 @@ def app():
     flask_app.config['WTF_CSRF_ENABLED'] = False
     with flask_app.app_context():
         _db.create_all()
-        ensure_db_schema()  # Run migrations/auto-migrations
+        run_auto_migration()  # Run migrations/auto-migrations just like production
+        ensure_db_schema()  # Run legacy migrations if needed
         yield flask_app
         _db.drop_all()
 
