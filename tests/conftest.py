@@ -59,3 +59,21 @@ def create_part(db):
         db.session.commit()
         return part
     return do_create
+
+@pytest.fixture
+def setup_test_data(db):
+    # Create two sites
+    site1 = Site(name='Site 1')
+    site2 = Site(name='Site 2')
+    db.session.add_all([site1, site2])
+    db.session.commit()
+    # Create a machine assigned to site1
+    machine = Machine(name='Machine 1', site_id=site1.id)
+    db.session.add(machine)
+    db.session.commit()
+    # Assign admin user to both sites
+    admin = User.query.filter_by(username='admin').first()
+    if admin:
+        admin.sites = [site1, site2]
+        db.session.commit()
+    return {'site1': site1, 'site2': site2, 'machine': machine, 'admin': admin}
