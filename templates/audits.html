@@ -43,6 +43,21 @@
                             </select>
                         </div>
                         <div class="mb-3">
+                            <label for="interval" class="form-label">Interval</label>
+                            <select class="form-select" id="interval" name="interval" required>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                            <div class="form-text">How often this audit task should be completed.</div>
+                        </div>
+                        <div class="mb-3" id="custom-interval-group" style="display:none;">
+                            <label for="custom_interval_days" class="form-label">Custom Interval (days)</label>
+                            <input type="number" class="form-control" id="custom_interval_days" name="custom_interval_days" min="1" max="365" value="30">
+                            <div class="form-text">Number of days between required completions for this audit task.</div>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Machines</label>
                             <div class="row">
                                 {% for site in sites %}
@@ -111,13 +126,27 @@
                                   {% for task in audit_tasks if task.site_id == site.id and machine in task.machines %}
                                     <div class="col-md-6 col-lg-4 mb-2">
                                       <div class="d-flex align-items-center">
-                                        <input type="checkbox" class="form-check-input audit-checkoff" name="complete_{{ task.id }}_{{ machine.id }}" id="complete_{{ task.id }}_{{ machine.id }}" {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}checked disabled{% endif %}>
+                                        <input type="checkbox" class="form-check-input audit-checkoff" name="complete_{{ task.id }}_{{ machine.id }}" id="complete_{{ task.id }}_{{ machine.id }}"
+                                          {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}checked disabled
+                                          {% elif eligibility.get((task.id, machine.id)) and eligibility.get((task.id, machine.id)) > today %}disabled
+                                          {% endif %}>
                                         <label class="form-check-label fw-bold" for="complete_{{ task.id }}_{{ machine.id }}">
                                           {{ task.name }}
                                           {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}
                                             <span class="badge bg-success ms-2">Checked Off</span>
                                           {% else %}
                                             <span class="badge bg-warning text-dark ms-2">Pending</span>
+                                          {% endif %}
+                                          <span class="badge bg-secondary ms-2">
+                                            Interval:
+                                            {% if task.interval == 'custom' and task.custom_interval_days %}
+                                              Custom (every {{ task.custom_interval_days }} days)
+                                            {% else %}
+                                              {{ task.interval|capitalize }}
+                                            {% endif %}
+                                          </span>
+                                          {% if eligibility.get((task.id, machine.id)) and eligibility.get((task.id, machine.id)) > today %}
+                                            <span class="badge bg-light text-muted ms-2">Next eligible: {{ eligibility.get((task.id, machine.id)).strftime('%Y-%m-%d') }}</span>
                                           {% endif %}
                                         </label>
                                         {% if can_delete_audits %}
@@ -171,3 +200,21 @@
 </div>
 {% endif %}
 {% endblock %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var intervalSelect = document.getElementById('interval');
+    var customGroup = document.getElementById('custom-interval-group');
+    if (intervalSelect) {
+        function toggleCustom() {
+            if (intervalSelect.value === 'custom') {
+                customGroup.style.display = 'block';
+            } else {
+                customGroup.style.display = 'none';
+            }
+        }
+        intervalSelect.addEventListener('change', toggleCustom);
+        toggleCustom();
+    }
+});
+</script>

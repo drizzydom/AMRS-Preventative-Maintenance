@@ -18,6 +18,7 @@ A comprehensive desktop and web application for tracking and managing preventati
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License and Legal](#license-and-legal)
+- [Audit Reminder System](#audit-reminder-system)
 
 ## Overview
 
@@ -140,3 +141,76 @@ python -m unittest discover tests
 ## License and Legal
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Audit Reminder System
+
+The AMRS Preventative Maintenance System supports automated audit reminder emails for incomplete audit tasks. This helps ensure compliance and timely completion of required audits.
+
+### How It Works
+- At the end of each day, the system checks for audit tasks that have not been completed for each machine.
+- Users assigned to the relevant site and with audit reminders enabled in their notification preferences will receive an email reminder for each incomplete audit task.
+- The reminder email includes the site, machine, audit task name, and interval.
+
+### Enabling Audit Reminders
+- Each user can enable or disable audit reminders in their notification preferences (see your profile page in the web app).
+- Site administrators can ensure that site notification settings are enabled for audit reminders to be sent.
+
+### Running the Notification Scheduler
+
+To send audit reminders automatically, schedule the following command to run daily (e.g., at 5:00 PM):
+
+```
+python notification_scheduler.py audit
+```
+
+#### Example: macOS launchd (Cron Alternative)
+
+1. Create a file at `~/Library/LaunchAgents/com.amrs.auditreminder.plist` with the following contents:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.amrs.auditreminder</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/python3</string>
+        <string>/Users/dominicmoriello/Documents/GitHub/AMRS-Preventative-Maintenance/notification_scheduler.py</string>
+        <string>audit</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>17</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/amrs_auditreminder.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/amrs_auditreminder.err</string>
+</dict>
+</plist>
+```
+
+2. Load the job:
+
+```
+launchctl load ~/Library/LaunchAgents/com.amrs.auditreminder.plist
+```
+
+### Manual Run
+You can also run reminders manually at any time:
+
+```
+python notification_scheduler.py audit
+```
+
+### Template
+The reminder email uses `templates/email/audit_reminder.html`.
+
+---
+
+For more information, see the user profile notification preferences and the [notification_scheduler.py](notification_scheduler.py) script.
