@@ -499,9 +499,13 @@ def inject_site_helpers():
 @app.context_processor
 def inject_common_variables():
     """Inject common variables into all templates."""
+    try:
+        is_auth = getattr(current_user, 'is_authenticated', False)
+    except Exception:
+        is_auth = False
     return {
-        'is_admin_user': is_admin_user(current_user) if current_user.is_authenticated else False,
-        'url_for_safe': url_for_safe,  # Add a safe url_for wrapper
+        'is_admin_user': is_admin_user(current_user) if is_auth else False,
+        'url_for_safe': url_for_safe,
         'datetime': datetime,
         'now': datetime.now()
     }
@@ -1262,6 +1266,15 @@ def delete_site(site_id):
         flash('An error occurred while deleting the site.', 'danger')
         return redirect(url_for('manage_sites'))
 
+@app.route('/part/<int:part_id>/history')
+@login_required
+def part_history_route(part_id):
+    part = Part.query.get_or_404(part_id)
+    machine = part.machine
+    site = machine.site if machine else None
+    maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+    return render_template('part_history.html', part=part, machine=machine, site=site, maintenance_records=maintenance_records, now=datetime.now())
+
 # --- MAINTENANCE DATE UPDATE AND HISTORY FIXES ---
 @login_required
 def part_history(part_id):
@@ -1514,47 +1527,36 @@ def user_profile():
     """View and edit user profile."""
     try:
         user = User.query.get(current_user.id)
-        
         if request.method == 'POST':
             # Get form data
             email = request.form.get('email')
             current_password = request.form.get('current_password')
             new_password = request.form.get('new_password')
             confirm_password = request.form.get('confirm_password')
-            
+            email_changed = email and email != user.email
+            password_changed = current_password and new_password
             # Check if email is already in use by another user
-            if email != user.email and User.query.filter_by(email=email).first():
+            if email_changed and User.query.filter_by(email=email).first():
                 flash('Email is already in use by another account.', 'danger')
                 return redirect(url_for('user_profile'))
-            
             # Update email if it changed
-            if email and email != user.email:
+            if email_changed:
                 user.email = email
-                db.session.commit()
-                flash('Email updated successfully!', 'success')
-            
             # Update password if provided
-            if current_password and new_password:
-                # Verify current password is correct
+            if password_changed:
                 if not check_password_hash(user.password_hash, current_password):
                     flash('Current password is incorrect.', 'danger')
                     return redirect(url_for('user_profile'))
-                    
-                # Validate new password
                 if len(new_password) < 8:
                     flash('New password must be at least 8 characters long.', 'danger')
                     return redirect(url_for('user_profile'))
-                    
-                # Confirm passwords match
                 if new_password != confirm_password:
                     flash('New passwords do not match.', 'danger')
                     return redirect(url_for('user_profile'))
-                    
-                # Update password
                 user.password_hash = generate_password_hash(new_password)
+            if email_changed or password_changed:
                 db.session.commit()
-                flash('Password updated successfully!', 'success')
-                
+                flash('Profile updated successfully!', 'success')
         return render_template('profile.html', user=user)
     except Exception as e:
         app.logger.error(f"Error in user_profile: {e}")
