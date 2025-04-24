@@ -254,3 +254,5 @@ class AuditTaskCompletion(db.Model):
     completed = db.Column(db.Boolean, default=False)
     completed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     completed_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
