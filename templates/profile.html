@@ -7,11 +7,13 @@
 {% block content %}
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-    <ul id="flashes">
     {% for category, message in messages %}
-      <li class="flash {{ category }}">{{ message }}</li>
+      {% set alert_class = "success" if category == "success" else "danger" if category == "error" else category %}
+      <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
     {% endfor %}
-    </ul>
   {% endif %}
 {% endwith %}
 <div class="row mx-0 w-100">
