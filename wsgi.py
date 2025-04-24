@@ -27,6 +27,9 @@ except Exception as e:
 logger.info(f"FLASK_APP: {os.environ.get('FLASK_APP', 'Not set')}")
 logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
 
+from auto_migrate import run_auto_migration
+run_auto_migration()
+
 # Import the Flask app from render_app.py (which imports from app.py)
 from render_app import app
 
