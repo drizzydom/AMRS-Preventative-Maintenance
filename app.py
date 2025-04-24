@@ -27,6 +27,7 @@ import smtplib
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
+from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
 @property
@@ -1931,8 +1932,8 @@ def server_error(e):
         <head><title>Server Error</title></head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Server Error</h1>
-            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
-               </body>
+            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE790        <a href="/" style="color:#FE7900;">home page</a>.</p>
+        </body>
         </html>
         ''', 500
 
@@ -2333,17 +2334,23 @@ def edit_part(part_id):
         return redirect(url_for('manage_parts'))
     return render_template('edit_part.html', part=part, machines=machines)
 
+@app.route('/manage/roles')
+@login_required
+def manage_roles():
+    """Redirect or render the roles management page."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    roles = Role.query.all()
+    return render_template('admin/roles.html', roles=roles)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
     args = parser.parse_args()
-    
     with app.app_context():
-        # Import all models before creating tables
-        from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
-        db.create_all()
-        run_startup_migrations()
+        run_auto_migration()  # Ensure schema is up to date on launch
         add_default_admin_if_needed()
         
         try:
