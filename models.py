@@ -225,6 +225,8 @@ class AuditTask(db.Model):
     description = db.Column(db.Text)
     site_id = db.Column(db.Integer, db.ForeignKey('sites.id'), nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    interval = db.Column(db.String(20), default='daily')  # Options: daily, weekly, monthly, custom
+    custom_interval_days = db.Column(db.Integer, nullable=True)  # Only used if interval == 'custom'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     machines = db.relationship('Machine', secondary=machine_audit_task, backref='audit_tasks')

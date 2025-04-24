@@ -35,13 +35,16 @@ def configure_database(app):
             app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/maintenance.db'
             print(f"[DB_CONFIG] Using local SQLite database at instance/maintenance.db")
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'pool_size': 10,
-        'pool_recycle': 1800,
-        'pool_pre_ping': True,
-        'pool_timeout': 30,
-        'max_overflow': 5,
-        'echo': app.debug,
-        'echo_pool': app.debug,
-    }
+    # Only set engine options for non-in-memory SQLite and non-SQLite databases
+    uri = app.config['SQLALCHEMY_DATABASE_URI']
+    if not (uri.startswith('sqlite:///:memory:') or uri.startswith('sqlite://') and ':memory:' in uri):
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+            'pool_size': 10,
+            'pool_recycle': 1800,
+            'pool_pre_ping': True,
+            'pool_timeout': 30,
+            'max_overflow': 5,
+            'echo': app.debug,
+            'echo_pool': app.debug,
+        }
     return app
