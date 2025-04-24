@@ -13,6 +13,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.info("Starting AMRS Maintenance application for Render.com")
 
+from auto_migrate import run_auto_migration
+run_auto_migration()
+
 # Import the app from the main app.py file
 try:
     # First, try to import directly from app.py
