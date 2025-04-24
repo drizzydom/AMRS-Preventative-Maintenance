@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Audit Completion History{% endblock %}
+{% block header_title %}Audit Completion History{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h2 class="my-4">Audit Completion History</h2>
+  <div class="table-responsive">
+    <table class="table table-striped table-bordered">
+      <thead>
+        <tr>
+          <th>Date Completed</th>
+          <th>Audit Task</th>
+          <th>Machine</th>
+          <th>Completed By</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in completions %}
+        <tr>
+          <td>{{ c.completed_at.strftime('%Y-%m-%d %H:%M') if c.completed_at else c.date.strftime('%Y-%m-%d') }}</td>
+          <td>{{ audit_tasks[c.audit_task_id].name if c.audit_task_id in audit_tasks else c.audit_task_id }}</td>
+          <td>{{ machines[c.machine_id].name if c.machine_id in machines else c.machine_id }}</td>
+          <td>{{ users[c.completed_by].full_name or users[c.completed_by].username if c.completed_by in users else c.completed_by }}</td>
+          <td>{% if c.completed %}<span class="badge bg-success">Completed</span>{% else %}<span class="badge bg-warning text-dark">Pending</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

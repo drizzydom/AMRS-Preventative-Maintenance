@@ -177,9 +177,50 @@
                                        {% if notification_preferences.audit_reminders %}checked{% endif %}>
                                 <label class="form-check-label" for="audit_reminders">
                                     Receive daily audit task reminders
+                                    <i class="fas fa-info-circle text-primary" data-bs-toggle="tooltip" title="If enabled, you'll get an email if any audit task is not checked off for your assigned machines by the end of the day."></i>
                                 </label>
                             </div>
                             <small class="form-text text-muted">If enabled, you'll get an email if any audit task is not checked off for your assigned machines by the end of the day.</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Per-Site Notification Preferences -->
+                    <div class="mb-4">
+                        <div class="alert alert-info mb-3">
+                            <strong>Tip:</strong> Use the toggles below to control which sites you receive maintenance and audit notifications for. Hover over the <i class="fas fa-info-circle text-primary"></i> icons for more info.
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Per-Site Notification Preferences</h6>
+                            </div>
+                            <div class="card-body">
+                                {% if current_user.sites %}
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-sm align-middle mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Site</th>
+                                                    <th>Enable Notifications <i class="fas fa-info-circle text-primary" data-bs-toggle="tooltip" title="Turn off to stop all maintenance and audit emails for this site."></i></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for site in current_user.sites %}
+                                                <tr>
+                                                    <td>{{ site.name }}</td>
+                                                    <td>
+                                                        <input type="checkbox" name="site_notify_{{ site.id }}" id="site_notify_{{ site.id }}"
+                                                            {% if notification_preferences.site_notifications and notification_preferences.site_notifications[site.id|string] %}checked{% endif %}>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <small class="form-text text-muted">Uncheck to disable all maintenance and audit notifications for a specific site.</small>
+                                {% else %}
+                                    <div class="alert alert-info mb-0">You are not assigned to any sites.</div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                     
@@ -258,6 +299,12 @@
         
         // Set initial visibility
         emailFrequencyGroup.style.display = enableEmailCheckbox.checked ? 'block' : 'none';
+
+        // Enable Bootstrap tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     });
 
     function toggleNotificationOptions(enabled) {

@@ -57,7 +57,10 @@ def send_daily_digest():
             for site in sites:
                 if not site.enable_notifications:
                     continue
-                    
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                    continue
                 overdue, due_soon = get_maintenance_due(site)
                 if 'overdue' in notification_types:
                     all_overdue.extend(overdue)
@@ -115,7 +118,10 @@ def send_weekly_digest():
             for site in sites:
                 if not site.enable_notifications:
                     continue
-                    
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                    continue
                 overdue, due_soon = get_maintenance_due(site)
                 if 'overdue' in notification_types:
                     all_overdue.extend(overdue)
@@ -171,6 +177,10 @@ def send_audit_reminders():
                             continue
                         if not prefs.get('audit_reminders', True):
                             continue
+                        # Per-site notification preference check
+                        site_prefs = prefs.get('site_notifications', {})
+                        if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                            continue
                         subject = f"Audit Task Reminder: {task.name} for {machine.name}"
                         html = render_template(
                             'email/audit_reminder.html',
@@ -202,6 +212,10 @@ def send_immediate_notifications():
             notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
             for site in user.sites:
                 if not site.enable_notifications:
+                    continue
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
                     continue
                 overdue, due_soon = get_maintenance_due(site)
                 if 'overdue' in notification_types and overdue:
@@ -259,6 +273,10 @@ def send_monthly_digest():
             all_due_soon = []
             for site in sites:
                 if not site.enable_notifications:
+                    continue
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
                     continue
                 overdue, due_soon = get_maintenance_due(site)
                 if 'overdue' in notification_types:
