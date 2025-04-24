@@ -23,18 +23,19 @@
             <h5 class="card-title mb-0">Profile Information</h5>
           </div>
           <div class="card-body">
-            <form>
+            <form method="post" action="">
+              <input type="hidden" name="form_type" value="profile">
               <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
-                <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly>
+                <input type="text" class="form-control" id="username" name="username" value="{{ user.username }}" readonly>
               </div>
               <div class="mb-3">
                 <label for="fullName" class="form-label">Full Name</label>
-                <input type="text" class="form-control" id="fullName" value="{{ user.full_name }}">
+                <input type="text" class="form-control" id="fullName" name="full_name" value="{{ user.full_name }}">
               </div>
               <div class="mb-3">
                 <label for="email" class="form-label">Email</label>
-                <input type="email" class="form-control" id="email" value="{{ user.email }}">
+                <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}">
               </div>
               <button type="submit" class="btn btn-primary">Update Profile</button>
             </form>
@@ -47,18 +48,19 @@
             <h5 class="card-title mb-0">Change Password</h5>
           </div>
           <div class="card-body">
-            <form>
+            <form method="post" action="">
+              <input type="hidden" name="form_type" value="password">
               <div class="mb-3">
                 <label for="currentPassword" class="form-label">Current Password</label>
-                <input type="password" class="form-control" id="currentPassword">
+                <input type="password" class="form-control" id="currentPassword" name="current_password">
               </div>
               <div class="mb-3">
                 <label for="newPassword" class="form-label">New Password</label>
-                <input type="password" class="form-control" id="newPassword">
+                <input type="password" class="form-control" id="newPassword" name="new_password">
               </div>
               <div class="mb-3">
                 <label for="confirmPassword" class="form-label">Confirm Password</label>
-                <input type="password" class="form-control" id="confirmPassword">
+                <input type="password" class="form-control" id="confirmPassword" name="confirm_password">
               </div>
               <button type="submit" class="btn btn-primary">Change Password</button>
             </form>
