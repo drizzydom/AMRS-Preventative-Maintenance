@@ -1148,11 +1148,13 @@ def edit_user(user_id):
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
 def admin_roles():
-    """Admin page for managing roles."""
+    """Redirect or render the roles management page."""
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
-    return redirect(url_for('manage_roles'))
+    roles = Role.query.all()
+    all_permissions = get_all_permissions()
+    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
 
 @app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
@@ -2438,7 +2440,8 @@ def manage_roles():
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     roles = Role.query.all()
-    return render_template('admin/roles.html', roles=roles)
+    all_permissions = get_all_permissions()
+    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
