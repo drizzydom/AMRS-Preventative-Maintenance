@@ -2282,14 +2282,6 @@ def manage_parts():
         flash('An error occurred while loading the parts page.', 'danger')
         return redirect('/dashboard')
 
-@app.route('/admin/roles')
-@login_required
-def admin_roles():
-    """Admin page for managing roles."""
-    if not is_admin_user(current_user):
-        flash('You do not have permission to access this page.', 'danger')
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('manage_roles'))
 
 @app.route('/manage/users')
 @login_required
