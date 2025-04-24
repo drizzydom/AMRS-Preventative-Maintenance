@@ -2,45 +2,43 @@ import pytest
 from models import AuditTask, AuditTaskCompletion, User
 from datetime import datetime, timedelta
 
-def test_audit_reminder_email_logic(monkeypatch, client, db, login_admin):
+def test_audit_reminder_email_logic(monkeypatch, client, db, login_admin, setup_test_data):
     login_admin()
+    data = setup_test_data
     sent = {}
     def fake_send_email(*args, **kwargs):
         sent['called'] = True
     monkeypatch.setattr('app.mail.send', fake_send_email)
-    # Create audit task and incomplete completion
     client.post('/audits', data={
         'name': 'Reminder Audit',
-        'site_id': 1,
-        'machine_ids': [1],
+        'site_id': data['site1'].id,
+        'machine_ids': [data['machine'].id],
         'interval': 'daily'
     }, follow_redirects=True)
     audit = AuditTask.query.filter_by(name='Reminder Audit').first()
-    # No completion for today, should trigger reminder
     from notification_scheduler import send_audit_reminders
     send_audit_reminders()
     assert sent.get('called')
 
-def test_audit_reminder_respects_site_preferences(monkeypatch, client, db, login_admin):
+def test_audit_reminder_respects_site_preferences(monkeypatch, client, db, login_admin, setup_test_data):
     login_admin()
+    data = setup_test_data
     sent = {'count': 0}
     def fake_send_email(*args, **kwargs):
         sent['count'] += 1
     monkeypatch.setattr('app.mail.send', fake_send_email)
-    # Set user notification preferences to disable site 1
-    user = User.query.get(1)
+    user = data['admin']
     user.notification_preferences = {
         'enable_email': True,
         'notification_frequency': 'daily',
         'audit_reminders': True,
-        'site_notifications': {'1': False}
+        'site_notifications': {str(data['site1'].id): False}
     }
     db.session.commit()
-    # Create audit task for site 1
     client.post('/audits', data={
         'name': 'No Reminder Audit',
-        'site_id': 1,
-        'machine_ids': [1],
+        'site_id': data['site1'].id,
+        'machine_ids': [data['machine'].id],
         'interval': 'daily'
     }, follow_redirects=True)
     from notification_scheduler import send_audit_reminders
