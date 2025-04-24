@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import uuid
 import logging
 from pathlib import Path
-from .security_utils import SecurityUtils
+from windows_client.security_utils import SecurityUtils
 
 class OfflineDatabase:
     def __init__(self, db_path, encrypt=True):
