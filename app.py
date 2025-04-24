@@ -461,16 +461,17 @@ with app.app_context():
     
     try:
         print("[APP] Performing database integrity checks...")
-        admin_users = User.query.filter(or_(
-            User.role.ilike('admin'),
-            User.username == 'admin'
-        )).all()
-        
+        admin_users = User.query.join(Role).filter(
+            or_(
+                Role.name.ilike('admin'),
+                User.username == 'admin'
+            )
+        ).all()
         for user in admin_users:
-            if user.role != 'admin':
-                user.role = 'admin'
+            if not user.role or user.role.name.lower() != 'admin':
+                admin_role = Role.query.filter_by(name='admin').first()
+                user.role = admin_role
                 print(f"[APP] Fixed admin role for user {user.username}")
-        
         db.session.commit()
     except Exception as e:
         db.session.rollback()
@@ -2457,16 +2458,17 @@ if __name__ == '__main__':
         
         try:
             print("[APP] Performing database integrity checks...")
-            admin_users = User.query.filter(or_(
-                User.role.ilike('admin'),
-                User.username == 'admin'
-            )).all()
-            
+            admin_users = User.query.join(Role).filter(
+                or_(
+                    Role.name.ilike('admin'),
+                    User.username == 'admin'
+                )
+            ).all()
             for user in admin_users:
-                if user.role != 'admin':
-                    user.role = 'admin'
+                if not user.role or user.role.name.lower() != 'admin':
+                    admin_role = Role.query.filter_by(name='admin').first()
+                    user.role = admin_role
                     print(f"[APP] Fixed admin role for user {user.username}")
-            
             db.session.commit()
         except Exception as e:
             db.session.rollback()
@@ -2488,4 +2490,5 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
