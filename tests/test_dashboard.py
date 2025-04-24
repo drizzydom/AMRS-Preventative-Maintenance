@@ -1,8 +1,11 @@
 import pytest
+from models import Part
 
 def test_dashboard_stats(client, db, login_admin, create_part):
     part = create_part()
     login_admin()
     response = client.get('/dashboard')
     assert b'Total Parts' in response.data
-    # Add more assertions as dashboard logic is improved
+    # Check that the part count in the database matches the dashboard
+    part_count = Part.query.count()
+    assert str(part_count).encode() in response.data

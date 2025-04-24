@@ -9,7 +9,8 @@ def test_create_audit_task(client, db, login_admin, setup_test_data):
         'name': 'Test Audit',
         'site_id': data['site1'].id,
         'machine_ids': [data['machine'].id],
-        'interval': 'daily'
+        'interval': 'daily',
+        'create_audit': '1'
     }, follow_redirects=True)
     assert b'Create Audit Task' in response.data or b'Audit task created' in response.data
     audit = AuditTask.query.filter_by(name='Test Audit').first()
@@ -23,7 +24,8 @@ def test_create_audit_task_with_custom_interval(client, db, login_admin, setup_t
         'site_id': data['site1'].id,
         'machine_ids': [data['machine'].id],
         'interval': 'custom',
-        'custom_interval_days': 5
+        'custom_interval_days': 5,
+        'create_audit': '1'
     }, follow_redirects=True)
     assert b'Create Audit Task' in response.data or b'Audit task created' in response.data
     audit = AuditTask.query.filter_by(name='Custom Interval Audit').first()
@@ -44,7 +46,8 @@ def test_audit_checkoff_eligibility_custom_interval(client, db, login_admin, set
         'site_id': data['site1'].id,
         'machine_ids': [data['machine'].id],
         'interval': 'custom',
-        'custom_interval_days': 3
+        'custom_interval_days': 3,
+        'create_audit': '1'
     }, follow_redirects=True)
     audit = AuditTask.query.filter_by(name='Interval Checkoff').first()
     # Simulate a completion 2 days ago (should not be eligible)

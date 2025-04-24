@@ -13,7 +13,8 @@ def test_audit_reminder_email_logic(monkeypatch, client, db, login_admin, setup_
         'name': 'Reminder Audit',
         'site_id': data['site1'].id,
         'machine_ids': [data['machine'].id],
-        'interval': 'daily'
+        'interval': 'daily',
+        'create_audit': '1'
     }, follow_redirects=True)
     audit = AuditTask.query.filter_by(name='Reminder Audit').first()
     from notification_scheduler import send_audit_reminders
@@ -39,7 +40,8 @@ def test_audit_reminder_respects_site_preferences(monkeypatch, client, db, login
         'name': 'No Reminder Audit',
         'site_id': data['site1'].id,
         'machine_ids': [data['machine'].id],
-        'interval': 'daily'
+        'interval': 'daily',
+        'create_audit': '1'
     }, follow_redirects=True)
     from notification_scheduler import send_audit_reminders
     send_audit_reminders()

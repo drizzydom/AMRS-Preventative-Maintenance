@@ -2,7 +2,9 @@ import pytest
 from app import ensure_db_schema
 
 def test_auto_migration_adds_columns(app, db):
-    # Simulate missing column and run ensure_db_schema
+    from sqlalchemy import inspect
     ensure_db_schema()
-    # Add assertions for column existence (requires direct DB inspection)
-    assert True  # Placeholder
+    inspector = inspect(db.engine)
+    # Example: Check that 'created_at' column exists in 'users' table
+    columns = [col['name'] for col in inspector.get_columns('users')]
+    assert 'created_at' in columns

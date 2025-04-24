@@ -188,6 +188,19 @@ class Part(db.Model):
     # Define the one-to-many relationship with MaintenanceRecord
     maintenance_records = db.relationship('MaintenanceRecord', backref='part', lazy=True, cascade="all, delete-orphan")
     
+    def get_frequency_display(self):
+        unit = self.maintenance_unit or 'day'
+        freq = self.maintenance_frequency or 1
+        if unit == 'day':
+            return f"Every {freq} day{'s' if freq != 1 else ''}"
+        elif unit == 'week':
+            return f"Every {freq} week{'s' if freq != 1 else ''}"
+        elif unit == 'month':
+            return f"Every {freq} month{'s' if freq != 1 else ''}"
+        elif unit == 'year':
+            return f"Every {freq} year{'s' if freq != 1 else ''}"
+        return f"Every {freq} {unit}(s)"
+    
     def __repr__(self):
         return f'<Part {self.name}>'
 
