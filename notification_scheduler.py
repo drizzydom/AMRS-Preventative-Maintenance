@@ -159,7 +159,7 @@ def send_audit_reminders():
         # Get all audit tasks
         audit_tasks = AuditTask.query.all()
         for task in audit_tasks:
-            site = Site.query.get(task.site_id)
+            site = db.session.get(Site, task.site_id)
             if not site or not site.enable_notifications:
                 continue
             # Find site owner(s) (users assigned to the site)
