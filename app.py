@@ -230,7 +230,7 @@ login_manager.login_message_category = 'info'  # Flash message category for logi
 @login_manager.user_loader
 def load_user(user_id):
     # This must return None or a User object
-    return User.query.get(int(user_id)) if user_id else None
+    return db.session.get(User, int(user_id)) if user_id else None
 
 # Standardized function to check admin status
 def is_admin_user(user):
@@ -406,8 +406,6 @@ def ensure_maintenance_records_schema():
     except Exception as e:
         print(f"[APP] Error ensuring maintenance_records schema: {e}")
 
-# Initialize database connection for API endpoints
-@app.before_first_request
 def initialize_db_connection():
     """Initialize database connection."""
     try:
@@ -418,22 +416,11 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
-# Setup application before first request
-@app.before_first_request
-def setup_application():
-    """Setup everything needed before handling the first request."""
+# --- Move setup code from before_first_request to here ---
+with app.app_context():
     initialize_db_connection()
     ensure_db_schema()
-
-# Add additional setup tasks
-@app.before_first_request
-def additional_setup():
-    """Additional setup tasks."""
     ensure_maintenance_records_schema()
-
-@app.before_first_request
-def ensure_tables_exist():
-    from models import db
     db.create_all()
 
 # Add database connection check before requests
@@ -913,7 +900,10 @@ def delete_audit_task(audit_task_id):
         flash('You do not have permission to delete audit tasks.', 'danger')
         return redirect(url_for('audits_page'))
     try:
-        task = AuditTask.query.get_or_404(audit_task_id)
+        # Replace get_or_404 for AuditTask
+        task = db.session.get(AuditTask, audit_task_id)
+        if not task:
+            abort(404)
         db.session.delete(task)
         db.session.commit()
         flash('Audit task deleted successfully.', 'success')
@@ -1024,7 +1014,11 @@ def edit_user(user_id):
         flash('You do not have permission to edit users.', 'danger')
         return redirect(url_for('dashboard'))
     
-    user = User.query.get_or_404(user_id)
+    # Replace get_or_404 for User
+    user = db.session.get(User, user_id)
+    if not user:
+        abort(404)
+    
     roles = Role.query.all()
     sites = Site.query.all()
     
@@ -1099,7 +1093,11 @@ def edit_role(role_id):
         flash('You do not have permission to edit roles.', 'danger')
         return redirect(url_for('dashboard'))
     
-    role = Role.query.get_or_404(role_id)
+    # Replace get_or_404 for Role
+    role = db.session.get(Role, role_id)
+    if not role:
+        abort(404)
+    
     all_permissions = get_all_permissions()
     
     if request.method == 'POST':
@@ -1142,7 +1140,10 @@ def edit_role(role_id):
 def delete_machine(machine_id):
     """Delete a machine."""
     try:
-        machine = Machine.query.get_or_404(machine_id)
+        # Replace get_or_404 for Machine
+        machine = db.session.get(Machine, machine_id)
+        if not machine:
+            abort(404)
         
         # Check for associated maintenance records and parts before deleting
         maintenance_records = MaintenanceRecord.query.filter_by(machine_id=machine_id).all()
@@ -1168,7 +1169,10 @@ def delete_machine(machine_id):
 def delete_part(part_id):
     """Delete a part."""
     try:
-        part = Part.query.get_or_404(part_id)
+        # Replace get_or_404 for Part
+        part = db.session.get(Part, part_id)
+        if not part:
+            abort(404)
         
         # Delete the part
         db.session.delete(part)
@@ -1186,7 +1190,10 @@ def delete_part(part_id):
 def delete_site(site_id):
     """Delete a site."""
     try:
-        site = Site.query.get_or_404(site_id)
+        # Replace get_or_404 for Site
+        site = db.session.get(Site, site_id)
+        if not site:
+            abort(404)
         
         # Check for associated machines before deleting
         machines = Machine.query.filter_by(site_id=site_id).all()
@@ -1208,7 +1215,9 @@ def delete_site(site_id):
 @app.route('/part/<int:part_id>/history')
 @login_required
 def part_history_route(part_id):
-    part = Part.query.get_or_404(part_id)
+    part = db.session.get(Part, part_id)
+    if not part:
+        abort(404)
     machine = part.machine
     site = part.machine.site if part.machine else None
     maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
@@ -1217,7 +1226,9 @@ def part_history_route(part_id):
 # --- MAINTENANCE DATE UPDATE AND HISTORY FIXES ---
 @login_required
 def part_history(part_id):
-    part = Part.query.get_or_404(part_id)
+    part = db.session.get(Part, part_id)
+    if not part:
+        abort(404)
     machine = part.machine
     site = part.machine.site if part.machine else None
     maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
@@ -1226,7 +1237,9 @@ def part_history(part_id):
 @app.route('/machine/<int:machine_id>/history')
 @login_required
 def machine_history_view(machine_id):
-    machine = Machine.query.get_or_404(machine_id)
+    machine = db.session.get(Machine, machine_id)
+    if not machine:
+        abort(404)
     site = machine.site
     parts = Part.query.filter_by(machine_id=machine_id).all()
     # Gather all maintenance records for all parts in this machine
@@ -1236,7 +1249,9 @@ def machine_history_view(machine_id):
 @app.route('/site/<int:site_id>/history')
 @login_required
 def site_history(site_id):
-    site = Site.query.get_or_404(site_id)
+    site = db.session.get(Site, site_id)
+    if not site:
+        abort(404)
     machines = Machine.query.filter_by(site_id=site_id).all()
     parts = Part.query.filter(Part.machine_id.in_([m.id for m in machines])).all()
     # Gather all maintenance records for all parts in this site
@@ -1253,7 +1268,10 @@ def delete_role(role_id):
         return redirect(url_for('dashboard'))
     
     try:
-        role = Role.query.get_or_404(role_id)
+        # Replace get_or_404 for Role
+        role = db.session.get(Role, role_id)
+        if not role:
+            abort(404)
         
         # Check if the role is assigned to any users before deleting
         # Using role_id comparison instead of comparing objects directly
@@ -1287,7 +1305,10 @@ def delete_user(user_id):
             flash('You cannot delete your own account.', 'danger')
             return redirect('/admin/users')
             
-        user = User.query.get_or_404(user_id)
+        # Replace get_or_404 for User
+        user = db.session.get(User, user_id)
+        if not user:
+            abort(404)
         
         # Don't allow deleting the main admin account
         if user.username == 'admin':
@@ -1929,10 +1950,10 @@ def server_error(e):
         return '''
         <!DOCTYPE html>
         <html>
-        <head><title>Server Error</title></head>
+        <head><title>Server Error</title>Server Error</title>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Server Error</h1>
-            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE790        <a href="/" style="color:#FE7900;">home page</a>.</p>
+            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
         ''', 500
@@ -2015,7 +2036,7 @@ def manage_sites():
             return redirect(url_for('manage_sites'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error adding site: {str(e)}', 'error')
+            flash(f'Error adding site: {str(e)}', 'danger')
 
     # For GET request or if POST processing fails
     users = User.query.all() if current_user.is_admin else None
@@ -2033,7 +2054,9 @@ def manage_sites():
 @login_required
 def edit_site(site_id):
     """Edit an existing site"""
-    site = Site.query.get_or_404(site_id)
+    site = db.session.get(Site, site_id)
+    if not site:
+        abort(404)
     users = User.query.all() if current_user.is_admin else None
     
     if request.method == 'POST':
@@ -2152,7 +2175,9 @@ def manage_machines():
 @login_required
 def edit_machine(machine_id):
     """Edit an existing machine"""
-    machine = Machine.query.get_or_404(machine_id)
+    machine = db.session.get(Machine, machine_id)
+    if not machine:
+        abort(404)
     sites = current_user.sites if not current_user.is_admin else Site.query.all()
     
     if request.method == 'POST':
@@ -2323,7 +2348,9 @@ def import_excel_route():
 @app.route('/part/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
 def edit_part(part_id):
-    part = Part.query.get_or_404(part_id)
+    part = db.session.get(Part, part_id)
+    if not part:
+        abort(404)
     machines = Machine.query.all()
     if request.method == 'POST':
         part.name = request.form.get('name', part.name)
