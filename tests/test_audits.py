@@ -60,5 +60,5 @@ def test_audit_checkoff_eligibility_custom_interval(client, db, login_admin, set
     db.session.add(completion)
     db.session.commit()
     # Try to check off again today (should not be eligible)
-    response = client.post('/audits', data={'checkoff': '1', f'complete_{audit.id}_{data['machine'].id}': 'on'}, follow_redirects=True)
+    response = client.post('/audits', data={'checkoff': '1', f'complete_{audit.id}_{data["machine"].id}': 'on'}, follow_redirects=True)
     assert b'No eligible audit tasks' in response.data or b'checked off successfully' not in response.data
