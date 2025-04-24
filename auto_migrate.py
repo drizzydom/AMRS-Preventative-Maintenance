@@ -1,4 +1,5 @@
 from models import db
+import sqlalchemy
 from sqlalchemy import inspect, text
 
 def add_column_if_not_exists(engine, table, column, coltype):
@@ -20,6 +21,9 @@ def run_auto_migration():
         # Ensure audit_tasks columns
         add_column_if_not_exists(engine, 'audit_tasks', 'interval', "VARCHAR(20) DEFAULT 'daily'")
         add_column_if_not_exists(engine, 'audit_tasks', 'custom_interval_days', "INTEGER")
+        # Ensure audit_task_completions columns
+        add_column_if_not_exists(engine, 'audit_task_completions', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        add_column_if_not_exists(engine, 'audit_task_completions', 'updated_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         # Add more columns/tables as needed here
         print("[AUTO_MIGRATE] Auto-migration complete.")
 
