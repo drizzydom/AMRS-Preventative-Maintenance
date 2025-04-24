@@ -1260,7 +1260,7 @@ def delete_site(site_id):
         app.logger.error(f"Error deleting site: {e}")
         db.session.rollback()
         flash('An error occurred while deleting the site.', 'danger')
-        return redirect(url_for('manage_sites')
+        return redirect(url_for('manage_sites'))
 
 # --- MAINTENANCE DATE UPDATE AND HISTORY FIXES ---
 @login_required

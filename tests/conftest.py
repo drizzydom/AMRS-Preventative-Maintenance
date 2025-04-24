@@ -20,7 +20,6 @@ def app():
 @pytest.fixture(scope='function')
 def db(app):
     with app.app_context():
-        _db.session.begin_nested()
         yield _db
         _db.session.rollback()
 
@@ -41,7 +40,9 @@ def login_admin(client, db):
             admin = User(username='admin', email='admin@example.com', password_hash='pbkdf2:sha256:dummy', role=admin_role)
             db.session.add(admin)
             db.session.commit()
-        client.post('/login', data={'username': 'admin', 'password': 'admin'}, follow_redirects=True)
+        with client.session_transaction() as sess:
+            sess['_user_id'] = str(admin.id)
+            sess['_fresh'] = True
     return do_login
 
 @pytest.fixture
