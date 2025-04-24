@@ -17,6 +17,5 @@ except ImportError as e:
     print("Fatal error: Could not import application!")
     raise
 
-from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine, Part, MaintenanceRecord
-with app.app_context():
-    db.create_all()
+from auto_migrate import run_auto_migration
+run_auto_migration()
