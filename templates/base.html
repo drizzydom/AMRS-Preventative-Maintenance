@@ -165,15 +165,40 @@
             left: 0;
         }
         
+        /* Mobile close button */
+        .sidebar-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.95);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.5rem;
+            color: #333;
+            z-index: 1100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .sidebar-close-btn:focus {
+            outline: 2px solid #0d6efd;
+        }
+        @media (min-width: 992px) {
+            .sidebar-close-btn { display: none !important; }
+        }
+        /* Sidebar overlay polish */
         body.sidebar-active::before {
-            content: '';
+            background-color: rgba(0,0,0,0.45) !important;
+            transition: background 0.2s;
+        }
+        /* Prevent background scroll when sidebar is open on mobile */
+        body.sidebar-active {
+            overflow: hidden;
             position: fixed;
-            top: 48px; /* Start below header */
-            left: 0;
-            right: 0;
-            bottom: 48px; /* End above footer */
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1030;
+            width: 100vw;
         }
     }
     /* --- SIDEBAR COLLAPSE FOR DESKTOP --- */
@@ -229,6 +254,116 @@
         }
     }
     /* --- END SIDEBAR COLLAPSE --- */
+    /* --- MOBILE-FRIENDLY TABLES --- */
+    @media (max-width: 767.98px) {
+        .table-responsive, .card-body .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            margin-bottom: 1rem;
+        }
+        table.table {
+            min-width: 600px;
+        }
+        .table-scroll-hint {
+            display: block;
+            font-size: 0.85em;
+            color: #888;
+            text-align: right;
+            margin-bottom: 0.25rem;
+        }
+    }
+    /* --- END MOBILE-FRIENDLY TABLES --- */
+    
+    /* Hamburger button improvements */
+    #hamburger-btn {
+        position: relative;
+        z-index: 1201;
+        width: 48px;
+        height: 48px;
+        border: none;
+        background: rgba(255,255,255,0.85);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: background 0.2s, box-shadow 0.2s;
+        margin-right: 0.5rem;
+    }
+    #hamburger-btn:focus {
+        outline: 2px solid #0d6efd;
+    }
+    #hamburger-btn .navbar-toggler-icon {
+        width: 28px;
+        height: 28px;
+        display: inline-block;
+        position: relative;
+        transition: transform 0.3s;
+    }
+    /* Hamburger to X animation */
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon {
+        background-image: none;
+    }
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:before,
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:after,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:before,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:after {
+        content: '';
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        transition: transform 0.3s, top 0.3s, opacity 0.3s;
+    }
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:before,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:before {
+        top: 12px;
+        transform: rotate(45deg);
+    }
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:after,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:after {
+        top: 12px;
+        transform: rotate(-45deg);
+    }
+    #hamburger-btn .navbar-toggler-icon:before,
+    #hamburger-btn .navbar-toggler-icon:after {
+        content: '';
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        transition: transform 0.3s, top 0.3s, opacity 0.3s;
+    }
+    #hamburger-btn .navbar-toggler-icon:before {
+        top: 8px;
+        transform: rotate(0);
+    }
+    #hamburger-btn .navbar-toggler-icon:after {
+        top: 20px;
+        transform: rotate(0);
+    }
+    /* Hide default hamburger lines when animating */
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon {
+        background-image: none !important;
+    }
+    /* Sticky hamburger for mobile */
+    @media (max-width: 991.98px) {
+        #hamburger-btn {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            margin: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        }
+    }
     </style>
 </head>
 <body class="preload">
@@ -263,6 +398,10 @@
                         <li class="sidebar-nav-item sidebar-toggle-item">
                             <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">
                                 <i class="fas fa-bars"></i>
+                            </button>
+                            <!-- Mobile close button -->
+                            <button class="sidebar-close-btn d-lg-none" onclick="toggleSidebar()" aria-label="Close Sidebar" tabindex="0">
+                                <i class="fas fa-times"></i>
                             </button>
                         </li>
                         
