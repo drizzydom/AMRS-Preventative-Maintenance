@@ -97,17 +97,21 @@ def run_pyinstaller(args):
     if not args.no_upx:
         pyinstaller_args.extend(['--upx-dir', 'upx'])
     
-    # Add hidden imports
+    # Add hidden imports for new modules
     pyinstaller_args.extend([
-        '--hidden-import=keyring.backends',
-        '--hidden-import=keyring.backends.Windows',
-        '--hidden-import=win32timezone',
+        '--hidden-import=analytics.system_health',
+        '--hidden-import=analytics.maintenance_stats',
+        '--hidden-import=diagnostics',
+        '--hidden-import=accessibility_helper',
+        '--hidden-import=ui_enhancements',
+        '--hidden-import=performance_profiler',
+        '--hidden-import=translations',
     ])
-    
-    # Add data files
+
+    # Add data files for new resources
     pyinstaller_args.extend([
-        '--add-data', 'resources;resources',
-        '--add-data', '../static;static',
+        '--add-data', 'translations;translations',
+        '--add-data', 'analytics;analytics',
     ])
     
     # Main script
