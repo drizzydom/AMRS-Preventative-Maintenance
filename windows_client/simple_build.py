@@ -38,7 +38,21 @@ def main():
         "--hidden-import=keyring",
         "--hidden-import=keyring.backends",
     ]
-    
+    # Include hidden imports for new modules
+    cmd.extend([
+        "--hidden-import=analytics.system_health",
+        "--hidden-import=analytics.maintenance_stats",
+        "--hidden-import=diagnostics",
+        "--hidden-import=accessibility_helper",
+        "--hidden-import=ui_enhancements",
+        "--hidden-import=performance_profiler",
+        "--hidden-import=translations",
+    ])
+    # Add data files for new resources
+    if os.path.exists("translations"):
+        cmd.extend(["--add-data", "translations;translations"])
+    if os.path.exists("analytics"):
+        cmd.extend(["--add-data", "analytics;analytics"])
     # Add data files
     if os.path.exists("LICENSE"):
         cmd.extend(["--add-data", "LICENSE;."])
