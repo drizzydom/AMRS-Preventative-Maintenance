@@ -42,36 +42,37 @@
             <div class="card-body">
                 {% if maintenance_records %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Part</th>
-                                <th>Last Maintenance</th>
-                                <th>Next Maintenance</th>
-                                <th>Frequency</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in maintenance_records %}
-                            <tr>
-                                <td>{{ record.part }}</td>
-                                <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ record.next_date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ record.frequency }}</td>
-                                <td>
-                                    <!-- Use plain HTML form with hardcoded action to avoid routing issues -->
-                                    <form action="/update-maintenance" method="POST" class="d-inline">
-                                        <input type="hidden" name="part_id" value="{{ parts[loop.index0].id }}">
-                                        <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                            <i class="fas fa-check-circle"></i> Record
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                  <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
+                  <table class="table table-striped table-hover">
+                    <thead>
+                      <tr>
+                        <th>Part</th>
+                        <th>Last Maintenance</th>
+                        <th class="hide-sm">Next Maintenance</th>
+                        <th class="hide-sm">Frequency</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in maintenance_records %}
+                        <tr>
+                            <td>{{ record.part }}</td>
+                            <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ record.next_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ record.frequency }}</td>
+                            <td>
+                                <!-- Use plain HTML form with hardcoded action to avoid routing issues -->
+                                <form action="/update-maintenance" method="POST" class="d-inline">
+                                    <input type="hidden" name="part_id" value="{{ parts[loop.index0].id }}">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
+                                        <i class="fas fa-check-circle"></i> Record
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                  </table>
                 </div>
                 {% else %}
                 <p>No maintenance history found for this machine.</p>
