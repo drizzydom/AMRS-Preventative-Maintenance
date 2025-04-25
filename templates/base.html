@@ -269,6 +269,13 @@
                             </a>
                         </li>
                         {% endif %}
+                        
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('maintenance_records_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_records_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-history"></i>
+                                <span class="sidebar-link-text">Maintenance Records</span>
+                            </a>
+                        </li>
                     </ul>
                     
                     <!-- User information and logout at bottom of sidebar -->
