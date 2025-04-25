@@ -7,18 +7,19 @@ A comprehensive desktop and web application for tracking and managing preventati
 </p>
 
 ## Table of Contents
-
 - [Overview](#overview)
 - [Repository Structure](#repository-structure)
 - [System Requirements](#system-requirements)
 - [Development Setup](#development-setup)
-- [Building the Windows Client](#building-the-windows-client)
+- [Building and Running the Windows Client](#building-and-running-the-windows-client)
+- [Features](#features)
+- [Advanced Features](#advanced-features)
 - [Architecture](#architecture)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
-- [License and Legal](#license-and-legal)
 - [Audit Reminder System](#audit-reminder-system)
+- [License and Legal](#license-and-legal)
 
 ## Overview
 
@@ -31,6 +32,9 @@ AMRS Preventative Maintenance System combines a Flask web application with a Pyt
 - Analytics and reporting for maintenance trends
 - Scheduled maintenance reminders
 - Localization and accessibility features
+- Diagnostics and system health monitoring
+- Full offline/online synchronization
+- Standalone desktop experience (no web browser required)
 
 ## Repository Structure
 
@@ -77,24 +81,73 @@ AMRS-Preventative-Maintenance/
    pip install -r requirements.txt
    ```
 
-### Building the Windows Client
+## Building and Running the Windows Client
 
 1. Navigate to the `windows_client` directory:
    ```bash
    cd windows_client
    ```
-
 2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-
 3. Build the application:
    ```bash
    python build.py
    ```
-
+   - For a portable build, add `--portable`.
+   - For an installer, add `--installer`.
 4. The executable will be available in the `dist` folder.
+5. Run the app by launching `MaintenanceTracker.exe` (or the generated executable).
+
+### Usage Highlights
+- On launch, a splash screen will show database synchronization status.
+- A pop-up bubble will indicate online/offline status.
+- The app works fully offline, with automatic sync when reconnected.
+- All features are available offline, including analytics and reporting.
+- The app runs as a standalone desktop application (not in a web browser).
+
+## Features
+
+- **Offline Operation**: Continue working without an internet connection
+- **Automatic Sync**: Data synchronizes when connectivity is restored
+- **Splash Screen**: Shows sync status at launch
+- **Pop-up Status**: Online/offline status bubble
+- **Background Synchronization**: Syncs in the background
+- **Secure Credential Storage**: Safely store login information
+- **Local Data Caching**: Store maintenance data locally
+- **Portable Mode**: Run without installation from any storage media
+- **Visual Indicators**: Clear status for maintenance items
+- **System Tray Integration**: Minimize to tray for background operation
+- **Dashboard View**: At-a-glance overview
+- **Analytics and Reporting**: Visual reports and trends
+- **Diagnostics**: System health and performance monitoring
+- **Scheduled Maintenance Reminders**: Notifications for upcoming/overdue maintenance
+- **Localization**: Multi-language support
+- **Accessibility**: High contrast mode, keyboard navigation, screen reader support
+
+## Advanced Features
+
+### Offline/Online Synchronization
+- The app detects network changes and syncs data automatically.
+- All changes made offline are queued and sent to the server when online.
+
+### Analytics and Diagnostics
+- Built-in analytics dashboard for maintenance trends and system health.
+- Diagnostics tools for performance and error reporting.
+
+### Accessibility & Localization
+- High contrast and accessible UI.
+- Keyboard navigation and screen reader compatibility.
+- Language switching and multi-language support.
+
+### Notifications & Reminders
+- System tray notifications for status and reminders.
+- Scheduled and on-demand maintenance reminders.
+
+### Security
+- Secure credential storage using keyring.
+- Encrypted local database (optional).
 
 ## Architecture
 
@@ -137,10 +190,6 @@ python -m unittest discover tests
 3. Make your changes
 4. Run tests to ensure functionality
 5. Submit a pull request
-
-## License and Legal
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Audit Reminder System
 
@@ -214,3 +263,7 @@ The reminder email uses `templates/email/audit_reminder.html`.
 ---
 
 For more information, see the user profile notification preferences and the [notification_scheduler.py](notification_scheduler.py) script.
+
+## License and Legal
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
