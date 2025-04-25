@@ -176,6 +176,59 @@
             z-index: 1030;
         }
     }
+    /* --- SIDEBAR COLLAPSE FOR DESKTOP --- */
+    body.sidebar-collapsed .sidebar,
+    html body.sidebar-collapsed .sidebar {
+        width: 56px !important;
+        min-width: 56px !important;
+        max-width: 56px !important;
+        transition: width 0.2s;
+    }
+    body.sidebar-collapsed .sidebar-container,
+    html body.sidebar-collapsed .sidebar-container {
+        width: 56px !important;
+        min-width: 56px !important;
+        max-width: 56px !important;
+        transition: width 0.2s;
+    }
+    body.sidebar-collapsed .content-container,
+    html body.sidebar-collapsed .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+        max-width: calc(100% - 56px) !important;
+        transition: margin-left 0.2s, width 0.2s;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-link-text {
+        display: none !important;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-icon {
+        margin-right: 0 !important;
+        display: flex !important;
+        justify-content: center;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-nav-item {
+        text-align: center;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-toggle-btn {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+    @media (max-width: 991.98px) {
+        body.sidebar-collapsed .sidebar,
+        html body.sidebar-collapsed .sidebar {
+            width: 280px !important;
+            min-width: 280px !important;
+            max-width: 280px !important;
+        }
+        body.sidebar-collapsed .content-container,
+        html body.sidebar-collapsed .content-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+    /* --- END SIDEBAR COLLAPSE --- */
     </style>
 </head>
 <body class="preload">
