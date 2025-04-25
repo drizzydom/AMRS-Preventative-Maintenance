@@ -1,21 +1,17 @@
-/**
- * BASIC MOBILE SIDEBAR STYLING
- * No complex interactions, just the essentials for mobile display
- */
-
-/* Mobile sidebar base styling */
+/* IMPORTANT: Make sure this file is loaded last in your HTML <head> for mobile sidebar to work correctly! */
 @media (max-width: 991.98px) {
-    /* Force-hide sidebar on mobile unless .show is present */
-    body:not(.sidebar-active) .sidebar,
-    .sidebar:not(.show) {
+    html body .sidebar:not(.show),
+    html body:not(.sidebar-active) .sidebar {
         display: none !important;
         left: -100% !important;
+        position: fixed !important;
     }
-    .sidebar.show {
+    html body .sidebar.show {
         display: block !important;
         left: 0 !important;
+        position: fixed !important;
     }
-    body.sidebar-active::before {
+    html body.sidebar-active::before {
         content: '';
         position: fixed;
         top: 48px;
