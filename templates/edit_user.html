@@ -1,80 +1,128 @@
 {% extends "base.html" %}
 
-{% block title %}Edit User - Maintenance Tracker{% endblock %}
-
-{% block header_title %}Edit User: {{ user.username }}{% endblock %}
-
-{% block header_actions %}
-<a href="{{ url_for('manage_users') }}" class="btn btn-secondary">
-    <i class="fas fa-arrow-left"></i> Back to Users
-</a>
-{% endblock %}
+{% block title %}Edit User - {{ user.username }}{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-8 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Edit User Information</h5>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col">
+            <h1>Edit User</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin') }}">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_users') }}">Users</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Edit {{ user.username }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Edit User Information</div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('edit_user', user_id=user.id) }}">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username *</label>
+                            <input type="text" class="form-control" id="username" name="username" value="{{ user.username }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="full_name" class="form-label">Full Name</label>
+                            <input type="text" class="form-control" id="full_name" name="full_name" value="{{ user.full_name or '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="role" class="form-label">Role</label>
+                            <select class="form-select" id="role" name="role">
+                                <option value="">-- No Role --</option>
+                                {% for role in roles %}
+                                <option value="{{ role.name }}" {% if user.role == role.name %}selected{% endif %}>{{ role.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="site_ids" class="form-label">Assigned Sites</label>
+                            <select class="form-select" id="site_ids" name="site_ids" multiple>
+                                {% for site in sites %}
+                                <option value="{{ site.id }}" {% if site.id in assigned_sites %}selected{% endif %}>{{ site.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple sites</div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="post" action="{{ url_for('edit_user', user_id=user.id) }}">
-                    <div class="mb-3">
-                        <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="username" name="username" value="{{ user.username }}" required>
-                    </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">User Information</div>
+                <div class="card-body">
+                    <p><strong>Created:</strong> {{ user.created_at.strftime('%Y-%m-%d') if user.created_at }}</p>
+                    <p><strong>Last Updated:</strong> {{ user.updated_at.strftime('%Y-%m-%d') if user.updated_at }}</p>
+                    <p><strong>Last Login:</strong> {{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login }}</p>
+                    <p><strong>Is Admin:</strong> {{ "Yes" if user.is_admin else "No" }}</p>
                     
-                    <div class="mb-3">
-                        <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
-                        <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                    <div class="mt-3">
+                        <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-outline-secondary">Back to Users</a>
+                        {% if user.id != current_user.id and user.username != 'admin' %}
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteUserModal">
+                            Delete User
+                        </button>
+                        {% endif %}
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="full_name" class="form-label">Full Name</label>
-                        <input type="text" class="form-control" id="full_name" name="full_name" value="{{ user.full_name }}">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="role_id" class="form-label">Role</label>
-                        <select class="form-select" id="role_id" name="role_id">
-                            <option value="">No Role</option>
-                            {% for role in roles %}
-                            <option value="{{ role.id }}" {% if role.id == user.role_id %}selected{% endif %}>{{ role.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="is_admin" name="is_admin" 
-                               {% if user.is_admin %}checked{% endif %}>
-                        <label class="form-check-label" for="is_admin">Administrator Access</label>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="site_ids" class="form-label">Assigned Sites</label>
-                        <select multiple class="form-select" id="site_ids" name="site_ids">
-                            {% for site in sites %}
-                            <option value="{{ site.id }}" {% if site in user.sites %}selected{% endif %}>
-                                {{ site.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text">Hold Ctrl/Cmd to select multiple sites</div>
-                    </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="reset_password" name="reset_password">
-                        <label class="form-check-label" for="reset_password">Reset password</label>
-                        <div class="form-text">If checked, a new random password will be generated</div>
-                    </div>
-                    
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{{ url_for('manage_users') }}" class="btn btn-secondary me-md-2">Cancel</a>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">Password Management</div>
+                <div class="card-body">
+                    <a href="{{ url_for('user_profile') if user.id == current_user.id else '#' }}" class="btn btn-sm btn-outline-primary">
+                        {{ "Change Password" if user.id == current_user.id else "Reset Password" }}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete User Confirmation Modal -->
+{% if user.id != current_user.id and user.username != 'admin' %}
+<div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteUserModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the user <strong>{{ user.username }}</strong>? This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post">
+                    <button type="submit" class="btn btn-danger">Delete User</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Any JavaScript needed for the page
+    });
+</script>
 {% endblock %}
