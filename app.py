@@ -1158,7 +1158,7 @@ def edit_role(role_id):
             
             db.session.commit()
             flash(f'Role "{name}" updated successfully.', 'success')
-            return redirect(url_for('admin_roles'))
+            return redirect(url_for='admin_roles')
             
         except Exception as e:
             db.session.rollback()
@@ -1927,7 +1927,7 @@ def sync_status():
         return jsonify({
             'status': 'online',
             'server_time': datetime.now().isoformat(),
-            'version':'1.0.0'
+            'version': '1.0.0'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -2424,6 +2424,40 @@ def manage_roles():
     all_permissions = get_all_permissions()
     return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
 
+@app.route('/api/maintenance/records', methods=['GET'])
+@login_required
+def maintenance_records_page():
+    # Get all sites user can access
+    if current_user.is_admin:
+        sites = Site.query.all()
+    else:
+        sites = current_user.sites
+    site_id = request.args.get('site_id', type=int)
+    machine_id = request.args.get('machine_id', type=int)
+    part_id = request.args.get('part_id', type=int)
+
+    machines = []
+    parts = []
+    records = []
+
+    if site_id:
+        machines = Machine.query.filter_by(site_id=site_id).all()
+    if machine_id:
+        parts = Part.query.filter_by(machine_id=machine_id).all()
+    if part_id:
+        records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+
+    return render_template(
+        'maintenance_records.html',
+        sites=sites,
+        machines=machines,
+        parts=parts,
+        records=records,
+        selected_site=site_id,
+        selected_machine=machine_id,
+        selected_part=part_id
+    )
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
@@ -2470,6 +2504,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
