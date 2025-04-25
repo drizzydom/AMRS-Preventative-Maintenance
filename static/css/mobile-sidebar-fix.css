@@ -153,3 +153,10 @@
     display: none !important;
   }
 }
+
+@media (min-width: 992px) {
+  .sidebar-header,
+  .sidebar-back-btn {
+    display: none !important;
+  }
+}
