@@ -26,25 +26,6 @@
 
     <!-- Status counters -->
     <div class="row g-2 mb-4">
-        {% set overdue_count = 0 %}
-        {% set due_soon_count = 0 %}
-        {% set ok_count = 0 %}
-        
-        {% for site in sites %}
-            {% for machine in site.machines %}
-                {% for part in machine.parts %}
-                    {% set days_until = (part.next_maintenance - now).days %}
-                    {% if days_until < 0 %}
-                        {% set overdue_count = overdue_count + 1 %}
-                    {% elif days_until <= site.notification_threshold %}
-                        {% set due_soon_count = due_soon_count + 1 %}
-                    {% else %}
-                        {% set ok_count = ok_count + 1 %}
-                    {% endif %}
-                {% endfor %}
-            {% endfor %}
-        {% endfor %}
-
         <div class="col-lg-3 col-md-6 mb-4">
             <div class="card stats-card stats-danger h-100">
                 <div class="card-body">
@@ -60,7 +41,6 @@
                 </div>
             </div>
         </div>
-        
         <div class="col-lg-3 col-md-6 mb-4">
             <div class="card stats-card stats-warning h-100">
                 <div class="card-body">
@@ -76,7 +56,6 @@
                 </div>
             </div>
         </div>
-        
         <div class="col-lg-3 col-md-6 mb-4">
             <div class="card stats-card stats-success h-100">
                 <div class="card-body">
@@ -92,7 +71,6 @@
                 </div>
             </div>
         </div>
-        
         <div class="col-lg-3 col-md-6 mb-4">
             <div class="card stats-card stats-info h-100">
                 <div class="card-body">
@@ -101,7 +79,7 @@
                             <i class="fas fa-cog fa-lg"></i>
                         </div>
                         <div>
-                            <div class="stats-value text-info">{{ overdue_count + due_soon_count + ok_count }}</div>
+                            <div class="stats-value text-info">{{ total_parts }}</div>
                             <div class="stats-label">Total Parts</div>
                         </div>
                     </div>
