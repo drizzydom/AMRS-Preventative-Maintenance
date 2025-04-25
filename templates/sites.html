@@ -22,50 +22,51 @@
             <div class="card-body">
                 {% if sites %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Location</th>
-                                <th>Machines</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for site in sites %}
-                            <tr>
-                                <td>{{ site.name }}</td>
-                                <td>{{ site.location }}</td>
-                                <td>{{ site.machines|length }}</td>
-                                <td>
-                                    {% set status = site.get_parts_status(now) %}
-                                    {% if status.overdue %}
-                                    <span class="badge bg-danger">{{ status.overdue|length }} Overdue</span>
-                                    {% endif %}
-                                    {% if status.due_soon %}
-                                    <span class="badge bg-warning text-dark">{{ status.due_soon|length }} Due Soon</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('manage_machines') }}?site_id={{ site.id }}" class="btn btn-sm btn-primary">View Machines</a>
-                                    {% if can_edit %}
-                                    <a href="{{ url_for('edit_site', site_id=site.id) }}" class="btn btn-sm btn-secondary">Edit</a>
-                                    {% endif %}
-                                    {% if can_delete %}
-                                    <button type="button" class="btn btn-sm btn-danger" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#deleteSiteModal" 
-                                            data-site-id="{{ site.id }}"
-                                            data-site-name="{{ site.name }}">
-                                        Delete
-                                    </button>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                  <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
+                  <table class="table table-striped table-hover">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th class="hide-sm">Location</th>
+                        <th class="hide-sm">Machines</th>
+                        <th class="hide-sm">Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                        {% for site in sites %}
+                        <tr>
+                            <td>{{ site.name }}</td>
+                            <td class="hide-sm">{{ site.location }}</td>
+                            <td class="hide-sm">{{ site.machines|length }}</td>
+                            <td class="hide-sm">
+                                {% set status = site.get_parts_status(now) %}
+                                {% if status.overdue %}
+                                <span class="badge bg-danger">{{ status.overdue|length }} Overdue</span>
+                                {% endif %}
+                                {% if status.due_soon %}
+                                <span class="badge bg-warning text-dark">{{ status.due_soon|length }} Due Soon</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('manage_machines') }}?site_id={{ site.id }}" class="btn btn-sm btn-primary">View Machines</a>
+                                {% if can_edit %}
+                                <a href="{{ url_for('edit_site', site_id=site.id) }}" class="btn btn-sm btn-secondary">Edit</a>
+                                {% endif %}
+                                {% if can_delete %}
+                                <button type="button" class="btn btn-sm btn-danger" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#deleteSiteModal" 
+                                        data-site-id="{{ site.id }}"
+                                        data-site-name="{{ site.name }}">
+                                    Delete
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                  </table>
                 </div>
                 {% else %}
                 <p>No sites found. {% if can_create %}Use the "Add Site" button to create one.{% endif %}</p>

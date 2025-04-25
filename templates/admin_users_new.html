@@ -12,17 +12,19 @@
 
 {% block content %}
 <!-- Simple table without any extra divs or styling -->
-<table class="table table-striped table-bordered">
+<div class="table-responsive">
+  <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
+  <table class="table table-striped table-bordered">
     <thead class="thead-dark">
-        <tr>
-            <th>Username</th>
-            <th>Full Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Admin</th>
-            <th>Sites</th>
-            <th>Actions</th>
-        </tr>
+      <tr>
+        <th>Username</th>
+        <th class="hide-sm">Full Name</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Admin</th>
+        <th class="hide-sm">Sites</th>
+        <th>Actions</th>
+      </tr>
     </thead>
     <tbody>
         {% for user in users %}
@@ -45,7 +47,8 @@
         </tr>
         {% endfor %}
     </tbody>
-</table>
+  </table>
+</div>
 
 <!-- Add User Modal -->
 <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
