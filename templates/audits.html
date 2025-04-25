@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Audits - Maintenance Tracker{% endblock %}
+
+{% block header_title %}Audits{% endblock %}
+
+{% block content %}
+<!-- Flashed messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container-fluid">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show mt-2" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% if not (current_user.is_admin or (current_user.is_authenticated and current_user.role and (Role.query.filter_by(name=current_user.role).first() and 'audits.access' in (Role.query.filter_by(name=current_user.role).first().permissions or '')))) %}
+  <div class="alert alert-warning text-center my-4" role="alert">
+      <h4 class="alert-heading">Audits Feature Not Enabled</h4>
+      <p>This feature is not available in your current plan. If you would like access to the Audits module, please contact <a href="mailto:sales@accuratemachinerepair.com">sales@accuratemachinerepair.com</a> for more information.</p>
+  </div>
+{% else %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 mb-4">
+            <h2 class="h4">Audit Tasks for {{ today.strftime('%Y-%m-%d') }}</h2>
+        </div>
+        {% if current_user.is_admin %}
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Create New Audit Task</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <input type="hidden" name="create_audit" value="1">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Task Name</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="site_id" class="form-label">Site</label>
+                            <select class="form-select" id="site_id" name="site_id" required>
+                                <option value="">Select a site</option>
+                                {% for site in sites %}
+                                <option value="{{ site.id }}">{{ site.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="interval" class="form-label">Interval</label>
+                            <select class="form-select" id="interval" name="interval" required>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                            <div class="form-text">How often this audit task should be completed.</div>
+                        </div>
+                        <div class="mb-3" id="custom-interval-group" style="display:none;">
+                            <label for="custom_interval_value" class="form-label">Custom Interval</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="custom_interval_value" name="custom_interval_value" min="1" max="365" value="30">
+                                <select class="form-select" id="custom_interval_unit" name="custom_interval_unit">
+                                    <option value="day">Days</option>
+                                    <option value="week">Weeks</option>
+                                    <option value="month">Months</option>
+                                </select>
+                            </div>
+                            <div class="form-text">Set the custom interval and unit for this audit task.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Machines</label>
+                            <div class="row">
+                                {% for site in sites %}
+                                <div class="col-12 mb-2">
+                                    <strong>{{ site.name }}</strong>
+                                    <div class="row">
+                                        {% for machine in site.machines %}
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="machine_ids" id="machine_{{ machine.id }}" value="{{ machine.id }}">
+                                                <label class="form-check-label" for="machine_{{ machine.id }}">{{ machine.name }}</label>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Audit Task</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="col-12">
+            <form method="post">
+                <input type="hidden" name="checkoff" value="1">
+                <style>
+.audit-checkoff {
+  width: 1.25em !important;
+  height: 1.25em !important;
+  min-width: 1.25em !important;
+  min-height: 1.25em !important;
+  accent-color: #198754;
+  margin-right: 0.5em;
+  border-radius: 0.25em;
+  border: 2px solid #198754;
+}
+.audit-machine-section {
+  border: 1px solid #dee2e6;
+  border-radius: 0.5em;
+  margin-bottom: 1.5em;
+  padding: 1em;
+  background: #f8f9fa;
+}
+.audit-machine-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  margin-bottom: 0.5em;
+}
+</style>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Today's Audit Tasks</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if audit_tasks %}
+                        <p class="mb-2 text-info"><strong>Check off completed audit tasks below and click <span class="badge bg-success">Save Check-Offs</span> to record your progress for today.</strong></p>
+                        <div class="audit-task-list">
+                          {% for site in sites %}
+                            {% for machine in site.machines %}
+                              <div class="audit-machine-section">
+                                <div class="audit-machine-title">{{ machine.name }}</div>
+                                <div class="row g-2">
+                                  {% for task in audit_tasks if task.site_id == site.id and machine in task.machines %}
+                                    <div class="col-md-6 col-lg-4 mb-2">
+                                      <div class="d-flex align-items-center">
+                                        <input type="checkbox" class="form-check-input audit-checkoff" name="complete_{{ task.id }}_{{ machine.id }}" id="complete_{{ task.id }}_{{ machine.id }}"
+                                          {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}checked disabled
+                                          {% elif eligibility.get((task.id, machine.id)) and eligibility.get((task.id, machine.id)) > today %}disabled
+                                          {% endif %}>
+                                        <label class="form-check-label fw-bold" for="complete_{{ task.id }}_{{ machine.id }}">
+                                          {{ task.name }}
+                                          {% if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed %}
+                                            <span class="badge bg-success ms-2">Checked Off</span>
+                                          {% else %}
+                                            <span class="badge bg-warning text-dark ms-2">Pending</span>
+                                          {% endif %}
+                                          <span class="badge bg-secondary ms-2">
+                                            Interval:
+                                            {% if task.interval == 'custom' and task.custom_interval_days %}
+                                              Custom (every {{ task.custom_interval_days }} days)
+                                            {% else %}
+                                              {{ task.interval|capitalize }}
+                                            {% endif %}
+                                          </span>
+                                          {% if eligibility.get((task.id, machine.id)) and eligibility.get((task.id, machine.id)) > today %}
+                                            <span class="badge bg-light text-muted ms-2">Next eligible: {{ eligibility.get((task.id, machine.id)).strftime('%Y-%m-%d') }}</span>
+                                          {% endif %}
+                                        </label>
+                                        {% if can_delete_audits %}
+                                          <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-bs-toggle="modal" data-bs-target="#deleteAuditModal{{ task.id }}">
+                                            <i class="fas fa-trash"></i>
+                                          </button>
+                                        {% endif %}
+                                      </div>
+                                    </div>
+                                  {% endfor %}
+                                </div>
+                              </div>
+                            {% endfor %}
+                          {% endfor %}
+                        </div>
+                        {% for task in audit_tasks %}
+                          {% if can_delete_audits %}
+                            <div class="modal fade" id="deleteAuditModal{{ task.id }}" tabindex="-1" aria-labelledby="deleteAuditModalLabel{{ task.id }}" aria-hidden="true">
+                              <div class="modal-dialog">
+                                <div class="modal-content">
+                                  <div class="modal-header">
+                                    <h5 class="modal-title" id="deleteAuditModalLabel{{ task.id }}">Delete Audit Task</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                  </div>
+                                  <div class="modal-body">
+                                    <p>Are you sure you want to delete the audit task <strong>{{ task.name }}</strong>?</p>
+                                    <p class="text-danger mb-0">This action cannot be undone.</p>
+                                  </div>
+                                  <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <form action="{{ url_for('delete_audit_task', audit_task_id=task.id) }}" method="post" style="display:inline;">
+                                      <button type="submit" class="btn btn-danger">Delete</button>
+                                    </form>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          {% endif %}
+                        {% endfor %}
+                        <div class="text-end mt-3">
+                          <button type="submit" class="btn btn-success btn-lg">Save Check-Offs</button>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">No audit tasks found.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var intervalSelect = document.getElementById('interval');
+    var customGroup = document.getElementById('custom-interval-group');
+    var customValue = document.getElementById('custom_interval_value');
+    var customUnit = document.getElementById('custom_interval_unit');
+    function toggleCustom() {
+        if (intervalSelect.value === 'custom') {
+            customGroup.style.display = 'block';
+            if (customValue) customValue.required = true;
+            if (customUnit) customUnit.required = true;
+        } else {
+            customGroup.style.display = 'none';
+            if (customValue) customValue.required = false;
+            if (customUnit) customUnit.required = false;
+        }
+    }
+    if (intervalSelect) {
+        intervalSelect.addEventListener('change', toggleCustom);
+        toggleCustom();
+    }
+});
+</script>

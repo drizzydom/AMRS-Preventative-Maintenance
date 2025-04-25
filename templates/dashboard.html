@@ -26,25 +26,6 @@
 
     <!-- Status counters -->
     <div class="row g-2 mb-4">
-        {% set overdue_count = 0 %}
-        {% set due_soon_count = 0 %}
-        {% set ok_count = 0 %}
-        
-        {% for site in sites %}
-            {% for machine in site.machines %}
-                {% for part in machine.parts %}
-                    {% set days_until = (part.next_maintenance - now).days %}
-                    {% if days_until < 0 %}
-                        {% set overdue_count = overdue_count + 1 %}
-                    {% elif days_until <= site.notification_threshold %}
-                        {% set due_soon_count = due_soon_count + 1 %}
-                    {% else %}
-                        {% set ok_count = ok_count + 1 %}
-                    {% endif %}
-                {% endfor %}
-            {% endfor %}
-        {% endfor %}
-
         <div class="col-lg-3 col-md-6 mb-4">
             <div class="card stats-card stats-danger h-100">
                 <div class="card-body">
@@ -60,7 +41,6 @@
                 </div>
             </div>
         </div>
-        
         <div class="col-lg-3 col-md-6 mb-4">
             <div class="card stats-card stats-warning h-100">
                 <div class="card-body">
@@ -76,7 +56,6 @@
                 </div>
             </div>
         </div>
-        
         <div class="col-lg-3 col-md-6 mb-4">
             <div class="card stats-card stats-success h-100">
                 <div class="card-body">
@@ -92,16 +71,15 @@
                 </div>
             </div>
         </div>
-        
         <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-primary h-100">
+            <div class="card stats-card stats-info h-100">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
-                        <div class="stats-icon bg-primary bg-opacity-10 text-primary">
+                        <div class="stats-icon bg-info bg-opacity-10 text-info">
                             <i class="fas fa-cog fa-lg"></i>
                         </div>
                         <div>
-                            <div class="stats-value text-primary">{{ overdue_count + due_soon_count + ok_count }}</div>
+                            <div class="stats-value text-info">{{ total_parts }}</div>
                             <div class="stats-label">Total Parts</div>
                         </div>
                     </div>
@@ -520,192 +498,8 @@
 }
 </style>
 
-<script>
-// Basic dashboard functionality - no frills, just works
-document.addEventListener('DOMContentLoaded', function() {
-    initializeDashboard();
-});
-
-function initializeDashboard() {
-    console.log('Initializing dashboard...');
-    
-    // Store original stats
-    const originalStats = {
-        overdue: document.querySelector('.stats-danger .stats-value').textContent,
-        dueSoon: document.querySelector('.stats-warning .stats-value').textContent,
-        ok: document.querySelector('.stats-success .stats-value').textContent,
-        total: document.querySelector('.stats-primary .stats-value').textContent
-    };
-    
-    // Set up site filter
-    const siteFilter = document.getElementById('site-filter');
-    if (siteFilter) {
-        siteFilter.onchange = function() {
-            const siteId = this.value;
-            
-            // Update filter display name
-            const currentFilter = document.getElementById('current-filter');
-            if (currentFilter) {
-                if (siteId === 'all') {
-                    currentFilter.textContent = 'All Sites';
-                } else {
-                    currentFilter.textContent = this.options[this.selectedIndex].text;
-                }
-            }
-            
-            if (siteId === 'all') {
-                // Show all site rows
-                document.querySelectorAll('[data-site-id]').forEach(function(el) {
-                    el.style.display = '';
-                });
-                
-                // Reset stats to original values
-                document.querySelector('.stats-danger .stats-value').textContent = originalStats.overdue;
-                document.querySelector('.stats-warning .stats-value').textContent = originalStats.dueSoon;
-                document.querySelector('.stats-success .stats-value').textContent = originalStats.ok;
-                document.querySelector('.stats-primary .stats-value').textContent = originalStats.total;
-            } else {
-                // Hide all site rows
-                document.querySelectorAll('[data-site-id]').forEach(function(el) {
-                    el.style.display = 'none';
-                });
-                
-                // Show only matching site rows
-                document.querySelectorAll('[data-site-id="' + siteId + '"]').forEach(function(el) {
-                    el.style.display = '';
-                });
-                
-                // Update site counters for selected site
-                updateSiteCounters(siteId);
-            }
-        };
-    }
-    
-    // Set up toggle all parts button
-    const toggleAllBtn = document.getElementById('toggleAllMachineParts');
-    if (toggleAllBtn) {
-        toggleAllBtn.onclick = function() {
-            const partRows = document.querySelectorAll('.machine-parts-row');
-            let anyVisible = false;
-            
-            // Check if any rows are visible
-            partRows.forEach(function(row) {
-                if (row.style.display === 'table-row') {
-                    anyVisible = true;
-                }
-            });
-            
-            // Toggle based on current state
-            if (anyVisible) {
-                // Hide all rows
-                partRows.forEach(function(row) {
-                    row.style.display = 'none';
-                });
-                
-                // Update toggle buttons
-                document.querySelectorAll('.toggle-parts-btn').forEach(function(btn) {
-                    btn.setAttribute('aria-expanded', 'false');
-                    btn.classList.remove('active');
-                });
-                
-                // Update toggle button text and icon
-                document.getElementById('toggleAllText').textContent = 'Show All Parts';
-                this.querySelector('i').className = 'fas fa-eye me-1';
-            } else {
-                // Show all rows
-                partRows.forEach(function(row) {
-                    row.style.display = 'table-row';
-                });
-                
-                // Update toggle buttons
-                document.querySelectorAll('.toggle-parts-btn').forEach(function(btn) {
-                    btn.setAttribute('aria-expanded', 'true');
-                    btn.classList.add('active');
-                });
-                
-                // Update toggle button text and icon
-                document.getElementById('toggleAllText').textContent = 'Hide All Parts';
-                this.querySelector('i').className = 'fas fa-eye-slash me-1';
-            }
-            
-            return false; // Prevent default action
-        };
-    }
-    
-    // Set up individual part toggles
-    document.querySelectorAll('.toggle-parts-btn').forEach(function(btn) {
-        btn.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const targetId = this.getAttribute('data-target');
-            const row = document.querySelector(targetId);
-            
-            if (!row) return;
-            
-            // Toggle row visibility
-            if (row.style.display === 'table-row') {
-                row.style.display = 'none';
-                this.setAttribute('aria-expanded', 'false');
-                this.classList.remove('active');
-            } else {
-                row.style.display = 'table-row';
-                this.setAttribute('aria-expanded', 'true');
-                this.classList.add('active');
-            }
-        };
-    });
-    
-    // Hide all parts initially
-    document.querySelectorAll('.machine-parts-row').forEach(function(row) {
-        row.style.display = 'none';
-    });
-    
-    // Function to update stats counters for a specific site
-    function updateSiteCounters(siteId) {
-        const siteItem = document.querySelector(`.site-item[data-site-id="${siteId}"]`);
-        if (!siteItem) return;
-        
-        let overdueCount = 0;
-        let dueSoonCount = 0;
-        let okCount = 0;
-        
-        // Get counts from badges
-        const overdueBadge = siteItem.querySelector('.badge.bg-danger');
-        if (overdueBadge) {
-            const match = overdueBadge.textContent.match(/(\d+)/);
-            if (match) overdueCount = parseInt(match[1]);
-        }
-        
-        const dueSoonBadge = siteItem.querySelector('.badge.bg-warning');
-        if (dueSoonBadge) {
-            const match = dueSoonBadge.textContent.match(/(\d+)/);
-            if (match) dueSoonCount = parseInt(match[1]);
-        }
-        
-        // Handle "All Parts OK" case
-        const okBadge = siteItem.querySelector('.badge.bg-success');
-        if (okBadge && okBadge.textContent.includes('All Parts OK')) {
-            // Count all parts for this site
-            const machines = siteItem.querySelectorAll('.machine-row');
-            machines.forEach(function(machine) {
-                const parts = machine.nextElementSibling.querySelectorAll('tbody tr');
-                okCount = parts.length;
-            });
-        }
-        
-        // Update counter displays
-        document.querySelector('.stats-danger .stats-value').textContent = overdueCount;
-        document.querySelector('.stats-warning .stats-value').textContent = dueSoonCount;
-        document.querySelector('.stats-success .stats-value').textContent = okCount;
-        document.querySelector('.stats-primary .stats-value').textContent = (overdueCount + dueSoonCount + okCount);
-    }
-}
-
-// Run a second initialization in case DOMContentLoaded didn't fire or the DOM wasn't ready
-window.onload = function() {
-    initializeDashboard();
-};
-</script>
+<!-- Remove the inline script to avoid conflict with dashboard.js -->
+<!-- Load dashboard.js with defer attribute to ensure DOM is ready -->
+<script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
 
 {% endblock %}
