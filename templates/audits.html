@@ -130,6 +130,60 @@
   font-size: 1.1em;
   margin-bottom: 0.5em;
 }
+@media (max-width: 767.98px) {
+  .audit-task-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1em;
+  }
+  .audit-machine-section {
+    min-width: 320px;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0.75em 0.5em;
+  }
+  .audit-machine-title {
+    font-size: 1em;
+  }
+  .audit-checkoff {
+    width: 2em !important;
+    height: 2em !important;
+    min-width: 2em !important;
+    min-height: 2em !important;
+    margin-right: 1em;
+  }
+  .form-check-label {
+    font-size: 1.1em;
+    padding-left: 0.25em;
+  }
+  .btn {
+    font-size: 1.1em;
+    padding: 0.75em 1.25em;
+  }
+  .btn-lg {
+    font-size: 1.2em;
+    padding: 1em 2em;
+  }
+  .sticky-save {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+    padding: 0.75em 1em;
+    text-align: right;
+  }
+}
+@media (max-width: 575.98px) {
+  .audit-machine-section {
+    padding: 0.5em 0.25em;
+  }
+  .form-check-label {
+    font-size: 1em;
+  }
+}
 </style>
                 <div class="card">
                     <div class="card-header">
@@ -207,8 +261,11 @@
                             </div>
                           {% endif %}
                         {% endfor %}
-                        <div class="text-end mt-3">
+                        <div class="d-none d-md-block text-end mt-3">
                           <button type="submit" class="btn btn-success btn-lg">Save Check-Offs</button>
+                        </div>
+                        <div class="sticky-save d-md-none">
+                          <button type="submit" class="btn btn-success btn-lg w-100">Save Check-Offs</button>
                         </div>
                         {% else %}
                         <div class="alert alert-info">No audit tasks found.</div>
