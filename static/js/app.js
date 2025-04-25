@@ -104,3 +104,33 @@ function formatDate(dateString) {
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return new Date(dateString).toLocaleDateString(undefined, options);
 }
+
+// Sidebar toggle for desktop and mobile
+window.toggleSidebar = function() {
+    var body = document.body;
+    var sidebar = document.querySelector('.sidebar');
+    var contentContainer = document.querySelector('.content-container');
+    var sidebarContainer = document.querySelector('.sidebar-container');
+    // Toggle collapsed class on body
+    body.classList.toggle('sidebar-collapsed');
+    // For mobile, toggle .show on sidebar
+    if (window.innerWidth <= 991) {
+        sidebar.classList.toggle('show');
+        // Optionally add overlay for mobile
+        if (sidebar.classList.contains('show')) {
+            body.classList.add('sidebar-active');
+        } else {
+            body.classList.remove('sidebar-active');
+        }
+    }
+};
+// Hide sidebar when clicking overlay (mobile)
+document.addEventListener('click', function(e) {
+    if (document.body.classList.contains('sidebar-active')) {
+        var sidebar = document.querySelector('.sidebar');
+        if (!sidebar.contains(e.target) && !e.target.closest('.sidebar-toggle-btn') && !e.target.closest('#hamburger-btn')) {
+            sidebar.classList.remove('show');
+            document.body.classList.remove('sidebar-active');
+        }
+    }
+});
