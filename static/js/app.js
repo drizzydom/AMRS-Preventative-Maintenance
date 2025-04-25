@@ -109,14 +109,16 @@ function formatDate(dateString) {
 window.toggleSidebar = function() {
     var body = document.body;
     var sidebar = document.querySelector('.sidebar');
-    var contentContainer = document.querySelector('.content-container');
-    var sidebarContainer = document.querySelector('.sidebar-container');
     // Toggle collapsed class on body
+    var collapsed = !body.classList.contains('sidebar-collapsed');
     body.classList.toggle('sidebar-collapsed');
+    // Persist state for desktop
+    if (window.innerWidth > 991) {
+        localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
+    }
     // For mobile, toggle .show on sidebar
     if (window.innerWidth <= 991) {
         sidebar.classList.toggle('show');
-        // Optionally add overlay for mobile
         if (sidebar.classList.contains('show')) {
             body.classList.add('sidebar-active');
         } else {
@@ -124,6 +126,19 @@ window.toggleSidebar = function() {
         }
     }
 };
+// Restore sidebar state on page load
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.innerWidth > 991) {
+            var collapsed = localStorage.getItem('sidebar-collapsed');
+            if (collapsed === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            } else {
+                document.body.classList.remove('sidebar-collapsed');
+            }
+        }
+    });
+})();
 // Hide sidebar when clicking overlay (mobile)
 document.addEventListener('click', function(e) {
     if (document.body.classList.contains('sidebar-active')) {
