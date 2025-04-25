@@ -16,22 +16,56 @@ def test_create_audit_task(client, db, login_admin, setup_test_data):
     audit = AuditTask.query.filter_by(name='Test Audit').first()
     assert audit is not None
 
-def test_create_audit_task_with_custom_interval(client, db, login_admin, setup_test_data):
+def test_create_audit_task_with_custom_interval_days(client, db, login_admin, setup_test_data):
     login_admin()
     data = setup_test_data
     response = client.post('/audits', data={
-        'name': 'Custom Interval Audit',
+        'name': 'Custom Interval Audit Days',
         'site_id': data['site1'].id,
         'machine_ids': [data['machine'].id],
         'interval': 'custom',
-        'custom_interval_days': 5,
+        'custom_interval_value': 5,
+        'custom_interval_unit': 'day',
         'create_audit': '1'
     }, follow_redirects=True)
-    assert b'Create Audit Task' in response.data or b'Audit task created' in response.data
-    audit = AuditTask.query.filter_by(name='Custom Interval Audit').first()
+    audit = AuditTask.query.filter_by(name='Custom Interval Audit Days').first()
     assert audit is not None
     assert audit.interval == 'custom'
     assert audit.custom_interval_days == 5
+
+def test_create_audit_task_with_custom_interval_weeks(client, db, login_admin, setup_test_data):
+    login_admin()
+    data = setup_test_data
+    response = client.post('/audits', data={
+        'name': 'Custom Interval Audit Weeks',
+        'site_id': data['site1'].id,
+        'machine_ids': [data['machine'].id],
+        'interval': 'custom',
+        'custom_interval_value': 2,
+        'custom_interval_unit': 'week',
+        'create_audit': '1'
+    }, follow_redirects=True)
+    audit = AuditTask.query.filter_by(name='Custom Interval Audit Weeks').first()
+    assert audit is not None
+    assert audit.interval == 'custom'
+    assert audit.custom_interval_days == 14
+
+def test_create_audit_task_with_custom_interval_months(client, db, login_admin, setup_test_data):
+    login_admin()
+    data = setup_test_data
+    response = client.post('/audits', data={
+        'name': 'Custom Interval Audit Months',
+        'site_id': data['site1'].id,
+        'machine_ids': [data['machine'].id],
+        'interval': 'custom',
+        'custom_interval_value': 1,
+        'custom_interval_unit': 'month',
+        'create_audit': '1'
+    }, follow_redirects=True)
+    audit = AuditTask.query.filter_by(name='Custom Interval Audit Months').first()
+    assert audit is not None
+    assert audit.interval == 'custom'
+    assert audit.custom_interval_days == 30
 
 def test_audit_checkoff_logic(client, db, login_admin, setup_test_data):
     # This would simulate the logic for check-off intervals and reminders

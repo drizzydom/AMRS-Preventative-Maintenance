@@ -641,7 +641,6 @@ def index():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Main dashboard view after login."""
     try:
         # Get upcoming and overdue maintenance across all sites the user has access to
         if current_user.is_admin:
@@ -675,69 +674,22 @@ def dashboard():
         
         # Process parts for maintenance status
         now = datetime.now()
-        overdue_parts = []
-        due_soon_parts = []
+        overdue_count = 0
+        due_soon_count = 0
         ok_count = 0
-        
         for part in parts:
             days_until = (part.next_maintenance - now).days
-            
             if days_until < 0:
-                # Part is overdue
-                overdue_parts.append({
-                    'id': part.id,
-                    'name': part.name,
-                    'machine': part.machine.name,
-                    'site': part.machine.site.name,
-                    'days_overdue': abs(days_until),
-                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
-                })
-                stats['overdue_count'] += 1
-            elif days_until <= 30:  # Due within 30 days
-                # Part is due soon
-                due_soon_parts.append({
-                    'id': part.id,
-                    'name': part.name,
-                    'machine': part.machine.name,
-                    'site': part.machine.site.name,
-                    'days_until': days_until,
-                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
-                })
-                stats['due_soon_count'] += 1
+                overdue_count += 1
+            elif days_until <= 30:
+                due_soon_count += 1
             else:
                 ok_count += 1
-        
-        # Sort parts by urgency
-        overdue_parts.sort(key=lambda x: x['days_overdue'], reverse=True)
-        due_soon_parts.sort(key=lambda x: x['days_until'])
-        
-        return render_template('dashboard.html',
-                              sites=sites,
-                              machines=machines,
-                              parts=parts,
-                              stats=stats,
-                              overdue_parts=overdue_parts,
-                              due_soon_parts=due_soon_parts,
-                              overdue_count=stats['overdue_count'],
-                              due_soon_count=stats['due_soon_count'],
-                              ok_count=ok_count,
-                              now=now)
+        total_parts = len(parts)
+        return render_template('dashboard.html', sites=sites, overdue_count=overdue_count, due_soon_count=due_soon_count, ok_count=ok_count, total_parts=total_parts, now=now)
     except Exception as e:
-        app.logger.error(f"Error rendering dashboard: {e}")
-        # Log the error details for debugging
-        print(f"Dashboard error: {str(e)}")
-        # Return an empty dashboard as fallback
-        return render_template('dashboard.html', 
-                              sites=[], 
-                              machines=[], 
-                              parts=[], 
-                              stats={'sites_count': 0, 'machines_count': 0, 'parts_count': 0, 'overdue_count': 0, 'due_soon_count': 0},
-                              overdue_parts=[],
-                              due_soon_parts=[],
-                              overdue_count=0,
-                              due_soon_count=0,
-                              ok_count=0,
-                              now=datetime.now())
+        flash(f'Error loading dashboard: {str(e)}', 'error')
+        return redirect(url_for('index'))
 
 @app.route('/admin')
 @login_required
@@ -894,23 +846,30 @@ def audits_page():
             eligibility[(task.id, machine.id)] = next_eligible
 
     if request.method == 'POST' and request.form.get('create_audit') == '1':
-        name = request.form.get('name')
-        description = request.form.get('description')
-        site_id = request.form.get('site_id')
-        interval = request.form.get('interval', 'daily')
-        custom_interval_days = request.form.get('custom_interval_days')
+        interval = request.form.get('interval')
+        custom_interval_days = None
+        if interval == 'custom':
+            value = int(request.form.get('custom_interval_value', 1))
+            unit = request.form.get('custom_interval_unit', 'day')
+            if unit == 'week':
+                custom_interval_days = value * 7
+            elif unit == 'month':
+                custom_interval_days = value * 30
+            else:
+                custom_interval_days = value
+        # Ensure machine_ids is always a list
         machine_ids = request.form.getlist('machine_ids')
-        if not (name and site_id and machine_ids):
+        if not (request.form.get('name') and request.form.get('site_id') and machine_ids):
             flash('Task name, site, and at least one machine are required.', 'danger')
             return redirect(url_for('audits_page'))
         try:
             audit_task = AuditTask(
-                name=name,
-                description=description,
-                site_id=site_id,
+                name=request.form.get('name'),
+                description=request.form.get('description'),
+                site_id=request.form.get('site_id'),
                 created_by=current_user.id,
                 interval=interval,
-                custom_interval_days=int(custom_interval_days) if interval == 'custom' and custom_interval_days else None
+                custom_interval_days=custom_interval_days
             )
             for machine_id in machine_ids:
                 machine = Machine.query.get(int(machine_id))
@@ -1524,13 +1483,25 @@ def update_maintenance(part_id):
             return redirect(url_for('maintenance_page'))
         now = datetime.now()
         part.last_maintenance = now
-        part.next_maintenance = now + timedelta(days=part.maintenance_days)
+        # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
+        freq = part.maintenance_frequency or 1
+        unit = part.maintenance_unit or 'day'
+        if unit == 'week':
+            delta = timedelta(weeks=freq)
+        elif unit == 'month':
+            delta = timedelta(days=freq * 30)
+        elif unit == 'year':
+            delta = timedelta(days=freq * 365)
+        else:
+            delta = timedelta(days=freq)
+        part.next_maintenance = now + delta
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
             user_id=current_user.id,
             date=now,
-            comments=request.form.get('comments', '')
+            comments=request.form.get('comments', ''),
+            description=request.form.get('description', None)
         )
         db.session.add(maintenance_record)
         db.session.commit()
@@ -1963,7 +1934,6 @@ def sync_data():
     try:
         data = request.json
         sync_type = data.get('type')
-        
         if sync_type == 'push':
             # Handle data being pushed from client to server
             # Process items from the client
@@ -2495,5 +2465,6 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
