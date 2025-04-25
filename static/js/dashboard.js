@@ -79,7 +79,9 @@ function filterSites(siteId) {
         document.querySelectorAll('[data-site-id]').forEach(function(row) {
             row.style.display = '';
         });
-        
+        // Show all Overdue/Due Soon cards
+        showCardIfRowsExist('overdue');
+        showCardIfRowsExist('due-soon');
         // Reset counters to original values
         resetCounters();
     } else {
@@ -87,21 +89,49 @@ function filterSites(siteId) {
         document.querySelectorAll('[data-site-id]').forEach(function(row) {
             row.style.display = 'none';
         });
-        
         // Show rows matching the selected site
         document.querySelectorAll(`[data-site-id="${siteId}"]`).forEach(function(row) {
             row.style.display = '';
         });
-        
+        // Show/hide Overdue/Due Soon cards based on visible rows
+        showCardIfRowsExist('overdue');
+        showCardIfRowsExist('due-soon');
         // Show the site item in the accordion
         const siteItem = document.querySelector(`.site-item[data-site-id="${siteId}"]`);
         if (siteItem) {
             siteItem.style.display = '';
-            
             // Update counters for just this site
             updateCountersFromSite(siteItem);
         }
     }
+}
+
+// Helper to show/hide Overdue/Due Soon cards based on visible rows
+function showCardIfRowsExist(type) {
+    let cardSelector, rowSelector;
+    if (type === 'overdue') {
+        cardSelector = '.stats-danger, .card:has(.fa-exclamation-triangle)';
+        rowSelector = 'tr[data-site-id]';
+    } else if (type === 'due-soon') {
+        cardSelector = '.stats-warning, .card:has(.fa-clock)';
+        rowSelector = 'tr[data-site-id]';
+    } else {
+        return;
+    }
+    // Find the card
+    const cards = Array.from(document.querySelectorAll(cardSelector)).filter(card => card.querySelector(rowSelector));
+    cards.forEach(card => {
+        // Only check tables inside cards
+        const table = card.querySelector('table');
+        if (!table) return;
+        // Count visible rows
+        const visibleRows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
+        if (visibleRows.length === 0) {
+            card.style.display = 'none';
+        } else {
+            card.style.display = '';
+        }
+    });
 }
 
 // Reset stats counters to original values
