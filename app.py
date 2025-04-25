@@ -1923,6 +1923,7 @@ def run_startup_migrations():
         'update_schema.py',
         'create_maintenance_table.py',
         'add_notification_preferences.py',
+        'add_audit_task_columns.py',
     ]
     for script in migration_scripts:
         script_path = os.path.join(os.path.dirname(__file__), script)
