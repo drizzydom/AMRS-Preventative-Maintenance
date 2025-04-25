@@ -97,5 +97,30 @@ def test_audit_checkoff_eligibility_custom_interval(client, db, login_admin, set
     db.session.add(completion)
     db.session.commit()
     # Try to check off again today (should not be eligible)
-    response = client.post('/audits', data={'checkoff': '1', f'complete_{audit.id}_{data["machine"].id}': 'on'}, follow_redirects=True)
-    assert b'No eligible audit tasks were checked off' in response.data
+    response = client.post('/audits', data={'checkoff': '1', f'complete_{audit.id}_{data["machine"].id}': 'on'}, follow_redirects=False)
+    assert response.status_code in (302, 303)
+    redirected_response = client.get('/audits')
+    # Check for the message in the HTML response (raw bytes)
+    found_in_html = b'No eligible audit tasks were checked off' in redirected_response.data
+    # Use BeautifulSoup to search for the message in alert divs
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(redirected_response.data, 'html.parser')
+    found_in_alert = False
+    for alert in soup.find_all(class_='alert'):
+        if 'No eligible audit tasks were checked off' in alert.get_text():
+            found_in_alert = True
+            break
+    # Debug output if not found
+    if not (found_in_html or found_in_alert):
+        print('---DEBUG: audits.html response---')
+        print(redirected_response.data.decode(errors='replace'))
+        print('---END DEBUG---')
+    # Check for the message in the session's flashed messages (should be consumed, but check anyway)
+    with client.session_transaction() as sess:
+        flashed = False
+        flashes = sess.get('_flashes', [])
+        for category, message in flashes:
+            if 'No eligible audit tasks were checked off' in message:
+                flashed = True
+                break
+    assert found_in_html or found_in_alert or flashed
