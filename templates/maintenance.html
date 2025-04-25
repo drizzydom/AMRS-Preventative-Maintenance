@@ -91,45 +91,46 @@
             <div class="card-body">
                 {% if overdue_parts %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Part</th>
-                                <th>Machine</th>
-                                <th>Site</th>
-                                <th>Last Maintenance</th>
-                                <th>Overdue By</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for part in overdue_parts %}
-                            <tr>
-                                <td>{{ part.name }}</td>
-                                <td>{{ part.machine.name }}</td>
-                                <td>{{ part.site.name }}</td>
-                                <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
-                                <td><span class="badge bg-danger">{{ part.days }} days</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-success" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#recordMaintenanceModal" 
-                                            data-part-id="{{ part.id }}"
-                                            data-part-name="{{ part.name }}"
-                                            title="Record Maintenance">
-                                        <i class="fas fa-check-circle"></i> Record
-                                    </button>
-                                    <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-                                    <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
-                                        <i class="fas fa-history"></i> History
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                  <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
+                  <table class="table table-striped table-hover">
+                    <thead>
+                      <tr>
+                        <th>Part</th>
+                        <th>Machine</th>
+                        <th class="hide-sm">Site</th>
+                        <th class="hide-sm">Last Maintenance</th>
+                        <th>Overdue By</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                        {% for part in overdue_parts %}
+                        <tr>
+                            <td>{{ part.name }}</td>
+                            <td>{{ part.machine.name }}</td>
+                            <td>{{ part.site.name }}</td>
+                            <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
+                            <td><span class="badge bg-danger">{{ part.days }} days</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-success" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#recordMaintenanceModal" 
+                                        data-part-id="{{ part.id }}"
+                                        data-part-name="{{ part.name }}"
+                                        title="Record Maintenance">
+                                    <i class="fas fa-check-circle"></i> Record
+                                </button>
+                                <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
+                                    <i class="fas fa-history"></i> History
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                  </table>
                 </div>
                 {% else %}
                 <p class="text-muted mb-0">No overdue maintenance items.</p>
@@ -150,45 +151,46 @@
             <div class="card-body">
                 {% if due_soon_parts %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Part</th>
-                                <th>Machine</th>
-                                <th>Site</th>
-                                <th>Last Maintenance</th>
-                                <th>Due In</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for part in due_soon_parts %}
-                            <tr>
-                                <td>{{ part.name }}</td>
-                                <td>{{ part.machine.name }}</td>
-                                <td>{{ part.site.name }}</td>
-                                <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
-                                <td><span class="badge bg-warning text-dark">{{ part.days }} days</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-success" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#recordMaintenanceModal" 
-                                            data-part-id="{{ part.id }}"
-                                            data-part-name="{{ part.name }}"
-                                            title="Record Maintenance">
-                                        <i class="fas fa-check-circle"></i> Record
-                                    </button>
-                                    <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-                                    <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
-                                        <i class="fas fa-history"></i> History
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                  <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
+                  <table class="table table-striped table-hover">
+                    <thead>
+                      <tr>
+                        <th>Part</th>
+                        <th>Machine</th>
+                        <th class="hide-sm">Site</th>
+                        <th class="hide-sm">Last Maintenance</th>
+                        <th>Due In</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                        {% for part in due_soon_parts %}
+                        <tr>
+                            <td>{{ part.name }}</td>
+                            <td>{{ part.machine.name }}</td>
+                            <td>{{ part.site.name }}</td>
+                            <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
+                            <td><span class="badge bg-warning text-dark">{{ part.days }} days</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-success" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#recordMaintenanceModal" 
+                                        data-part-id="{{ part.id }}"
+                                        data-part-name="{{ part.name }}"
+                                        title="Record Maintenance">
+                                    <i class="fas fa-check-circle"></i> Record
+                                </button>
+                                <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
+                                    <i class="fas fa-history"></i> History
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                  </table>
                 </div>
                 {% else %}
                 <p class="text-muted mb-0">No maintenance items due soon.</p>
@@ -209,45 +211,46 @@
             <div class="card-body">
                 {% if upcoming_parts %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Part</th>
-                                <th>Machine</th>
-                                <th>Site</th>
-                                <th>Last Maintenance</th>
-                                <th>Due In</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for part in upcoming_parts %}
-                            <tr>
-                                <td>{{ part.name }}</td>
-                                <td>{{ part.machine.name }}</td>
-                                <td>{{ part.site.name }}</td>
-                                <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ part.days }} days</td>
-                                <td>
-                                    <button class="btn btn-sm btn-success" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#recordMaintenanceModal" 
-                                            data-part-id="{{ part.id }}"
-                                            data-part-name="{{ part.name }}"
-                                            title="Record Maintenance">
-                                        <i class="fas fa-check-circle"></i> Record
-                                    </button>
-                                    <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-                                    <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
-                                        <i class="fas fa-history"></i> History
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                  <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
+                  <table class="table table-striped table-hover">
+                    <thead>
+                      <tr>
+                        <th>Part</th>
+                        <th>Machine</th>
+                        <th class="hide-sm">Site</th>
+                        <th class="hide-sm">Last Maintenance</th>
+                        <th>Due In</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                        {% for part in upcoming_parts %}
+                        <tr>
+                            <td>{{ part.name }}</td>
+                            <td>{{ part.machine.name }}</td>
+                            <td>{{ part.site.name }}</td>
+                            <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ part.days }} days</td>
+                            <td>
+                                <button class="btn btn-sm btn-success" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#recordMaintenanceModal" 
+                                        data-part-id="{{ part.id }}"
+                                        data-part-name="{{ part.name }}"
+                                        title="Record Maintenance">
+                                    <i class="fas fa-check-circle"></i> Record
+                                </button>
+                                <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <a href="{{ url_for('view_part_history', part_id=part.id) }}" class="btn btn-sm btn-info">
+                                    <i class="fas fa-history"></i> History
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                  </table>
                 </div>
                 {% else %}
                 <p class="text-muted mb-0">No upcoming maintenance items.</p>
