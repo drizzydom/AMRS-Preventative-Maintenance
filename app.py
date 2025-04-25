@@ -883,37 +883,37 @@ def audits_page():
             db.session.rollback()
             flash(f'Error creating audit task: {str(e)}', 'danger')
             return redirect(url_for('audits_page'))
-    
-    if request.method == 'POST' and request.form.get('checkoff') == '1':
-        updated = 0
-        for task in audit_tasks:
-            for machine in task.machines:
-                key = f'complete_{task.id}_{machine.id}'
-                if key in request.form:
-                    # Check if already completed today
-                    if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed:
-                        continue
-                    # Enforce interval: only allow if today >= next eligible date
-                    next_eligible = eligibility.get((task.id, machine.id))
-                    if next_eligible and today < next_eligible:
-                        continue  # Not eligible yet
-                    # Record completion
-                    completion = AuditTaskCompletion(
-                        audit_task_id=task.id,
-                        machine_id=machine.id,
-                        date=today,
-                        completed=True,
-                        completed_by=current_user.id,
-                        completed_at=datetime.now()
-                    )
-                    db.session.add(completion)
-                    updated += 1
-        if updated:
-            db.session.commit()
-            flash(f'{updated} audit task(s) checked off successfully.', 'success')
-        else:
-            flash('No eligible audit tasks were checked off.', 'info')
-        return redirect(url_for('audits_page'))
+            
+        if request.method == 'POST' and request.form.get('checkoff') == '1':
+            updated = 0
+            for task in audit_tasks:
+                for machine in task.machines:
+                    key = f'complete_{task.id}_{machine.id}'
+                    if key in request.form:
+                        # Check if already completed today
+                        if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed:
+                            continue
+                        # Strictly enforce interval: only allow if no previous completion or today >= next eligible date
+                        next_eligible = eligibility.get((task.id, machine.id))
+                        if next_eligible is not None and today < next_eligible:
+                            continue  # Not eligible yet
+                        # Only record completion if eligible (either no previous completion or today >= next_eligible)
+                        completion = AuditTaskCompletion(
+                            audit_task_id=task.id,
+                            machine_id=machine.id,
+                            date=today,
+                            completed=True,
+                            completed_by=current_user.id,
+                            completed_at=datetime.now()
+                        )
+                        db.session.add(completion)
+                        updated += 1
+            if updated:
+                db.session.commit()
+                flash(f'{updated} audit task(s) checked off successfully.', 'success')
+            else:
+                flash('No eligible audit tasks were checked off.', 'info')
+            return redirect(url_for('audits_page'))
     
     return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility)
 
