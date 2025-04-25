@@ -16,7 +16,7 @@ try:
     if not os.path.exists(data_dir):
         logger.warning(f"Data directory {data_dir} does not exist!")
     else:
-        for subdir in ['db', 'backups', 'uploads']:
+        for subdir in ['db', 'uploads']:  # Removed 'backups'
             full_path = os.path.join(data_dir, subdir)
             if not os.path.exists(full_path):
                 os.makedirs(full_path, exist_ok=True)
@@ -27,14 +27,16 @@ except Exception as e:
 logger.info(f"FLASK_APP: {os.environ.get('FLASK_APP', 'Not set')}")
 logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
 
-# Import the real Flask application file
-# Instead of importing from app.py, import directly from the actual application module
-# Adjust this import to match your actual application structure
-import sys
-sys.path.insert(0, os.path.dirname(__file__))
-from flask_app import create_app  # Assuming your actual app is in flask_app.py
+from auto_migrate import run_auto_migration
+run_auto_migration()
 
-app = create_app()
+# Import the Flask app from render_app.py (which imports from app.py)
+from render_app import app
+
+# Ensure all tables are created before serving requests
+from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine, Part, MaintenanceRecord
+with app.app_context():
+    db.create_all()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

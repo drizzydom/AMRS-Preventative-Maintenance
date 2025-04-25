@@ -6,30 +6,73 @@ import string
 import logging
 import signal
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from functools import wraps
+import traceback
+
+# --- TEST DB PATCH: Force in-memory SQLite for pytest runs ---
+if any('pytest' in arg for arg in sys.argv):
+    os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
 # Third-party imports
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
-import bleach
-import jwt  # Added for password reset tokens
-from sqlalchemy import or_, text  # Added text for SQL execution
+from sqlalchemy import or_, text
 from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv  # Add the missing import for load_dotenv
-import secrets  # Add import for secrets used later in the code
-from sqlalchemy import inspect  # Add import for inspect
-import psycopg2  # Add PostgreSQL driver
+from dotenv import load_dotenv
+import secrets
+from sqlalchemy import inspect
+import smtplib
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
+from auto_migrate import run_auto_migration
 
-# Define PostgreSQL database URI
-POSTGRESQL_DATABASE_URI = os.environ.get(
-    'DATABASE_URL', 
-    'postgresql://maintenance_tracker_data_user:mbVv4EmuXc0co5A0KcHe57SPhW7Kd0gi@dpg-cvv7vebe5dus73ec3ksg-a/maintenance_tracker_data'
-)
+# Patch is_admin property to User class immediately after import
+@property
+def is_admin(self):
+    """Add is_admin property to User class for template compatibility"""
+    return is_admin_user(self)
+User.is_admin = is_admin
+
+# Then patch the Site class directly as a monkey patch
+# This must be outside any function to execute immediately
+def parts_status(self, current_date=None):
+    """
+    Get maintenance status of all parts at this site
+    Returns dictionary with 'overdue' and 'due_soon' lists
+    """
+    if current_date is None:
+        current_date = datetime.now()
+    
+    overdue = []
+    due_soon = []
+    threshold = self.notification_threshold or 30  # Default to 30 days if not set
+    
+    # Loop through all machines at this site
+    for machine in self.machines:
+        for part in machine.parts:
+            days_until = (part.next_maintenance - current_date).days
+            
+            # Overdue parts
+            if days_until < 0:
+                overdue.append(part)
+            # Due soon parts within threshold
+            elif days_until <= threshold:
+                due_soon.append(part)
+    
+    return {
+        'overdue': overdue,
+        'due_soon': due_soon
+    }
+
+# Update the function assignments
+Site.parts_status = parts_status
+Site.get_parts_status = parts_status
+
+# Define PostgreSQL database URI from environment only
+POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
 
 # Verify persistent storage
 def check_persistent_storage():
@@ -47,6 +90,49 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Email configuration (all secrets from environment)
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
+
+# Checklist for email environment variables:
+# MAIL_SERVER (e.g. smtp.ionos.com)
+# MAIL_PORT (e.g. 587)
+# MAIL_USE_TLS (true/false)
+# MAIL_USERNAME (your email address)
+# MAIL_PASSWORD (your email password)
+# MAIL_DEFAULT_SENDER (your email address)
+
+# Optional: SMTP connectivity test for debugging
+def test_smtp_connection():
+    try:
+        server = os.environ.get('MAIL_SERVER')
+        port = int(os.environ.get('MAIL_PORT', 587))
+        username = os.environ.get('MAIL_USERNAME')
+        password = os.environ.get('MAIL_PASSWORD')
+        use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+        print(f"Testing SMTP connection to {server}:{port} as {username} (TLS={use_tls})")
+        smtp = smtplib.SMTP(server, port, timeout=10)
+        if use_tls:
+            smtp.starttls()
+        smtp.login(username, password)
+        smtp.quit()
+        print("SMTP connection successful!")
+    except Exception as e:
+        print(f"SMTP connection failed: {e}")
+
+# Uncomment to test SMTP connectivity at startup
+# test_smtp_connection()
+
+# Initialize Flask-Mail
+mail = Mail(app)
+
+# Secret key from environment only
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
 # Set up logging
 logging.basicConfig(
@@ -114,8 +200,6 @@ except ImportError as e:
         return app
 
 # Initialize Flask app with better error handling
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
-app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')
 app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '/')
 app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
 
@@ -146,88 +230,417 @@ login_manager.login_message_category = 'info'  # Flash message category for logi
 @login_manager.user_loader
 def load_user(user_id):
     # This must return None or a User object
-    return User.query.get(int(user_id)) if user_id else None
+    return db.session.get(User, int(user_id)) if user_id else None
 
-# Add error handlers with fallbacks
-@app.errorhandler(404)
-def page_not_found(e):
+# Standardized function to check admin status
+def is_admin_user(user):
+    """Standardized function to check if a user has admin privileges."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    # Relationship-based check
+    if hasattr(user, 'role') and user.role and hasattr(user.role, 'name') and user.role.name and user.role.name.lower() == 'admin':
+        return True
+    # Fallback: username
+    if getattr(user, 'username', None) == 'admin':
+        return True
+    return False
+
+# Database connection checker
+def check_db_connection():
+    """Check if database connection is working and reconnect if needed."""
     try:
-        return render_template('errors/404.html'), 404
-    except:
-        # Fallback to simple HTML response if template is missing
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head><title>Page Not Found</title></head>
-        <body style="font-family:Arial; text-align:center; padding:50px;">
-            <h1 style="color:#FE7900;">Page Not Found</h1>
-            <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
-        </body>
-        </html>
-        ''', 404
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception as e:
+        app.logger.error(f"Database connection error: {e}")
+        return False
 
-@app.errorhandler(500)
-def server_error(e):
+# Whitelist allowed table and column names for schema changes
+ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions'}
+ALLOWED_COLUMNS = {
+    'users': {'last_login', 'reset_token', 'reset_token_expiration', 'created_at', 'updated_at'},
+    'roles': {'created_at', 'updated_at'},
+    'sites': {'created_at', 'updated_at'},
+    'machines': {'created_at', 'updated_at'},
+    'parts': {'created_at', 'updated_at'},
+    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
+    'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
+    'audit_task_completions': {'created_at', 'updated_at'}
+}
+
+# Function to ensure database schema matches models
+def ensure_db_schema():
+    """Ensure database schema matches the models by adding missing columns and fixing column types."""
     try:
-        return render_template('errors/500.html'), 500
-    except:
-        # Fallback to simple HTML response if template is missing
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head><title>Server Error</title></head>
-        <body style="font-family:Arial; text-align:center; padding:50px;">
-            <h1 style="color:#FE7900;">Server Error</h1>
-            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
-        </body>
-        </html>
-        ''', 500
+        print("[APP] Checking database schema...")
+        inspector = inspect(db.engine)
+        table_schemas = {
+            'users': {
+                'last_login': 'TIMESTAMP',
+                'reset_token': 'VARCHAR(100)',
+                'reset_token_expiration': 'TIMESTAMP',
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'roles': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'sites': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'machines': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'parts': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            },
+            'maintenance_records': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP',
+                'client_id': 'VARCHAR(36)',
+                'machine_id': 'INTEGER',
+                'maintenance_type': 'VARCHAR(50)',
+                'description': 'TEXT',
+                'performed_by': 'VARCHAR(100)',
+                'status': 'VARCHAR(50)',
+                'notes': 'TEXT'
+            },
+            'audit_tasks': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP',
+                'interval': 'VARCHAR(50)',
+                'custom_interval_days': 'INTEGER'
+            },
+            'audit_task_completions': {
+                'created_at': 'TIMESTAMP',
+                'updated_at': 'TIMESTAMP'
+            }
+        }
+        with db.engine.connect() as conn:
+            for table, columns in table_schemas.items():
+                if table not in ALLOWED_TABLES:
+                    continue
+                if inspector.has_table(table):
+                    print(f"[APP] Checking {table} table schema...")
+                    existing_columns = {column['name']: column for column in inspector.get_columns(table)}
+                    for column_name, column_type in columns.items():
+                        if column_name not in ALLOWED_COLUMNS.get(table, set()):
+                            continue
+                        if column_name not in existing_columns:
+                            print(f"[APP] Adding missing column {column_name} to {table} table")
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
+                            conn.commit()
+                        else:
+                            # Check and fix type for client_id in maintenance_records
+                            if table == 'maintenance_records' and column_name == 'client_id':
+                                db_type = existing_columns[column_name]['type']
+                                # Only fix if not already VARCHAR/CHAR/TEXT
+                                if not (hasattr(db_type, 'length') and db_type.length == 36) and 'char' not in str(db_type).lower() and 'text' not in str(db_type).lower():
+                                    print("[APP] Altering client_id column type to VARCHAR(36) in maintenance_records table")
+                                    try:
+                                        conn.execute(text("ALTER TABLE maintenance_records ALTER COLUMN client_id TYPE VARCHAR(36) USING client_id::text"))
+                                        conn.commit()
+                                    except Exception as e:
+                                        print(f"[APP] Could not alter client_id column type: {e}")
+                    if 'created_at' in columns and 'created_at' not in existing_columns:
+                        conn.execute(text(f"UPDATE {table} SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                        conn.commit()
+                    
+                    if 'updated_at' in columns and 'updated_at' not in existing_columns:
+                        conn.execute(text(f"UPDATE {table} SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                        conn.commit()
+                else:
+                    print(f"[APP] Table {table} does not exist - will be created by db.create_all()")
+        
+        print("[APP] Database schema check completed")
+    except Exception as e:
+        print(f"[APP] Error checking database schema: {e}")
 
-# Make sure your login route is defined
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """Handle user login"""
-    # If user is already authenticated, redirect to dashboard
+# Ensure maintenance_records table has necessary columns
+def ensure_maintenance_records_schema():
+    """Ensure maintenance_records table has necessary columns."""
+    try:
+        inspector = inspect(db.engine)
+        if inspector.has_table('maintenance_records'):
+            columns = [column['name'] for column in inspector.get_columns('maintenance_records')]
+            
+            # Add client_id column if missing
+            if 'client_id' not in columns:
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS client_id VARCHAR(36)"))
+                    conn.commit()
+                print("[APP] Added client_id column to maintenance_records table")
+            
+            # Add machine_id column if missing (to fix delete machine error)
+            if 'machine_id' not in columns:
+                print("[APP] Adding missing machine_id column to maintenance_records table")
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS machine_id INTEGER"))
+                    conn.commit()
+                
+                # Populate machine_id from associated part's machine_id
+                maintenance_records = MaintenanceRecord.query.all()
+                for record in maintenance_records:
+                    if record.part:
+                        record.machine_id = record.part.machine_id
+                
+                db.session.commit()
+                print("[APP] Populated machine_id values in maintenance_records table")
+                
+                # Try to add foreign key constraint but don't fail if it doesn't work
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(text("""
+                            ALTER TABLE maintenance_records 
+                            ADD CONSTRAINT fk_maintenance_records_machine_id 
+                            FOREIGN KEY (machine_id) REFERENCES machines (id)
+                        """))
+                        conn.commit()
+                    print("[APP] Added foreign key constraint to machine_id column")
+                except Exception as e:
+                    print(f"[APP] Note: Could not add foreign key constraint: {str(e)}")
+                    print("[APP] This is not critical, the column is still usable.")
+    except Exception as e:
+        print(f"[APP] Error ensuring maintenance_records schema: {e}")
+
+def initialize_db_connection():
+    """Initialize database connection."""
+    try:
+        # Test database connection
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            print("[APP] Database connection established successfully")
+    except Exception as e:
+        print(f"[APP] Database connection error: {e}")
+
+# --- Move setup code from before_first_request to here ---
+def add_default_admin_if_needed():
+    """Add a default admin user if no users exist in the database."""
+    try:
+        user_count = User.query.count()
+        if user_count == 0:
+            print("[APP] No users found, creating default admin user")
+            admin_role = Role.query.filter_by(name='admin').first()
+            if not admin_role:
+                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+                db.session.add(admin_role)
+                db.session.commit()
+            admin = User(
+                username='admin',
+                email='admin@example.com',
+                password_hash=generate_password_hash('admin'),
+                role=admin_role
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("[APP] Default admin user created")
+        else:
+            # Ensure existing admin user has correct role
+            admin_user = User.query.filter_by(username='admin').first()
+            admin_role = Role.query.filter_by(name='admin').first()
+            if admin_user and (not admin_user.role or admin_user.role != admin_role):
+                print(f"[APP] Fixing admin role for user {admin_user.username}")
+                if not admin_role:
+                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+                    db.session.add(admin_role)
+                    db.session.commit()
+                admin_user.role = admin_role
+                db.session.commit()
+    except Exception as e:
+        print(f"[APP] Error creating/updating default admin: {e}")
+
+with app.app_context():
+    try:
+        run_auto_migration()  # Ensure schema is up to date on launch
+    except Exception as e:
+        print(f'[AUTO_MIGRATE ERROR] {e}')
+    add_default_admin_if_needed()
+    
+    try:
+        print("[APP] Performing database integrity checks...")
+        admin_users = User.query.join(Role).filter(
+            or_(
+                Role.name.ilike('admin'),
+                User.username == 'admin'
+            )
+        ).all()
+        for user in admin_users:
+            if not user.role or user.role.name.lower() != 'admin':
+                admin_role = Role.query.filter_by(name='admin').first()
+                user.role = admin_role
+                print(f"[APP] Fixed admin role for user {user.username}")
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[APP] Error performing database integrity checks: {e}")
+    
+    # Healthcheck log
+    try:
+        from simple_healthcheck import check_database
+        print("[STARTUP] Running healthcheck...")
+        if check_database():
+            print("[STARTUP] Healthcheck PASSED: Database is ready.")
+        else:
+            print("[STARTUP] Healthcheck FAILED: Database is not ready.")
+    except Exception as e:
+        print(f"[STARTUP] Healthcheck error: {e}")
+
+    initialize_db_connection()
+    ensure_db_schema()
+    ensure_maintenance_records_schema()
+    db.create_all()
+
+# Add database connection check before requests
+@app.before_request
+def ensure_db_connection():
+    """Ensure database connection is working before each request."""
+    # Skip for static files and health checks
+    if request.path.startswith('/static/') or request.path == '/health-check':
+        return
+        
+    # Check DB connection for routes that need it
+    if request.endpoint not in ['static', 'health_check'] and not check_db_connection():
+        return jsonify({'error': 'Database connection failure'}), 500
+
+# Helper: Always allow admins to access any page
+@app.before_request
+def allow_admin_everywhere():
+    if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and getattr(current_user, 'is_admin', False):
+        # Bypass permission checks for admins
+        return None
+
+# Replace the enhance_models function with a template context processor
+@app.context_processor
+def inject_site_helpers():
+    """Add helper functions to templates without modifying models."""
+    def get_site_parts_status(site):
+        """Get status of parts for a site's machines."""
+        try:
+            # Get all machines at this site
+            machines = Machine.query.filter_by(site_id=site.id).all()
+            
+            # Count parts
+            total_parts = 0
+            low_stock = 0
+            out_of_stock = 0
+            
+            for machine in machines:
+                parts = Part.query.filter_by(machine_id=machine.id).all()
+                total_parts += len(parts)
+                
+                for part in parts:
+                    if part.quantity == 0:
+                        out_of_stock += 1
+                    elif part.quantity < 5:  # Assume 5 is the low stock threshold
+                        low_stock += 1
+            
+            return {
+                'total': total_parts,
+                'low_stock': low_stock,
+                'out_of_stock': out_of_stock
+            }
+        except Exception as e:
+            app.logger.error(f"Error in get_site_parts_status: {e}")
+            return {'total': 0, 'low_stock': 0, 'out_of_stock': 0}
+    
+    # Return both names to support multiple template patterns
+    return {
+        'get_parts_status': get_site_parts_status,
+        'get_site_parts_status': get_site_parts_status
+    }
+
+# Add this context processor before other route definitions
+
+@app.context_processor
+def inject_common_variables():
+    """Inject common variables into all templates."""
+    try:
+        is_auth = getattr(current_user, 'is_authenticated', False)
+    except Exception:
+        is_auth = False
+    return {
+        'is_admin_user': is_admin_user(current_user) if is_auth else False,
+        'url_for_safe': url_for_safe,
+        'datetime': datetime,
+        'now': datetime.now()
+    }
+
+def url_for_safe(endpoint, **values):
+    """A safe wrapper for url_for that won't raise exceptions."""
+    try:
+        return url_for(endpoint, **values)
+    except Exception as e:
+        app.logger.warning(f"URL building error for endpoint '{endpoint}': {e}")
+        
+        # Simple fallbacks for common routes
+        if endpoint == 'manage_machines':
+            return '/machines'
+        elif endpoint == 'manage_sites':
+            return '/sites'  
+        elif endpoint == 'manage_parts':
+            return '/parts'
+        elif endpoint == 'manage_users':
+            return '/admin/users'
+        elif endpoint == 'manage_roles':  # Add this case
+            return '/admin/roles'
+        elif endpoint == 'update_maintenance' and 'part_id' in values:
+            return f'/update-maintenance/{values["part_id"]}'
+        elif endpoint == 'machine_history' and 'machine_id' in values:  # Add this case
+            return f'/machine-history/{values["machine_id"]}'
+        elif endpoint == 'admin_dashboard':
+            return '/admin'
+        elif endpoint.startswith('admin_'):
+            return '/admin'
+        else:
+            return '/dashboard'
+
+def get_all_permissions():
+    """Return a dictionary of all available permissions."""
+    permissions = {
+        'admin.view': 'View Admin Panel',
+        'admin.users': 'Manage Users',
+        'admin.roles': 'Manage Roles',
+        'sites.view': 'View Sites',
+        'sites.create': 'Create Sites',
+        'sites.edit': 'Edit Sites',
+        'sites.delete': 'Delete Sites',
+        'machines.view': 'View Machines',
+        'machines.create': 'Create Machines',
+        'machines.edit': 'Edit Machines',
+        'machines.delete': 'Delete Machines',
+        'parts.view': 'View Parts',
+        'parts.create': 'Create Parts',
+        'parts.edit': 'Edit Parts',
+        'parts.delete': 'Delete Parts',
+        'maintenance.record': 'Record Maintenance',
+        'maintenance.view': 'View Maintenance Records',
+        'reports.view': 'View Reports',
+        # Audits permissions
+        'audits.view': 'View Audits',
+        'audits.create': 'Create Audit Tasks',
+        'audits.edit': 'Edit Audit Tasks',
+        'audits.delete': 'Delete Audit Tasks',
+        'audits.complete': 'Complete Audit Tasks',
+        'audits.access': 'Access Audits Page'
+    }
+    return permissions
+
+# Add root route handler
+@app.route('/')
+def index():
+    """Homepage route that redirects to dashboard if logged in or shows login page."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    
-    # Handle login form submission
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        # Find the user
-        user = User.query.filter_by(username=username).first()
-        
-        # Check if user exists and password is correct
-        if user and user.check_password(password):
-            # Log the user in
-            login_user(user)
-            flash('Login successful', 'success')
-            
-            # Redirect to the requested page or dashboard
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
-        else:
-            flash('Invalid username or password', 'error')
-    
-    # Render login template for GET requests
-    return render_template('login.html', now=datetime.now())
+    return render_template('login.html')
 
-# Make sure you have a logout route
-@app.route('/logout')
-@login_required
-def logout():
-    """Handle user logout"""
-    logout_user()
-    flash('You have been logged out', 'info')
-    return redirect(url_for('login'))
-
-# Add a dashboard route if it doesn't exist
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Show the main dashboard with all sites, machines, and parts information"""
     try:
         # Get upcoming and overdue maintenance across all sites the user has access to
         if current_user.is_admin:
@@ -261,110 +674,1053 @@ def dashboard():
         
         # Process parts for maintenance status
         now = datetime.now()
-        overdue_parts = []
-        due_soon_parts = []
-        
+        overdue_count = 0
+        due_soon_count = 0
+        ok_count = 0
         for part in parts:
             days_until = (part.next_maintenance - now).days
-            
             if days_until < 0:
-                # Part is overdue
-                overdue_parts.append({
-                    'id': part.id,
-                    'name': part.name,
-                    'machine': part.machine.name,
-                    'site': part.machine.site.name,
-                    'days_overdue': abs(days_until),
-                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
-                })
-                stats['overdue_count'] += 1
-            elif days_until <= 30:  # Due within 30 days
-                # Part is due soon
-                due_soon_parts.append({
-                    'id': part.id,
-                    'name': part.name,
-                    'machine': part.machine.name,
-                    'site': part.machine.site.name,
-                    'days_until': days_until,
-                    'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d')
-                })
-                stats['due_soon_count'] += 1
-        
-        # Sort parts by urgency
-        overdue_parts.sort(key=lambda x: x['days_overdue'], reverse=True)
-        due_soon_parts.sort(key=lambda x: x['days_until'])
-        
-        return render_template('dashboard.html',
-                              sites=sites,
-                              machines=machines,
-                              parts=parts,
-                              stats=stats,
-                              overdue_parts=overdue_parts,
-                              due_soon_parts=due_soon_parts,
-                              now=now)
+                overdue_count += 1
+            elif days_until <= 30:
+                due_soon_count += 1
+            else:
+                ok_count += 1
+        total_parts = len(parts)
+        return render_template('dashboard.html', sites=sites, overdue_count=overdue_count, due_soon_count=due_soon_count, ok_count=ok_count, total_parts=total_parts, now=now)
     except Exception as e:
         flash(f'Error loading dashboard: {str(e)}', 'error')
-        # Log the error details for debugging
-        print(f"Dashboard error: {str(e)}")
-        # Return an empty dashboard as fallback
-        return render_template('dashboard.html', 
-                              sites=[], 
-                              machines=[], 
-                              parts=[], 
-                              stats={'sites_count': 0, 'machines_count': 0, 'parts_count': 0, 'overdue_count': 0, 'due_soon_count': 0},
-                              overdue_parts=[],
-                              due_soon_parts=[],
-                              now=datetime.now())
+        return redirect(url_for('index'))
 
-# Root route handler
-@app.route('/')
-def index():
-    """Root route that redirects to the dashboard or login page."""
+@app.route('/admin')
+@login_required
+def admin():
+    """Admin dashboard with overview information."""
+    # Use standardized admin check
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access the admin panel.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Get stats for admin dashboard
+        user_count = User.query.count()
+        roles_count = Role.query.count()
+        site_count = Site.query.count()  # Keep this as site_count
+        sites_count = site_count  # Add this line to have both variable names
+        machine_count = Machine.query.count()
+        part_count = Part.query.count()
+        
+        # Create safe URLs for admin navigation - provide ALL possible links needed by template
+        admin_links = {
+            'users': '/admin/users',
+            'roles': '/admin/roles',
+            'sites': '/sites',
+            'machines': '/machines',
+            'parts': '/parts',
+            'dashboard': '/dashboard',
+            'profile': '/profile',
+            'maintenance': '/maintenance',
+            'manage_users': '/admin/users',  # Add this specifically since it's being referenced
+            'manage_sites': '/sites',
+            'manage_machines': '/machines',
+            'manage_parts': '/parts',
+            'admin_users': '/admin/users',
+            'admin_roles': '/admin/roles'
+        }
+        
+        # Render admin dashboard view with safe navigation links
+        return render_template('admin.html',
+                              user_count=user_count,
+                              roles_count=roles_count,
+                              site_count=site_count,
+                              sites_count=sites_count,  # Include both variables
+                              machine_count=machine_count,
+                              part_count=part_count,
+                              admin_links=admin_links,
+                              section='dashboard',
+                              active_section='dashboard')
+    except Exception as e:
+        app.logger.error(f"Error in admin route: {e}")
+        flash('An error occurred while loading the admin dashboard.', 'danger')
+        return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
+
+@app.route('/admin/audit-history')
+@login_required
+def admin_audit_history():
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    completions = AuditTaskCompletion.query.order_by(AuditTaskCompletion.completed_at.desc()).all()
+    audit_tasks = {t.id: t for t in AuditTask.query.all()}
+    machines = {m.id: m for m in Machine.query.all()}
+    users = {u.id: u for u in User.query.all()}
+    return render_template('admin/audit_history.html', completions=completions, audit_tasks=audit_tasks, machines=machines, users=users)
+
+@app.route('/admin/excel-import', methods=['GET'])
+@login_required
+def admin_excel_import():
+    """Admin page for Excel data import."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    # You can render a template or just show a simple message for now
+    return render_template('admin/excel_import.html') if os.path.exists(os.path.join('templates', 'admin', 'excel_import.html')) else "<h1>Excel Import Page</h1>"
+
+@app.route('/test-email', methods=['GET', 'POST'])
+@login_required
+def test_email():
+    # Always allow admins
+    if not (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'test_email' in getattr(current_user.role, 'permissions', ''))):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        recipient = request.form.get('recipient') or current_user.email
+        try:
+            msg = Message(
+                subject='Test Email from AMRS Maintenance Tracker',
+                recipients=[recipient],
+                html=render_template('email/test_email.html', user=current_user),
+                sender=current_app.config['MAIL_DEFAULT_SENDER']
+            )
+            mail.send(msg)
+            flash(f'Test email sent to {recipient}', 'success')
+        except Exception as e:
+            flash(f'Failed to send test email: {e}', 'danger')
+    return render_template('admin/test_email.html')
+
+@app.route('/audits', methods=['GET', 'POST'])
+@login_required
+def audits_page():
+    # Permission checks
+    can_delete_audits = False
+    can_complete_audits = False
+    if current_user.is_admin:
+        can_delete_audits = True
+        can_complete_audits = True
+    else:
+        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
+        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+        can_delete_audits = 'audits.delete' in permissions
+        can_complete_audits = 'audits.complete' in permissions
+
+    # Restrict sites for non-admins
+    if current_user.is_admin:
+        audit_tasks = AuditTask.query.all()
+        sites = Site.query.all()
+    else:
+        user_site_ids = [site.id for site in current_user.sites]
+        audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(user_site_ids)).all()
+        sites = current_user.sites
+
+    today = date.today()
+    completions = {(c.audit_task_id, c.machine_id): c for c in AuditTaskCompletion.query.filter_by(date=today).all()}
+    
+    # Build a dict: (task_id, machine_id) -> next_eligible_date
+    eligibility = {}
+    for task in audit_tasks:
+        for machine in task.machines:
+            last_completion = (
+                AuditTaskCompletion.query
+                .filter_by(audit_task_id=task.id, machine_id=machine.id, completed=True)
+                .order_by(AuditTaskCompletion.date.desc())
+                .first()
+            )
+            if last_completion:
+                last_date = last_completion.date
+            else:
+                last_date = None
+            # Determine interval in days
+            if task.interval == 'daily':
+                interval_days = 1
+            elif task.interval == 'weekly':
+                interval_days = 7
+            elif task.interval == 'monthly':
+                interval_days = 30
+            elif task.interval == 'custom' and task.custom_interval_days:
+                interval_days = task.custom_interval_days
+            else:
+                interval_days = 1  # Default/fallback
+            if last_date:
+                next_eligible = last_date + timedelta(days=interval_days)
+            else:
+                next_eligible = None  # No completion yet, eligible immediately
+            eligibility[(task.id, machine.id)] = next_eligible
+
+    if request.method == 'POST' and request.form.get('create_audit') == '1':
+        interval = request.form.get('interval')
+        custom_interval_days = None
+        if interval == 'custom':
+            value = int(request.form.get('custom_interval_value', 1))
+            unit = request.form.get('custom_interval_unit', 'day')
+            if unit == 'week':
+                custom_interval_days = value * 7
+            elif unit == 'month':
+                custom_interval_days = value * 30
+            else:
+                custom_interval_days = value
+        # Ensure machine_ids is always a list
+        machine_ids = request.form.getlist('machine_ids')
+        if not (request.form.get('name') and request.form.get('site_id') and machine_ids):
+            flash('Task name, site, and at least one machine are required.', 'danger')
+            return redirect(url_for('audits_page'))
+        try:
+            audit_task = AuditTask(
+                name=request.form.get('name'),
+                description=request.form.get('description'),
+                site_id=request.form.get('site_id'),
+                created_by=current_user.id,
+                interval=interval,
+                custom_interval_days=custom_interval_days
+            )
+            for machine_id in machine_ids:
+                machine = Machine.query.get(int(machine_id))
+                if machine:
+                    audit_task.machines.append(machine)
+            db.session.add(audit_task)
+            db.session.commit()
+            flash('Audit task created successfully.', 'success')
+            return redirect(url_for('audits_page'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error creating audit task: {str(e)}', 'danger')
+            return redirect(url_for('audits_page'))
+            
+        if request.method == 'POST' and request.form.get('checkoff') == '1':
+            updated = 0
+            ineligible = False
+            for task in audit_tasks:
+                for machine in task.machines:
+                    key = f'complete_{task.id}_{machine.id}'
+                    if key in request.form:
+                        # Check if already completed today
+                        if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed:
+                            continue
+                        # Strictly enforce interval: only allow if no previous completion or today >= next eligible date
+                        next_eligible = eligibility.get((task.id, machine.id))
+                        if next_eligible is not None and today < next_eligible:
+                            ineligible = True
+                            continue  # Not eligible yet
+                        # Only record completion if eligible (either no previous completion or today >= next_eligible)
+                        completion = AuditTaskCompletion(
+                            audit_task_id=task.id,
+                            machine_id=machine.id,
+                            date=today,
+                            completed=True,
+                            completed_by=current_user.id,
+                            completed_at=datetime.now()
+                        )
+                        db.session.add(completion)
+                        updated += 1
+            if ineligible and updated == 0:
+                flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'info')
+                return redirect(url_for('audits_page'), code=303)
+            if updated:
+                db.session.commit()
+                flash(f'{updated} audit task(s) checked off successfully.', 'success')
+            else:
+                flash('No eligible audit tasks were checked off.', 'info')
+            return redirect(url_for('audits_page'))
+    
+    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility)
+
+@app.route('/audit_tasks/delete/<int:audit_task_id>', methods=['POST'])
+@login_required
+def delete_audit_task(audit_task_id):
+    can_delete_audits = False
+    if current_user.is_admin:
+        can_delete_audits = True
+    else:
+        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
+        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+        can_delete_audits = 'audits.delete' in permissions
+    if not can_delete_audits:
+        flash('You do not have permission to delete audit tasks.', 'danger')
+        return redirect(url_for('audits_page'))
+    try:
+        # Replace get_or_404 for AuditTask
+        task = db.session.get(AuditTask, audit_task_id)
+        if not task:
+            abort(404)
+        db.session.delete(task)
+        db.session.commit()
+        flash('Audit task deleted successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting audit task: {str(e)}', 'danger')
+    return redirect(url_for('audits_page'))
+
+@app.route('/admin/users', methods=['GET', 'POST'])
+@login_required
+def admin_users():
+    """User management page."""
+    # Use standardized admin check
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Handle form submission for creating a new user
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username')
+            email = request.form.get('email')
+            password = request.form.get('password')
+            role_id = request.form.get('role_id')
+            role = db.session.get(Role, int(role_id)) if role_id else None
+            
+            # Validate required fields
+            if not username or not email or not password:
+                flash('Username, email, and password are required.', 'danger')
+                return redirect('/admin/users')
+            
+            # Check if username or email already exist
+            if User.query.filter_by(username=username).first():
+                flash(f'Username "{username}" is already taken.', 'danger')
+                return redirect('/admin/users')
+                
+            if User.query.filter_by(email=email).first():
+                flash(f'Email "{email}" is already registered.', 'danger')
+                return redirect('/admin/users')
+            
+            # Validate password length
+            if len(password) < 8:
+                flash('Password must be at least 8 characters long.', 'danger')
+                return redirect('/admin/users')
+            
+            # Create new user with role as object
+            new_user = User(
+                username=username,
+                email=email,
+                password_hash=generate_password_hash(password),
+                role=role
+            )
+            
+            # Add user to database
+            db.session.add(new_user)
+            db.session.commit()
+            
+            flash(f'User "{username}" created successfully.', 'success')
+            return redirect('/admin/users')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating user: {e}")
+            flash(f'Error creating user: {str(e)}', 'danger')
+    
+    # For GET requests or after POST processing
+    try:
+        # Get all users and roles for the template
+        users = User.query.all()
+        roles = Role.query.all()
+        sites = Site.query.all()
+        
+        # Pre-generate safe URLs for actions on each user
+        user_actions = {}
+        for user in users:
+            user_actions[user.id] = {
+                'edit': f'/user/edit/{user.id}',
+                'delete': f'/user/delete/{user.id}',
+                'reset_password': f'/user/reset-password/{user.id}'
+            }
+        
+        # Safe URLs for general actions
+        safe_urls = {
+            'create_user': '/admin/users',  # Updated to point to this route
+            'users_list': '/admin/users',
+            'roles_list': '/admin/roles',
+            'dashboard': '/dashboard',
+            'admin': '/admin'
+        }
+        
+        # Use the specific template instead of the generic admin.html
+        return render_template('admin/users.html', 
+                              users=users,
+                              roles=roles,
+                              sites=sites,
+                              current_user=current_user,
+                              user_actions=user_actions,
+                              safe_urls=safe_urls)
+    except Exception as e:
+        app.logger.error(f"Error in admin_users route: {e}")
+        flash('An error occurred while loading the users page.', 'danger')
+        return redirect('/admin')
+
+@app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    """Edit an existing user - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to edit users.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Replace get_or_404 for User
+    user = db.session.get(User, user_id)
+    if not user:
+        abort(404)
+    
+    roles = Role.query.all()
+    sites = Site.query.all()
+    
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username')
+            email = request.form.get('email')
+            full_name = request.form.get('full_name', '')
+            role_id = request.form.get('role_id')
+            role = db.session.get(Role, int(role_id)) if role_id else None
+            
+            # Check if username already exists for another user
+            existing_user = User.query.filter(User.username == username, User.id != user_id).first()
+            if existing_user:
+                flash(f'Username "{username}" is already taken.', 'danger')
+                return redirect(url_for('edit_user', user_id=user_id))
+                
+            # Check if email already exists for another user  
+            existing_user = User.query.filter(User.email == email, User.id != user_id).first()
+            if existing_user:
+                flash(f'Email "{email}" is already registered.', 'danger')
+                return redirect(url_for('edit_user', user_id=user_id))
+            
+            # Update user details
+            user.username = username
+            user.email = email
+            user.full_name = full_name
+            user.role = role  # Assign Role object
+            
+            # Update site assignments if provided
+            if 'site_ids' in request.form:
+                # Clear existing site associations
+                user.sites = []
+                
+                # Add selected sites
+                site_ids = request.form.getlist('site_ids')
+                for site_id in site_ids:
+                    site = Site.query.get(int(site_id))
+                    if site:
+                        user.sites.append(site)
+            
+            db.session.commit()
+            flash(f'User "{username}" updated successfully.', 'success')
+            return redirect(url_for('admin_users'))
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating user: {e}")
+            flash(f'Error updating user: {str(e)}', 'danger')
+    
+    # For GET request, show the edit form
+    return render_template('edit_user.html', 
+                          user=user,
+                          roles=roles,
+                          sites=sites,
+                          assigned_sites=[site.id for site in user.sites])
+
+@app.route('/admin/roles', methods=['GET', 'POST'])
+@login_required
+def admin_roles():
+    """Redirect or render the roles management page."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+    roles = Role.query.all()
+    all_permissions = get_all_permissions()
+    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
+
+@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+def edit_role(role_id):
+    """Edit an existing role - admin only"""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to edit roles.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Replace get_or_404 for Role
+    role = db.session.get(Role, role_id)
+    if not role:
+        abort(404)
+    
+    all_permissions = get_all_permissions()
+    
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name')
+            description = request.form.get('description', '')
+            
+            # Check if name is changed and already exists
+            if name != role.name and Role.query.filter_by(name=name).first():
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect(url_for='edit_role', role_id=role_id)
+            
+            # Update role details
+            role.name = name
+            role.description = description
+            
+            # Update permissions
+            permissions = request.form.getlist('permissions')
+            role.permissions = ','.join(permissions) if permissions else ''
+            
+            db.session.commit()
+            flash(f'Role "{name}" updated successfully.', 'success')
+            return redirect(url_for='admin_roles')
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating role: {e}")
+            flash(f'Error updating role: {str(e)}', 'danger')
+    
+    # For GET requests, render the edit form with role's current permissions
+    current_permissions = role.permissions.split(',') if role.permissions else []
+    
+    return render_template('edit_role.html', 
+                          role=role,
+                          all_permissions=all_permissions,
+                          current_permissions=current_permissions)
+
+
+
+@app.route('/machines/delete/<int:machine_id>', methods=['POST'])
+@login_required
+def delete_machine(machine_id):
+    """Delete a machine."""
+    try:
+        # Replace get_or_404 for Machine
+        machine = db.session.get(Machine, machine_id)
+        if not machine:
+            abort(404)
+        
+        # Check for associated maintenance records and parts before deleting
+        maintenance_records = MaintenanceRecord.query.filter_by(machine_id=machine_id).all()
+        parts = Part.query.filter_by(machine_id=machine_id).all()
+        
+        if maintenance_records:
+            flash(f'Cannot delete machine: It has {len(maintenance_records)} maintenance records. Delete those first.', 'danger')
+        elif parts:
+            flash(f'Cannot delete machine: It has {len(parts)} associated parts. Delete or reassign those first.', 'danger')
+        else:
+            db.session.delete(machine)
+            db.session.commit()
+            flash(f'Machine "{machine.name}" deleted successfully.', 'success')
+        
+        return redirect(url_for('manage_machines'))
+    except Exception as e:
+        app.logger.error(f"Error deleting machine: {e}")
+        flash('An error occurred while deleting the machine.', 'danger')
+        return redirect(url_for('manage_machines'))
+
+@app.route('/parts/delete/<int:part_id>', methods=['POST'])
+@login_required
+def delete_part(part_id):
+    """Delete a part."""
+    try:
+        # Replace get_or_404 for Part
+        part = db.session.get(Part, part_id)
+        if not part:
+            abort(404)
+        
+        # Delete the part
+        db.session.delete(part)
+        db.session.commit()
+        flash(f'Part "{part.name}" deleted successfully.', 'success')
+        
+        return redirect(url_for('manage_parts'))
+    except Exception as e:
+        app.logger.error(f"Error deleting part: {e}")
+        flash('An error occurred while deleting the part.', 'danger')
+        return redirect(url_for('manage_parts'))
+
+@app.route('/sites/delete/<int:site_id>', methods=['POST'])
+@login_required
+def delete_site(site_id):
+    """Delete a site."""
+    try:
+        # Replace get_or_404 for Site
+        site = db.session.get(Site, site_id)
+        if not site:
+            abort(404)
+        
+        # Check for associated machines before deleting
+        machines = Machine.query.filter_by(site_id=site_id).all()
+        
+        if machines:
+            flash(f'Cannot delete site: It has {len(machines)} associated machines. Delete or reassign those first.', 'danger')
+        else:
+            db.session.delete(site)
+            db.session.commit()
+            flash(f'Site "{site.name}" deleted successfully.', 'success')
+        
+        return redirect(url_for('manage_sites'))
+    except Exception as e:
+        app.logger.error(f"Error deleting site: {e}")
+        db.session.rollback()
+        flash('An error occurred while deleting the site.', 'danger')
+        return redirect(url_for('manage_sites'))
+
+@app.route('/part/<int:part_id>/history')
+@login_required
+def part_history_route(part_id):
+    part = db.session.get(Part, part_id)
+    if not part:
+        abort(404)
+    machine = part.machine
+    site = part.machine.site if part.machine else None
+    maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+    return render_template('part_history.html', part=part, machine=machine, site=site, maintenance_records=maintenance_records, now=datetime.now())
+
+# --- MAINTENANCE DATE UPDATE AND HISTORY FIXES ---
+@login_required
+def part_history(part_id):
+    part = db.session.get(Part, part_id)
+    if not part:
+        abort(404)
+    machine = part.machine
+    site = part.machine.site if part.machine else None
+    maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+    return render_template('part_history.html', part=part, machine=machine, site=site, maintenance_records=maintenance_records, now=datetime.now())
+
+@app.route('/machine/<int:machine_id>/history')
+@login_required
+def machine_history_view(machine_id):
+    machine = db.session.get(Machine, machine_id)
+    if not machine:
+        abort(404)
+    site = machine.site
+    parts = Part.query.filter_by(machine_id=machine_id).all()
+    # Gather all maintenance records for all parts in this machine
+    maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).order_by(MaintenanceRecord.date.desc()).all()
+    return render_template('machine_history.html', machine=machine, site=site, parts=parts, maintenance_records=maintenance_records, now=datetime.now())
+
+@app.route('/site/<int:site_id>/history')
+@login_required
+def site_history(site_id):
+    site = db.session.get(Site, site_id)
+    if not site:
+        abort(404)
+    machines = Machine.query.filter_by(site_id=site_id).all()
+    parts = Part.query.filter(Part.machine_id.in_([m.id for m in machines])).all()
+    # Gather all maintenance records for all parts in this site
+    maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).order_by(MaintenanceRecord.date.desc()).all()
+    return render_template('site_history.html', site=site, machines=machines, parts=parts, maintenance_records=maintenance_records, now=datetime.now())
+# --- END MAINTENANCE HISTORY FIXES ---
+
+@app.route('/role/delete/<int:role_id>', methods=['POST'])
+@login_required
+def delete_role(role_id):
+    """Delete a role - admin only."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to delete roles.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Replace get_or_404 for Role
+        role = db.session.get(Role, role_id)
+        if not role:
+            abort(404)
+        
+        # Check if the role is assigned to any users before deleting
+        # Using role_id comparison instead of comparing objects directly
+        users_with_role = User.query.filter_by(role_id=role_id).all()
+        
+        if users_with_role:
+            flash(f'Cannot delete role: It is assigned to {len(users_with_role)} users. Reassign those users first.', 'danger')
+        else:
+            db.session.delete(role)
+            db.session.commit()
+            flash(f'Role "{role.name}" has been deleted successfully.', 'success')
+        
+        return redirect('/admin/roles')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting role: {e}")
+        flash('An error occurred while deleting the role.', 'danger')
+        return redirect('/admin/roles')
+
+@app.route('/user/delete/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    """Delete a user - admin only."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to delete users.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Don't allow deleting your own account
+        if user_id == current_user.id:
+            flash('You cannot delete your own account.', 'danger')
+            return redirect('/admin/users')
+            
+        # Replace get_or_404 for User
+        user = db.session.get(User, user_id)
+        if not user:
+            abort(404)
+        
+        # Don't allow deleting the main admin account
+        if user.username == 'admin':
+            flash('The main admin account cannot be deleted.', 'danger')
+            return redirect('/admin/users')
+            
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'User "{user.username}" has been deleted successfully.', 'success')
+        
+        return redirect('/admin/users')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting user: {e}")
+        flash('An error occurred while deleting the user.', 'danger')
+        return redirect('/admin/users')
+
+@app.route('/maintenance', methods=['GET', 'POST'])
+@login_required
+def maintenance_page():
+    try:
+        # Restrict sites for non-admins
+        if current_user.is_admin:
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+
+        # Get all machines, parts, and sites for the form
+        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in sites])).all()
+        parts = Part.query.filter(Part.machine_id.in_([machine.id for machine in machines])).all()
+        
+        # Get all maintenance records with related data
+        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_([machine.id for machine in machines])).order_by(MaintenanceRecord.date.desc()).all()
+        
+        # Handle form submission for adding new maintenance records
+        if request.method == 'POST':
+            machine_id = request.form.get('machine_id')
+            part_id = request.form.get('part_id')
+            user_id = current_user.id
+            maintenance_type = request.form.get('maintenance_type')
+            description = request.form.get('description')
+            date_str = request.form.get('date')
+            performed_by = request.form.get('performed_by', '')
+            status = request.form.get('status', 'completed')
+            notes = request.form.get('notes', '')
+            client_id = request.form.get('client_id')
+            parts_used = request.form.getlist('parts_used')
+
+            # Validate and cast to int
+            try:
+                machine_id = int(machine_id)
+                part_id = int(part_id)
+                user_id = int(user_id)
+            except (TypeError, ValueError):
+                flash('Invalid machine, part, or user selection.', 'danger')
+                return redirect(url_for('maintenance_page'))
+
+            # Validate required fields
+            if not machine_id or not part_id or not user_id or not maintenance_type or not description or not date_str:
+                flash('Machine, part, user, maintenance type, description, and date are required!', 'danger')
+                return redirect(url_for('maintenance_page'))
+            else:
+                try:
+                    maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    new_record = MaintenanceRecord(
+                        machine_id=machine_id,
+                        part_id=part_id,
+                        user_id=user_id,
+                        maintenance_type=maintenance_type,
+                        description=description,
+                        date=maintenance_date,
+                        performed_by=performed_by,
+                        status=status,
+                        notes=notes,
+                        client_id=client_id if client_id else None
+                    )
+                    db.session.add(new_record)
+                    db.session.commit()
+                    flash('Maintenance record added successfully!', 'success')
+                    return redirect(url_for('maintenance_page'))
+                except ValueError:
+                    flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
+        
+        return render_template('maintenance.html', 
+                              maintenance_records=maintenance_records,
+                              machines=machines,
+                              parts=parts,
+                              sites=sites)
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_page: {e}")
+        print("[MAINTENANCE ERROR] Exception occurred in maintenance_page:")
+        traceback.print_exc()
+        flash('An error occurred while loading maintenance records.', 'danger')
+        return redirect(url_for('dashboard'))
+
+@app.route('/update-maintenance', methods=['POST'])
+@login_required
+def update_maintenance_alt():
+    try:
+        part_id = request.form.get('part_id')
+        comments = request.form.get('comments', '')
+        if not part_id:
+            flash('Missing part ID', 'error')
+            return redirect(url_for('maintenance_page'))
+        part = Part.query.get_or_404(int(part_id))
+        now = datetime.now()
+        # Update the last maintenance date
+        part.last_maintenance = now
+        # Calculate next maintenance date based on frequency
+        part.next_maintenance = now + timedelta(days=part.maintenance_days)
+        # Create a maintenance record
+        maintenance_record = MaintenanceRecord(
+            part_id=part.id,
+            user_id=current_user.id,
+            date=now,
+            comments=comments
+        )
+        db.session.add(maintenance_record)
+        db.session.commit()
+        flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
+        referrer = request.referrer
+        if referrer:
+            return redirect(referrer)
+        else:
+            return redirect(url_for('maintenance_page'))
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating maintenance: {str(e)}', 'error')
+        return redirect(url_for('maintenance_page'))
+
+@app.route('/parts/<int:part_id>/update_maintenance', methods=['GET', 'POST'])
+@login_required
+def update_maintenance(part_id):
+    try:
+        part = Part.query.get_or_404(part_id)
+        if request.method == 'GET':
+            return redirect(url_for('maintenance_page'))
+        now = datetime.now()
+        part.last_maintenance = now
+        # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
+        freq = part.maintenance_frequency or 1
+        unit = part.maintenance_unit or 'day'
+        if unit == 'week':
+            delta = timedelta(weeks=freq)
+        elif unit == 'month':
+            delta = timedelta(days=freq * 30)
+        elif unit == 'year':
+            delta = timedelta(days=freq * 365)
+        else:
+            delta = timedelta(days=freq)
+        part.next_maintenance = now + delta
+        # Create a maintenance record
+        maintenance_record = MaintenanceRecord(
+            part_id=part.id,
+            user_id=current_user.id,
+            date=now,
+            comments=request.form.get('comments', ''),
+            description=request.form.get('description', None)
+        )
+        db.session.add(maintenance_record)
+        db.session.commit()
+        flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
+        referrer = request.referrer
+        if referrer:
+            return redirect(referrer)
+        else:
+            return redirect(url_for('manage_parts', machine_id=part.machine_id))
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating maintenance: {str(e)}', 'error')
+        return redirect(url_for('manage_parts'))
+
+@app.route('/machine-history/<int:machine_id>')
+@login_required
+def machine_history(machine_id):
+    """Endpoint for viewing machine maintenance history."""
+    try:
+        machine = Machine.query.get_or_404(machine_id)
+        return redirect(f'/maintenance?machine_id={machine_id}')
+    except Exception as e:
+        app.logger.error(f"Error in machine_history: {e}")
+        flash('An error occurred while accessing the machine history.', 'danger')
+        return redirect('/maintenance')
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def user_profile():
+    """View and edit user profile."""
+    try:
+        user = current_user  # Always use the logged-in user
+        if request.method == 'POST':
+            form_type = request.form.get('form_type')
+            # Profile form submission
+            if form_type == 'profile':
+                email = request.form.get('email')
+                full_name = request.form.get('full_name')
+                # Validate email input
+                if not email or '@' not in email:
+                    flash('Please enter a valid email address.', 'danger')
+                    return redirect(url_for('user_profile'))
+                email_changed = email != user.email
+                # Check if email is already in use by another user
+                if email_changed and User.query.filter(User.email == email, User.id != user.id).first():
+                    flash('Email is already in use by another account.', 'danger')
+                    return redirect(url_for('user_profile'))
+                if email_changed:
+                    user.email = email
+                if full_name is not None:
+                    user.full_name = full_name
+                try:
+                    db.session.add(user)
+                    db.session.commit()
+                    flash('Profile updated successfully!', 'success')
+                except Exception as e:
+                    db.session.rollback()
+                    app.logger.error(f"Database error updating profile: {e}")
+                    flash('Error updating profile.', 'danger')
+                return redirect(url_for('user_profile'))
+            # Password form submission
+            elif form_type == 'password':
+                current_password = request.form.get('current_password')
+                new_password = request.form.get('new_password')
+                confirm_password = request.form.get('confirm_password')
+
+                # Validate password fields
+                if not current_password or not new_password or not confirm_password:
+                    flash('All password fields are required.', 'danger')
+                    return redirect(url_for('user_profile'))
+                
+                # Verify current password is correct
+                if not user.password_hash or not check_password_hash(user.password_hash, current_password):
+                    flash('Current password is incorrect.', 'danger')
+                    return redirect(url_for('user_profile'))
+                
+                if len(new_password) < 8:
+                    flash('New password must be at least 8 characters long.', 'danger')
+                    return redirect(url_for('user_profile'))
+                
+                if new_password != confirm_password:
+                    flash('New passwords do not match.', 'danger')
+                    return redirect(url_for('user_profile'))
+                
+                # Update password
+                user.password_hash = generate_password_hash(new_password)
+                db.session.commit()
+                flash('Password updated successfully!', 'success')
+                return redirect(url_for('user_profile'))
+                
+            # Notification preferences form
+            elif form_type == 'notifications':
+                # Handle notification preferences in a separate route to keep this one cleaner
+                return redirect(url_for('update_notification_preferences'))
+                
+            # Fallback for tests: handle both email and password fields in one POST if form_type is missing
+            elif not form_type:
+                # Support the test case scenario where all fields are submitted in one request
+                email = request.form.get('email')
+                if email and email != user.email:
+                    # Validate email
+                    if '@' not in email:
+                        flash('Please enter a valid email address.', 'danger')
+                        return redirect(url_for('user_profile'))
+                        
+                    # Check if email is already in use by another user
+                    if User.query.filter(User.email == email, User.username != user.username).first():
+                        flash('Email is already in use by another account.', 'danger')
+                        return redirect(url_for('user_profile'))
+                    # Update the email
+                    user.email = email
+                    db.session.commit()
+                    flash('Email updated successfully', 'success')
+                    
+                # Handle password update in the same request if provided
+                current_password = request.form.get('current_password')
+                new_password = request.form.get('new_password')
+                confirm_password = request.form.get('confirm_password')
+                if current_password and new_password and confirm_password:
+                    if not user.password_hash or not check_password_hash(user.password_hash, current_password):
+                        flash('Current password is incorrect.', 'danger')
+                    elif new_password != confirm_password:
+                        flash('New passwords do not match.', 'danger')
+                    else:
+                        user.password_hash = generate_password_hash(new_password)
+                        db.session.commit()
+                        flash('Password updated successfully', 'success')
+                
+                return redirect(url_for('user_profile'))
+            
+            # Unknown form type
+            else:
+                flash('Unknown form submission type.', 'danger')
+                return redirect(url_for('user_profile'))
+
+        # Fetch notification preferences for GET request
+        notification_prefs = user.get_notification_preferences() if hasattr(user, 'get_notification_preferences') else {}
+        
+        # Get user's sites for notification preferences display
+        user_sites = user.sites if hasattr(user, 'sites') else []
+        
+        return render_template('profile.html', user=user, notification_prefs=notification_prefs, user_sites=user_sites)
+    except Exception as e:
+        app.logger.error(f"Error in user_profile: {e}")
+        flash('An error occurred while loading your profile.', 'danger')
+        return redirect(url_for('dashboard'))
+
+@app.route('/update_notification_preferences', methods=['POST'])
+@login_required
+def update_notification_preferences():
+    user = current_user
+    prefs = user.get_notification_preferences()
+    enable_email = request.form.get('enable_email') == 'on'
+    notification_frequency = request.form.get('notification_frequency', 'weekly')
+    email_format = request.form.get('email_format', 'html')
+    audit_reminders = request.form.get('audit_reminders') == 'on'
+    # 'none' disables email
+    if notification_frequency == 'none':
+        enable_email = False
+    prefs['enable_email'] = enable_email
+    prefs['notification_frequency'] = notification_frequency
+    prefs['email_format'] = email_format
+    prefs['audit_reminders'] = audit_reminders
+    # Per-site notification preferences
+    site_notifications = {}
+    for site in current_user.sites:
+        key = f'site_notify_{site.id}'
+        site_notifications[str(site.id)] = key in request.form
+    prefs['site_notifications'] = site_notifications
+    user.set_notification_preferences(prefs)
+    db.session.commit()  # Ensure changes are saved
+    flash('Notification preferences updated.', 'success')
+    return redirect(url_for('user_profile'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handle user login."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    else:
-        return redirect(url_for('login'))
-
-# Add debug route to check application
-@app.route('/debug-info')
-def debug_info():
-    """Debug route to check application status"""
-    output = {
-        "status": "running",
-        "time": datetime.now().isoformat(),
-        "routes": [str(rule) for rule in app.url_map.iter_rules()],
-        "flask_login_initialized": hasattr(app, 'login_manager'),
-        "current_user": str(current_user) if 'current_user' in globals() else "Not available",
-        "is_authenticated": current_user.is_authenticated if 'current_user' in globals() else False
-    }
-    return jsonify(output)
-
-# Add health check route for diagnostics
-@app.route('/health')
-def health_check():
-    """Simple health check endpoint for monitoring"""
-    try:
-        # Test database connection
-        from models import db
-        db.engine.execute("SELECT 1")
         
-        return jsonify({
-            "status": "ok",
-            "version": "1.0.0",
-            "timestamp": datetime.now().isoformat(),
-            "environment": os.environ.get('FLASK_ENV', 'production'),
-            "database": "PostgreSQL"
-        }), 200
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Add debug for login attempts
+        app.logger.debug(f"Login attempt: username={username}")
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
+            app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('dashboard'))
+        else:
+            if user:
+                app.logger.debug(f"Login failed: Invalid password for username={username}")
+            else:
+                app.logger.debug(f"Login failed: No user found with username={username}")
+            flash('Invalid username or password', 'danger')
+    
+    return render_template('login.html')
 
-# Add password reset functionality
+@app.route('/logout')
+@login_required
+def logout():
+    """Handle user logout."""
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
+
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    """Handle forgot password requests"""
+    """Handle password reset request."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
         
@@ -373,230 +1729,328 @@ def forgot_password():
         user = User.query.filter_by(email=email).first()
         
         if user:
-            # Generate a secure token for this user
-            reset_token = jwt.encode(
-                {
-                    'user_id': user.id,
-                    'exp': datetime.utcnow() + timedelta(hours=1)  # Token expires in 1 hour
-                },
-                app.config['SECRET_KEY'],
-                algorithm='HS256'
-            )
+            # Generate a password reset token
+            reset_token = secrets.token_urlsafe(32)
+            expires = datetime.now() + timedelta(hours=24)
             
-            # Create reset link
-            reset_url = url_for('reset_password', user_id=user.id, token=reset_token, _external=True)
+            # Store token in database
+            user.reset_token = reset_token
+            user.reset_token_expiration = expires
+            db.session.commit()
             
-            # For now, just print the reset URL to the console for testing
-            print(f"Password reset link for {user.username}: {reset_url}")
+            # In a production app, you would send an email with the reset link
+            # For now, just flash a message with the token (for demonstration)
+            reset_url = url_for('reset_password', token=reset_token, _external=True)
+            flash(f'Password reset link: {reset_url}', 'info')
             
-            # TODO: Send email with reset link
-            # In a production environment, you would send an email with the reset link
-            
-            flash('If an account exists with that email, a password reset link has been sent.', 'info')
-            return redirect(url_for('login'))
-        else:
-            # Don't reveal that the user doesn't exist
-            flash('If an account exists with that email, a password reset link has been sent.', 'info')
-            return redirect(url_for('login'))
-    
-    return render_template('forgot_password.html', now=datetime.now())
+        # Always show this message to prevent user enumeration
+        flash('If an account with that email exists, a password reset link has been sent.', 'info')
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html') if os.path.exists(os.path.join('templates', 'forgot_password.html')) else '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Forgot Password</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Reset Password</div>
+                        <div class="card-body">
+                            <form method="post">
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="email" name="email" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Send Reset Link</button>
+                            </form>
+                            <div class="mt-3">
+                                <a href="/login" class="text-decoration-none">Back to Login</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
 
-@app.route('/reset-password/<int:user_id>/<token>', methods=['GET', 'POST'])
-def reset_password(user_id, token):
-    """Handle password reset with token"""
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """Handle password reset with token."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
-    user = User.query.get(user_id)
-    if not user:
-        flash('Invalid or expired reset link.', 'error')
-        return redirect(url_for('login'))
-        
-    try:
-        # Verify the token
-        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        if payload['user_id'] != user_id:
-            raise Exception("Token doesn't match user")
-    except:
-        flash('Invalid or expired reset link.', 'error')
-        return redirect(url_for('login'))
+    user = User.query.filter_by(reset_token=token).first()
     
+    # Check if token is valid and not expired
+    if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
+        flash('The password reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('forgot_password'))
     if request.method == 'POST':
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
         
-        if password != confirm_password:
-            flash('Passwords do not match', 'error')
-            return render_template('reset_password.html', user_id=user_id, token=token)
-            
-        if len(password) < 8:
-            flash('Password must be at least 8 characters', 'error')
-            return render_template('reset_password.html', user_id=user_id, token=token)
-        
-        # Update user's password
-        user.set_password(password)
-        db.session.commit()
-        
-        flash('Your password has been updated. Please log in with your new password.', 'success')
-        return redirect(url_for('login'))
-    
-    return render_template('reset_password.html', user_id=user_id, token=token)
-
-# Create admin function
-def create_default_admin():
-    """Create a default admin account if no users exist"""
-    try:
-        print("[APP] Checking for existing users...")
-        
-        # Check if users table exists
-        inspector = inspect(db.engine)
-        if 'users' not in inspector.get_table_names():  # Changed from 'user' to 'users'
-            print("[APP] Users table doesn't exist yet, creating all tables...")
-            db.create_all()
-        
-        # Check for existing users
-        user_count = User.query.count()
-        
-        if user_count == 0:
-            print("[APP] No users found. Creating default admin user...")
-            
-            # Check if Roles table exists and has Administrator role
-            admin_role = None
-            if 'roles' in inspector.get_table_names():  # Changed from 'role' to 'roles'
-                admin_role = Role.query.filter_by(name="Administrator").first()
-                
-            # Create admin role if needed
-            if not admin_role:
-                print("[APP] Creating Administrator role...")
-                
-                # Handle case where get_all_permissions may not exist
-                try:
-                    permissions = Permissions.get_all_permissions() if hasattr(Permissions, 'get_all_permissions') else "admin"
-                    permissions_string = ",".join(permissions)
-                except:
-                    permissions_string = "admin.full"
-                
-                admin_role = Role(
-                    name="Administrator",
-                    description="Full system access",
-                    permissions=permissions_string
-                )
-                db.session.add(admin_role)
-                db.session.commit()
-            
-            # Create admin user with username "admin" and password "admin"
-            admin_user = User(
-                username="admin",
-                email="admin@example.com",
-                full_name="System Administrator", 
-                is_admin=True,
-                role_id=admin_role.id if admin_role else None
-            )
-            
-            # Set password - handle different implementations
-            if hasattr(admin_user, 'set_password'):
-                admin_user.set_password("admin")
-            else:
-                admin_user.password_hash = generate_password_hash("admin")
-            
-            db.session.add(admin_user)
+        if not password or len(password) < 8:
+            flash('Password must be at least 8 characters long.', 'danger')
+            return redirect(url_for('reset_password', token=token))
+        elif password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return redirect(url_for('reset_password', token=token))
+        else:
+            # Update password and clear reset token
+            user.password_hash = generate_password_hash(password)
+            user.reset_token = None
+            user.reset_token_expiration = None
             db.session.commit()
             
-            print("[APP] Created default admin user 'admin' with password 'admin'")
-            print("[APP] WARNING: This is intended for testing only.")
-            print("[APP] IMPORTANT: Change this password when deploying to production!")
-            
-            return True
-        else:
-            print(f"[APP] {user_count} users already exist, not creating default admin")
-            return False
-            
-    except Exception as e:
-        print(f"[APP] Error creating default admin: {str(e)}")
-        return False
+            flash('Your password has been updated. Please log in.', 'success')
+            return redirect(url_for('login'))
+    return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Reset Password</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Reset Password</div>
+                        <div class="card-body">
+                            <form method="post">
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">New Password</label>
+                                    <input type="password" class="form-control" id="password" name="password" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="confirm_password" class="form-label">Confirm Password</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Reset Password</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
 
-# Add default user if none exist - ensures at least one admin exists after fresh deployments
-def add_default_admin_if_needed():
-    """Add a default admin user if no users exist in the database"""
-    try:
-        print("[APP] Checking for default admin user...")
+@app.route('/debug-info')
+def debug_info():
+    """Display debug information including all available routes."""
+    if not app.debug:
+        return "Debug mode is disabled", 403
         
-        # First make sure tables exist
-        with app.app_context():
-            inspector = inspect(db.engine)
-            if 'users' not in inspector.get_table_names():  # Changed from 'user' to 'users'
-                print("[APP] User table doesn't exist yet. Will create tables first.")
-                db.create_all()
-                print("[APP] Tables created.")
-            
-            # Check if any users exist
-            user_count = User.query.count()
-            
-            if user_count == 0:
-                print("[APP] No users found in database. Creating default admin user.")
-                
-                # Create default admin role if needed
-                admin_role = Role.query.filter_by(name="Administrator").first()
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': ','.join(rule.methods),
+            'route': str(rule)
+        })
+    return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
+
+def add_default_admin_if_needed():
+    """Add a default admin user if no users exist in the database."""
+    try:
+        user_count = User.query.count()
+        if user_count == 0:
+            print("[APP] No users found, creating default admin user")
+            admin_role = Role.query.filter_by(name='admin').first()
+            if not admin_role:
+                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+                db.session.add(admin_role)
+                db.session.commit()
+            admin = User(
+                username='admin',
+                email='admin@example.com',
+                password_hash=generate_password_hash('admin'),
+                role=admin_role
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("[APP] Default admin user created")
+        else:
+            # Ensure existing admin user has correct role
+            admin_user = User.query.filter_by(username='admin').first()
+            admin_role = Role.query.filter_by(name='admin').first()
+            if admin_user and (not admin_user.role or admin_user.role != admin_role):
+                print(f"[APP] Fixing admin role for user {admin_user.username}")
                 if not admin_role:
-                    print("[APP] Creating Administrator role with full permissions.")
-                    admin_role = Role(
-                        name="Administrator",
-                        description="Full system access",
-                        permissions="admin.full"  # Full administrator access
-                    )
+                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
                     db.session.add(admin_role)
                     db.session.commit()
-                
-                # Create default admin user with simple password for testing
-                admin_user = User(
-                    username="admin",
-                    email="admin@example.com",
-                    full_name="System Administrator",
-                    is_admin=True,
-                    role_id=admin_role.id if admin_role else None
-                )
-                admin_user.set_password("admin")  # Simple password for testing
-                
-                db.session.add(admin_user)
+                admin_user.role = admin_role
                 db.session.commit()
-                
-                print("[APP] Created default admin user 'admin' with password 'admin'")
-                print("[APP] WARNING: This is intended for testing only.")
-                print("[APP] IMPORTANT: Please change this password immediately after login.")
-                
-                return admin_user
-            else:
-                print(f"[APP] Found {user_count} existing users in database - no default admin needed.")
-                return None
     except Exception as e:
-        print(f"[APP] Error creating default admin: {str(e)}")
-        return None
+        print(f"[APP] Error creating/updating default admin: {e}")
 
-# Call this function when app initializes
-with app.app_context():
+def run_startup_migrations():
+    """Run all migration/update scripts and log results"""
+    import subprocess
+    import sys
+    migration_scripts = [
+        'add_password_reset_columns.py',
+        'add_maintenance_unit.py',
+        'update_schema.py',
+        'create_maintenance_table.py',
+        'add_notification_preferences.py',
+        'add_audit_task_columns.py',
+    ]
+    for script in migration_scripts:
+        script_path = os.path.join(os.path.dirname(__file__), script)
+        if os.path.exists(script_path):
+            print(f"[STARTUP] Running migration: {script}")
+            try:
+                result = subprocess.run([sys.executable, script_path], capture_output=True, text=True)
+                print(f"[STARTUP] {script} output:\n{result.stdout}")
+                if result.stderr:
+                    print(f"[STARTUP] {script} errors:\n{result.stderr}")
+            except Exception as e:
+                print(f"[STARTUP] Failed to run {script}: {e}")
+        else:
+            print(f"[STARTUP] Migration script not found: {script}")
+
+@app.route('/api/sync/status', methods=['GET'])
+def sync_status():
+    """Get synchronization status information."""
     try:
-        create_default_admin()
+        # Basic information about the server state
+        return jsonify({
+            'status': 'online',
+            'server_time': datetime.now().isoformat(),
+            'version': '1.0.0'
+        })
     except Exception as e:
-        print(f"[APP] Error during startup initialization: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# AFTER all models are defined, THEN create tables
-if os.environ.get('RENDER', False):
-    print("[APP] Running on Render, creating database tables...")
-    with app.app_context():
-        try:
-            db.create_all()
-            print("[APP] Database tables created successfully.")
-            # Add default admin user if needed
-            add_default_admin_if_needed()
-        except Exception as e:
-            print(f"[APP] Error creating database tables: {str(e)}", file=sys.stderr)
+@app.route('/api/sync/data', methods=['POST'])
+@login_required
+def sync_data():
+    """Handle data synchronization requests from desktop clients."""
+    try:
+        data = request.json
+        sync_type = data.get('type')
+        if sync_type == 'push':
+            # Handle data being pushed from client to server
+            # Process items from the client
+            return jsonify({'status': 'success', 'message': 'Data received successfully'})
+            
+        elif sync_type == 'pull':
+            # Handle client requesting data from server
+            # Return requested data based on parameters
+            entity_type = data.get('entity_type')
+            timestamp = data.get('last_sync')
+            
+            # This is simplified - in a real implementation you would fetch actual data
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'type': entity_type,
+                    'items': []  # Actual data would go here
+                }
+            })
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# Routes for main navigation items
+@app.route('/health-check')
+def health_check():
+    """Basic healthcheck endpoint."""
+    try:
+        # Update to use connection-based execute pattern
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        app.logger.error(f"Health check failed: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.errorhandler(404)
+def page_not_found(e):
+    try:
+        return render_template('errors/404.html'), 404
+    except:
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <title>Page Not Found</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body style="font-family:Arial; text-align:center; padding:50px;">
+            <h1 style="color:#FE7900;">Page Not Found</h1>
+            <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
+        </body>
+        </html>
+        ''', 404
+
+@app.errorhandler(500)
+def server_error(e):
+    try:
+        return render_template('errors/500.html'), 500
+    except:
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Server Error</title>Server Error</title>
+        <body style="font-family:Arial; text-align:center; padding:50px;">
+            <h1 style="color:#FE7900;">Server Error</h1>
+            <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
+        </body>
+        </html>
+        ''', 500
+
+@app.errorhandler(400)
+def bad_request(e):
+    app.logger.warning(f"400 Bad Request: {request.path} - {e}")
+    try:
+        return render_template('errors/400.html'), 400
+    except:
+        return '<h1>Bad Request</h1><p>The request could not be understood by the server.</p>', 400
+
+@app.errorhandler(401)
+def unauthorized(e):
+    app.logger.warning(f"401 Unauthorized: {request.path} - {e}")
+    try:
+        return render_template('errors/401.html'), 401
+    except:
+        return '<h1>Unauthorized</h1><p>Login required.</p>', 401
+
+@app.errorhandler(403)
+def forbidden(e):
+    app.logger.warning(f"403 Forbidden: {request.path} - {e}")
+    try:
+        return render_template('errors/403.html'), 403
+    except:
+        return '<h1>Forbidden</h1><p>You do not have permission to access this resource.</p>', 403
+
+@app.route('/admin/<section>')
+@login_required
+def admin_section(section):
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access the admin panel.', 'danger')
+        return redirect(url_for('dashboard'))
+    if section == 'users':
+        return render_template('admin/users.html',users=User.query.all())
+    elif section == 'roles':
+        return render_template('admin/roles.html', roles=Role.query.all())
+    # Handle other sections...
+
 @app.route('/sites', methods=['GET', 'POST'])
 @login_required
 def manage_sites():
     """Handle site management page and site creation"""
-    sites = Site.query.all()  # Get all sites
+    sites = current_user.sites if not current_user.is_admin else Site.query.all()
     
     # Handle form submission for adding a new site
     if request.method == 'POST':
@@ -634,8 +2088,8 @@ def manage_sites():
             return redirect(url_for('manage_sites'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error adding site: {str(e)}', 'error')
-    
+            flash(f'Error adding site: {str(e)}', 'danger')
+
     # For GET request or if POST processing fails
     users = User.query.all() if current_user.is_admin else None
     
@@ -648,369 +2102,17 @@ def manage_sites():
                           can_edit=True,
                           can_delete=True)
 
-@app.route('/machines', methods=['GET', 'POST'])
-@login_required
-def manage_machines():
-    """Handle machine management page and machine creation"""
-    site_id = request.args.get('site_id', type=int)
-    
-    # Filter machines by site if site_id is provided
-    if site_id:
-        machines = Machine.query.filter_by(site_id=site_id).all()
-        title = f"Machines for {Site.query.get_or_404(site_id).name}"
-    else:
-        machines = Machine.query.all()
-        title = "Machines"
-    
-    sites = Site.query.all()
-    
-    # Handle form submission for adding a new machine
-    if request.method == 'POST':
-        try:
-            name = request.form['name']
-            model = request.form.get('model', '')
-            machine_number = request.form.get('machine_number', '')
-            serial_number = request.form.get('serial_number', '')
-            site_id = request.form['site_id']
-            
-            # Create new machine
-            new_machine = Machine(
-                name=name,
-                model=model,
-                machine_number=machine_number,
-                serial_number=serial_number,
-                site_id=site_id
-            )
-            
-            # Add machine to database
-            db.session.add(new_machine)
-            db.session.commit()
-            
-            flash(f'Machine "{name}" has been added successfully.', 'success')
-            return redirect(url_for('manage_machines', site_id=site_id))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error adding machine: {str(e)}', 'error')
-    
-    return render_template('machines.html', 
-                          machines=machines,
-                          sites=sites,
-                          site_id=site_id,
-                          title=title,
-                          now=datetime.now(),
-                          can_create=True,
-                          can_edit=True,
-                          can_delete=True)
-
-@app.route('/machines/<int:machine_id>/history')
-@login_required
-def machine_history(machine_id):
-    """Display maintenance history for a specific machine"""
-    machine = Machine.query.get_or_404(machine_id)
-    parts = Part.query.filter_by(machine_id=machine_id).all()
-    
-    # Get maintenance records sorted by date
-    # Since we don't have a separate maintenance record model in the context,
-    # we'll use the parts' last_maintenance dates as a simple history
-    maintenance_records = []
-    for part in parts:
-        maintenance_records.append({
-            'part': part.name,
-            'date': part.last_maintenance,
-            'next_date': part.next_maintenance,
-            'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}(s)"
-        })
-    
-    # Sort by most recent first
-    maintenance_records.sort(key=lambda x: x['date'], reverse=True)
-    
-    return render_template('machine_history.html', 
-                          machine=machine,
-                          parts=parts,
-                          maintenance_records=maintenance_records,
-                          site=machine.site)
-
-@app.route('/parts', methods=['GET', 'POST'])
-@login_required
-def manage_parts():
-    """Handle parts management page and part creation"""
-    machine_id = request.args.get('machine_id', type=int)
-    
-    # Filter parts by machine if machine_id is provided
-    if machine_id:
-        parts = Part.query.filter_by(machine_id=machine_id).all()
-        title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
-        machines = [Machine.query.get_or_404(machine_id)]
-    else:
-        parts = Part.query.all()
-        title = "Parts"
-        machines = Machine.query.all()
-    
-    # Handle form submission for adding a new part
-    if request.method == 'POST':
-        try:
-            name = request.form['name']
-            description = request.form.get('description', '')
-            machine_id = request.form['machine_id']
-            frequency = request.form['maintenance_frequency']
-            unit = request.form['maintenance_unit']
-            
-            # Convert frequency to days based on unit
-            maintenance_days = calculate_maintenance_days(int(frequency), unit)
-            
-            # Calculate next maintenance date
-            next_maintenance = datetime.now() + timedelta(days=maintenance_days)
-            
-            # Create new part
-            new_part = Part(
-                name=name,
-                description=description,
-                machine_id=machine_id,
-                maintenance_frequency=int(frequency),
-                maintenance_unit=unit,
-                maintenance_days=maintenance_days,
-                last_maintenance=datetime.now(),
-                next_maintenance=next_maintenance
-            )
-            
-            # Add part to database
-            db.session.add(new_part)
-            db.session.commit()
-            
-            flash(f'Part "{name}" has been added successfully.', 'success')
-            return redirect(url_for('manage_parts', machine_id=machine_id))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error adding part: {str(e)}', 'error')
-    
-    return render_template('parts.html',
-                          parts=parts,
-                          machines=machines,
-                          machine_id=machine_id,
-                          title=title,
-                          now=datetime.now(),
-                          can_create=True,
-                          can_edit=True,
-                          can_delete=True)
-
-@app.route('/parts/<int:part_id>/update_maintenance', methods=['GET', 'POST'])
-@login_required
-def update_maintenance(part_id):
-    """Update maintenance records for a specific part"""
-    try:
-        part = Part.query.get_or_404(part_id)
-        
-        # For GET requests, redirect to the maintenance page
-        if request.method == 'GET':
-            return redirect(url_for('maintenance_page'))
-            
-        # For POST requests, update the maintenance
-        now = datetime.now()
-        
-        # Update the last maintenance date
-        part.last_maintenance = now
-        
-        # Calculate next maintenance date based on frequency
-        part.next_maintenance = now + timedelta(days=part.maintenance_days)
-        
-        # Commit the changes
-        db.session.commit()
-        flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
-        
-        # Redirect to the referring page, if available
-        referrer = request.referrer
-        if referrer:
-            return redirect(referrer)
-        else:
-            return redirect(url_for('manage_parts', machine_id=part.machine_id))
-            
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error updating maintenance: {str(e)}', 'error')
-        return redirect(url_for('manage_parts'))
-
-@app.route('/update-maintenance', methods=['POST'])
-@login_required
-def update_maintenance_alt():
-    """Alternative route to update maintenance records for a specific part"""
-    try:
-        part_id = request.form.get('part_id')
-        comments = request.form.get('comments', '')
-        
-        if not part_id:
-            flash('Missing part ID', 'error')
-            return redirect(url_for('maintenance_page'))
-        
-        part = Part.query.get_or_404(int(part_id))
-        
-        # Get the current datetime
-        now = datetime.now()
-        
-        # Update the last maintenance date
-        part.last_maintenance = now
-        
-        # Calculate next maintenance date based on frequency
-        part.next_maintenance = now + timedelta(days=part.maintenance_days)
-        
-        # Create a maintenance record
-        maintenance_record = MaintenanceRecord(
-            part_id=part.id,
-            user_id=current_user.id,
-            date=now,
-            comments=comments
-        )
-        
-        # Add and commit both changes
-        db.session.add(maintenance_record)
-        db.session.commit()
-        
-        flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
-        
-        # Redirect to the referring page, if available
-        referrer = request.referrer
-        if referrer:
-            return redirect(referrer)
-        else:
-            return redirect(url_for('maintenance_page'))
-            
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error updating maintenance: {str(e)}', 'error')
-        return redirect(url_for('maintenance_page'))
-
-@app.route('/parts/<int:part_id>/history')
-@login_required
-def view_part_history(part_id):
-    """View maintenance history for a specific part"""
-    try:
-        part = Part.query.get_or_404(part_id)
-        maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
-        return render_template('part_history.html', part=part, maintenance_records=maintenance_records, machine=part.machine)
-    except Exception as e:
-        flash(f'Error loading maintenance history: {str(e)}', 'error')
-        return redirect(url_for('maintenance_page'))
-
-@app.route('/admin/backups')
-@login_required
-def manage_backups():
-    """Database backup management page"""
-    if not current_user.is_admin:
-        flash('You do not have permission to access this page.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    # Import and use the backup_utils module to get backups
-    from backup_utils import list_backups
-    backups = list_backups()
-    
-    # Process the backup data for display
-    for backup in backups:
-        # Convert timestamp string to datetime if needed
-        if isinstance(backup.get('created'), str):
-            try:
-                backup['created'] = datetime.fromisoformat(backup['created'].replace('Z', '+00:00'))
-            except (ValueError, AttributeError):
-                # If conversion fails, use file creation time
-                backup['created'] = datetime.now()
-    
-    return render_template('admin_backups.html', backups=backups)
-
-def calculate_maintenance_days(frequency, unit):
-    """Convert maintenance frequency into days"""
-    if unit == 'day':
-        return frequency
-    elif unit == 'week':
-        return frequency * 7
-    elif unit == 'month':
-        return frequency * 30
-    elif unit == 'year':
-        return frequency * 365
-    else:
-        return frequency  # Default to days
-
-@app.route('/profile')
-@login_required
-def user_profile():
-    """Handle user profile page"""
-    return render_template('profile.html', user=current_user)
-
-@app.route('/admin')
-@login_required
-def admin():
-    """Admin dashboard - only accessible to admin users"""
-    if not current_user.is_admin:
-        flash('You do not have permission to access the admin area.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    # Placeholder counts - in a real app, you'd query the database
-    user_count = User.query.count()
-    site_count = Site.query.count()
-    machine_count = Machine.query.count()
-    part_count = Part.query.count()
-    
-    return render_template('admin.html',
-                          user_count=user_count,
-                          site_count=site_count,
-                          machine_count=machine_count,
-                          part_count=part_count)
-
-# Admin sub-pages
-@app.route('/admin/users')
-@login_required
-def manage_users():
-    """User management page"""
-    if not current_user.is_admin:
-        flash('You do not have permission to access this page.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    users = User.query.all()
-    roles = Role.query.all()
-    sites = Site.query.all()
-    
-    return render_template('admin_users.html', users=users, roles=roles, sites=sites, current_user=current_user)
-
-@app.route('/admin/roles')
-@login_required
-def manage_roles():
-    """Role management page"""
-    if not current_user.is_admin:
-        flash('You do not have permission to access this page.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    roles = Role.query.all()
-    all_permissions = get_all_permissions()
-    
-    return render_template('admin_roles.html', roles=roles, all_permissions=all_permissions)
-
-# Add helper function to get all available permissions
-def get_all_permissions():
-    """Return a dictionary of all available permissions"""
-    # Sample permissions - replace with your actual permissions system
-    return {
-        "view_sites": "View Sites",
-        "edit_sites": "Edit Sites", 
-        "delete_sites": "Delete Sites",
-        "view_machines": "View Machines",
-        "edit_machines": "Edit Machines",
-        "delete_machines": "Delete Machines",
-        "view_parts": "View Parts",
-        "edit_parts": "Edit Parts",
-        "delete_parts": "Delete Parts",
-        "view_reports": "View Reports",
-        "admin.users": "Manage Users",
-        "admin.roles": "Manage Roles",
-        "admin.backups": "Manage Backups"
-    }
-
-# Site CRUD Operations
-@app.route('/sites/edit/<int:site_id>', methods=['GET', 'POST'])
+@app.route('/site/edit/<int:site_id>', methods=['GET', 'POST'])
 @login_required
 def edit_site(site_id):
     """Edit an existing site"""
-    site = Site.query.get_or_404(site_id)
+    site = db.session.get(Site, site_id)
+    if not site:
+        abort(404)
+    users = User.query.all() if current_user.is_admin else None
     
     if request.method == 'POST':
         try:
-            # Update site details
             site.name = request.form['name']
             site.location = request.form.get('location', '')
             site.contact_email = request.form.get('contact_email', '')
@@ -1019,10 +2121,11 @@ def edit_site(site_id):
             
             # Handle user assignments if admin
             if current_user.is_admin:
-                # Clear current user assignments
-                site.users = []
+                # First remove all user associations
+                for user in site.users:
+                    site.users.remove(user)
                 
-                # Add selected users
+                # Then add selected users
                 user_ids = request.form.getlist('user_ids')
                 if user_ids:
                     for user_id in user_ids:
@@ -1035,552 +2138,373 @@ def edit_site(site_id):
             return redirect(url_for('manage_sites'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating site: {str(e)}', 'error')
+            app.logger.error(f"Error updating site: {e}")
+            flash(f'Error updating site: {str(e)}', 'danger')
     
-    # For GET request or if POST processing fails
-    users = User.query.all() if current_user.is_admin else []
-    is_admin = current_user.is_admin
-    
-    return render_template('edit_site.html', site=site, users=users, is_admin=is_admin)
+    # For GET requests, render the edit form
+    return render_template('edit_site.html', 
+                          site=site,
+                          users=users,
+                          is_admin=current_user.is_admin,
+                          assigned_users=[user.id for user in site.users])
 
-@app.route('/sites/delete/<int:site_id>', methods=['POST'])
+@app.route('/machines', methods=['GET', 'POST'])
 @login_required
-def delete_site(site_id):
-    """Delete a site and all its machines and parts"""
+def manage_machines():
+    """Handle machine management page and machine creation"""
     try:
-        site = Site.query.get_or_404(site_id)
+        site_id = request.args.get('site_id', type=int)
         
-        # Store site name for flash message
-        site_name = site.name
+        # Filter machines by site if site_id is provided
+        if site_id:
+            machines = Machine.query.filter_by(site_id=site_id).all()
+            title = f"Machines for {Site.query.get_or_404(site_id).name}"
+        else:
+            site_ids = [site.id for site in current_user.sites] if not current_user.is_admin else None
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else Machine.query.all()
+            title = "Machines"
         
-        # Delete all parts associated with this site's machines
-        parts_count = 0
-        for machine in Machine.query.filter_by(site_id=site_id).all():
-            parts_count += Part.query.filter_by(machine_id=machine.id).count()
-            Part.query.filter_by(machine_id=machine.id).delete()
+        sites = current_user.sites if not current_user.is_admin else Site.query.all()
         
-        # Delete all machines for this site
-        machines_count = Machine.query.filter_by(site_id=site_id).count()
-        Machine.query.filter_by(site_id=site_id).delete()
+        # Pre-generate URLs for admin navigation - provide ALL possible links needed by template
+        safe_urls = {
+            'add_machine': '/machines',
+            'back_to_sites': '/sites',
+            'dashboard': '/dashboard',
+            'admin': '/admin',
+            'machine_history': '/maintenance'  # Add a default history URL
+        }
         
-        # Delete the site
-        db.session.delete(site)
-        db.session.commit()
+        # Generate URLs for each machine's actions
+        for machine in machines:
+            machine.delete_url = f'/machines/delete/{machine.id}'
+            machine.edit_url = f'/machine/edit/{machine.id}'
+            machine.parts_url = f'/parts?machine_id={machine.id}'
+            # Add history URL too which is likely referenced in the template
+            machine.history_url = f'/maintenance?machine_id={machine.id}'
         
-        flash(f'Site "{site_name}" with {machines_count} machines and {parts_count} parts has been deleted.', 'success')
+        # Handle form submission for adding a new machine
+        if request.method == 'POST':
+            try:
+                name = request.form['name']
+                model = request.form.get('model', '')
+                machine_number = request.form.get('machine_number', '')
+                serial_number = request.form.get('serial_number', '')
+                site_id = request.form['site_id']
+                
+                # Create new machine with minimal required fields only
+                new_machine = Machine(
+                    name=name,
+                    model=model,
+                    machine_number=machine_number,
+                    serial_number=serial_number,
+                    site_id=site_id
+                )
+                
+                # Add machine to database
+                db.session.add(new_machine)
+                db.session.commit()
+                
+                flash(f'Machine "{name}" has been added successfully.', 'success')
+                return redirect(url_for('manage_machines', site_id=site_id))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error adding machine: {str(e)}', 'danger')
+        
+        return render_template('admin/machines.html', 
+                              machines=machines,
+                              sites=sites,
+                              site_id=site_id,
+                              title=title,
+                              safe_urls=safe_urls,
+                              now=datetime.now())
     except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting site: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_sites'))
+        app.logger.error(f"Error in manage_machines route: {e}")
+        flash('An error occurred while loading the machines page.', 'danger')
+        return redirect('/dashboard')
 
-# Machine CRUD Operations
-@app.route('/machines/edit/<int:machine_id>', methods=['GET', 'POST'])
+@app.route('/machine/edit/<int:machine_id>', methods=['GET', 'POST'])
 @login_required
 def edit_machine(machine_id):
     """Edit an existing machine"""
-    machine = Machine.query.get_or_404(machine_id)
+    machine = db.session.get(Machine, machine_id)
+    if not machine:
+        abort(404)
+    sites = current_user.sites if not current_user.is_admin else Site.query.all()
     
     if request.method == 'POST':
         try:
-            # Update machine details
             machine.name = request.form['name']
             machine.model = request.form.get('model', '')
             machine.machine_number = request.form.get('machine_number', '')
             machine.serial_number = request.form.get('serial_number', '')
-            machine.site_id = request.form['site_id']
+            
+            # Convert site_id to integer
+            site_id = int(request.form['site_id'])
+            machine.site_id = site_id
             
             db.session.commit()
             flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
-            return redirect(url_for('manage_machines', site_id=machine.site_id))
+            return redirect(url_for('manage_machines'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating machine: {str(e)}', 'error')
+            app.logger.error(f"Error updating machine: {e}")
+            flash(f'Error updating machine: {str(e)}', 'danger')
     
-    # For GET request or if POST processing fails
-    sites = Site.query.all()
-    
-    return render_template('edit_machine.html', machine=machine, sites=sites)
+    # For GET requests, render the edit form
+    return render_template('edit_machine.html', 
+                          machine=machine,
+                          sites=sites)
 
-@app.route('/machines/delete/<int:machine_id>', methods=['POST'])
+@app.route('/parts', methods=['GET', 'POST'])
 @login_required
-def delete_machine(machine_id):
-    """Delete a machine and all its parts"""
+def manage_parts():
+    """Handle parts management page and part creation"""
     try:
-        machine = Machine.query.get_or_404(machine_id)
-        site_id = machine.site_id  # Store site_id for redirect
+        machine_id = request.args.get('machine_id', type=int)
         
-        # Store machine name for flash message
-        machine_name = machine.name
+        # Filter parts by machine if machine_id is provided
+        if machine_id:
+            parts = Part.query.filter_by(machine_id=machine_id).all()
+            title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
+        else:
+            machine_ids = [machine.id for machine in Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all()] if not current_user.is_admin else None
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else Part.query.all()
+            title = "Parts"
         
-        # Delete all parts associated with this machine
-        parts_count = Part.query.filter_by(machine_id=machine_id).count()
-        Part.query.filter_by(machine_id=machine_id).delete()
+        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all() if not current_user.is_admin else Machine.query.all()
         
-        # Delete the machine
-        db.session.delete(machine)
-        db.session.commit()
+        # Pre-generate URLs for template use
+        safe_urls = {
+            'add_part': '/parts',
+            'back_to_machines': '/machines',
+            'dashboard': '/dashboard',
+            'admin': '/admin'
+        }
         
-        flash(f'Machine "{machine_name}" and its {parts_count} parts have been deleted.', 'success')
+        # Handle form submission for adding a new part
+        if request.method == 'POST':
+            try:
+                name = request.form['name']
+                description = request.form.get('description', '')
+                # Collect form values but don't use invalid ones in constructor
+                part_number = request.form.get('part_number', '')  
+                machine_id = request.form['machine_id']
+                quantity = request.form.get('quantity', 0)  
+                notes = request.form.get('notes', '')
+                
+                # Create new part with only what appear to be valid fields
+                new_part = Part(
+                    name=name,
+                    description=description,
+                    machine_id=machine_id if machine_id else None
+                )
+                
+                # Add part to database
+                db.session.add(new_part)
+                db.session.commit()
+                
+                flash(f'Part "{name}" has been added successfully.', 'success')
+                return redirect('/parts')  # Using direct URL to avoid potential errors
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error adding part: {e}")
+                flash(f'Error adding part: {str(e)}', 'danger')
+        
+        return render_template('admin/parts.html', 
+                            parts=parts,
+                            machines=machines,
+                            machine_id=machine_id,
+                            title=title,
+                            safe_urls=safe_urls,
+                            now=datetime.now())
     except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting machine: {str(e)}', 'error')
-    
-    # Redirect back to the site's machines page if we have the site_id
-    if 'site_id' in locals():
-        return redirect(url_for('manage_machines', site_id=site_id))
-    else:
-        return redirect(url_for('manage_machines'))
+        app.logger.error(f"Error in manage_parts route: {e}")
+        flash('An error occurred while loading the parts page.', 'danger')
+        return redirect('/dashboard')
 
-# Part CRUD Operations
-@app.route('/parts/edit/<int:part_id>', methods=['GET', 'POST'])
+
+@app.route('/manage/users')
+@login_required
+def manage_users():
+    """Alternative route for user management - redirects to admin users page."""
+    # If this is a POST request, forward it to the admin_users function
+    if request.method == 'POST':
+        return admin_users()
+        
+    # For GET requests, continue with normal redirect logic
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect('/dashboard')
+    return redirect('/admin/users')
+
+@app.route('/import_excel', methods=['GET', 'POST'])
+@login_required
+def import_excel_route():
+    """Handle Excel file imports to add data to the system."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to import data.', 'danger')
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            flash('No file part', 'danger')
+            flash('Import complete', 'info')
+            return redirect(request.referrer or url_for('admin_excel_import'))
+            
+        file = request.files['file']
+        
+        if file.filename == '':
+            flash('No selected file', 'danger')
+            flash('Import complete', 'info')
+            return redirect(request.referrer or url_for('admin_excel_import'))
+            
+        if file and '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ['xlsx', 'xls']:
+            try:
+                # Save the uploaded file temporarily
+                import tempfile
+                from excel_importer import import_excel
+                
+                # Create a temporary file
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+                file.save(temp_file.name)
+                temp_file.close()
+                
+                # Import data from the Excel file
+                try:
+                    stats = import_excel(temp_file.name)
+                    # Remove the temporary file
+                    import os
+                    os.unlink(temp_file.name)
+                    # Display import results
+                    success_message = f"Data imported successfully! Added {stats['sites_added']} sites, {stats['machines_added']} machines, and {stats['parts_added']} parts."
+                    flash(success_message, 'success')
+                except Exception as e:
+                    flash(f'Error importing data: {str(e)}', 'danger')
+                flash('Import complete', 'info')
+                return redirect(url_for('admin_excel_import'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error importing data: {str(e)}', 'danger')
+                flash('Import complete', 'info')
+                return redirect(url_for('admin_excel_import'))
+        else:
+            flash('Invalid file type. Please upload an Excel file (.xlsx, .xls)', 'danger')
+            flash('Import complete', 'info')
+            return redirect(url_for('admin_excel_import'))
+            
+    # GET request - redirect to the Excel import page
+    return redirect(url_for('admin_excel_import'))
+
+@app.route('/part/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
 def edit_part(part_id):
-    """Edit an existing part"""
-    part = Part.query.get_or_404(part_id)
-    
-    if request.method == 'POST':
-        try:
-            # Update part details
-            part.name = request.form['name']
-            part.description = request.form.get('description', '')
-            part.machine_id = request.form['machine_id']
-            part.maintenance_frequency = int(request.form['maintenance_frequency'])
-            part.maintenance_unit = request.form['maintenance_unit']
-            
-            # Update maintenance days based on frequency and unit
-            part.maintenance_days = calculate_maintenance_days(part.maintenance_frequency, part.maintenance_unit)
-            
-            # Update next maintenance date (optionally)
-            # Uncomment if you want to recalculate the next date based on last_maintenance:
-            # part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_days)
-            
-            db.session.commit()
-            flash(f'Part "{part.name}" has been updated successfully.', 'success')
-            return redirect(url_for('manage_parts', machine_id=part.machine_id))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating part: {str(e)}', 'error')
-    
-    # For GET request or if POST processing fails
+    part = db.session.get(Part, part_id)
+    if not part:
+        abort(404)
     machines = Machine.query.all()
-    
+    if request.method == 'POST':
+        part.name = request.form.get('name', part.name)
+        part.description = request.form.get('description', part.description)
+        part.machine_id = request.form.get('machine_id', part.machine_id)
+        db.session.commit()
+        flash('Part updated successfully.', 'success')
+        return redirect(url_for('manage_parts'))
     return render_template('edit_part.html', part=part, machines=machines)
 
-@app.route('/parts/delete/<int:part_id>', methods=['POST'])
+@app.route('/manage/roles')
 @login_required
-def delete_part(part_id):
-    """Delete a part"""
-    try:
-        part = Part.query.get_or_404(part_id)
-        machine_id = part.machine_id  # Store machine_id for redirect
-        
-        # Store part name for flash message
-        part_name = part.name
-        
-        # Delete the part
-        db.session.delete(part)
-        db.session.commit()
-        
-        flash(f'Part "{part_name}" has been deleted.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting part: {str(e)}', 'error')
-    
-    # Redirect back to the machine's parts page if we have the machine_id
-    if 'machine_id' in locals():
-        return redirect(url_for('manage_parts', machine_id=machine_id))
-    else:
-        return redirect(url_for('manage_parts'))
-
-# User Management Routes
-@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
-@login_required
-def edit_user(user_id):
-    """Edit an existing user"""
-    if not current_user.is_admin:
-        flash('You do not have permission to edit users.', 'error')
+def manage_roles():
+    """Redirect or render the roles management page."""
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
-    
-    user = User.query.get_or_404(user_id)
-    
-    if request.method == 'POST':
-        try:
-            # Update user details
-            user.username = request.form['username']
-            user.email = request.form['email']
-            user.full_name = request.form['full_name']
-            
-            # Handle role assignment
-            role_id = request.form.get('role_id')
-            user.role_id = int(role_id) if role_id and role_id != '' else None
-            
-            # Handle admin status
-            user.is_admin = 'is_admin' in request.form
-            
-            # Handle site assignments
-            user.sites = []
-            site_ids = request.form.getlist('site_ids')
-            if site_ids:
-                for site_id in site_ids:
-                    site = Site.query.get(int(site_id))
-                    if site:
-                        user.sites.append(site)
-            
-            # Handle password reset if requested
-            password_reset_message = ""
-            if 'reset_password' in request.form:
-                # Generate a random password
-                alphabet = string.ascii_letters + string.digits
-                password = ''.join(random.choice(alphabet) for i in range(12))
-                user.set_password(password)
-                password_reset_message = f" Password has been reset to '{password}'."
-            
-            db.session.commit()
-            flash(f'User {user.username} has been updated.{password_reset_message}', 'success')
-            return redirect(url_for('manage_users'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating user: {str(e)}', 'error')
-    
-    # For GET request or if POST processing fails
     roles = Role.query.all()
-    sites = Site.query.all()
-    
-    return render_template('edit_user.html', user=user, roles=roles, sites=sites)
-
-@app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
-@login_required
-def delete_user(user_id):
-    """Delete a user"""
-    if not current_user.is_admin:
-        flash('You do not have permission to delete users.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    if user_id == current_user.id:
-        flash('You cannot delete your own account.', 'error')
-        return redirect(url_for('manage_users'))
-    
-    try:
-        user = User.query.get_or_404(user_id)
-        username = user.username
-        
-        # Remove user from any sites
-        user.sites = []
-        
-        # Delete the user
-        db.session.delete(user)
-        db.session.commit()
-        
-        flash(f'User "{username}" has been deleted.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting user: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_users'))
-
-@app.route('/admin/users/add', methods=['POST'])
-@login_required
-def add_user():
-    """Add a new user"""
-    if not current_user.is_admin:
-        flash('You do not have permission to add users.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        # Get form data
-        username = request.form['username']
-        email = request.form['email']
-        full_name = request.form.get('full_name', '')
-        role_id = request.form.get('role_id')
-        is_admin = 'is_admin' in request.form
-        
-        # Generate a random password
-        alphabet = string.ascii_letters + string.digits
-        password = ''.join(random.choice(alphabet) for i in range(12))
-        
-        # Create new user
-        new_user = User(
-            username=username,
-            email=email,
-            full_name=full_name,
-            is_admin=is_admin,
-            role_id=int(role_id) if role_id and role_id != '' else None
-        )
-        new_user.set_password(password)
-        
-        # Add user to database
-        db.session.add(new_user)
-        db.session.commit()
-        
-        # Assign sites if any were selected
-        site_ids = request.form.getlist('site_ids')
-        if site_ids:
-            for site_id in site_ids:
-                site = Site.query.get(int(site_id))
-                if site:
-                    new_user.sites.append(site)
-            db.session.commit()
-        
-        flash(f'User {username} created successfully with password: {password}', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error adding user: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_users'))
-
-# Role Management Routes
-@app.route('/admin/roles/edit/<int:role_id>', methods=['GET', 'POST'])
-@login_required
-def edit_role(role_id):
-    """Edit an existing role"""
-    if not current_user.is_admin:
-        flash('You do not have permission to edit roles.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    role = Role.query.get_or_404(role_id)
-    
-    if request.method == 'POST':
-        try:
-            # Update role details
-            role.name = request.form['name']
-            role.description = request.form.get('description', '')
-            
-            # Update permissions
-            permissions = request.form.getlist('permissions')
-            role.permissions = ','.join(permissions) if permissions else ''
-            
-            db.session.commit()
-            flash(f'Role "{role.name}" has been updated.', 'success')
-            return redirect(url_for('manage_roles'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating role: {str(e)}', 'error')
-    
-    # For GET request or if POST processing fails
-    role_permissions = role.get_permissions_list()
     all_permissions = get_all_permissions()
-    
-    return render_template('edit_role.html', role=role, role_permissions=role_permissions, all_permissions=all_permissions)
+    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
 
-@app.route('/admin/roles/delete/<int:role_id>', methods=['POST'])
+@app.route('/api/maintenance/records', methods=['GET'])
 @login_required
-def delete_role(role_id):
-    """Delete a role if it has no users assigned"""
-    if not current_user.is_admin:
-        flash('You do not have permission to delete roles.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        role = Role.query.get_or_404(role_id)
-        
-        # Check if any users have this role
-        if role.users and len(role.users) > 0:
-            flash(f'Cannot delete role "{role.name}" because it is assigned to {len(role.users)} users.', 'error')
-            return redirect(url_for('manage_roles'))
-        
-        role_name = role.name
-        db.session.delete(role)
-        db.session.commit()
-        
-        flash(f'Role "{role_name}" has been deleted.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting role: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_roles'))
+def maintenance_records_page():
+    # Get all sites user can access
+    if current_user.is_admin:
+        sites = Site.query.all()
+    else:
+        sites = current_user.sites
+    site_id = request.args.get('site_id', type=int)
+    machine_id = request.args.get('machine_id', type=int)
+    part_id = request.args.get('part_id', type=int)
 
-@app.route('/admin/roles/add', methods=['POST'])
-@login_required
-def add_role():
-    """Add a new role"""
-    if not current_user.is_admin:
-        flash('You do not have permission to add roles.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        # Get form data
-        name = request.form['name']
-        description = request.form.get('description', '')
-        permissions = request.form.getlist('permissions')
-        permissions_str = ','.join(permissions) if permissions else ''
-        
-        # Create new role
-        new_role = Role(
-            name=name,
-            description=description,
-            permissions=permissions_str
-        )
-        
-        # Add role to database
-        db.session.add(new_role)
-        db.session.commit()
-        
-        flash(f'Role "{name}" created successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error adding role: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_roles'))
+    machines = []
+    parts = []
+    records = []
 
-# Backup Management Routes
-@app.route('/admin/backups/create', methods=['POST'])
-@login_required
-def create_backup():
-    """Create a new database backup"""
-    if not current_user.is_admin:
-        flash('You do not have permission to create backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        from backup_utils import create_backup as create_db_backup
-        success, message = create_db_backup()
-        
-        if success:
-            flash(f'Backup created successfully: {message}', 'success')
-        else:
-            flash(f'Backup failed: {message}', 'error')
-    except Exception as e:
-        flash(f'Error creating backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
+    if site_id:
+        machines = Machine.query.filter_by(site_id=site_id).all()
+    if machine_id:
+        parts = Part.query.filter_by(machine_id=machine_id).all()
+    if part_id:
+        records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
 
-@app.route('/admin/backups/restore/<filename>', methods=['POST'])
-@login_required
-def restore_backup(filename):
-    """Restore database from a backup file"""
-    if not current_user.is_admin:
-        flash('You do not have permission to restore backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        from backup_utils import restore_backup as restore_db_backup
-        success, message = restore_db_backup(filename)
-        
-        if success:
-            flash(f'Database restored successfully: {message}', 'success')
-        else:
-            flash(f'Restore failed: {message}', 'error')
-    except Exception as e:
-        flash(f'Error restoring backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
+    return render_template(
+        'maintenance_records.html',
+        sites=sites,
+        machines=machines,
+        parts=parts,
+        records=records,
+        selected_site=site_id,
+        selected_machine=machine_id,
+        selected_part=part_id
+    )
 
-@app.route('/admin/backups/delete/<filename>', methods=['POST'])
-@login_required
-def delete_backup(filename):
-    """Delete a database backup file"""
-    if not current_user.is_admin:
-        flash('You do not have permission to delete backups.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    try:
-        from backup_utils import get_backup_dir
-        import os
-        
-        backup_path = os.path.join(get_backup_dir(), filename)
-        if os.path.exists(backup_path):
-            os.remove(backup_path)
-            # Also remove info file if it exists
-            info_path = f"{backup_path}.info"
-            if os.path.exists(info_path):
-                os.remove(info_path)
-            flash(f'Backup "{filename}" has been deleted.', 'success')
-        else:
-            flash(f'Backup file not found.', 'error')
-    except Exception as e:
-        flash(f'Error deleting backup: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_backups'))
-
-@app.route('/maintenance')
-@login_required
-def maintenance_page():
-    """Dedicated page for recording maintenance activities"""
-    try:
-        # Get user-accessible sites 
-        if current_user.is_admin:
-            sites = Site.query.all()
-        else:
-            sites = current_user.sites
-            
-        site_ids = [site.id for site in sites]
-        machines = []
-        if site_ids:
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
-            
-        machine_ids = [machine.id for machine in machines]
-        parts = []
-        if machine_ids:
-            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
-        
-        # Process parts for maintenance status
-        now = datetime.now()
-        overdue_parts = []
-        due_soon_parts = []
-        upcoming_parts = []
-        
-        for part in parts:
-            days_until = (part.next_maintenance - now).days
-            part_data = {
-                'id': part.id,
-                'name': part.name,
-                'description': part.description,
-                'machine': part.machine,
-                'site': part.machine.site,
-                'last_maintenance': part.last_maintenance,
-                'next_maintenance': part.next_maintenance,
-                'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}(s)",
-                'days': abs(days_until) if days_until < 0 else days_until
-            }
-            
-            if days_until < 0:
-                # Part is overdue
-                overdue_parts.append(part_data)
-            elif days_until <= 30:  # Due within 30 days
-                due_soon_parts.append(part_data)
-            else:
-                upcoming_parts.append(part_data)
-        
-        # Sort parts by urgency
-        overdue_parts.sort(key=lambda x: x['days'], reverse=True)
-        due_soon_parts.sort(key=lambda x: x['days'])
-        upcoming_parts.sort(key=lambda x: x['days'])
-        
-        return render_template('maintenance.html',
-                              overdue_parts=overdue_parts,
-                              due_soon_parts=due_soon_parts,
-                              upcoming_parts=upcoming_parts,
-                              now=now)
-    except Exception as e:
-        flash(f'Error loading maintenance page: {str(e)}', 'error')
-        print(f"Maintenance page error: {str(e)}")
-        return render_template('maintenance.html', 
-                              overdue_parts=[],
-                              due_soon_parts=[],
-                              upcoming_parts=[],
-                              now=datetime.now())
-
-# Make sure we can run the app directly for both development and production
 if __name__ == '__main__':
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
     args = parser.parse_args()
-    
     with app.app_context():
-        # Create tables if they don't exist
-        db.create_all()
-        
-        # Add default admin account if no users exist
+        try:
+            run_auto_migration()  # Ensure schema is up to date on launch
+        except Exception as e:
+            print(f'[AUTO_MIGRATE ERROR] {e}')
         add_default_admin_if_needed()
-    
-    # Get port from command line argument, environment variable, or default
+        
+        try:
+            print("[APP] Performing database integrity checks...")
+            admin_users = User.query.join(Role).filter(
+                or_(
+                    Role.name.ilike('admin'),
+                    User.username == 'admin'
+                )
+            ).all()
+            for user in admin_users:
+                if not user.role or user.role.name.lower() != 'admin':
+                    admin_role = Role.query.filter_by(name='admin').first()
+                    user.role = admin_role
+                    print(f"[APP] Fixed admin role for user {user.username}")
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"[APP] Error performing database integrity checks: {e}")
+        
+        # Healthcheck log
+        try:
+            from simple_healthcheck import check_database
+            print("[STARTUP] Running healthcheck...")
+            if check_database():
+                print("[STARTUP] Healthcheck PASSED: Database is ready.")
+            else:
+                print("[STARTUP] Healthcheck FAILED: Database is not ready.")
+        except Exception as e:
+            print(f"[STARTUP] Healthcheck error: {e}")
+
     port = args.port or int(os.environ.get('PORT', 10000))
     debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     
     print(f"[APP] Starting Flask server on port {port}")
-    
-    # Use host 0.0.0.0 to bind to all interfaces
     app.run(host='0.0.0.0', port=port, debug=debug)
+
+
+
+

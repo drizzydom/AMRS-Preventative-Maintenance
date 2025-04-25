@@ -13,11 +13,6 @@ fi
 echo "[STARTUP] Setting permissions on data directory..."
 chmod -R 755 /var/data || echo "[ERROR] Failed to set permissions on /var/data"
 
-# Create backups directory if it doesn't exist
-echo "[STARTUP] Creating backups directory..."
-mkdir -p /var/data/backups || echo "[ERROR] Failed to create backups directory"
-chmod -R 755 /var/data/backups || echo "[ERROR] Failed to set permissions on backups directory"
-
 # Ensure the templates/errors directory exists and is writable
 echo "[STARTUP] Ensuring error templates directory exists..."
 mkdir -p templates/errors

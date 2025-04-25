@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, shrink-to-fit=no">
     <title>{% block title %}Maintenance Tracker{% endblock %}</title>
     
     <!-- Load critical CSS as early as possible -->
@@ -261,6 +261,21 @@
                             </a>
                         </li>
                         {% endif %}
+                        {% if current_user.is_authenticated and (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'audits.access' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('audits_page') }}" class="sidebar-link {% if request.endpoint == 'audits_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-clipboard-check"></i>
+                                <span class="sidebar-link-text">Audits</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('maintenance_records_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_records_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-history"></i>
+                                <span class="sidebar-link-text">Maintenance Records</span>
+                            </a>
+                        </li>
                     </ul>
                     
                     <!-- User information and logout at bottom of sidebar -->

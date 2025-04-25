@@ -6,6 +6,81 @@
 
 {% block content %}
 <div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tools me-2"></i> Record Maintenance
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('maintenance_page') }}">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="site_id" class="form-label">Site</label>
+                            <select class="form-select" id="site_id" name="site_id" required>
+                                <option value="">Select Site</option>
+                                {% for site in sites %}
+                                <option value="{{ site.id }}">{{ site.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="machine_id" class="form-label">Machine</label>
+                            <select class="form-select" id="machine_id" name="machine_id" required>
+                                <option value="">Select Machine</option>
+                                {% for machine in machines %}
+                                <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="part_id" class="form-label">Part</label>
+                            <select class="form-select" id="part_id" name="part_id" required>
+                                <option value="">Select Part</option>
+                                {% for part in parts %}
+                                <option value="{{ part.id }}" data-machine="{{ part.machine_id }}">{{ part.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="date" class="form-label">Date</label>
+                            <input type="date" class="form-control" id="date" name="date" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="maintenance_type" class="form-label">Maintenance Type</label>
+                            <select class="form-select" id="maintenance_type" name="maintenance_type" required>
+                                <option value="">Select Type</option>
+                                <option value="Routine">Routine</option>
+                                <option value="Repair">Repair</option>
+                                <option value="Inspection">Inspection</option>
+                                <option value="Upgrade">Upgrade</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="2" placeholder="Describe the maintenance performed" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Additional notes (optional)"></textarea>
+                    </div>
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check-circle me-1"></i> Record Maintenance
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
     <div class="col">
         <div class="card">
             <div class="card-header bg-danger text-white">
@@ -223,6 +298,7 @@
 {% endblock %}
 
 {% block scripts %}
+{{ super() }}
 <script>
     // Set up the maintenance modal
     document.addEventListener('DOMContentLoaded', function() {
@@ -238,5 +314,33 @@
             });
         }
     });
+
+    // Filter machines by site
+    const siteSelect = document.getElementById('site_id');
+    const machineSelect = document.getElementById('machine_id');
+    const partSelect = document.getElementById('part_id');
+    if(siteSelect && machineSelect && partSelect) {
+        siteSelect.addEventListener('change', function() {
+            const siteId = this.value;
+            for(const option of machineSelect.options) {
+                if(option.value === "") continue;
+                option.style.display = option.getAttribute('data-site') === siteId ? '' : 'none';
+            }
+            machineSelect.value = "";
+            for(const option of partSelect.options) {
+                if(option.value === "") continue;
+                option.style.display = 'none';
+            }
+            partSelect.value = "";
+        });
+        machineSelect.addEventListener('change', function() {
+            const machineId = this.value;
+            for(const option of partSelect.options) {
+                if(option.value === "") continue;
+                option.style.display = option.getAttribute('data-machine') === machineId ? '' : 'none';
+            }
+            partSelect.value = "";
+        });
+    }
 </script>
 {% endblock %}
