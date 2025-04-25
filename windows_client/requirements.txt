@@ -30,3 +30,18 @@ Sphinx>=5.3.0
 apscheduler>=3.10.1
 plyer>=2.1.0
 dateparser>=1.1.8
+
+# Analytics and reporting
+seaborn>=0.12.0
+
+# Diagnostics and system info
+psutil>=5.9.0
+
+# Accessibility and UI enhancements
+pyttsx3>=2.90
+
+# Performance profiling
+memory_profiler>=0.61.0
+
+# Localization
+Babel>=2.12.1

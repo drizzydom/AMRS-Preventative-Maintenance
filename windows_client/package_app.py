@@ -33,6 +33,12 @@ def package_application():
         '--log-level=INFO',
     ]
     
+    # Add data files for new resources
+    if Path('translations').exists():
+        args.append('--add-data=translations;translations')
+    if Path('analytics').exists():
+        args.append('--add-data=analytics;analytics')
+    
     # Add icon if available
     if icon_path:
         args.append(f'--icon={icon_path}')
