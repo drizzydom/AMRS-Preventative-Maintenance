@@ -886,6 +886,7 @@ def audits_page():
             
         if request.method == 'POST' and request.form.get('checkoff') == '1':
             updated = 0
+            ineligible = False
             for task in audit_tasks:
                 for machine in task.machines:
                     key = f'complete_{task.id}_{machine.id}'
@@ -896,6 +897,7 @@ def audits_page():
                         # Strictly enforce interval: only allow if no previous completion or today >= next eligible date
                         next_eligible = eligibility.get((task.id, machine.id))
                         if next_eligible is not None and today < next_eligible:
+                            ineligible = True
                             continue  # Not eligible yet
                         # Only record completion if eligible (either no previous completion or today >= next_eligible)
                         completion = AuditTaskCompletion(
@@ -908,6 +910,9 @@ def audits_page():
                         )
                         db.session.add(completion)
                         updated += 1
+            if ineligible and updated == 0:
+                flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'info')
+                return redirect(url_for('audits_page'), code=303)
             if updated:
                 db.session.commit()
                 flash(f'{updated} audit task(s) checked off successfully.', 'success')
@@ -1922,7 +1927,7 @@ def sync_status():
         return jsonify({
             'status': 'online',
             'server_time': datetime.now().isoformat(),
-            'version': '1.0.0'
+            'version':'1.0.0'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500

@@ -226,14 +226,20 @@
 document.addEventListener('DOMContentLoaded', function() {
     var intervalSelect = document.getElementById('interval');
     var customGroup = document.getElementById('custom-interval-group');
-    if (intervalSelect) {
-        function toggleCustom() {
-            if (intervalSelect.value === 'custom') {
-                customGroup.style.display = 'block';
-            } else {
-                customGroup.style.display = 'none';
-            }
+    var customValue = document.getElementById('custom_interval_value');
+    var customUnit = document.getElementById('custom_interval_unit');
+    function toggleCustom() {
+        if (intervalSelect.value === 'custom') {
+            customGroup.style.display = 'block';
+            if (customValue) customValue.required = true;
+            if (customUnit) customUnit.required = true;
+        } else {
+            customGroup.style.display = 'none';
+            if (customValue) customValue.required = false;
+            if (customUnit) customUnit.required = false;
         }
+    }
+    if (intervalSelect) {
         intervalSelect.addEventListener('change', toggleCustom);
         toggleCustom();
     }
