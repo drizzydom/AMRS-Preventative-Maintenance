@@ -109,21 +109,23 @@ function formatDate(dateString) {
 window.toggleSidebar = function() {
     var body = document.body;
     var sidebar = document.querySelector('.sidebar');
-    // Toggle collapsed class on body
-    var collapsed = !body.classList.contains('sidebar-collapsed');
-    body.classList.toggle('sidebar-collapsed');
-    // Persist state for desktop
     if (window.innerWidth > 991) {
+        // Desktop: only toggle sidebar-collapsed
+        var collapsed = !body.classList.contains('sidebar-collapsed');
+        body.classList.toggle('sidebar-collapsed');
         localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
-    }
-    // For mobile, toggle .show on sidebar
-    if (window.innerWidth <= 991) {
-        sidebar.classList.toggle('show');
-        if (sidebar.classList.contains('show')) {
-            body.classList.add('sidebar-active');
-        } else {
+    } else {
+        // Mobile: only toggle .show and sidebar-active
+        var isOpen = sidebar.classList.contains('show');
+        if (isOpen) {
+            sidebar.classList.remove('show');
             body.classList.remove('sidebar-active');
+        } else {
+            sidebar.classList.add('show');
+            body.classList.add('sidebar-active');
         }
+        // Never toggle sidebar-collapsed on mobile
+        body.classList.remove('sidebar-collapsed');
     }
 };
 // Restore sidebar state on page load
@@ -136,6 +138,12 @@ window.toggleSidebar = function() {
             } else {
                 document.body.classList.remove('sidebar-collapsed');
             }
+        } else {
+            // Always start closed on mobile
+            var sidebar = document.querySelector('.sidebar');
+            if (sidebar) sidebar.classList.remove('show');
+            document.body.classList.remove('sidebar-active');
+            document.body.classList.remove('sidebar-collapsed');
         }
     });
 })();
