@@ -403,3 +403,42 @@ h1, h2, h3, h4, h5, h6 {
   text-align: center;
   font-size: 1rem;
 }
+
+/* --- MOBILE-FRIENDLY TABLES & BUTTONS --- */
+@media (max-width: 767.98px) {
+  .table-responsive, .card-body .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    margin-bottom: 1rem;
+  }
+  .table-scroll-hint {
+    display: block;
+    font-size: 0.9em;
+    color: #888;
+    text-align: right;
+    margin: 0.25em 0 0.5em 0;
+  }
+  .table th.hide-sm, .table td.hide-sm {
+    display: none;
+  }
+  .btn, .btn-sm, .btn-group .btn {
+    min-height: 44px;
+    min-width: 44px;
+    font-size: 1.1em;
+    padding: 0.6em 1em;
+  }
+  .form-control, .form-select {
+    font-size: 1.1em;
+    min-height: 44px;
+  }
+  label, th, td {
+    font-size: 1.05em;
+  }
+}
+
+/* Utility for hiding columns on mobile */
+.hide-sm {
+  /* No effect by default, only on mobile via media query above */
+}

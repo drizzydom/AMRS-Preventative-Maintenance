@@ -35,6 +35,7 @@
   </form>
   {% if records %}
   <div class="table-responsive">
+    <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
     <table class="table table-striped table-hover">
       <thead>
         <tr>
@@ -42,8 +43,8 @@
           <th>Machine</th>
           <th>Part</th>
           <th>Performed By</th>
-          <th>Description</th>
-          <th>Notes</th>
+          <th class="hide-sm">Description</th>
+          <th class="hide-sm">Notes</th>
         </tr>
       </thead>
       <tbody>
@@ -53,8 +54,8 @@
           <td>{{ record.machine.name if record.machine else '' }}</td>
           <td>{{ record.part.name if record.part else '' }}</td>
           <td>{{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else '')) }}</td>
-          <td>{{ record.description or '' }}</td>
-          <td>{{ record.notes or record.comments or '' }}</td>
+          <td class="hide-sm">{{ record.description or '' }}</td>
+          <td class="hide-sm">{{ record.notes or record.comments or '' }}</td>
         </tr>
         {% endfor %}
       </tbody>
