@@ -7,7 +7,7 @@ from sqlalchemy import or_
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app, db, mail
-from models import User, Site, Machine, Part
+from models import User, Site, Machine, Part, AuditTask, AuditTaskCompletion
 from flask_mail import Message
 from flask import render_template
 
@@ -57,7 +57,10 @@ def send_daily_digest():
             for site in sites:
                 if not site.enable_notifications:
                     continue
-                    
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                    continue
                 overdue, due_soon = get_maintenance_due(site)
                 if 'overdue' in notification_types:
                     all_overdue.extend(overdue)
@@ -115,7 +118,10 @@ def send_weekly_digest():
             for site in sites:
                 if not site.enable_notifications:
                     continue
-                    
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                    continue
                 overdue, due_soon = get_maintenance_due(site)
                 if 'overdue' in notification_types:
                     all_overdue.extend(overdue)
@@ -145,10 +151,172 @@ def send_weekly_digest():
             except Exception as e:
                 print(f"Failed to send weekly digest to {user.email}: {str(e)}")
 
+def send_audit_reminders():
+    """Send audit reminder emails for incomplete audit tasks at end of day."""
+    print(f"Running audit reminders at {datetime.now()}")
+    with app.app_context():
+        today = datetime.utcnow().date()
+        # Get all audit tasks
+        audit_tasks = AuditTask.query.all()
+        for task in audit_tasks:
+            site = db.session.get(Site, task.site_id)
+            if not site or not site.enable_notifications:
+                continue
+            # Find site owner(s) (users assigned to the site)
+            site_users = site.users
+            for machine in task.machines:
+                # Check if today's completion exists and is completed
+                completion = AuditTaskCompletion.query.filter_by(
+                    audit_task_id=task.id, machine_id=machine.id, date=today
+                ).first()
+                if not completion or not completion.completed:
+                    # Send reminder to all users with audit reminders enabled
+                    for user in site_users:
+                        prefs = user.get_notification_preferences()
+                        if not prefs.get('enable_email', True):
+                            continue
+                        if not prefs.get('audit_reminders', True):
+                            continue
+                        # Per-site notification preference check
+                        site_prefs = prefs.get('site_notifications', {})
+                        if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                            continue
+                        subject = f"Audit Task Reminder: {task.name} for {machine.name}"
+                        html = render_template(
+                            'email/audit_reminder.html',
+                            user=user,
+                            task=task,
+                            machine=machine,
+                            site=site,
+                            date=today
+                        )
+                        try:
+                            msg = Message(subject=subject,
+                                         recipients=[user.email],
+                                         html=html,
+                                         sender=app.config['MAIL_DEFAULT_SENDER'])
+                            mail.send(msg)
+                            print(f"Sent audit reminder to {user.email} for {machine.name}")
+                        except Exception as e:
+                            print(f"Failed to send audit reminder to {user.email}: {str(e)}")
+
+def send_immediate_notifications():
+    """Send immediate notifications for users who want them."""
+    with app.app_context():
+        users = User.query.filter(
+            User.email.isnot(None),
+            User.notification_preferences.contains({"enable_email": True, "notification_frequency": "immediate"})
+        ).all()
+        for user in users:
+            preferences = user.get_notification_preferences()
+            notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
+            for site in user.sites:
+                if not site.enable_notifications:
+                    continue
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                    continue
+                overdue, due_soon = get_maintenance_due(site)
+                if 'overdue' in notification_types and overdue:
+                    subject = f"Immediate Maintenance Alert - Overdue Items"
+                    html = render_template(
+                        'email/maintenance_alert.html',
+                        user=user,
+                        overdue_parts=overdue,
+                        due_soon_parts=[],
+                        site=site
+                    )
+                    try:
+                        msg = Message(subject=subject,
+                                     recipients=[user.email],
+                                     html=html,
+                                     sender=app.config['MAIL_DEFAULT_SENDER'])
+                        mail.send(msg)
+                        print(f"Sent immediate overdue alert to {user.email}")
+                    except Exception as e:
+                        print(f"Failed to send immediate alert to {user.email}: {str(e)}")
+                if 'due_soon' in notification_types and due_soon:
+                    subject = f"Immediate Maintenance Alert - Due Soon Items"
+                    html = render_template(
+                        'email/maintenance_alert.html',
+                        user=user,
+                        overdue_parts=[],
+                        due_soon_parts=due_soon,
+                        site=site
+                    )
+                    try:
+                        msg = Message(subject=subject,
+                                     recipients=[user.email],
+                                     html=html,
+                                     sender=app.config['MAIL_DEFAULT_SENDER'])
+                        mail.send(msg)
+                        print(f"Sent immediate due soon alert to {user.email}")
+                    except Exception as e:
+                        print(f"Failed to send immediate alert to {user.email}: {str(e)}")
+
+def send_monthly_digest():
+    """Send monthly digest emails to users who have selected this frequency."""
+    print(f"Running monthly digest at {datetime.now()}")
+    with app.app_context():
+        users = User.query.filter(
+            User.email.isnot(None),
+            User.notification_preferences.contains({"enable_email": True, "notification_frequency": "monthly"})
+        ).all()
+        for user in users:
+            sites = user.sites
+            if not sites:
+                continue
+            preferences = user.get_notification_preferences()
+            notification_types = preferences.get('notification_types', ['overdue', 'due_soon'])
+            all_overdue = []
+            all_due_soon = []
+            for site in sites:
+                if not site.enable_notifications:
+                    continue
+                # Per-site notification preference check
+                site_prefs = preferences.get('site_notifications', {})
+                if str(site.id) in site_prefs and not site_prefs[str(site.id)]:
+                    continue
+                overdue, due_soon = get_maintenance_due(site)
+                if 'overdue' in notification_types:
+                    all_overdue.extend(overdue)
+                if 'due_soon' in notification_types:
+                    all_due_soon.extend(due_soon)
+            if not all_overdue and not all_due_soon:
+                continue
+            subject = f"Monthly Maintenance Digest - {datetime.now().strftime('%Y-%m-%d')}"
+            html = render_template(
+                'email/maintenance_digest.html',
+                user=user,
+                overdue_parts=all_overdue,
+                due_soon_parts=all_due_soon,
+                digest_type='Monthly'
+            )
+            try:
+                msg = Message(subject=subject,
+                             recipients=[user.email],
+                             html=html,
+                             sender=app.config['MAIL_DEFAULT_SENDER'])
+                mail.send(msg)
+                print(f"Sent monthly digest to {user.email}")
+            except Exception as e:
+                print(f"Failed to send monthly digest to {user.email}: {str(e)}")
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "daily":
-        send_daily_digest()
-    elif len(sys.argv) > 1 and sys.argv[1] == "weekly":
-        send_weekly_digest()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "daily":
+            send_daily_digest()
+            send_audit_reminders()
+        elif sys.argv[1] == "weekly":
+            send_weekly_digest()
+        elif sys.argv[1] == "monthly":
+            send_monthly_digest()
+        elif sys.argv[1] == "immediate":
+            send_immediate_notifications()
+        elif sys.argv[1] == "audit":
+            send_audit_reminders()
+        else:
+            print("Please specify 'immediate', 'daily', 'weekly', 'monthly', or 'audit' as an argument")
     else:
-        print("Please specify 'daily' or 'weekly' as an argument")
+        print("Please specify 'immediate', 'daily', 'weekly', 'monthly', or 'audit' as an argument")

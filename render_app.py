@@ -7,6 +7,9 @@ import os
 import sys
 print("Initializing render_app.py for Render deployment...")
 
+from auto_migrate import run_auto_migration
+run_auto_migration()
+
 # Import the app from the main application
 try:
     from app import app

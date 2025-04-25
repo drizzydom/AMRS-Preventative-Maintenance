@@ -1,14 +1,20 @@
 from app import db
 from models import User
 from sqlalchemy import text
+from db_utils import execute_sql
 
 def add_notification_preferences():
+    """Add notification_preferences column to users table"""
     try:
-        # Add notification_preferences column if it doesn't exist
-        with db.engine.connect() as conn:
-            conn.execute(text('ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSON'))
-            conn.commit()
-            
+        execute_sql('ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSON')
+        print("Added notification_preferences column to users table")
+        return True
+    except Exception as e:
+        print(f"Error adding notification_preferences column: {e}")
+        return False
+
+def set_default_notification_preferences():
+    try:
         # Set default notification preferences for users who don't have them
         users = User.query.all()
         default_preferences = {
@@ -29,4 +35,5 @@ def add_notification_preferences():
         db.session.rollback()
 
 if __name__ == '__main__':
-    add_notification_preferences()
+    if add_notification_preferences():
+        set_default_notification_preferences()
