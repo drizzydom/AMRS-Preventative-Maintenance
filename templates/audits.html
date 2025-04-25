@@ -222,6 +222,7 @@
 {% endif %}
 {% endblock %}
 
+{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var intervalSelect = document.getElementById('interval');
@@ -245,3 +246,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+{% endblock %}
