@@ -265,7 +265,7 @@ ALLOWED_COLUMNS = {
     'machines': {'created_at', 'updated_at'},
     'parts': {'created_at', 'updated_at'},
     'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
-    'audit_tasks': {'created_at', 'updated_at'},
+    'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
     'audit_task_completions': {'created_at', 'updated_at'}
 }
 
@@ -312,7 +312,9 @@ def ensure_db_schema():
             },
             'audit_tasks': {
                 'created_at': 'TIMESTAMP',
-                'updated_at': 'TIMESTAMP'
+                'updated_at': 'TIMESTAMP',
+                'interval': 'VARCHAR(50)',
+                'custom_interval_days': 'INTEGER'
             },
             'audit_task_completions': {
                 'created_at': 'TIMESTAMP',
@@ -1156,56 +1158,6 @@ def admin_roles():
     roles = Role.query.all()
     all_permissions = get_all_permissions()
     return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
-
-@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
-@login_required
-def edit_role(role_id):
-    """Edit an existing role - admin only"""
-    if not is_admin_user(current_user):
-        flash('You do not have permission to edit roles.', 'danger')
-        return redirect(url_for('dashboard'))
-    
-    # Replace get_or_404 for Role
-    role = db.session.get(Role, role_id)
-    if not role:
-        abort(404)
-    
-    all_permissions = get_all_permissions()
-    
-    if request.method == 'POST':
-        try:
-            name = request.form.get('name')
-            description = request.form.get('description', '')
-            
-            # Check if name is changed and already exists
-            if name != role.name and Role.query.filter_by(name=name).first():
-                flash(f'A role with the name "{name}" already exists.', 'danger')
-                return redirect(url_for='edit_role', role_id=role_id)
-            
-            # Update role details
-            role.name = name
-            role.description = description
-            
-            # Update permissions
-            permissions = request.form.getlist('permissions')
-            role.permissions = ','.join(permissions) if permissions else ''
-            
-            db.session.commit()
-            flash(f'Role "{name}" updated successfully.', 'success')
-            return redirect(url_for('admin_roles'))
-            
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error updating role: {e}")
-            flash(f'Error updating role: {str(e)}', 'danger')
-    
-    # For GET requests, render the edit form with role's current permissions
-    current_permissions = role.permissions.split(',') if role.permissions else []
-    
-    return render_template('edit_role.html', 
-                          role=role,
-                          all_permissions=all_permissions,
-                          current_permissions=current_permissions)
 
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
