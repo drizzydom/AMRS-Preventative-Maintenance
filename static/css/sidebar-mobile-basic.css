@@ -5,28 +5,20 @@
 
 /* Mobile sidebar base styling */
 @media (max-width: 991.98px) {
-    /* Hide sidebar by default */
-    .sidebar {
+    /* Force-hide sidebar on mobile unless .show is present */
+    body:not(.sidebar-active) .sidebar,
+    .sidebar:not(.show) {
         display: none !important;
-        position: fixed !important;
-        top: 48px !important; /* Match navbar height */
         left: -100% !important;
-        width: 250px !important;
-        height: calc(100vh - 48px) !important;
-        z-index: 1040;
-        transition: left 0.3s ease-in-out;
-        overflow-y: auto;
     }
-    /* Show sidebar when .show class is applied */
     .sidebar.show {
         display: block !important;
         left: 0 !important;
     }
-    /* Add dark overlay when sidebar is active */
     body.sidebar-active::before {
         content: '';
         position: fixed;
-        top: 48px; /* Below navbar */
+        top: 48px;
         left: 0;
         right: 0;
         bottom: 0;
