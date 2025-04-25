@@ -53,9 +53,16 @@
                             <div class="form-text">How often this audit task should be completed.</div>
                         </div>
                         <div class="mb-3" id="custom-interval-group" style="display:none;">
-                            <label for="custom_interval_days" class="form-label">Custom Interval (days)</label>
-                            <input type="number" class="form-control" id="custom_interval_days" name="custom_interval_days" min="1" max="365" value="30">
-                            <div class="form-text">Number of days between required completions for this audit task.</div>
+                            <label for="custom_interval_value" class="form-label">Custom Interval</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="custom_interval_value" name="custom_interval_value" min="1" max="365" value="30">
+                                <select class="form-select" id="custom_interval_unit" name="custom_interval_unit">
+                                    <option value="day">Days</option>
+                                    <option value="week">Weeks</option>
+                                    <option value="month">Months</option>
+                                </select>
+                            </div>
+                            <div class="form-text">Set the custom interval and unit for this audit task.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Machines</label>
