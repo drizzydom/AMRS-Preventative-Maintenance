@@ -62,7 +62,7 @@
                             <td>{{ record.frequency }}</td>
                             <td>
                                 <!-- Use plain HTML form with hardcoded action to avoid routing issues -->
-                                <form action="/update-maintenance" method="POST" class="d-inline">
+                                <form action="{{ url_for('update_maintenance') }}" method="POST" class="d-inline">
                                     <input type="hidden" name="part_id" value="{{ parts[loop.index0].id }}">
                                     <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
                                         <i class="fas fa-check-circle"></i> Record
