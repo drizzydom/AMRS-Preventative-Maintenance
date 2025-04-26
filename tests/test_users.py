@@ -3,6 +3,7 @@ from models import User
 
 def test_create_user(client, db, login_admin):
     login_admin()
+    # Test valid password
     response = client.post('/admin/users', data={
         'username': 'testuser',
         'email': 'testuser@example.com',
@@ -12,6 +13,18 @@ def test_create_user(client, db, login_admin):
     assert b'created successfully' in response.data
     user = User.query.filter_by(username='testuser').first()
     assert user is not None
+
+    # Test too short password
+    response = client.post('/admin/users', data={
+        'username': 'shortpwuser',
+        'email': 'shortpwuser@example.com',
+        'password': '123',  # Too short
+        'role': 'user'
+    }, follow_redirects=True)
+    # Should not create user and should show error message
+    assert b'Password too short' in response.data or b'password' in response.data.lower()
+    user = User.query.filter_by(username='shortpwuser').first()
+    assert user is None
 
 def test_update_profile(client, db, login_admin):
     login_admin()
