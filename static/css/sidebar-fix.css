@@ -102,8 +102,19 @@ html body .sidebar {
   margin-right: 0.75rem;
 }
 
-/* Mobile adjustments */
+/* Hide sidebar toggle item (hamburger/close) on desktop */
+@media (min-width: 992px) {
+  .sidebar-toggle-item {
+    display: none !important;
+  }
+}
+
+/* Show sidebar toggle item only on mobile */
 @media (max-width: 991.98px) {
+  .sidebar-toggle-item {
+    display: block !important;
+  }
+
   .sidebar {
     position: fixed;
     top: 48px;
