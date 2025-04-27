@@ -394,13 +394,18 @@
             <div class="col-md-auto px-0 sidebar-container">
                 <div class="sidebar">
                     <ul class="sidebar-nav">
-                        <!-- Add hamburger toggle button as first item in the sidebar with proper padding and positioning -->
-                        <li class="sidebar-nav-item sidebar-toggle-item">
+                        <!-- Add collapse/expand button for desktop (always visible) -->
+                        <li class="sidebar-nav-item sidebar-toggle-item d-none d-lg-block">
+                            <button class="sidebar-toggle-btn" onclick="toggleSidebarCollapse()" aria-label="Collapse Sidebar">
+                                <i class="fas fa-angle-double-left"></i>
+                            </button>
+                        </li>
+                        <!-- Mobile hamburger/close remains as-is -->
+                        <li class="sidebar-nav-item sidebar-toggle-item d-lg-none">
                             <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">
                                 <i class="fas fa-bars"></i>
                             </button>
-                            <!-- Mobile close button -->
-                            <button class="sidebar-close-btn d-lg-none" onclick="toggleSidebar()" aria-label="Close Sidebar" tabindex="0">
+                            <button class="sidebar-close-btn" onclick="toggleSidebar()" aria-label="Close Sidebar" tabindex="0">
                                 <i class="fas fa-times"></i>
                             </button>
                         </li>
