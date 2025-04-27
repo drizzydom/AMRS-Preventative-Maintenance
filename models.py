@@ -9,6 +9,7 @@ from sqlalchemy import Table, Column, Integer, ForeignKey, Date, Boolean
 from cryptography.fernet import Fernet, InvalidToken
 import base64
 import os
+import hashlib
 
 # --- Application-level encryption utilities ---
 # In production, store this key securely (e.g., in the OS keyring or derived from a user password)
@@ -36,6 +37,11 @@ def decrypt_value(value):
     except (InvalidToken, AttributeError):
         return None
 
+def hash_value(value):
+    if value is None:
+        return None
+    return hashlib.sha256(value.lower().encode()).hexdigest()
+
 db = SQLAlchemy()
 
 # Define the association table for many-to-many relationship between User and Site
@@ -57,7 +63,9 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'  # Explicit table name for PostgreSQL conventions
     id = db.Column(db.Integer, primary_key=True)
     _username = db.Column('username', db.Text, unique=True, nullable=False, index=True)
+    username_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     _email = db.Column('email', db.Text, unique=True, nullable=False)
+    email_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
@@ -90,6 +98,7 @@ class User(UserMixin, db.Model):
     @username.setter
     def username(self, value):
         self._username = encrypt_value(value)
+        self.username_hash = hash_value(value)
 
     @property
     def email(self):
@@ -98,6 +107,7 @@ class User(UserMixin, db.Model):
     @email.setter
     def email(self, value):
         self._email = encrypt_value(value)
+        self.email_hash = hash_value(value)
 
     def set_password(self, password):
         """Set the password hash"""
