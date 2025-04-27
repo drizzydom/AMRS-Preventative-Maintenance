@@ -462,57 +462,35 @@ def add_default_admin_if_needed():
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
 
-# Run user field length expansion migration on startup (safe to run multiple times)
-try:
-    import expand_user_fields
-except Exception as e:
-    print(f"[STARTUP] User field length expansion migration failed: {e}")
-
-# Ensure the user field expansion runs BEFORE any user creation or admin logic
+# Ensure the user field expansion runs AFTER tables are created and migrations are run
 with app.app_context():
-    try:
-        import expand_user_fields
-    except Exception as e:
-        print(f"[STARTUP] User field length expansion migration failed: {e}")
     try:
         run_auto_migration()  # Ensure schema is up to date on launch
     except Exception as e:
         print(f'[AUTO_MIGRATE ERROR] {e}')
+    try:
+        import expand_user_fields
+    except Exception as e:
+        print(f"[STARTUP] User field length expansion migration failed: {e}")
     add_default_admin_if_needed()
-    
-    try:
-        print("[APP] Performing database integrity checks...")
-        admin_users = User.query.join(Role).filter(
-            or_(
-                Role.name.ilike('admin'),
-                User.username == 'admin'
-            )
-        ).all()
-        for user in admin_users:
-            if not user.role or user.role.name.lower() != 'admin':
-                admin_role = Role.query.filter_by(name='admin').first()
-                user.role = admin_role
-                print(f"[APP] Fixed admin role for user {user.username}")
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(f"[APP] Error performing database integrity checks: {e}")
-    
-    # Healthcheck log
-    try:
-        from simple_healthcheck import check_database
-        print("[STARTUP] Running healthcheck...")
-        if check_database():
-            print("[STARTUP] Healthcheck PASSED: Database is ready.")
-        else:
-            print("[STARTUP] Healthcheck FAILED: Database is not ready.")
-    except Exception as e:
-        print(f"[STARTUP] Healthcheck error: {e}")
 
-    initialize_db_connection()
-    ensure_db_schema()
-    ensure_maintenance_records_schema()
-    db.create_all()
+# --- END DEFAULT ADMIN CREATION ---
+
+# Healthcheck log
+try:
+    from simple_healthcheck import check_database
+    print("[STARTUP] Running healthcheck...")
+    if check_database():
+        print("[STARTUP] Healthcheck PASSED: Database is ready.")
+    else:
+        print("[STARTUP] Healthcheck FAILED: Database is not ready.")
+except Exception as e:
+    print(f"[STARTUP] Healthcheck error: {e}")
+
+initialize_db_connection()
+ensure_db_schema()
+ensure_maintenance_records_schema()
+db.create_all()
 
 # Add database connection check before requests
 @app.before_request
@@ -1954,10 +1932,9 @@ def server_error(e):
         return '''
         <!DOCTYPE html>
         <html>
-        <head><title>Server Error</title>Server Error</title>
+        <head><title>Server Error</title></head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Server Error</h1>
-            <p>Sorry```html
             <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
