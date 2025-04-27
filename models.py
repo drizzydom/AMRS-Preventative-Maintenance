@@ -14,6 +14,7 @@ import os
 # In production, store this key securely (e.g., in the OS keyring or derived from a user password)
 # For demo/dev, you can use a static key, but this is NOT secure for real deployments!
 FERNET_KEY = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
+print(f"[ENCRYPTION] USER_FIELD_ENCRYPTION_KEY at import: {FERNET_KEY}")
 if not FERNET_KEY:
     # Generate a key and print it for manual setup
     FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
@@ -23,7 +24,9 @@ fernet = Fernet(FERNET_KEY)
 def encrypt_value(value):
     if value is None:
         return None
-    return fernet.encrypt(value.encode()).decode()
+    encrypted = fernet.encrypt(value.encode()).decode()
+    print(f"[ENCRYPTION] encrypt_value('{value}') = {encrypted}")
+    return encrypted
 
 def decrypt_value(value):
     if value is None:
