@@ -4,3 +4,4 @@
 # Additional Windows-specific packages
 pywin32
 electron-builder>=24.0.0
+cryptography
