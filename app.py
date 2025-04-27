@@ -1697,7 +1697,7 @@ def login():
         # Add debug for login attempts
         app.logger.debug(f"Login attempt: username={username}")
         
-        user = User.query.filter_by(_username=encrypt_value(username)).first()
+        user = User.query.filter_by(username_hash=hash_value(username)).first()
         
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
@@ -1729,7 +1729,7 @@ def forgot_password():
         
     if request.method == 'POST':
         email = request.form.get('email')
-        user = User.query.filter_by(_email=encrypt_value(email)).first()
+        user = User.query.filter_by(email_hash=hash_value(email)).first()
         
         if user:
             # Generate a password reset token
@@ -2412,4 +2412,5 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
