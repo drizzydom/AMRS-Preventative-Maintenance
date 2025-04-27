@@ -9,6 +9,8 @@ import json
 import time
 from sqlalchemy import create_engine, text
 import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from models import encrypt_value
 
 # Use DATABASE_URL from environment
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -31,8 +33,9 @@ def check_database():
             if missing_tables:
                 print(f"Warning: Missing tables: {', '.join(missing_tables)}")
                 return False
-            # Check for admin account (dmoriello or techsupport)
-            result = conn.execute(text("SELECT id, username FROM users WHERE username = :username"), {"username": "dmoriello"})
+            # Check for admin account (dmoriello, encrypted)
+            encrypted_username = encrypt_value('dmoriello')
+            result = conn.execute(text("SELECT id, username FROM users WHERE username = :username"), {"username": encrypted_username})
             admin = result.fetchone()
             if not admin:
                 print("Warning: Admin account 'dmoriello' not found!")
