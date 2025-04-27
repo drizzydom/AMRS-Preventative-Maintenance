@@ -462,10 +462,10 @@ def add_default_admin_if_needed():
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
 
-# Ensure the user field expansion runs AFTER tables are created and migrations are run
+# --- Move all startup DB logic inside a single app context ---
 with app.app_context():
     try:
-        run_auto_migration()  # Ensure schema is up to date on launch
+        run_auto_migration()
     except Exception as e:
         print(f'[AUTO_MIGRATE ERROR] {e}')
     try:
@@ -473,24 +473,37 @@ with app.app_context():
     except Exception as e:
         print(f"[STARTUP] User field length expansion migration failed: {e}")
     add_default_admin_if_needed()
-
-# --- END DEFAULT ADMIN CREATION ---
-
-# Healthcheck log
-try:
-    from simple_healthcheck import check_database
-    print("[STARTUP] Running healthcheck...")
-    if check_database():
-        print("[STARTUP] Healthcheck PASSED: Database is ready.")
-    else:
-        print("[STARTUP] Healthcheck FAILED: Database is not ready.")
-except Exception as e:
-    print(f"[STARTUP] Healthcheck error: {e}")
-
-initialize_db_connection()
-ensure_db_schema()
-ensure_maintenance_records_schema()
-db.create_all()
+    try:
+        print("[APP] Performing database integrity checks...")
+        admin_users = User.query.join(Role).filter(
+            or_(
+                Role.name.ilike('admin'),
+                User.username == 'admin'
+            )
+        ).all()
+        for user in admin_users:
+            if not user.role or user.role.name.lower() != 'admin':
+                admin_role = Role.query.filter_by(name='admin').first()
+                user.role = admin_role
+                print(f"[APP] Fixed admin role for user {user.username}")
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[APP] Error performing database integrity checks: {e}")
+    # Healthcheck log (now inside app context)
+    try:
+        from simple_healthcheck import check_database
+        print("[STARTUP] Running healthcheck...")
+        if check_database():
+            print("[STARTUP] Healthcheck PASSED: Database is ready.")
+        else:
+            print("[STARTUP] Healthcheck FAILED: Database is not ready.")
+    except Exception as e:
+        print(f"[STARTUP] Healthcheck error: {e}")
+    initialize_db_connection()
+    ensure_db_schema()
+    ensure_maintenance_records_schema()
+    db.create_all()
 
 # Add database connection check before requests
 @app.before_request
@@ -1915,6 +1928,7 @@ def page_not_found(e):
         <html>
         <head>
         <title>Page Not Found</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css```html
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
         </head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
@@ -2398,10 +2412,4 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
-
-
-
-
-
-
 
