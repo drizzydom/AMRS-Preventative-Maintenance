@@ -26,7 +26,7 @@ from sqlalchemy import inspect
 import smtplib
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
@@ -465,7 +465,7 @@ def add_default_admin_if_needed():
 # --- Move all startup DB logic inside a single app context ---
 with app.app_context():
     try:
-        run_auto_migration()
+        run_auto_migration()  # Ensure columns exist before any queries
     except Exception as e:
         print(f'[AUTO_MIGRATE ERROR] {e}')
     try:
@@ -1928,7 +1928,6 @@ def page_not_found(e):
         <html>
         <head>
         <title>Page Not Found</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css```html
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
         </head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
