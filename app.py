@@ -424,25 +424,34 @@ def initialize_db_connection():
 # --- Move setup code from before_first_request to here ---
 def add_default_admin_if_needed():
     try:
+        # Use your requested admin credentials
+        admin_username = "dmoriello"
+        admin_email = "techsupport@accuratemachinerepair.com"
+        admin_password = "Sm@rty123"
         user_count = User.query.count()
-        if user_count == 0:
-            print("[APP] No users found, creating default admin user")
+        # Check for admin by username or email (encrypted)
+        admin_user = User.query.filter(
+            (User._username == encrypt_value(admin_username)) |
+            (User._email == encrypt_value(admin_email))
+        ).first()
+        if not admin_user:
+            print("[APP] No admin user found, creating default admin user")
             admin_role = Role.query.filter_by(name='admin').first()
             if not admin_role:
                 admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
                 db.session.add(admin_role)
                 db.session.commit()
             admin = User(
-                username='admin',
-                email='admin@example.com',
-                password_hash=generate_password_hash('admin'),
+                username=admin_username,
+                email=admin_email,
+                password_hash=generate_password_hash(admin_password),
                 role=admin_role
             )
             db.session.add(admin)
             db.session.commit()
-            print("[APP] Default admin user created")
+            print("[APP] Default admin user created: dmoriello / Sm@rty123")
         else:
-            admin_user = User.query.filter_by(_username=encrypt_value('admin')).first()
+            # Ensure admin user has admin role
             admin_role = Role.query.filter_by(name='admin').first()
             if admin_user and (not admin_user.role or admin_user.role != admin_role):
                 print(f"[APP] Fixing admin role for user {admin_user.username}")
