@@ -4,49 +4,45 @@ Simplified healthcheck script that doesn't require external dependencies
 """
 import os
 import sys
-import sqlite3
 import http.client
 import json
 import time
+from sqlalchemy import create_engine, text
+import os
 
-DB_PATH = '/app/data/app.db'
+# Use DATABASE_URL from environment
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def check_database():
-    """Check if database has the required tables and admin account"""
-    print("Checking database...")
-    
+    """Check if database has the required tables and admin account (PostgreSQL/SQLAlchemy version)"""
+    print("Checking database (SQLAlchemy/PostgreSQL)...")
+    if not DATABASE_URL:
+        print("DATABASE_URL not set!")
+        return False
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Check if tables exist
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [table[0] for table in cursor.fetchall()]
-        required_tables = ['user', 'site', 'machine', 'part', 'maintenance_record']
-        
-        missing_tables = [table for table in required_tables if table not in tables]
-        if missing_tables:
-            print(f"Warning: Missing tables: {', '.join(missing_tables)}")
-            return False
-        
-        # Check for admin account
-        cursor.execute("SELECT id, username FROM user WHERE username = ?", ("techsupport",))
-        admin = cursor.fetchone()
-        if not admin:
-            print("Warning: Techsupport admin account not found!")
-            return False
-            
-        print(f"Database check passed! Admin account ID: {admin[0]}")
-        return True
-        
+        engine = create_engine(DATABASE_URL)
+        with engine.connect() as conn:
+            # Check tables
+            tables = [row[0] for row in conn.execute(text("""
+                SELECT table_name FROM information_schema.tables WHERE table_schema='public'
+            """))]
+            required_tables = ['users', 'sites', 'machines', 'parts', 'maintenance_records']
+            missing_tables = [t for t in required_tables if t not in tables]
+            if missing_tables:
+                print(f"Warning: Missing tables: {', '.join(missing_tables)}")
+                return False
+            # Check for admin account (dmoriello or techsupport)
+            result = conn.execute(text("SELECT id, username FROM users WHERE username = :username"), {"username": "dmoriello"})
+            admin = result.fetchone()
+            if not admin:
+                print("Warning: Admin account 'dmoriello' not found!")
+                return False
+            print(f"Database check passed! Admin account ID: {admin[0]}")
+            return True
     except Exception as e:
         print(f"Database check failed: {str(e)}")
         return False
     
-    finally:
-        if 'conn' in locals():
-            conn.close()
-
 def check_api():
     """Check if API endpoints are responding using standard library"""
     print("Checking API endpoints...")
