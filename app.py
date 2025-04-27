@@ -421,50 +421,18 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
-# --- Move setup code from before_first_request to here ---
-def add_default_admin_if_needed():
-    try:
-        # Use your requested admin credentials
-        admin_username = "dmoriello"
-        admin_email = "techsupport@accuratemachinerepair.com"
-        admin_password = "Sm@rty123"
-        user_count = User.query.count()
-        # Check for admin by username or email (encrypted)
-        admin_user = User.query.filter(
-            (User._username == encrypt_value(admin_username)) |
-            (User._email == encrypt_value(admin_email))
-        ).first()
-        if not admin_user:
-            print("[APP] No admin user found, creating default admin user")
-            admin_role = Role.query.filter_by(name='admin').first()
-            if not admin_role:
-                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                db.session.add(admin_role)
-                db.session.commit()
-            admin = User(
-                username=admin_username,
-                email=admin_email,
-                password_hash=generate_password_hash(admin_password),
-                role=admin_role
-            )
-            db.session.add(admin)
-            db.session.commit()
-            print("[APP] Default admin user created: dmoriello / Sm@rty123")
-        else:
-            # Ensure admin user has admin role
-            admin_role = Role.query.filter_by(name='admin').first()
-            if admin_user and (not admin_user.role or admin_user.role != admin_role):
-                print(f"[APP] Fixing admin role for user {admin_user.username}")
-                if not admin_role:
-                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                    db.session.add(admin_role)
-                    db.session.commit()
-                admin_user.role = admin_role
-                db.session.commit()
-    except Exception as e:
-        print(f"[APP] Error creating/updating default admin: {e}")
+# Run user field length expansion migration on startup (safe to run multiple times)
+try:
+    import expand_user_fields
+except Exception as e:
+    print(f"[STARTUP] User field length expansion migration failed: {e}")
 
+# Ensure the user field expansion runs BEFORE any user creation or admin logic
 with app.app_context():
+    try:
+        import expand_user_fields
+    except Exception as e:
+        print(f"[STARTUP] User field length expansion migration failed: {e}")
     try:
         run_auto_migration()  # Ensure schema is up to date on launch
     except Exception as e:
@@ -1861,12 +1829,6 @@ def debug_info():
         })
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
 
-# Run user field length expansion migration on startup (safe to run multiple times)
-try:
-    import expand_user_fields
-except Exception as e:
-    print(f"[STARTUP] User field length expansion migration failed: {e}")
-
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
     """Get synchronization status information."""
@@ -1953,6 +1915,7 @@ def server_error(e):
         <head><title>Server Error</title>Server Error</title>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Server Error</h1>
+            <p>Sorry```html
             <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
@@ -2411,47 +2374,12 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
     args = parser.parse_args()
-    with app.app_context():
-        try:
-            run_auto_migration()  # Ensure schema is up to date on launch
-        except Exception as e:
-            print(f'[AUTO_MIGRATE ERROR] {e}')
-        add_default_admin_if_needed()
-        
-        try:
-            print("[APP] Performing database integrity checks...")
-            admin_users = User.query.join(Role).filter(
-                or_(
-                    Role.name.ilike('admin'),
-                    User.username == 'admin'
-                )
-            ).all()
-            for user in admin_users:
-                if not user.role or user.role.name.lower() != 'admin':
-                    admin_role = Role.query.filter_by(name='admin').first()
-                    user.role = admin_role
-                    print(f"[APP] Fixed admin role for user {user.username}")
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f"[APP] Error performing database integrity checks: {e}")
-        
-        # Healthcheck log
-        try:
-            from simple_healthcheck import check_database
-            print("[STARTUP] Running healthcheck...")
-            if check_database():
-                print("[STARTUP] Healthcheck PASSED: Database is ready.")
-            else:
-                print("[STARTUP] Healthcheck FAILED: Database is not ready.")
-        except Exception as e:
-            print(f"[STARTUP] Healthcheck error: {e}")
-
     port = args.port or int(os.environ.get('PORT', 10000))
     debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
