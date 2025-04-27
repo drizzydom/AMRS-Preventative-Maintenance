@@ -2,10 +2,13 @@
 """
 Launcher script that fixes Python module imports
 """
-import os
 import sys
+import os
 import importlib.util
 import traceback
+
+# Ensure the current directory is in sys.path so auto_migrate.py can be found
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 def main():
     """Main function that runs the Flask app with proper module imports"""

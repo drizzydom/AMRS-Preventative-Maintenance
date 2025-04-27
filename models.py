@@ -6,6 +6,32 @@ import uuid
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 from sqlalchemy.types import JSON as SA_JSON
 from sqlalchemy import Table, Column, Integer, ForeignKey, Date, Boolean
+from cryptography.fernet import Fernet, InvalidToken
+import base64
+import os
+
+# --- Application-level encryption utilities ---
+# In production, store this key securely (e.g., in the OS keyring or derived from a user password)
+# For demo/dev, you can use a static key, but this is NOT secure for real deployments!
+FERNET_KEY = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
+if not FERNET_KEY:
+    # Generate a key and print it for manual setup
+    FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    print(f"[SECURITY] Generated encryption key: {FERNET_KEY}")
+fernet = Fernet(FERNET_KEY)
+
+def encrypt_value(value):
+    if value is None:
+        return None
+    return fernet.encrypt(value.encode()).decode()
+
+def decrypt_value(value):
+    if value is None:
+        return None
+    try:
+        return fernet.decrypt(value.encode()).decode()
+    except (InvalidToken, AttributeError):
+        return None
 
 db = SQLAlchemy()
 
@@ -26,10 +52,9 @@ machine_audit_task = Table(
 class User(UserMixin, db.Model):
     """User model for authentication and authorization"""
     __tablename__ = 'users'  # Explicit table name for PostgreSQL conventions
-    
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    _username = db.Column('username', db.String(128), unique=True, nullable=False, index=True)
+    _email = db.Column('email', db.String(256), unique=True, nullable=False)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
@@ -54,7 +79,23 @@ class User(UserMixin, db.Model):
     
     # Define the one-to-many relationship with MaintenanceRecord
     maintenance_records = db.relationship('MaintenanceRecord', backref='user', lazy=True)
-    
+
+    @property
+    def username(self):
+        return decrypt_value(self._username)
+
+    @username.setter
+    def username(self, value):
+        self._username = encrypt_value(value)
+
+    @property
+    def email(self):
+        return decrypt_value(self._email)
+
+    @email.setter
+    def email(self, value):
+        self._email = encrypt_value(value)
+
     def set_password(self, password):
         """Set the password hash"""
         self.password_hash = generate_password_hash(password)
