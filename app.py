@@ -423,7 +423,6 @@ def initialize_db_connection():
 
 # --- Move setup code from before_first_request to here ---
 def add_default_admin_if_needed():
-    """Add a default admin user if no users exist in the database."""
     try:
         user_count = User.query.count()
         if user_count == 0:
@@ -443,8 +442,7 @@ def add_default_admin_if_needed():
             db.session.commit()
             print("[APP] Default admin user created")
         else:
-            # Ensure existing admin user has correct role
-            admin_user = User.query.filter_by(username='admin').first()
+            admin_user = User.query.filter_by(_username=encrypt_value('admin')).first()
             admin_role = Role.query.filter_by(name='admin').first()
             if admin_user and (not admin_user.role or admin_user.role != admin_role):
                 print(f"[APP] Fixing admin role for user {admin_user.username}")
@@ -1854,11 +1852,11 @@ def debug_info():
         })
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
 
-# Run user field encryption migration on startup (safe to run multiple times)
+# Run user field length expansion migration on startup (safe to run multiple times)
 try:
-    import migrate_user_fields_to_encrypted
+    import expand_user_fields
 except Exception as e:
-    print(f"[STARTUP] User field encryption migration failed: {e}")
+    print(f"[STARTUP] User field length expansion migration failed: {e}")
 
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
@@ -1919,7 +1917,7 @@ def health_check():
 @app.errorhandler(404)
 def page_not_found(e):
     try:
-        return render_template('errors/404.html'), 404
+             return render_template('errors/404.html'), 404
     except:
         return '''
         <!DOCTYPE html>
