@@ -26,7 +26,7 @@ from sqlalchemy import inspect
 import smtplib
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
@@ -90,6 +90,9 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Load configuration from config.py for secure local database
+app.config.from_object('config.Config')
 
 # Email configuration (all secrets from environment)
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
@@ -967,11 +970,11 @@ def admin_users():
                 return redirect('/admin/users')
             
             # Check if username or email already exist
-            if User.query.filter_by(username=username).first():
+            if User.query.filter_by(_username=encrypt_value(username)).first():
                 flash(f'Username "{username}" is already taken.', 'danger')
                 return redirect('/admin/users')
                 
-            if User.query.filter_by(email=email).first():
+            if User.query.filter_by(_email=encrypt_value(email)).first():
                 flash(f'Email "{email}" is already registered.', 'danger')
                 return redirect('/admin/users')
             
@@ -1167,8 +1170,6 @@ def edit_role(role_id):
                           role=role,
                           all_permissions=all_permissions,
                           current_permissions=current_permissions)
-
-
 
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
@@ -1689,7 +1690,7 @@ def login():
         # Add debug for login attempts
         app.logger.debug(f"Login attempt: username={username}")
         
-        user = User.query.filter_by(username=username).first()
+        user = User.query.filter_by(_username=encrypt_value(username)).first()
         
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
@@ -1721,7 +1722,7 @@ def forgot_password():
         
     if request.method == 'POST':
         email = request.form.get('email')
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter_by(_email=encrypt_value(email)).first()
         
         if user:
             # Generate a password reset token
@@ -1853,66 +1854,11 @@ def debug_info():
         })
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
 
-def add_default_admin_if_needed():
-    """Add a default admin user if no users exist in the database."""
-    try:
-        user_count = User.query.count()
-        if user_count == 0:
-            print("[APP] No users found, creating default admin user")
-            admin_role = Role.query.filter_by(name='admin').first()
-            if not admin_role:
-                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                db.session.add(admin_role)
-                db.session.commit()
-            admin = User(
-                username='admin',
-                email='admin@example.com',
-                password_hash=generate_password_hash('admin'),
-                role=admin_role
-            )
-            db.session.add(admin)
-            db.session.commit()
-            print("[APP] Default admin user created")
-        else:
-            # Ensure existing admin user has correct role
-            admin_user = User.query.filter_by(username='admin').first()
-            admin_role = Role.query.filter_by(name='admin').first()
-            if admin_user and (not admin_user.role or admin_user.role != admin_role):
-                print(f"[APP] Fixing admin role for user {admin_user.username}")
-                if not admin_role:
-                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                    db.session.add(admin_role)
-                    db.session.commit()
-                admin_user.role = admin_role
-                db.session.commit()
-    except Exception as e:
-        print(f"[APP] Error creating/updating default admin: {e}")
-
-def run_startup_migrations():
-    """Run all migration/update scripts and log results"""
-    import subprocess
-    import sys
-    migration_scripts = [
-        'add_password_reset_columns.py',
-        'add_maintenance_unit.py',
-        'update_schema.py',
-        'create_maintenance_table.py',
-        'add_notification_preferences.py',
-        'add_audit_task_columns.py',
-    ]
-    for script in migration_scripts:
-        script_path = os.path.join(os.path.dirname(__file__), script)
-        if os.path.exists(script_path):
-            print(f"[STARTUP] Running migration: {script}")
-            try:
-                result = subprocess.run([sys.executable, script_path], capture_output=True, text=True)
-                print(f"[STARTUP] {script} output:\n{result.stdout}")
-                if result.stderr:
-                    print(f"[STARTUP] {script} errors:\n{result.stderr}")
-            except Exception as e:
-                print(f"[STARTUP] Failed to run {script}: {e}")
-        else:
-            print(f"[STARTUP] Migration script not found: {script}")
+# Run user field encryption migration on startup (safe to run multiple times)
+try:
+    import migrate_user_fields_to_encrypted
+except Exception as e:
+    print(f"[STARTUP] User field encryption migration failed: {e}")
 
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
