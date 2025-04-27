@@ -141,3 +141,27 @@ html body .sidebar {
     z-index: 1030;
   }
 }
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  z-index: 1039;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.45);
+  transition: background 0.2s;
+}
+body.sidebar-active .sidebar-overlay {
+  display: block;
+}
+.sidebar-overlay .overlay-text {
+  color: #fff;
+  font-size: 1.2rem;
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
