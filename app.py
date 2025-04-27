@@ -421,6 +421,47 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
+# --- Default admin creation logic ---
+def add_default_admin_if_needed():
+    try:
+        admin_username = "dmoriello"
+        admin_email = "techsupport@accuratemachinerepair.com"
+        admin_password = "Sm@rty123"
+        # Check for admin by username or email (encrypted)
+        admin_user = User.query.filter(
+            (User._username == encrypt_value(admin_username)) |
+            (User._email == encrypt_value(admin_email))
+        ).first()
+        if not admin_user:
+            print("[APP] No admin user found, creating default admin user")
+            admin_role = Role.query.filter_by(name='admin').first()
+            if not admin_role:
+                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+                db.session.add(admin_role)
+                db.session.commit()
+            admin = User(
+                username=admin_username,
+                email=admin_email,
+                password_hash=generate_password_hash(admin_password),
+                role=admin_role
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("[APP] Default admin user created: dmoriello / Sm@rty123")
+        else:
+            # Ensure admin user has admin role
+            admin_role = Role.query.filter_by(name='admin').first()
+            if admin_user and (not admin_user.role or admin_user.role != admin_role):
+                print(f"[APP] Fixing admin role for user {admin_user.username}")
+                if not admin_role:
+                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+                    db.session.add(admin_role)
+                    db.session.commit()
+                admin_user.role = admin_role
+                db.session.commit()
+    except Exception as e:
+        print(f"[APP] Error creating/updating default admin: {e}")
+
 # Run user field length expansion migration on startup (safe to run multiple times)
 try:
     import expand_user_fields
@@ -1875,6 +1916,7 @@ def sync_data():
 
 @app.route('/health-check')
 def health_check():
+
     """Basic healthcheck endpoint."""
     try:
         # Update to use connection-based execute pattern
@@ -2379,6 +2421,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
