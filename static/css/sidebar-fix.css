@@ -165,3 +165,76 @@ body.sidebar-active .sidebar-overlay {
   transform: translateX(-50%);
   text-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
+
+/* Desktop sidebar collapse button - always visible */
+.sidebar-toggle-item.d-none.d-lg-block {
+  display: block !important;
+  padding: 0.5rem 1rem;
+  text-align: right;
+  background-color: rgba(0,0,0,0.1);
+}
+
+.sidebar-toggle-item.d-none.d-lg-block .sidebar-toggle-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+/* Fix sidebar collapse styles */
+body.sidebar-collapsed .sidebar,
+html body.sidebar-collapsed .sidebar {
+  width: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  transition: width 0.3s, min-width 0.3s;
+}
+
+body.sidebar-collapsed .sidebar-container,
+html body.sidebar-collapsed .sidebar-container {
+  width: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  transition: width 0.3s, min-width 0.3s;
+}
+
+body.sidebar-collapsed .content-container,
+html body.sidebar-collapsed .content-container {
+  margin-left: 56px !important;
+  width: calc(100% - 56px) !important;
+  max-width: calc(100% - 56px) !important;
+  transition: margin-left 0.3s, width 0.3s;
+}
+
+/* Hide text when collapsed */
+body.sidebar-collapsed .sidebar .sidebar-link-text,
+body.sidebar-collapsed .sidebar .sidebar-footer span {
+  display: none !important;
+}
+
+/* Center icons when collapsed */
+body.sidebar-collapsed .sidebar .sidebar-icon {
+  margin-right: 0 !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+  text-align: center !important;
+}
+
+/* Center all elements when collapsed */
+body.sidebar-collapsed .sidebar-nav-item {
+  text-align: center;
+}
+
+body.sidebar-collapsed .sidebar-link {
+  justify-content: center;
+  padding: 0.75rem 0;
+}
+
+/* Ensure overlay is always top-to-bottom */
+.sidebar-overlay {
+  top: 0 !important;
+  bottom: 0 !important;
+  height: 100vh !important;
+}

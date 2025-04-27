@@ -105,25 +105,49 @@ function formatDate(dateString) {
     return new Date(dateString).toLocaleDateString(undefined, options);
 }
 
-// Sidebar toggle for desktop and mobile
+// Connect the hamburger button in the navbar to sidebar toggle
+document.addEventListener('DOMContentLoaded', function() {
+    var hamburgerBtn = document.getElementById('hamburger-btn');
+    if (hamburgerBtn) {
+        hamburgerBtn.addEventListener('click', function() {
+            toggleSidebar();
+        });
+    }
+});
+
+// Completely rewrite the sidebar toggle functions to fix issues
 function toggleSidebarCollapse() {
     document.body.classList.toggle('sidebar-collapsed');
+    
+    // Update the icon direction based on collapsed state
+    var collapseIcon = document.querySelector('.sidebar-toggle-item.d-none.d-lg-block .fas');
+    if (collapseIcon) {
+        if (document.body.classList.contains('sidebar-collapsed')) {
+            collapseIcon.classList.remove('fa-angle-double-left');
+            collapseIcon.classList.add('fa-angle-double-right');
+        } else {
+            collapseIcon.classList.remove('fa-angle-double-right');
+            collapseIcon.classList.add('fa-angle-double-left');
+        }
+    }
 }
 
 function toggleSidebar() {
     var sidebar = document.querySelector('.sidebar');
     var overlay = document.getElementById('sidebar-overlay');
-    var isMobile = window.innerWidth < 992;
-    if (isMobile) {
-        // Mobile: toggle sidebar visibility
+    
+    // Toggle the show class on sidebar
+    sidebar.classList.toggle('show');
+    
+    // Toggle the sidebar-active class on body
+    document.body.classList.toggle('sidebar-active');
+    
+    // Show/hide overlay
+    if (overlay) {
         if (sidebar.classList.contains('show')) {
-            sidebar.classList.remove('show');
-            document.body.classList.remove('sidebar-active');
-            if (overlay) overlay.style.display = 'none';
+            overlay.style.display = 'block';
         } else {
-            sidebar.classList.add('show');
-            document.body.classList.add('sidebar-active');
-            if (overlay) overlay.style.display = 'block';
+            overlay.style.display = 'none';
         }
     }
 }
