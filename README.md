@@ -12,13 +12,13 @@ A comprehensive desktop and web application for tracking and managing preventati
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
   - [Server](#server)
-  - [Windows Client](#windows-client)
+  - [Desktop Client](#desktop-client)
 - [Features](#features)
 - [Advanced Features](#advanced-features)
 - [Architecture](#architecture)
 - [Usage](#usage)
-- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
+- [Recent Updates](#recent-updates)
 - [Contributing](#contributing)
 - [Audit Reminder System](#audit-reminder-system)
 - [License and Legal](#license-and-legal)
@@ -33,8 +33,7 @@ AMRS Preventative Maintenance System combines a Flask web application with a Pyt
 - Offline functionality with automatic syncing
 - Analytics and reporting for maintenance trends
 - Scheduled maintenance reminders
-- Localization and accessibility features
-- Diagnostics and system health monitoring
+- Automated notifications for overdue and upcoming maintenance
 - Full offline/online synchronization
 - Standalone desktop experience (no web browser required)
 
@@ -44,17 +43,22 @@ AMRS Preventative Maintenance System combines a Flask web application with a Pyt
 AMRS-Preventative-Maintenance/
 ├── app.py                     # Main Flask application entry point
 ├── models.py                  # Database models using SQLAlchemy
-├── windows_client/            # Windows client application
-│   ├── build.py               # Build script for the Windows client
-│   ├── requirements.txt       # Python dependencies for the client
-│   ├── docs/                  # Documentation for the client
-│   ├── analytics/             # Analytics and reporting modules
-│   ├── scheduler.py           # Scheduled maintenance reminders
-│   ├── localization.py        # Localization support
-│   └── ...                    # Other client modules
 ├── static/                    # Static web assets (CSS, JS, images)
+│   ├── css/                   # Stylesheets  
+│   ├── js/                    # JavaScript files
+│   │   ├── dashboard.js       # Dashboard functionality
+│   │   ├── ajax-loader.js     # Data synchronization
+│   │   └── ...                # Other client-side scripts
+│   └── img/                   # Images and icons
 ├── templates/                 # HTML templates for Flask
-├── requirements.txt           # Python dependencies for the server
+│   ├── admin/                 # Admin dashboard templates
+│   ├── dashboard.html         # Main dashboard
+│   ├── machines.html          # Machine management
+│   └── ...                    # Other template files
+├── server/                    # Server-specific components
+├── notification_scheduler.py  # Automated maintenance reminders
+├── config.py                  # Configuration settings
+├── requirements.txt           # Python dependencies
 └── instance/                  # Instance-specific data (DB)
 ```
 
@@ -62,9 +66,10 @@ AMRS-Preventative-Maintenance/
 
 ### Prerequisites
 
-- **Python 3.10+** - Backend server runtime and Windows client
-- **SQLite** - Database (included with Python)
-- **Windows 10/11** - Primary target OS for the desktop client
+- **Python 3.10+** - Backend server runtime and desktop client
+- **SQLite/PostgreSQL** - Database support
+- **Modern Web Browser** - For web interface
+- **Windows 10/11, macOS, or Linux** - Supported desktop platforms
 
 ## Installation
 
@@ -76,11 +81,11 @@ AMRS-Preventative-Maintenance/
 docker-compose up -d
 ```
 
-This will start the server on port 9000 by default.
+This will start the server on port 5000 by default.
 
 #### Manual Installation
 
-1. Ensure Python 3.8+ is installed
+1. Ensure Python 3.10+ is installed
 2. Create a virtual environment:
    ```bash
    python -m venv venv
@@ -92,37 +97,31 @@ This will start the server on port 9000 by default.
    ```
 4. Configure the database:
    ```bash
-   python manage.py migrate
+   python init_database.py
    ```
-5. Create an admin user:
+5. Create an admin user (follow the prompts):
    ```bash
-   python manage.py createsuperuser
+   python app.py --create-admin
    ```
 6. Start the server:
    ```bash
-   python manage.py runserver 0.0.0.0:9000
+   python app.py
    ```
 
-### Windows Client
+### Desktop Client
 
 #### Standard Installation
 
-1. Download the installer (`MaintenanceTracker-Setup.exe`) from the releases page
+1. Download the installer from the releases page
 2. Run the installer and follow the on-screen instructions
 3. The application will be installed in your Programs directory and shortcuts will be created
-
-#### Portable Installation
-
-1. Download the portable zip archive (`MaintenanceTrackerPortable.zip`)
-2. Extract the archive to any location (e.g., USB drive)
-3. Run `MaintenanceTracker.exe` from the extracted folder
 
 #### Building from Source
 
 1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
-   cd AMRS-Preventative-Maintenance/windows_client
+   cd AMRS-Preventative-Maintenance
    ```
 2. Install requirements:
    ```bash
@@ -130,102 +129,123 @@ This will start the server on port 9000 by default.
    ```
 3. Build the application:
    ```bash
-   python build.py
+   python build_desktop_app.py
    ```
 4. The executable will be available in the `dist` folder.
 
 ## Features
 
-- **Offline Operation**: Continue working without an internet connection
-- **Automatic Sync**: Data synchronizes when connectivity is restored
-- **Splash Screen**: Shows sync status at launch
-- **Pop-up Status**: Online/offline status bubble
-- **Background Synchronization**: Syncs in the background
-- **Secure Credential Storage**: Safely store login information
-- **Local Data Caching**: Store maintenance data locally
-- **Portable Mode**: Run without installation from any storage media
-- **Visual Indicators**: Clear status for maintenance items
-- **System Tray Integration**: Minimize to tray for background operation
-- **Dashboard View**: At-a-glance overview
-- **Analytics and Reporting**: Visual reports and trends
-- **Diagnostics**: System health and performance monitoring
-- **Scheduled Maintenance Reminders**: Notifications for upcoming/overdue maintenance
-- **Localization**: Multi-language support
-- **Accessibility**: High contrast mode, keyboard navigation, screen reader support
+- **Dashboard View**: At-a-glance overview of maintenance status
+- **Site Management**: Organize machines by physical location
+- **Machine Tracking**: Manage machine inventory with detailed information
+- **Part Management**: Track individual parts requiring maintenance
+- **Maintenance Recording**: Log maintenance activities with timestamps and notes
+- **Status Indicators**: Clearly see overdue, due soon, and OK maintenance statuses
+- **Filtering**: Filter by site, machine, and maintenance status
+- **Site Overview**: Accordion view displaying machines per site
+- **Notification System**: Email alerts for overdue maintenance
+- **User Management**: Role-based permissions and access control
+- **Offline Support**: Work without internet connectivity
+- **Data Synchronization**: Automatic syncing when online
 
 ## Advanced Features
 
-### Offline/Online Synchronization
-- The app detects network changes and syncs data automatically.
-- All changes made offline are queued and sent to the server when online.
-- Manual sync is available via the "Force Sync" button.
-- Conflict resolution strategies: Server Wins, Client Wins, Newest Wins, or Ask Me.
+### Maintenance Status Tracking
+- Color-coded visual indicators for maintenance status
+- Automatic calculation of due dates based on maintenance frequency
+- Sorting and filtering by status, date, and other criteria
+- Detailed maintenance history for each part and machine
 
-### Analytics and Diagnostics
-- Built-in analytics dashboard for maintenance trends and system health.
-- Diagnostics tools for performance and error reporting.
-- Export reports in CSV or JSON format.
-
-### Accessibility & Localization
-- High contrast and accessible UI.
-- Keyboard navigation and screen reader compatibility.
-- Language switching and multi-language support.
+### Dashboard Analytics
+- Summary statistics for overdue, due soon, and on-schedule maintenance
+- Site-specific views and filters
+- Expandable/collapsible machine parts for detailed inspection
+- Mobile-responsive design for field technicians
 
 ### Notifications & Reminders
-- System tray notifications for status and reminders.
-- Scheduled and on-demand maintenance reminders.
-- Customizable reminder intervals and notification preferences.
+- Automated email notifications for overdue maintenance
+- Configurable reminder thresholds per site
+- Audit task reminder system
+- User-configurable notification preferences
 
-### Security
-- Secure credential storage using keyring.
-- Encrypted local database (optional).
+### Multi-Site Management
+- Organize equipment by physical location
+- Site-specific maintenance schedules and notification settings
+- Role-based access control by site
 
 ## Architecture
 
 ### Key Components
 
 - **Flask Application**: Handles database operations and business logic
-- **Windows Client**: Provides a native desktop experience with offline support
-- **Analytics Module**: Generates visual reports and trends
-- **Scheduler**: Manages recurring maintenance reminders
-- **Localization**: Supports multiple languages for global users
+- **SQLAlchemy ORM**: Database abstraction and model definitions
+- **Bootstrap UI**: Responsive and mobile-friendly interface
+- **JavaScript Modules**: Client-side interactivity and dynamic updates
+- **Notification Scheduler**: Background process for sending automated reminders
 
 ## Usage
 
-- On launch, a splash screen will show database synchronization status.
-- A pop-up bubble will indicate online/offline status.
-- The app works fully offline, with automatic sync when reconnected.
-- All features are available offline, including analytics and reporting.
-- The app runs as a standalone desktop application (not in a web browser).
+### Dashboard
 
-## Testing
+The dashboard provides an at-a-glance view of your maintenance status:
 
-### Python Unit Tests
+1. **Summary Statistics**: Total counts of overdue, due soon, OK, and total parts.
+2. **Overdue & Due Soon Panels**: Quick access to parts requiring attention.
+3. **Site Overview**: Expandable view of sites, machines, and their parts.
+4. **Filtering**: Filter by site using the dropdown at the top.
+5. **Part Details**: Expand machine rows to see individual parts and their status.
 
-```bash
-python -m unittest discover tests
-```
+### Recording Maintenance
+
+1. Navigate to a part that needs maintenance
+2. Click the "Record" button next to the part
+3. Enter maintenance details and notes
+4. Submit to update the maintenance record and reset the due date
+
+### Managing Sites, Machines, and Parts
+
+Admin users can:
+1. Add, edit, and delete sites
+2. Add machines to sites
+3. Add parts to machines with specific maintenance schedules
+4. Configure notification thresholds and preferences
 
 ## Troubleshooting
 
-### Database Issues
+### Common Issues
+
+#### Database Issues
 - Run database migrations if schema changes are required:
   ```bash
-  python manage.py db upgrade
+  python auto_migrate.py
   ```
 
-### Build Problems
-- Ensure all dependencies are installed:
-  ```bash
-  pip install -r requirements.txt
-  ```
+#### Dashboard Display Problems
+- If machine statuses are not displaying correctly, refresh the page
+- Check browser console for JavaScript errors
+- Clear browser cache if styles or scripts appear outdated
 
-### Windows Client Troubleshooting
-- Connection issues: Verify server URL, check server status, network configuration
-- Sync problems: Check log files, try "Force Sync", restart the app
-- Performance: Optimize database, clear cache, reduce offline data
-- Log files: `%USERPROFILE%\.amrs\logs` (installed) or `logs` folder (portable)
-- Data storage: `%USERPROFILE%\.amrs\` (installed) or `data\` folder (portable)
+#### Email Notifications Not Sending
+- Verify email configuration in config.py
+- Check notification_scheduler.py logs
+- Ensure user email addresses and notification preferences are set correctly
+
+### Log Files
+- Application logs: `instance/app.log`
+- Database issues: Check SQLite errors in the application log
+- Email errors: Check SMTP settings in config.py
+
+## Recent Updates
+
+### Dashboard Enhancements (April 2025)
+- **Fixed machine status display**: Corrected an issue where machines would incorrectly display "All OK" status when they had overdue or due soon parts
+- **Improved site filtering**: Now properly updates machine statuses when filtering by site
+- **Enhanced status indicators**: Better visual distinction between overdue, due soon, and OK status
+
+### Audit Reminder System (March 2025)
+- Added automated email reminders for incomplete audit tasks
+- Configurable notification preferences per user
+- Daily scheduled reminders
 
 ## Contributing
 
@@ -270,7 +290,7 @@ python notification_scheduler.py audit
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/python3</string>
-        <string>/Users/dominicmoriello/Documents/GitHub/AMRS-Preventative-Maintenance/notification_scheduler.py</string>
+        <string>/path/to/AMRS-Preventative-Maintenance/notification_scheduler.py</string>
         <string>audit</string>
     </array>
     <key>StartCalendarInterval</key>
@@ -303,10 +323,6 @@ python notification_scheduler.py audit
 
 ### Template
 The reminder email uses `templates/email/audit_reminder.html`.
-
----
-
-For more information, see the user profile notification preferences and the [notification_scheduler.py](notification_scheduler.py) script.
 
 ## License and Legal
 
