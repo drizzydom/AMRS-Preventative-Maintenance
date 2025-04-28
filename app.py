@@ -1579,25 +1579,38 @@ def update_maintenance(part_id):
             return redirect(url_for('maintenance_page'))
         now = datetime.now()
         part.last_maintenance = now
+        
         # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
         freq = part.maintenance_frequency or 1
         unit = part.maintenance_unit or 'day'
         if unit == 'week':
             delta = timedelta(weeks=freq)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq * 7
         elif unit == 'month':
             delta = timedelta(days=freq * 30)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq * 30
         elif unit == 'year':
             delta = timedelta(days=freq * 365)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq * 365
         else:
             delta = timedelta(days=freq)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq
+            
+        # Set the next maintenance date
         part.next_maintenance = now + delta
+        
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
             user_id=current_user.id,
             date=now,
             comments=request.form.get('comments', ''),
-            description=request.form.get('description', None)
+            description=request.form.get('description', None),
+            machine_id=part.machine_id
         )
         db.session.add(maintenance_record)
         db.session.commit()
@@ -1923,8 +1936,7 @@ def reset_password(token):
     <html>
     <head>
         <title>Reset Password</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css```html
-" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     </head>
     <body>
         <div class="container mt-5">
