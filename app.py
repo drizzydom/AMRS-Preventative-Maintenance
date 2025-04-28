@@ -1091,6 +1091,9 @@ def admin_users():
     
     # For GET requests or after POST processing
     try:
+        # Ensure database session is refreshed to get the latest data
+        db.session.expire_all()
+        
         # Get all users and roles for the template
         users = User.query.all()
         roles = Role.query.all()
@@ -1919,7 +1922,7 @@ def reset_password(token):
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
         if not password or len(password) < 8:
-            flash('Password must be at least 8 characters long.', 'danger')
+            flash('Password must be at least 8 characterslong.', 'danger')
             return redirect(url_for('reset_password', token=token))
         elif password != confirm_password:
             flash('Passwords do not match.', 'danger')
