@@ -33,14 +33,35 @@ def check_database():
             if missing_tables:
                 print(f"Warning: Missing tables: {', '.join(missing_tables)}")
                 return False
-            # Check for admin account (dmoriello, encrypted)
-            encrypted_username = encrypt_value('dmoriello')
-            result = conn.execute(text("SELECT id, username FROM users WHERE username = :username"), {"username": encrypted_username})
-            admin = result.fetchone()
-            if not admin:
-                print("Warning: Admin account 'dmoriello' not found!")
-                return False
-            print(f"Database check passed! Admin account ID: {admin[0]}")
+                
+            # Check for admin account using environment variable or fallback
+            admin_username = os.environ.get('DEFAULT_ADMIN_USERNAME')
+            if admin_username:
+                encrypted_username = encrypt_value(admin_username)
+                result = conn.execute(text("SELECT id, username FROM users WHERE username = :username"), {"username": encrypted_username})
+                admin = result.fetchone()
+                if not admin:
+                    print(f"Warning: Admin account '{admin_username}' not found!")
+                    # Check if any admin account exists at all
+                    result = conn.execute(text("SELECT COUNT(*) FROM users WHERE role_id = (SELECT id FROM roles WHERE name = 'admin')"))
+                    count = result.scalar()
+                    if count == 0:
+                        print("No admin account found in the database!")
+                        return False
+                    else:
+                        print(f"Found {count} admin account(s) with different username.")
+                else:
+                    print(f"Database check passed! Admin account ID: {admin[0]}")
+            else:
+                # If no admin username provided in env vars, check if any admin role exists
+                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE role_id = (SELECT id FROM roles WHERE name = 'admin')"))
+                count = result.scalar()
+                if count == 0:
+                    print("No admin account found in the database!")
+                    return False
+                else:
+                    print(f"Database check passed! Found {count} admin account(s).")
+            
             return True
     except Exception as e:
         print(f"Database check failed: {str(e)}")
