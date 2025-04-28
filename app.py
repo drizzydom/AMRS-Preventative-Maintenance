@@ -2373,16 +2373,49 @@ def maintenance_records_page():
     machine_id = request.args.get('machine_id', type=int)
     part_id = request.args.get('part_id', type=int)
 
+    # Get site IDs the user has access to
+    site_ids = [site.id for site in sites]
+    
     machines = []
     parts = []
     records = []
 
     if site_id:
+        # Filter machines by selected site
         machines = Machine.query.filter_by(site_id=site_id).all()
+    else:
+        # Get all machines for sites the user has access to
+        machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
+    
+    machine_ids = [machine.id for machine in machines]
+    
     if machine_id:
+        # Filter parts by selected machine
         parts = Part.query.filter_by(machine_id=machine_id).all()
+    else:
+        # Get all parts for machines the user has access to
+        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
+    
+    part_ids = [part.id for part in parts]
+    
     if part_id:
+        # Filter records by selected part
         records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+    elif machine_id:
+        # If machine is selected but no part, show records for all parts of that machine
+        parts_for_machine = Part.query.filter_by(machine_id=machine_id).all()
+        part_ids_for_machine = [part.id for part in parts_for_machine]
+        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_machine)).order_by(MaintenanceRecord.date.desc()).all()
+    elif site_id:
+        # If site is selected but no machine/part, show records for all parts of all machines at that site
+        machines_for_site = Machine.query.filter_by(site_id=site_id).all()
+        machine_ids_for_site = [machine.id for machine in machines_for_site]
+        parts_for_site = Part.query.filter(Part.machine_id.in_(machine_ids_for_site)).all()
+        part_ids_for_site = [part.id for part in parts_for_site]
+        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_site)).order_by(MaintenanceRecord.date.desc()).all()
+    else:
+        # No filters selected - show all records for parts the user has access to
+        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids)).order_by(MaintenanceRecord.date.desc()).all() if part_ids else []
 
     return render_template(
         'maintenance_records.html',
@@ -2512,6 +2545,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
