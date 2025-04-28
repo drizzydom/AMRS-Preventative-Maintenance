@@ -102,17 +102,45 @@ html body .sidebar {
   margin-right: 0.75rem;
 }
 
-/* Hide sidebar toggle item (hamburger/close) on desktop */
+/* Hide hamburger button completely on desktop */
 @media (min-width: 992px) {
-  .sidebar-toggle-item {
+  #hamburger-btn {
     display: none !important;
   }
 }
 
-/* Show sidebar toggle item only on mobile */
+/* Make sure it's visible on mobile */
 @media (max-width: 991.98px) {
-  .sidebar-toggle-item {
-    display: block !important;
+  #hamburger-btn {
+    display: flex !important;
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 1050;
+  }
+}
+
+/* Show sidebar toggle item only on mobile - UPDATED FOR MOBILE SIDEBAR FIX */
+@media (max-width: 991.98px) {
+  /* Mobile sidebar container adjustments */
+  .sidebar-container {
+    width: 0 !important; /* No width by default on mobile */
+    min-width: 0 !important;
+    flex: 0 0 0 !important;
+  }
+
+  /* Hide redundant toggle buttons on mobile */
+  .sidebar-nav-item.sidebar-toggle-item:not(:first-child) {
+    display: none !important;
+  }
+  
+  /* Keep only one button for toggling */
+  .sidebar-nav .sidebar-close-btn {
+    display: flex !important;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1050;
   }
 
   .sidebar {
@@ -120,25 +148,27 @@ html body .sidebar {
     top: 48px;
     left: -280px; /* Start off-screen */
     width: 280px; /* Slightly wider on mobile */
-    height: calc(100vh - 48px);
+    height: calc(100vh - 96px); /* Account for footer */
     z-index: 1040;
     transition: left 0.3s ease;
+    visibility: hidden; /* Hide by default */
+    box-shadow: 2px 0 8px rgba(0,0,0,0.2);
   }
   
   .sidebar.show {
     left: 0;
+    visibility: visible; /* Show when toggled */
   }
-  
-  /* Color overlay when sidebar is active */
-  body.sidebar-active::before {
-    content: '';
-    position: fixed;
-    top: 48px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1030;
+
+  /* Update overlay handling for mobile */
+  body.sidebar-active .sidebar-overlay {
+    display: block;
+  }
+
+  /* Ensure content doesn't shift when sidebar is shown */
+  body.sidebar-active .content-container {
+    position: relative;
+    overflow: hidden;
   }
 }
 
