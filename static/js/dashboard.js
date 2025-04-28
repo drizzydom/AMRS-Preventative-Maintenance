@@ -79,9 +79,16 @@ function filterSites(siteId) {
         document.querySelectorAll('[data-site-id]').forEach(function(row) {
             row.style.display = '';
         });
+        
+        // Show all site items
+        document.querySelectorAll('.site-item').forEach(function(siteItem) {
+            siteItem.style.display = '';
+        });
+        
         // Show all Overdue/Due Soon cards
         showCardIfRowsExist('overdue');
         showCardIfRowsExist('due-soon');
+        
         // Reset counters to original values
         resetCounters();
     } else {
@@ -89,13 +96,21 @@ function filterSites(siteId) {
         document.querySelectorAll('[data-site-id]').forEach(function(row) {
             row.style.display = 'none';
         });
+        
+        // Hide all site items first
+        document.querySelectorAll('.site-item').forEach(function(siteItem) {
+            siteItem.style.display = 'none';
+        });
+        
         // Show rows matching the selected site
         document.querySelectorAll(`[data-site-id="${siteId}"]`).forEach(function(row) {
             row.style.display = '';
         });
+        
         // Show/hide Overdue/Due Soon cards based on visible rows
         showCardIfRowsExist('overdue');
         showCardIfRowsExist('due-soon');
+        
         // Show the site item in the accordion
         const siteItem = document.querySelector(`.site-item[data-site-id="${siteId}"]`);
         if (siteItem) {
