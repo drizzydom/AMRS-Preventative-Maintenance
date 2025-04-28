@@ -1546,6 +1546,7 @@ def update_maintenance_alt():
             # Update maintenance_days for consistency
             part.maintenance_days = freq
         
+        # Set the next maintenance date
         part.next_maintenance = now + delta
         
         # Create a maintenance record
@@ -1553,7 +1554,8 @@ def update_maintenance_alt():
             part_id=part.id,
             user_id=current_user.id,
             date=now,
-            comments=comments
+            comments=comments,
+            machine_id=part.machine_id if hasattr(part, 'machine_id') else None
         )
         db.session.add(maintenance_record)
         db.session.commit()
@@ -1921,11 +1923,11 @@ def reset_password(token):
     <html>
     <head>
         <title>Reset Password</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css```html
+" rel="stylesheet">
     </head>
     <body>
         <div class="container mt-5">
-            <div```html
             <div class="row justify-content-center">
                 <div class="col-md-6">
                     <div class="card">
@@ -2700,6 +2702,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
