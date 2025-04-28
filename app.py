@@ -241,11 +241,9 @@ def is_admin_user(user):
     """Standardized function to check if a user has admin privileges."""
     if not user or not getattr(user, 'is_authenticated', False):
         return False
-    
-    # Direct is_admin flag check
-    if getattr(user, 'is_admin', False):
-        return True
         
+    # IMPORTANT: Do not use getattr(user, 'is_admin') as it would cause infinite recursion
+    
     # Relationship-based check
     if hasattr(user, 'role') and user.role:
         # Check role name (case-insensitive)
@@ -1929,7 +1927,7 @@ def forgot_password():
                                     <input type="email" class="form-control" id="email" name="email" required>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Send Reset Link</button>
-                                                       </form>
+                                                       </form```html
                             <div class="mt-3">
                                 <a href="/login" class="text-decoration-none">Back to Login</a>
                             </div>
@@ -2751,6 +2749,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
