@@ -1496,6 +1496,22 @@ def maintenance_page():
                         client_id=client_id if client_id else None
                     )
                     db.session.add(new_record)
+                    # Update part's last_maintenance and next_maintenance
+                    part = Part.query.get(part_id)
+                    if part:
+                        part.last_maintenance = maintenance_date
+                        freq = part.maintenance_frequency or 1
+                        unit = part.maintenance_unit or 'day'
+                        if unit == 'week':
+                            delta = timedelta(weeks=freq)
+                        elif unit == 'month':
+                            delta = timedelta(days=freq * 30)
+                        elif unit == 'year':
+                            delta = timedelta(days=freq * 365)
+                        else:
+                            delta = timedelta(days=freq)
+                        part.next_maintenance = maintenance_date + delta
+                        db.session.add(part)
                     db.session.commit()
                     flash('Maintenance record added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
