@@ -602,11 +602,13 @@ def url_for_safe(endpoint, **values):
             return '/parts'
         elif endpoint == 'manage_users':
             return '/admin/users'
-        elif endpoint == 'manage_roles':  # Add this case
+        elif endpoint == 'manage_roles':  # Add fallback for 'manage_roles'
+            return '/admin/roles'
+        elif endpoint == 'admin_roles':  # Add fallback for 'admin_roles' as well
             return '/admin/roles'
         elif endpoint == 'update_maintenance' and 'part_id' in values:
             return f'/update-maintenance/{values["part_id"]}'
-        elif endpoint == 'machine_history' and 'machine_id' in values:  # Add this case
+        elif endpoint == 'machine_history' and 'machine_id' in values:
             return f'/machine-history/{values["machine_id"]}'
         elif endpoint == 'admin_dashboard':
             return '/admin'
@@ -1627,7 +1629,7 @@ def user_profile():
                     elif new_password != confirm_password:
                         flash('New passwords do not match.', 'danger')
                     else:
-                        user.password_hash = generate_password_hash(new_password)
+                        user.password
                         db.session.commit()
                         flash('Password updated successfully', 'success')
                 
