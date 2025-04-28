@@ -1525,6 +1525,10 @@ def update_maintenance_alt():
             return redirect(url_for('maintenance_page'))
         part = Part.query.get_or_404(int(part_id))
         now = datetime.now()
+        # Debug: Log current and new values
+        print(f"[DEBUG] Updating maintenance for part_id={part.id}")
+        print(f"[DEBUG] Old last_maintenance: {part.last_maintenance}")
+        print(f"[DEBUG] Old next_maintenance: {part.next_maintenance}")
         # Update the last maintenance date
         part.last_maintenance = now
         # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
@@ -1539,6 +1543,8 @@ def update_maintenance_alt():
         else:
             delta = timedelta(days=freq)
         part.next_maintenance = now + delta
+        print(f"[DEBUG] New last_maintenance: {part.last_maintenance}")
+        print(f"[DEBUG] New next_maintenance: {part.next_maintenance}")
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
@@ -1548,6 +1554,7 @@ def update_maintenance_alt():
         )
         db.session.add(maintenance_record)
         db.session.commit()
+        print(f"[DEBUG] Commit successful for part_id={part.id}")
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
         referrer = request.referrer
         if referrer:
@@ -1556,6 +1563,7 @@ def update_maintenance_alt():
             return redirect(url_for('maintenance_page'))
     except Exception as e:
         db.session.rollback()
+        print(f"[DEBUG] Exception during maintenance update: {e}")
         flash(f'Error updating maintenance: {str(e)}', 'error')
         return redirect(url_for('maintenance_page'))
 
@@ -1907,7 +1915,7 @@ def reset_password(token):
             # Update password and clear reset token
             user.password_hash = generate_password_hash(password)
             user.reset_token = None
-            user.reset_token_expiration = None
+            user.reset_token_expiration= None
             db.session.commit()
             
             flash('Your password has been updated. Please log in.', 'success')
@@ -1919,8 +1927,8 @@ def reset_password(token):
         <title>Reset Password</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     </head>
-    <body```html
-<body style="font-family:Arial; text-align:center; padding:50px;">
+    <body>
+    <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Reset Password</h1>
             <form method="post">
                 <div class="mb-3">
