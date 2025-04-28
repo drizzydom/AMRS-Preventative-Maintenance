@@ -70,6 +70,70 @@
         </div>
       </div>
     </div>
+    
+    <!-- Notification Preferences Section -->
+    <div class="row mt-4">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">Notification Preferences</h5>
+          </div>
+          <div class="card-body">
+            <form method="post" action="">
+              <input type="hidden" name="form_type" value="notifications">
+              
+              <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="enableEmail" name="enable_email" {% if notification_prefs.get('enable_email', True) %}checked{% endif %}>
+                <label class="form-check-label" for="enableEmail">Enable email notifications</label>
+              </div>
+              
+              <div class="mb-3">
+                <label for="notificationFrequency" class="form-label">Notification Frequency</label>
+                <select class="form-select" id="notificationFrequency" name="notification_frequency">
+                  <option value="immediate" {% if notification_prefs.get('notification_frequency') == 'immediate' %}selected{% endif %}>Immediate</option>
+                  <option value="daily" {% if notification_prefs.get('notification_frequency') == 'daily' %}selected{% endif %}>Daily</option>
+                  <option value="weekly" {% if notification_prefs.get('notification_frequency', 'weekly') == 'weekly' %}selected{% endif %}>Weekly</option>
+                  <option value="monthly" {% if notification_prefs.get('notification_frequency') == 'monthly' %}selected{% endif %}>Monthly</option>
+                  <option value="none" {% if notification_prefs.get('notification_frequency') == 'none' %}selected{% endif %}>None</option>
+                </select>
+              </div>
+              
+              <div class="mb-3">
+                <label for="emailFormat" class="form-label">Email Format</label>
+                <select class="form-select" id="emailFormat" name="email_format">
+                  <option value="html" {% if notification_prefs.get('email_format', 'html') == 'html' %}selected{% endif %}>HTML</option>
+                  <option value="text" {% if notification_prefs.get('email_format') == 'text' %}selected{% endif %}>Plain Text</option>
+                </select>
+              </div>
+              
+              <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="auditReminders" name="audit_reminders" {% if notification_prefs.get('audit_reminders', True) %}checked{% endif %}>
+                <label class="form-check-label" for="auditReminders">Receive audit task reminders</label>
+              </div>
+
+              {% if user_sites %}
+              <div class="mb-3">
+                <label class="form-label">Site-specific Notifications</label>
+                <div class="card">
+                  <div class="card-body">
+                    {% for site in user_sites %}
+                    <div class="form-check">
+                      <input type="checkbox" class="form-check-input" id="site_notify_{{ site.id }}" name="site_notify_{{ site.id }}" 
+                        {% if notification_prefs.get('site_notifications', {}).get(site.id|string, True) %}checked{% endif %}>
+                      <label class="form-check-label" for="site_notify_{{ site.id }}">{{ site.name }}</label>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+              
+              <button type="submit" class="btn btn-primary">Save Notification Preferences</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

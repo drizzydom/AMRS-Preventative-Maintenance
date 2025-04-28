@@ -1654,27 +1654,45 @@ def user_profile():
 @login_required
 def update_notification_preferences():
     user = current_user
-    prefs = user.get_notification_preferences()
+    prefs = user.get_notification_preferences() if hasattr(user, 'get_notification_preferences') else {}
+    
+    # Process general notification settings
     enable_email = request.form.get('enable_email') == 'on'
     notification_frequency = request.form.get('notification_frequency', 'weekly')
     email_format = request.form.get('email_format', 'html')
     audit_reminders = request.form.get('audit_reminders') == 'on'
-    # 'none' disables email
+    
+    # Validate notification frequency option
+    valid_frequencies = ['immediate', 'daily', 'weekly', 'monthly', 'none']
+    if notification_frequency not in valid_frequencies:
+        notification_frequency = 'weekly'  # Default to weekly if invalid
+    
+    # 'none' disables email notifications
     if notification_frequency == 'none':
         enable_email = False
+    
+    # Update preferences
     prefs['enable_email'] = enable_email
     prefs['notification_frequency'] = notification_frequency
     prefs['email_format'] = email_format
     prefs['audit_reminders'] = audit_reminders
-    # Per-site notification preferences
+    
+    # Process site-specific notification preferences
     site_notifications = {}
     for site in current_user.sites:
         key = f'site_notify_{site.id}'
         site_notifications[str(site.id)] = key in request.form
+    
     prefs['site_notifications'] = site_notifications
-    user.set_notification_preferences(prefs)
-    db.session.commit()  # Ensure changes are saved
-    flash('Notification preferences updated.', 'success')
+    
+    # Save preferences to user
+    if hasattr(user, 'set_notification_preferences'):
+        user.set_notification_preferences(prefs)
+        db.session.commit()  # Ensure changes are saved
+        flash('Notification preferences updated successfully.', 'success')
+    else:
+        flash('Unable to save notification preferences.', 'danger')
+    
     return redirect(url_for('user_profile'))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -1925,7 +1943,6 @@ def page_not_found(e):
         </head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Page Not Found</h1>
-            <p>The requested page was not found. Please check the URL or go```html
             <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
@@ -2350,16 +2367,60 @@ def edit_part(part_id):
         return redirect(url_for('manage_parts'))
     return render_template('edit_part.html', part=part, machines=machines)
 
-@app.route('/manage/roles')
+@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
-def manage_roles():
-    """Redirect or render the roles management page."""
+def edit_role(role_id):
+    """Edit an existing role - admin only."""
     if not is_admin_user(current_user):
-        flash('You do not have permission to access this page.', 'danger')
+        flash('You do not have permission to edit roles.', 'danger')
         return redirect(url_for('dashboard'))
-    roles = Role.query.all()
-    all_permissions = get_all_permissions()
-    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
+    
+    try:
+        # Get role by ID
+        role = db.session.get(Role, role_id)
+        if not role:
+            abort(404)
+        
+        # Process form submission
+        if request.method == 'POST':
+            name = request.form.get('name')
+            description = request.form.get('description', '')
+            permissions = request.form.getlist('permissions')
+            
+            # Validate required fields
+            if not name:
+                flash('Role name is required.', 'danger')
+                return redirect(url_for('edit_role', role_id=role_id))
+            
+            # Check if role name already exists for another role
+            existing_role = Role.query.filter(Role.name == name, Role.id != role_id).first()
+            if existing_role:
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect(url_for('edit_role', role_id=role_id))
+            
+            # Update role details
+            role.name = name
+            role.description = description
+            role.permissions = ','.join(permissions) if permissions else ''
+            
+            db.session.commit()
+            flash(f'Role "{name}" updated successfully.', 'success')
+            return redirect(url_for('admin_roles'))
+            
+        # For GET requests, show the edit form
+        all_permissions = get_all_permissions()
+        role_permissions = role.permissions.split(',') if role.permissions else []
+        
+        return render_template('edit_role.html', 
+                            role=role, 
+                            all_permissions=all_permissions,
+                            role_permissions=role_permissions)
+                            
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error editing role: {e}")
+        flash(f'Error editing role: {str(e)}', 'danger')
+        return redirect(url_for('admin_roles'))
 
 @app.route('/api/maintenance/records', methods=['GET'])
 @login_required
@@ -2545,6 +2606,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
