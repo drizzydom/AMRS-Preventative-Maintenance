@@ -68,6 +68,10 @@
       {
         "from": "models.py",
         "to": "models.py"
+      },
+      {
+        "from": "auto_migrate.py",
+        "to": "auto_migrate.py"
       }
     ],
     "publish": [
@@ -81,7 +85,8 @@
       "target": [
         "nsis"
       ],
-      "icon": "electron_app/icons/app.png"
+      "icon": "electron_app/icons/app.png",
+      "compression": "store"
     },
     "nsis": {
       "oneClick": false,

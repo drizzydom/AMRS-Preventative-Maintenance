@@ -139,7 +139,7 @@
                 <p class="text-danger">This will also delete all parts associated with this machine!</p>
             </div>
             <div class="modal-footer">
-                <form id="deleteMachineForm" method="post" action="">
+                <form id="deleteMachineForm" method="post" action="{{ url_for('delete_machine', machine_id=0) }}">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger">Delete Machine</button>
                 </form>
