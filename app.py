@@ -1167,7 +1167,13 @@ def edit_user(user_id):
             user.username = username
             user.email = email
             user.full_name = full_name
+            
+            # Update role: ensure both role object and role_id are set
             user.role = role  # Assign Role object
+            if role:
+                user.role_id = role.id  # Also explicitly set the role_id field
+            else:
+                user.role_id = None  # Clear role_id if no role selected
             
             # Update site assignments if provided
             if 'site_ids' in request.form:
@@ -1921,7 +1927,7 @@ def reset_password(token):
         else:
             # Update password and clear reset token
             user.password_hash = generate_password_hash(password)
-            user.reset_token =None
+            user.reset_token = None
             user.reset_token_expiration = None
             db.session.commit()
             flash('Your password has been updated. Please log in.', 'success')
@@ -2707,6 +2713,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
