@@ -1934,7 +1934,7 @@ def health_check():
 @app.errorhandler(404)
 def page_not_found(e):
     try:
-             return render_template('errors/404.html'), 404
+        return render_template('errors/404.html'), 404
     except:
         return '''
         <!DOCTYPE html>
@@ -2608,6 +2608,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
