@@ -1527,42 +1527,33 @@ def update_maintenance_alt():
         now = datetime.now()
         # Update the last maintenance date
         part.last_maintenance = now
-        
         # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
         freq = part.maintenance_frequency or 1
         unit = part.maintenance_unit or 'day'
         if unit == 'week':
             delta = timedelta(weeks=freq)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq * 7
         elif unit == 'month':
             delta = timedelta(days=freq * 30)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq * 30
         elif unit == 'year':
             delta = timedelta(days=freq * 365)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq * 365
         else:
             delta = timedelta(days=freq)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq
-        
-        # Set the next maintenance date
         part.next_maintenance = now + delta
-        
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
             user_id=current_user.id,
             date=now,
-            comments=comments,
-            machine_id=part.machine_id if hasattr(part, 'machine_id') else None
+            comments=comments
         )
         db.session.add(maintenance_record)
         db.session.commit()
-        db.session.refresh(part)  # Ensure part has latest values
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
+        referrer = request.referrer
+        if referrer:
+            return redirect(referrer)
+        else:
+            return redirect(url_for('maintenance_page'))
     except Exception as e:
         db.session.rollback()
         flash(f'Error updating maintenance: {str(e)}', 'error')
@@ -1583,20 +1574,12 @@ def update_maintenance(part_id):
         unit = part.maintenance_unit or 'day'
         if unit == 'week':
             delta = timedelta(weeks=freq)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq * 7
         elif unit == 'month':
             delta = timedelta(days=freq * 30)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq * 30
         elif unit == 'year':
             delta = timedelta(days=freq * 365)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq * 365
         else:
             delta = timedelta(days=freq)
-            # Update maintenance_days for consistency
-            part.maintenance_days = freq
             
         # Set the next maintenance date
         part.next_maintenance = now + delta
@@ -1936,32 +1919,23 @@ def reset_password(token):
         <title>Reset Password</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     </head>
-    <body>
-        <div class="container mt-5">
-            <div class="row justify-content-center">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">Reset Password</div>
-                        <div class="card-body">
-                            <form method="post">
-                                <div class="mb-3">
-                                    <label for="password" class="form-label">New Password</label>
-                                    <input type="password" class="form-control" id="password" name="password" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="confirm_password" class="form-label">Confirm Password</label>
-                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
-                                </div>
-                                <button type="submit" class="btn btn-primary">Reset Password</button>
-                            </form>
-                        </div>
-                    </div>
+    <body```html
+<body style="font-family:Arial; text-align:center; padding:50px;">
+            <h1 style="color:#FE7900;">Reset Password</h1>
+            <form method="post">
+                <div class="mb-3">
+                    <label for="password" class="form-label">New Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
                 </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
+                <div class="mb-3">
+                    <label for="confirm_password" class="form-label">Confirm Password</label>
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Reset Password</button>
+            </form>
+        </body>
+        </html>
+        '''
 
 @app.route('/debug-info')
 def debug_info():
@@ -2027,7 +2001,7 @@ def health_check():
 
     """Basic healthcheck endpoint."""
     try:
-        # Update to use connection-based execute pattern```python
+        # Update to use connection-based execute pattern
         with db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return jsonify({'status': 'ok'}), 200
