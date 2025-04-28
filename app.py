@@ -609,9 +609,13 @@ def ensure_db_connection():
 # Helper: Always allow admins to access any page
 @app.before_request
 def allow_admin_everywhere():
-    if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and getattr(current_user, 'is_admin', False):
-        # Bypass permission checks for admins
-        return None
+    """Allow admin users to access all pages without additional permission checks."""
+    if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+        # Use the standardized is_admin_user function instead of directly accessing is_admin property
+        # This prevents infinite recursion
+        if is_admin_user(current_user):
+            # Bypass permission checks for admins
+            return None
 
 # Replace the enhance_models function with a template context processor
 @app.context_processor
@@ -1924,10 +1928,11 @@ def forgot_password():
                             <form method="post">
                                 <div class="mb-3">
                                     <label for="email" class="form-label">Email</label>
-                                    <input type="email" class="form-control" id="email" name="email" required>
+                                    <input type="email" class="form-control"```html
+                                    id="email" name="email" required>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Send Reset Link</button>
-                                                       </form```html
+                            </form>
                             <div class="mt-3">
                                 <a href="/login" class="text-decoration-none">Back to Login</a>
                             </div>
@@ -2749,6 +2754,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
