@@ -241,12 +241,27 @@ def is_admin_user(user):
     """Standardized function to check if a user has admin privileges."""
     if not user or not getattr(user, 'is_authenticated', False):
         return False
-    # Relationship-based check
-    if hasattr(user, 'role') and user.role and hasattr(user.role, 'name') and user.role.name and user.role.name.lower() == 'admin':
+    
+    # Direct is_admin flag check
+    if getattr(user, 'is_admin', False):
         return True
+        
+    # Relationship-based check
+    if hasattr(user, 'role') and user.role:
+        # Check role name (case-insensitive)
+        if hasattr(user.role, 'name') and user.role.name:
+            role_name = user.role.name.lower()
+            if role_name in ['admin', 'administrator']:
+                return True
+            
+        # Check role permissions for admin.full
+        if hasattr(user.role, 'permissions') and user.role.permissions and 'admin.full' in user.role.permissions:
+            return True
+            
     # Fallback: username
     if getattr(user, 'username', None) == 'admin':
         return True
+        
     return False
 
 # Database connection checker
@@ -1914,7 +1929,7 @@ def forgot_password():
                                     <input type="email" class="form-control" id="email" name="email" required>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Send Reset Link</button>
-                            </form>
+                                                       </form>
                             <div class="mt-3">
                                 <a href="/login" class="text-decoration-none">Back to Login</a>
                             </div>
