@@ -2407,6 +2407,113 @@ def maintenance_records_page():
         selected_part=part_id
     )
 
+@app.route('/emergency-maintenance-request', methods=['POST'])
+@login_required
+def emergency_maintenance_request():
+    """Handle emergency maintenance request form submission"""
+    try:
+        # Get form data
+        machine_id = request.form.get('machine_id')
+        machine_name = request.form.get('machine_name')
+        site_name = request.form.get('site_name')
+        site_location = request.form.get('site_location', '')
+        part_id = request.form.get('part_id')
+        contact_name = request.form.get('contact_name')
+        contact_email = request.form.get('contact_email')
+        contact_phone = request.form.get('contact_phone', '')
+        issue_description = request.form.get('issue_description')
+        priority = request.form.get('priority', 'Critical')
+        
+        # Validate required fields
+        if not (machine_id and machine_name and contact_name and contact_email and issue_description):
+            flash('Missing required fields for emergency request.', 'danger')
+            return redirect(url_for('manage_machines'))
+        
+        # Get additional machine details
+        machine = db.session.get(Machine, int(machine_id))
+        if not machine:
+            flash('Machine not found.', 'danger')
+            return redirect(url_for('manage_machines'))
+            
+        # Get part details if specified
+        part_name = None
+        if part_id:
+            part = db.session.get(Part, int(part_id))
+            if part:
+                part_name = part.name
+        
+        # Get emergency contact email from environment
+        emergency_email = os.environ.get('EMERGENCY_CONTACT_EMAIL')
+        
+        # If no emergency email is configured, use a fallback approach
+        if not emergency_email:
+            app.logger.warning("No EMERGENCY_CONTACT_EMAIL configured. Using admin users as fallback.")
+            # Get emails of all admin users as fallback
+            admin_role = Role.query.filter_by(name='admin').first()
+            if admin_role:
+                admin_users = User.query.filter_by(role_id=admin_role.id).all()
+                emergency_emails = [user.email for user in admin_users if user.email]
+            else:
+                # Absolute fallback - use the system default sender
+                emergency_emails = [app.config['MAIL_DEFAULT_SENDER']]
+        else:
+            # Use the configured emergency email
+            emergency_emails = [emergency_email]
+        
+        # Prepare email context
+        context = {
+            'machine_name': machine_name,
+            'machine_model': machine.model,
+            'machine_number': machine.machine_number or 'N/A',
+            'serial_number': machine.serial_number or 'N/A',
+            'site_name': site_name,
+            'site_location': site_location,
+            'part_name': part_name,
+            'contact_name': contact_name,
+            'contact_email': contact_email,
+            'contact_phone': contact_phone,
+            'issue_description': issue_description,
+            'priority': priority,
+            'now': datetime.now()
+        }
+        
+        # Create subject line based on priority
+        if priority == 'Critical':
+            subject = f"URGENT: Critical Maintenance Required - {machine_name} at {site_name}"
+        elif priority == 'High':
+            subject = f"HIGH Priority: Maintenance Required - {machine_name} at {site_name}"
+        else:
+            subject = f"Maintenance Request - {machine_name} at {site_name}"
+        
+        # Send email
+        try:
+            msg = Message(
+                subject=subject,
+                recipients=emergency_emails,
+                html=render_template('email/emergency_request.html', **context),
+                sender=app.config['MAIL_DEFAULT_SENDER']
+            )
+            # Add reply-to header so technicians can reply directly to the requester
+            msg.reply_to = contact_email
+            
+            # Send the email
+            mail.send(msg)
+            
+            # Log the emergency request
+            app.logger.info(f"Emergency maintenance request sent for {machine_name} at {site_name} with {priority} priority")
+            
+            flash('Emergency maintenance request has been sent successfully. A technician will contact you shortly.', 'success')
+        except Exception as e:
+            app.logger.error(f"Failed to send emergency maintenance email: {str(e)}")
+            flash(f'Failed to send emergency request email: {str(e)}', 'danger')
+        
+        return redirect(url_for('manage_machines'))
+        
+    except Exception as e:
+        app.logger.error(f"Error processing emergency maintenance request: {str(e)}")
+        flash(f'Error processing emergency request: {str(e)}', 'danger')
+        return redirect(url_for('manage_machines'))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
