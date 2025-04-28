@@ -78,6 +78,25 @@ document.addEventListener('DOMContentLoaded', function() {
             document.documentElement.setAttribute('data-theme', 'dark');
         }
     }
+    
+    // Prevent clicks inside sidebar from closing it
+    var sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        sidebar.addEventListener('click', function(e) {
+            // Stop event from reaching the overlay click handler
+            e.stopPropagation();
+        });
+    }
+    
+    // Make sidebar links work properly on mobile by preventing default only when needed
+    var sidebarLinks = document.querySelectorAll('.sidebar-nav a.sidebar-link');
+    sidebarLinks.forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            // Don't stop propagation, but make sure links work
+            e.stopPropagation();
+            // Allow the default navigation behavior (following the link)
+        });
+    });
 });
 
 // Helper function for AJAX requests
@@ -105,16 +124,30 @@ function formatDate(dateString) {
     return new Date(dateString).toLocaleDateString(undefined, options);
 }
 
-// Completely revise the toggleSidebar function to fix mobile sidebar issues
+// Updated toggleSidebar function to properly handle the close button state
 function toggleSidebar() {
     var sidebar = document.querySelector('.sidebar');
     var overlay = document.getElementById('sidebar-overlay');
+    var closeBtn = document.querySelector('.sidebar-close-btn');
     
     if (!sidebar || window.innerWidth >= 992) return; // Only handle on mobile
     
     // Toggle sidebar visibility
     sidebar.classList.toggle('show');
     document.body.classList.toggle('sidebar-active');
+    
+    // Update close button appearance
+    if (closeBtn) {
+        if (sidebar.classList.contains('show')) {
+            closeBtn.style.opacity = '1';
+            closeBtn.style.visibility = 'visible';
+            closeBtn.style.transform = 'rotate(0deg)';
+        } else {
+            closeBtn.style.opacity = '0';
+            closeBtn.style.visibility = 'hidden';
+            closeBtn.style.transform = 'rotate(-90deg)';
+        }
+    }
     
     // Show/hide overlay
     if (overlay) {

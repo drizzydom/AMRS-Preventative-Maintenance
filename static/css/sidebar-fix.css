@@ -165,10 +165,32 @@ html body .sidebar {
     display: block;
   }
 
-  /* Ensure content doesn't shift when sidebar is shown */
+  /* Make sure page names are visible on mobile */
+  .sidebar-link-text {
+    display: inline-block !important;
+    white-space: nowrap;
+  }
+  
+  /* Ensure links and elements within sidebar are clickable */
+  .sidebar a, 
+  .sidebar button,
+  .sidebar-nav-item {
+    pointer-events: auto !important; /* Force clickable elements */
+  }
+  
+  /* Make the sidebar click-through-proof */
+  .sidebar.show {
+    pointer-events: auto;
+  }
+  
+  /* Prevent clicks on content when sidebar is open */
   body.sidebar-active .content-container {
-    position: relative;
-    overflow: hidden;
+    pointer-events: none; /* Prevent background clicks */
+  }
+  
+  /* Allow clicks on overlay but not content */
+  .sidebar-overlay {
+    pointer-events: auto !important;
   }
 }
 
