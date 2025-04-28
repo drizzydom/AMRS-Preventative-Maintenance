@@ -1152,7 +1152,6 @@ def edit_user(user_id):
             email = request.form.get('email')
             full_name = request.form.get('full_name', '')
             role_id = request.form.get('role_id')
-            role = db.session.get(Role, int(role_id)) if role_id else None
             
             # Check if username already exists for another user
             existing_user = User.query.filter(User.username == username, User.id != user_id).first()
@@ -1171,12 +1170,27 @@ def edit_user(user_id):
             user.email = email
             user.full_name = full_name
             
-            # Update role: ensure both role object and role_id are set
-            user.role = role  # Assign Role object
-            if role:
-                user.role_id = role.id  # Also explicitly set the role_id field
+            # More direct approach to role assignment
+            old_role_name = user.role.name if user.role else "None"
+            
+            if role_id:
+                # Find the role and assign it directly
+                role = db.session.get(Role, int(role_id))
+                if role:
+                    # Force detach from previous role
+                    user.role_id = None
+                    db.session.flush()
+                    # Assign new role
+                    user.role = role
+                    user.role_id = role.id
+                    new_role_name = role.name
+                else:
+                    new_role_name = "None (role not found)"
             else:
-                user.role_id = None  # Clear role_id if no role selected
+                # Clear role if none selected
+                user.role = None
+                user.role_id = None
+                new_role_name = "None"
             
             # Update site assignments if provided
             if 'site_ids' in request.form:
@@ -1190,8 +1204,14 @@ def edit_user(user_id):
                     if site:
                         user.sites.append(site)
             
+            # Force immediate commit to database
             db.session.commit()
-            flash(f'User "{username}" updated successfully.', 'success')
+            # Log role change for debugging
+            app.logger.info(f"User {user.username} role changed: {old_role_name} -> {new_role_name}")
+            flash(f'User "{username}" updated successfully. Role changed from "{old_role_name}" to "{new_role_name}".', 'success')
+            
+            # Force session clear before redirect to ensure fresh data on next page load
+            db.session.expire_all()
             return redirect(url_for('admin_users'))
             
         except Exception as e:
