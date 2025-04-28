@@ -486,7 +486,67 @@ with app.app_context():
         import expand_user_fields
     except Exception as e:
         print(f"[STARTUP] User field length expansion migration failed: {e}")
+    
+    # Fix admin role first to ensure it exists with proper permissions
+    try:
+        # Ensure admin role exists with admin.full permission
+        admin_role = Role.query.filter_by(name='admin').first()
+        if not admin_role:
+            print("[APP] Creating missing admin role with full permissions")
+            admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+            db.session.add(admin_role)
+            db.session.commit()
+        elif 'admin.full' not in admin_role.permissions:
+            # Update existing admin role to include admin.full permission
+            current_permissions = admin_role.permissions.split(',') if admin_role.permissions else []
+            if 'admin.full' not in current_permissions:
+                current_permissions.append('admin.full')
+                admin_role.permissions = ','.join(current_permissions)
+                db.session.commit()
+                print("[APP] Updated admin role to include admin.full permission")
+    except Exception as e:
+        print(f"[APP] Error fixing admin role: {e}")
+    
+    # Now fix all admin users to have the admin role
+    try:
+        # Find the admin role
+        admin_role = Role.query.filter_by(name='admin').first()
+        if admin_role:
+            # Find all users who should be admins (username=admin or is_admin flag)
+            admin_users = User.query.filter(
+                (User.username == 'admin') | 
+                (User._username == encrypt_value('admin'))
+            ).all()
+            
+            # Also get users with is_admin=True as a fallback
+            admin_flag_users = []
+            try:
+                # Try to query is_admin column if it exists
+                admin_flag_users = User.query.filter_by(is_admin=True).all()
+            except:
+                print("[APP] is_admin column not available, skipping that filter")
+            
+            # Combine the lists without duplicates
+            all_admin_users = list({user.id: user for user in admin_users + admin_flag_users}.values())
+            
+            updated_count = 0
+            for user in all_admin_users:
+                if not user.role or user.role.id != admin_role.id:
+                    user.role = admin_role
+                    updated_count += 1
+                    print(f"[APP] Fixed admin role for user {user.username}")
+            
+            if updated_count > 0:
+                db.session.commit()
+                print(f"[APP] Updated {updated_count} admin user(s) to have the correct role")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[APP] Error fixing admin users: {e}")
+    
+    # Then run the default admin creation logic
     add_default_admin_if_needed()
+    
+    # Standard integrity checks
     try:
         print("[APP] Performing database integrity checks...")
         admin_users = User.query.join(Role).filter(
@@ -504,6 +564,7 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f"[APP] Error performing database integrity checks: {e}")
+    
     # Healthcheck log (now inside app context)
     try:
         from simple_healthcheck import check_database
@@ -1857,6 +1918,7 @@ def reset_password(token):
                                     <label for="confirm_password" class="form-label">Confirm Password</label>
                                     <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
                                 </div>
+                               ```html
                                 <button type="submit" class="btn btn-primary">Reset Password</button>
                             </form>
                         </div>
@@ -2617,6 +2679,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
