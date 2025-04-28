@@ -325,7 +325,6 @@
                 const button = event.relatedTarget;
                 const partId = button.getAttribute('data-part-id');
                 const partName = button.getAttribute('data-part-name');
-                
                 document.getElementById('maintenance-part-id').value = partId;
                 document.getElementById('maintenance-part-name').value = partName;
             });
@@ -440,17 +439,6 @@
                 partSelect.disabled = true;
             }
         });
-    });
-    
-    // Add a submit event listener to the modal form for debugging
-    document.addEventListener('DOMContentLoaded', function() {
-        const modalForm = document.querySelector('#recordMaintenanceModal form');
-        if (modalForm) {
-            modalForm.addEventListener('submit', function(e) {
-                console.log('[DEBUG] Modal maintenance form submitted');
-                alert('DEBUG: Modal maintenance form submitted');
-            });
-        }
     });
 </script>
 {% endblock %}
