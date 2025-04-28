@@ -319,195 +319,116 @@
                 document.getElementById('maintenance-part-name').value = partName;
             });
         }
-    });
-
-    // Enhanced dependent dropdown functionality with strict type checking
-    document.addEventListener('DOMContentLoaded', function() {
+        
+        // Simple and clean dropdown filtering solution
         const siteSelect = document.getElementById('site_id');
         const machineSelect = document.getElementById('machine_id');
         const partSelect = document.getElementById('part_id');
         const machineHelp = document.getElementById('machine-help');
         const partHelp = document.getElementById('part-help');
         
-        if(siteSelect && machineSelect && partSelect) {
-            console.log("Initializing dependent dropdowns");
-            
-            // Initial state - count available options for each site and machine
-            const siteMachineCount = {};
-            const machineParts = {};
-            
-            // Log initial state for debugging
-            console.log("Total machines: ", machineSelect.options.length - 1);
-            console.log("Total parts: ", partSelect.options.length - 1);
-            
-            // Count machines per site
-            for(const option of machineSelect.options) {
-                if(option.value === "") continue;
-                const siteId = option.getAttribute('data-site');
-                if (!siteMachineCount[siteId]) siteMachineCount[siteId] = 0;
-                siteMachineCount[siteId]++;
-            }
-            
-            // Count parts per machine
-            for(const option of partSelect.options) {
-                if(option.value === "") continue;
-                const machineId = option.getAttribute('data-machine');
-                if (!machineParts[machineId]) machineParts[machineId] = 0;
-                machineParts[machineId]++;
-            }
-            
-            console.log("Machines per site: ", siteMachineCount);
-            console.log("Parts per machine: ", machineParts);
-
-            // Hide all machine options except the first one (Select Machine)
-            for(let i = 1; i < machineSelect.options.length; i++) {
-                machineSelect.options[i].style.display = 'none';
-            }
-            
-            // Hide all part options except the first one (Select Part)
-            for(let i = 1; i < partSelect.options.length; i++) {
-                partSelect.options[i].style.display = 'none';
-            }
-            
-            // Site selection change handler
-            siteSelect.addEventListener('change', function() {
-                const siteId = this.value;
-                console.log("Site selected: ", siteId);
-                
-                // Reset and disable subsequent dropdowns if no site selected
-                if(!siteId) {
-                    machineSelect.value = "";
-                    machineSelect.disabled = true;
-                    machineHelp.textContent = "Please select a site first";
-                    
-                    // Hide all machine options except the first one
-                    for(let i = 1; i < machineSelect.options.length; i++) {
-                        machineSelect.options[i].style.display = 'none';
-                    }
-                    
-                    partSelect.value = "";
-                    partSelect.disabled = true;
-                    partHelp.textContent = "Please select a machine first";
-                    
-                    // Hide all part options except the first one
-                    for(let i = 1; i < partSelect.options.length; i++) {
-                        partSelect.options[i].style.display = 'none';
-                    }
-                    return;
-                }
-                
-                // Enable machine dropdown since we have a site
-                machineSelect.disabled = false;
-                machineHelp.textContent = siteMachineCount[siteId] ? 
-                    `${siteMachineCount[siteId]} machines available` : 
-                    "No machines for this site";
-                
-                // Reset machine selection
-                machineSelect.value = "";
-                
-                // Show only machines for selected site
-                let availableMachines = 0;
-                for(let i = 0; i < machineSelect.options.length; i++) {
-                    const option = machineSelect.options[i];
-                    if(option.value === "") continue; // Skip the placeholder option
-                    
-                    const machineSiteId = option.getAttribute('data-site');
-                    // Ensure strict string equality
-                    const shouldShow = String(machineSiteId) === String(siteId);
-                    
-                    option.style.display = shouldShow ? '' : 'none';
-                    if(shouldShow) {
-                        availableMachines++;
-                        console.log("Showing machine: ", option.text);
-                    }
-                }
-                
-                console.log(`Found ${availableMachines} machines for site ${siteId}`);
-                
-                // If no machines available for this site, keep machine dropdown disabled
-                if(availableMachines === 0) {
-                    machineSelect.disabled = true;
-                    machineHelp.textContent = "No machines available for this site";
-                }
-                
-                // Reset and disable part dropdown
-                partSelect.value = "";
-                partSelect.disabled = true;
-                partHelp.textContent = "Please select a machine first";
-                
-                // Hide all part options except the first one
-                for(let i = 1; i < partSelect.options.length; i++) {
-                    partSelect.options[i].style.display = 'none';
-                }
+        if (!siteSelect || !machineSelect || !partSelect) return;
+        
+        // Set initial state
+        machineSelect.disabled = true;
+        partSelect.disabled = true;
+        
+        // Cache original machine options for quick reference
+        const machineOptions = [];
+        for (let i = 0; i < machineSelect.options.length; i++) {
+            machineOptions.push({
+                value: machineSelect.options[i].value,
+                text: machineSelect.options[i].text,
+                siteId: machineSelect.options[i].getAttribute('data-site')
             });
-            
-            // Machine selection change handler
-            machineSelect.addEventListener('change', function() {
-                const machineId = this.value;
-                console.log("Machine selected: ", machineId);
-                
-                // Reset and disable part dropdown if no machine selected
-                if(!machineId) {
-                    partSelect.value = "";
-                    partSelect.disabled = true;
-                    partHelp.textContent = "Please select a machine first";
-                    
-                    // Hide all part options except the first one
-                    for(let i = 1; i < partSelect.options.length; i++) {
-                        partSelect.options[i].style.display = 'none';
-                    }
-                    return;
-                }
-                
-                // Enable part dropdown since we have a machine
-                partSelect.disabled = false;
-                partHelp.textContent = machineParts[machineId] ?
-                    `${machineParts[machineId]} parts available` :
-                    "No parts for this machine";
-                
-                // Reset part selection
-                partSelect.value = "";
-                
-                // Show only parts for selected machine
-                let availableParts = 0;
-                for(let i = 0; i < partSelect.options.length; i++) {
-                    const option = partSelect.options[i];
-                    if(option.value === "") continue; // Skip the placeholder option
-                    
-                    const partMachineId = option.getAttribute('data-machine');
-                    // Ensure strict string equality
-                    const shouldShow = String(partMachineId) === String(machineId);
-                    
-                    option.style.display = shouldShow ? '' : 'none';
-                    if(shouldShow) {
-                        availableParts++;
-                        console.log("Showing part: ", option.text);
-                    }
-                }
-                
-                console.log(`Found ${availableParts} parts for machine ${machineId}`);
-                
-                // If no parts available for this machine, keep part dropdown disabled
-                if(availableParts === 0) {
-                    partSelect.disabled = true;
-                    partHelp.textContent = "No parts available for this machine";
-                }
-            });
-            
-            // Initialize the dropdowns on page load
-            if(siteSelect.value) {
-                console.log("Initial site selected: ", siteSelect.value);
-                // Trigger the change event to set up initial state if a site is pre-selected
-                const event = new Event('change');
-                siteSelect.dispatchEvent(event);
-                
-                // If machine is also pre-selected, trigger its change event too
-                if(machineSelect.value) {
-                    console.log("Initial machine selected: ", machineSelect.value);
-                    machineSelect.dispatchEvent(event);
-                }
-            }
         }
+        
+        // Cache original part options for quick reference
+        const partOptions = [];
+        for (let i = 0; i < partSelect.options.length; i++) {
+            partOptions.push({
+                value: partSelect.options[i].value,
+                text: partSelect.options[i].text,
+                machineId: partSelect.options[i].getAttribute('data-machine')
+            });
+        }
+        
+        // Site selection change handler
+        siteSelect.addEventListener('change', function() {
+            const siteId = this.value;
+            
+            // Reset machine dropdown
+            machineSelect.innerHTML = '<option value="">Select Machine</option>';
+            machineSelect.disabled = !siteId;
+            
+            // Reset part dropdown
+            partSelect.innerHTML = '<option value="">Select Part</option>';
+            partSelect.disabled = true;
+            
+            if (!siteId) {
+                machineHelp.textContent = "Please select a site first";
+                partHelp.textContent = "Please select a machine first";
+                return;
+            }
+            
+            // Add filtered machine options
+            let machineCount = 0;
+            for (const option of machineOptions) {
+                if (option.value && option.siteId === siteId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-site', option.siteId);
+                    machineSelect.add(newOption);
+                    machineCount++;
+                }
+            }
+            
+            // Update help text
+            if (machineCount > 0) {
+                machineHelp.textContent = `${machineCount} machines available`;
+            } else {
+                machineHelp.textContent = "No machines available for this site";
+                machineSelect.disabled = true;
+            }
+            
+            partHelp.textContent = "Please select a machine first";
+        });
+        
+        // Machine selection change handler
+        machineSelect.addEventListener('change', function() {
+            const machineId = this.value;
+            
+            // Reset part dropdown
+            partSelect.innerHTML = '<option value="">Select Part</option>';
+            partSelect.disabled = !machineId;
+            
+            if (!machineId) {
+                partHelp.textContent = "Please select a machine first";
+                return;
+            }
+            
+            // Add filtered part options
+            let partCount = 0;
+            for (const option of partOptions) {
+                if (option.value && option.machineId === machineId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-machine', option.machineId);
+                    partSelect.add(newOption);
+                    partCount++;
+                }
+            }
+            
+            // Update help text
+            if (partCount > 0) {
+                partHelp.textContent = `${partCount} parts available`;
+            } else {
+                partHelp.textContent = "No parts available for this machine";
+                partSelect.disabled = true;
+            }
+        });
     });
 </script>
 {% endblock %}
