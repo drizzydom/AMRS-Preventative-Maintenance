@@ -1525,8 +1525,20 @@ def update_maintenance_alt():
         now = datetime.now()
         # Update the last maintenance date
         part.last_maintenance = now
-        # Calculate next maintenance date based on frequency
-        part.next_maintenance = now + timedelta(days=part.maintenance_days)
+        
+        # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
+        freq = part.maintenance_frequency or 1
+        unit = part.maintenance_unit or 'day'
+        if unit == 'week':
+            delta = timedelta(weeks=freq)
+        elif unit == 'month':
+            delta = timedelta(days=freq * 30)
+        elif unit == 'year':
+            delta = timedelta(days=freq * 365)
+        else:
+            delta = timedelta(days=freq)
+        part.next_maintenance = now + delta
+        
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
@@ -1911,14 +1923,14 @@ def reset_password(token):
                         <div class="card-body">
                             <form method="post">
                                 <div class="mb-3">
-                                    <label for="password" class="form-label">New Password</label>
+                                    <label for="password" class="form-label">```html
+New Password</label>
                                     <input type="password" class="form-control" id="password" name="password" required>
                                 </div>
                                 <div class="mb-3">
                                     <label for="confirm_password" class="form-label">Confirm Password</label>
                                     <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
                                 </div>
-                               ```html
                                 <button type="submit" class="btn btn-primary">Reset Password</button>
                             </form>
                         </div>
