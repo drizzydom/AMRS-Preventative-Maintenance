@@ -1912,7 +1912,6 @@ def reset_password(token):
     if request.method == 'POST':
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
-        
         if not password or len(password) < 8:
             flash('Password must be at least 8 characters long.', 'danger')
             return redirect(url_for('reset_password', token=token))
@@ -1922,8 +1921,7 @@ def reset_password(token):
         else:
             # Update password and clear reset token
             user.password_hash = generate_password_hash(password)
-            user.reset_token
-            user.reset_token = None
+            user.reset_token =None
             user.reset_token_expiration = None
             db.session.commit()
             flash('Your password has been updated. Please log in.', 'success')
@@ -2338,23 +2336,24 @@ def manage_parts():
             try:
                 name = request.form['name']
                 description = request.form.get('description', '')
-                # Collect form values but don't use invalid ones in constructor
                 part_number = request.form.get('part_number', '')  
                 machine_id = request.form['machine_id']
                 quantity = request.form.get('quantity', 0)  
                 notes = request.form.get('notes', '')
-                
-                # Create new part with only what appear to be valid fields
+                # Get maintenance frequency and unit from form
+                maintenance_frequency = request.form.get('maintenance_frequency', 30)
+                maintenance_unit = request.form.get('maintenance_unit', 'day')
+                # Create new part with all fields
                 new_part = Part(
                     name=name,
                     description=description,
-                    machine_id=machine_id if machine_id else None
+                    machine_id=machine_id if machine_id else None,
+                    maintenance_frequency=maintenance_frequency,
+                    maintenance_unit=maintenance_unit
                 )
-                
                 # Add part to database
                 db.session.add(new_part)
                 db.session.commit()
-                
                 flash(f'Part "{name}" has been added successfully.', 'success')
                 return redirect('/parts')  # Using direct URL to avoid potential errors
             except Exception as e:
@@ -2459,10 +2458,13 @@ def edit_part(part_id):
         part.name = request.form.get('name', part.name)
         part.description = request.form.get('description', part.description)
         part.machine_id = request.form.get('machine_id', part.machine_id)
+        # Update maintenance_frequency and maintenance_unit from form
+        part.maintenance_frequency = request.form.get('maintenance_frequency', part.maintenance_frequency)
+        part.maintenance_unit = request.form.get('maintenance_unit', part.maintenance_unit)
         db.session.commit()
         flash('Part updated successfully.', 'success')
         return redirect(url_for('manage_parts'))
-    return render_template('edit_part.html', part=part, machines=machines)
+    # ...existing code...
 
 @app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
