@@ -1531,12 +1531,21 @@ def update_maintenance_alt():
         unit = part.maintenance_unit or 'day'
         if unit == 'week':
             delta = timedelta(weeks=freq)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq * 7
         elif unit == 'month':
             delta = timedelta(days=freq * 30)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq * 30
         elif unit == 'year':
             delta = timedelta(days=freq * 365)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq * 365
         else:
             delta = timedelta(days=freq)
+            # Update maintenance_days for consistency
+            part.maintenance_days = freq
+        
         part.next_maintenance = now + delta
         
         # Create a maintenance record
@@ -1916,6 +1925,7 @@ def reset_password(token):
     </head>
     <body>
         <div class="container mt-5">
+            <div```html
             <div class="row justify-content-center">
                 <div class="col-md-6">
                     <div class="card">
@@ -1923,8 +1933,7 @@ def reset_password(token):
                         <div class="card-body">
                             <form method="post">
                                 <div class="mb-3">
-                                    <label for="password" class="form-label">```html
-New Password</label>
+                                    <label for="password" class="form-label">New Password</label>
                                     <input type="password" class="form-control" id="password" name="password" required>
                                 </div>
                                 <div class="mb-3">
@@ -2691,6 +2700,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
