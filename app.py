@@ -2464,7 +2464,9 @@ def edit_part(part_id):
         db.session.commit()
         flash('Part updated successfully.', 'success')
         return redirect(url_for('manage_parts'))
-    # ...existing code...
+    
+    # Return template for GET request
+    return render_template('edit_part.html', part=part, machines=machines)
 
 @app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
