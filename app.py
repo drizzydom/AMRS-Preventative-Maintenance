@@ -1559,12 +1559,8 @@ def update_maintenance_alt():
         )
         db.session.add(maintenance_record)
         db.session.commit()
+        db.session.refresh(part)  # Ensure part has latest values
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
-        referrer = request.referrer
-        if referrer:
-            return redirect(referrer)
-        else:
-            return redirect(url_for('maintenance_page'))
     except Exception as e:
         db.session.rollback()
         flash(f'Error updating maintenance: {str(e)}', 'error')
