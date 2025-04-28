@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Maintenance Request</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #d9534f;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-left: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+        }
+        .footer {
+            background-color: #f5f5f5;
+            padding: 15px;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            border-radius: 0 0 5px 5px;
+            border: 1px solid #ddd;
+        }
+        .info-box {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .priority-critical {
+            background-color: #d9534f;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .priority-high {
+            background-color: #f0ad4e;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .priority-medium {
+            background-color: #5bc0de;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .priority-low {
+            background-color: #5cb85c;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Emergency Maintenance Request</h1>
+        </div>
+        <div class="content">
+            <div class="info-box">
+                <h2>Request Details</h2>
+                <p>An emergency maintenance request has been submitted for immediate attention.</p>
+                
+                {% if priority == 'Critical' %}
+                <p><span class="priority-critical">{{ priority }}</span></p>
+                {% elif priority == 'High' %}
+                <p><span class="priority-high">{{ priority }}</span></p>
+                {% elif priority == 'Medium' %}
+                <p><span class="priority-medium">{{ priority }}</span></p>
+                {% else %}
+                <p><span class="priority-low">{{ priority }}</span></p>
+                {% endif %}
+                
+                <table>
+                    <tr>
+                        <th>Machine</th>
+                        <td>{{ machine_name }} ({{ machine_model }})</td>
+                    </tr>
+                    <tr>
+                        <th>Machine #</th>
+                        <td>{{ machine_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>Serial #</th>
+                        <td>{{ serial_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>Location</th>
+                        <td>{{ site_name }}{% if site_location %} - {{ site_location }}{% endif %}</td>
+                    </tr>
+                    {% if part_name %}
+                    <tr>
+                        <th>Affected Part</th>
+                        <td>{{ part_name }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+            
+            <div class="info-box">
+                <h2>Issue Description</h2>
+                <p style="white-space: pre-wrap;">{{ issue_description }}</p>
+            </div>
+            
+            <div class="info-box">
+                <h2>Contact Information</h2>
+                <table>
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ contact_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Email</th>
+                        <td><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></td>
+                    </tr>
+                    {% if contact_phone %}
+                    <tr>
+                        <th>Phone</th>
+                        <td><a href="tel:{{ contact_phone }}">{{ contact_phone }}</a></td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        <div class="footer">
+            <p>This is an automated message from the AMRS Maintenance Tracker. Please do not reply to this email.</p>
+            <p>© {{ now.year }} AMRS Preventative Maintenance</p>
+        </div>
+    </div>
+</body>
+</html>
