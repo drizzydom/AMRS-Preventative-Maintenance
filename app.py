@@ -19,6 +19,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
 from sqlalchemy import or_, text
+from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import secrets
@@ -732,25 +733,26 @@ def dashboard():
     try:
         # Get upcoming and overdue maintenance across all sites the user has access to
         if current_user.is_admin:
-            # Admins can see all sites
-            sites = Site.query.all()
+            # Admins can see all sites, eager load machines and parts
+            sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
         else:
-            # Non-admins can only see sites they're assigned to
-            sites = current_user.sites
-            
+            # Non-admins can only see sites they're assigned to, eager load as well
+            sites = (
+                Site.query.options(joinedload(Site.machines).joinedload(Machine.parts))
+                .filter(Site.id.in_([site.id for site in current_user.sites]))
+                .all()
+            )
         # Get all machines across accessible sites
         machines = []
         site_ids = [site.id for site in sites]
         if site_ids:
             machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
-            
         # Get all parts that need maintenance soon or are overdue
         parts = []
         machine_ids = [machine.id for machine in machines]
         if machine_ids:
             # Get all parts for these machines
             parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
-            
         # Get statistics
         stats = {
             'sites_count': len(sites),
