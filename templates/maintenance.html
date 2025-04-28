@@ -441,5 +441,16 @@
             }
         });
     });
+    
+    // Add a submit event listener to the modal form for debugging
+    document.addEventListener('DOMContentLoaded', function() {
+        const modalForm = document.querySelector('#recordMaintenanceModal form');
+        if (modalForm) {
+            modalForm.addEventListener('submit', function(e) {
+                console.log('[DEBUG] Modal maintenance form submitted');
+                alert('DEBUG: Modal maintenance form submitted');
+            });
+        }
+    });
 </script>
 {% endblock %}
