@@ -424,9 +424,15 @@ def initialize_db_connection():
 # --- Default admin creation logic ---
 def add_default_admin_if_needed():
     try:
-        admin_username = "dmoriello"
-        admin_email = "techsupport@accuratemachinerepair.com"
-        admin_password = "Sm@rty123"
+        admin_username = os.environ.get('DEFAULT_ADMIN_USERNAME')
+        admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL')
+        admin_password = os.environ.get('DEFAULT_ADMIN_PASSWORD')
+        
+        # Skip if environment variables aren't set
+        if not admin_username or not admin_email or not admin_password:
+            print("[APP] Default admin credentials not found in environment variables. Skipping default admin creation.")
+            return
+            
         # Check for admin by username or email (encrypted)
         admin_user = User.query.filter(
             (User._username == encrypt_value(admin_username)) |
@@ -447,7 +453,7 @@ def add_default_admin_if_needed():
             )
             db.session.add(admin)
             db.session.commit()
-            print("[APP] Default admin user created: dmoriello / Sm@rty123")
+            print(f"[APP] Default admin user created: {admin_username}")
         else:
             # Ensure admin user has admin role
             admin_role = Role.query.filter_by(name='admin').first()
