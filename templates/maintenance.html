@@ -348,6 +348,16 @@
             if (!machineParts[machineId]) machineParts[machineId] = 0;
             machineParts[machineId]++;
         }
+
+        // Hide all machine options except the first one (Select Machine)
+        for(let i = 1; i < machineSelect.options.length; i++) {
+            machineSelect.options[i].style.display = 'none';
+        }
+        
+        // Hide all part options except the first one (Select Part)
+        for(let i = 1; i < partSelect.options.length; i++) {
+            partSelect.options[i].style.display = 'none';
+        }
         
         // Site selection change handler
         siteSelect.addEventListener('change', function() {
@@ -359,9 +369,19 @@
                 machineSelect.disabled = true;
                 machineHelp.textContent = "Please select a site first";
                 
+                // Hide all machine options except the first one
+                for(let i = 1; i < machineSelect.options.length; i++) {
+                    machineSelect.options[i].style.display = 'none';
+                }
+                
                 partSelect.value = "";
                 partSelect.disabled = true;
                 partHelp.textContent = "Please select a machine first";
+                
+                // Hide all part options except the first one
+                for(let i = 1; i < partSelect.options.length; i++) {
+                    partSelect.options[i].style.display = 'none';
+                }
                 return;
             }
             
@@ -376,8 +396,10 @@
             
             // Show only machines for selected site
             let availableMachines = 0;
-            for(const option of machineSelect.options) {
-                if(option.value === "") continue;
+            for(let i = 0; i < machineSelect.options.length; i++) {
+                const option = machineSelect.options[i];
+                if(option.value === "") continue; // Skip the placeholder option
+                
                 const machineSiteId = option.getAttribute('data-site');
                 const shouldShow = machineSiteId === siteId;
                 option.style.display = shouldShow ? '' : 'none';
@@ -395,10 +417,9 @@
             partSelect.disabled = true;
             partHelp.textContent = "Please select a machine first";
             
-            // Hide all part options
-            for(const option of partSelect.options) {
-                if(option.value === "") continue;
-                option.style.display = 'none';
+            // Hide all part options except the first one
+            for(let i = 1; i < partSelect.options.length; i++) {
+                partSelect.options[i].style.display = 'none';
             }
         });
         
@@ -411,6 +432,11 @@
                 partSelect.value = "";
                 partSelect.disabled = true;
                 partHelp.textContent = "Please select a machine first";
+                
+                // Hide all part options except the first one
+                for(let i = 1; i < partSelect.options.length; i++) {
+                    partSelect.options[i].style.display = 'none';
+                }
                 return;
             }
             
@@ -425,8 +451,10 @@
             
             // Show only parts for selected machine
             let availableParts = 0;
-            for(const option of partSelect.options) {
-                if(option.value === "") continue;
+            for(let i = 0; i < partSelect.options.length; i++) {
+                const option = partSelect.options[i];
+                if(option.value === "") continue; // Skip the placeholder option
+                
                 const partMachineId = option.getAttribute('data-machine');
                 const shouldShow = partMachineId === machineId;
                 option.style.display = shouldShow ? '' : 'none';
