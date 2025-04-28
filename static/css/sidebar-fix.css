@@ -194,10 +194,41 @@ html body .sidebar {
   }
 }
 
+/* Mobile content should take up full width when sidebar is closed */
+@media (max-width: 991.98px) {
+  /* Content container should take full width */
+  html body .content-container,
+  body .content-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    transition: margin-left 0.3s ease;
+  }
+
+  /* Content positioning shouldn't be affected by sidebar state */
+  html body .centered-layout .row,
+  body .centered-layout .row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  /* Make sure sidebar container doesn't take up space */
+  .col-md-auto.sidebar-container {
+    padding: 0 !important;
+    width: 0 !important;
+    flex: 0 0 0 !important;
+  }
+
+  /* Don't push content aside when sidebar is open on mobile */
+  body.sidebar-active .content-container {
+    margin-left: 0 !important;
+  }
+}
+
 .sidebar-overlay {
   display: none;
   position: fixed;
-  z-index: 1039;
+  z-index: 1030; /* Lower than sidebar (1040) but higher than content */
   top: 0;
   left: 0;
   width: 100vw;
@@ -205,17 +236,28 @@ html body .sidebar {
   background: rgba(0,0,0,0.45);
   transition: background 0.2s;
 }
+
+/* Show the overlay only behind the sidebar, not on top of it */
 body.sidebar-active .sidebar-overlay {
   display: block;
 }
-.sidebar-overlay .overlay-text {
-  color: #fff;
-  font-size: 1.2rem;
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+
+/* The sidebar must be on top of the overlay */
+@media (max-width: 991.98px) {
+  .sidebar {
+    z-index: 1040; /* Higher than overlay (1030) */
+  }
+  
+  /* Remove pointer events completely from overlay when sidebar is shown */
+  body.sidebar-active .sidebar-overlay {
+    pointer-events: auto; /* Let clicks pass through to background content */
+  }
+  
+  /* Ensure the sidebar area is always clickable */
+  .sidebar.show {
+    z-index: 1040;
+    pointer-events: auto !important;
+  }
 }
 
 /* Desktop sidebar collapse button - always visible */
