@@ -50,6 +50,9 @@
                                 <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteMachineModal{{ machine.id }}">
                                     <i class="fas fa-trash"></i> Delete
                                 </button>
+                                <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#emergencyRequestModal{{ machine.id }}">
+                                    <i class="fas fa-exclamation-triangle"></i> Emergency Request
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -72,6 +75,81 @@
                                         <button type="submit" class="btn btn-danger">Delete Machine</button>
                                     </form>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Emergency Request Modal -->
+                    <div class="modal fade" id="emergencyRequestModal{{ machine.id }}" tabindex="-1" role="dialog" aria-labelledby="emergencyRequestModalLabel{{ machine.id }}" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header bg-danger text-white">
+                                    <h5 class="modal-title" id="emergencyRequestModalLabel{{ machine.id }}">Emergency Maintenance Request</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form action="{{ url_for('emergency_maintenance_request') }}" method="post">
+                                    <input type="hidden" name="machine_id" value="{{ machine.id }}">
+                                    <input type="hidden" name="machine_name" value="{{ machine.name }}">
+                                    <input type="hidden" name="site_name" value="{{ machine.site.name }}">
+                                    <input type="hidden" name="site_location" value="{{ machine.site.location }}">
+                                    
+                                    <div class="modal-body">
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle"></i> This form will send an emergency maintenance request to our field technicians.
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Machine</label>
+                                            <p class="form-control-plaintext">{{ machine.name }} ({{ machine.model }}) at {{ machine.site.name }}</p>
+                                        </div>
+                                        
+                                        {% if machine.parts %}
+                                        <div class="mb-3">
+                                            <label for="part_id{{ machine.id }}" class="form-label">Affected Part</label>
+                                            <select class="form-select" id="part_id{{ machine.id }}" name="part_id">
+                                                <option value="" selected>Unknown/Multiple Parts</option>
+                                                {% for part in machine.parts %}
+                                                <option value="{{ part.id }}">{{ part.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div class="mb-3">
+                                            <label for="contact_name{{ machine.id }}" class="form-label">Contact Name *</label>
+                                            <input type="text" class="form-control" id="contact_name{{ machine.id }}" name="contact_name" value="{{ current_user.full_name }}" required>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="contact_email{{ machine.id }}" class="form-label">Contact Email *</label>
+                                            <input type="email" class="form-control" id="contact_email{{ machine.id }}" name="contact_email" value="{{ current_user.email }}" required>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="contact_phone{{ machine.id }}" class="form-label">Contact Phone</label>
+                                            <input type="tel" class="form-control" id="contact_phone{{ machine.id }}" name="contact_phone" placeholder="Optional">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="issue_description{{ machine.id }}" class="form-label">Issue Description *</label>
+                                            <textarea class="form-control" id="issue_description{{ machine.id }}" name="issue_description" rows="5" required placeholder="Please describe the issue in detail, including any error messages, unusual sounds, or visible problems"></textarea>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="priority{{ machine.id }}" class="form-label">Priority</label>
+                                            <select class="form-select" id="priority{{ machine.id }}" name="priority">
+                                                <option value="Critical" selected>Critical - Machine Down (Immediate Response Needed)</option>
+                                                <option value="High">High - Limited Operation (24 Hour Response)</option>
+                                                <option value="Medium">Medium - Degraded Performance (48 Hour Response)</option>
+                                                <option value="Low">Low - Non-critical Issues (Standard Scheduling)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="submit" class="btn btn-danger">Submit Emergency Request</button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     </div>
