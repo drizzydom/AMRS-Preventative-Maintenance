@@ -124,30 +124,16 @@ function formatDate(dateString) {
     return new Date(dateString).toLocaleDateString(undefined, options);
 }
 
-// Updated toggleSidebar function to properly handle the close button state
+// Updated toggleSidebar function to only use hamburger button
 function toggleSidebar() {
     var sidebar = document.querySelector('.sidebar');
     var overlay = document.getElementById('sidebar-overlay');
-    var closeBtn = document.querySelector('.sidebar-close-btn');
     
     if (!sidebar || window.innerWidth >= 992) return; // Only handle on mobile
     
     // Toggle sidebar visibility
     sidebar.classList.toggle('show');
     document.body.classList.toggle('sidebar-active');
-    
-    // Update close button appearance
-    if (closeBtn) {
-        if (sidebar.classList.contains('show')) {
-            closeBtn.style.opacity = '1';
-            closeBtn.style.visibility = 'visible';
-            closeBtn.style.transform = 'rotate(0deg)';
-        } else {
-            closeBtn.style.opacity = '0';
-            closeBtn.style.visibility = 'hidden';
-            closeBtn.style.transform = 'rotate(-90deg)';
-        }
-    }
     
     // Show/hide overlay
     if (overlay) {
@@ -157,9 +143,19 @@ function toggleSidebar() {
             overlay.style.display = 'none';
         }
     }
+    
+    // Toggle hamburger button appearance
+    var hamburgerBtn = document.getElementById('hamburger-btn');
+    if (hamburgerBtn) {
+        if (sidebar.classList.contains('show')) {
+            hamburgerBtn.setAttribute('aria-expanded', 'true');
+        } else {
+            hamburgerBtn.setAttribute('aria-expanded', 'false');
+        }
+    }
 }
 
-// Handle hamburger button click (ensure we only need one button)
+// Handle hamburger button click
 document.addEventListener('DOMContentLoaded', function() {
     // Connect hamburger button to toggle function
     var hamburgerBtn = document.getElementById('hamburger-btn');
@@ -174,15 +170,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var overlay = document.getElementById('sidebar-overlay');
     if (overlay) {
         overlay.addEventListener('click', function() {
-            toggleSidebar();
-        });
-    }
-    
-    // Handle close button in sidebar
-    var sidebarCloseBtn = document.querySelector('.sidebar-close-btn');
-    if (sidebarCloseBtn) {
-        sidebarCloseBtn.addEventListener('click', function(e) {
-            e.preventDefault();
             toggleSidebar();
         });
     }
