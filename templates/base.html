@@ -394,22 +394,22 @@
             <div class="col-md-auto px-0 sidebar-container">
                 <div class="sidebar">
                     <ul class="sidebar-nav">
-                        <!-- Add collapse/expand button for desktop (always visible) -->
+                        <!-- Simplify sidebar toggle buttons -->
+                        <!-- Desktop collapse button (only visible on desktop) -->
                         <li class="sidebar-nav-item sidebar-toggle-item d-none d-lg-block">
                             <button class="sidebar-toggle-btn" onclick="toggleSidebarCollapse()" aria-label="Collapse Sidebar">
                                 <i class="fas fa-angle-double-left"></i>
                             </button>
                         </li>
-                        <!-- Mobile hamburger/close remains as-is -->
-                        <li class="sidebar-nav-item sidebar-toggle-item d-lg-none">
-                            <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">
-                                <i class="fas fa-bars"></i>
-                            </button>
-                            <button class="sidebar-close-btn" onclick="toggleSidebar()" aria-label="Close Sidebar" tabindex="0">
+                        
+                        <!-- Mobile close button (only visible on mobile) -->
+                        <li class="sidebar-nav-item d-lg-none">
+                            <button class="sidebar-close-btn" aria-label="Close Sidebar" tabindex="0">
                                 <i class="fas fa-times"></i>
                             </button>
                         </li>
                         
+                        <!-- Regular sidebar navigation items -->
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-tachometer-alt"></i>
