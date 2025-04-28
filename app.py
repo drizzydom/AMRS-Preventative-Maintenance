@@ -26,7 +26,7 @@ from sqlalchemy import inspect
 import smtplib
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
@@ -90,6 +90,9 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Load configuration from config.py for secure local database
+app.config.from_object('config.Config')
 
 # Email configuration (all secrets from environment)
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
@@ -418,30 +421,41 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
-# --- Move setup code from before_first_request to here ---
+# --- Default admin creation logic ---
 def add_default_admin_if_needed():
-    """Add a default admin user if no users exist in the database."""
     try:
-        user_count = User.query.count()
-        if user_count == 0:
-            print("[APP] No users found, creating default admin user")
+        admin_username = os.environ.get('DEFAULT_ADMIN_USERNAME')
+        admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL')
+        admin_password = os.environ.get('DEFAULT_ADMIN_PASSWORD')
+        
+        # Skip if environment variables aren't set
+        if not admin_username or not admin_email or not admin_password:
+            print("[APP] Default admin credentials not found in environment variables. Skipping default admin creation.")
+            return
+            
+        # Check for admin by username or email (encrypted)
+        admin_user = User.query.filter(
+            (User._username == encrypt_value(admin_username)) |
+            (User._email == encrypt_value(admin_email))
+        ).first()
+        if not admin_user:
+            print("[APP] No admin user found, creating default admin user")
             admin_role = Role.query.filter_by(name='admin').first()
             if not admin_role:
                 admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
                 db.session.add(admin_role)
                 db.session.commit()
             admin = User(
-                username='admin',
-                email='admin@example.com',
-                password_hash=generate_password_hash('admin'),
+                username=admin_username,
+                email=admin_email,
+                password_hash=generate_password_hash(admin_password),
                 role=admin_role
             )
             db.session.add(admin)
             db.session.commit()
-            print("[APP] Default admin user created")
+            print(f"[APP] Default admin user created: {admin_username}")
         else:
-            # Ensure existing admin user has correct role
-            admin_user = User.query.filter_by(username='admin').first()
+            # Ensure admin user has admin role
             admin_role = Role.query.filter_by(name='admin').first()
             if admin_user and (not admin_user.role or admin_user.role != admin_role):
                 print(f"[APP] Fixing admin role for user {admin_user.username}")
@@ -454,13 +468,17 @@ def add_default_admin_if_needed():
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
 
+# --- Move all startup DB logic inside a single app context ---
 with app.app_context():
     try:
-        run_auto_migration()  # Ensure schema is up to date on launch
+        run_auto_migration()  # Ensure columns exist before any queries
     except Exception as e:
         print(f'[AUTO_MIGRATE ERROR] {e}')
+    try:
+        import expand_user_fields
+    except Exception as e:
+        print(f"[STARTUP] User field length expansion migration failed: {e}")
     add_default_admin_if_needed()
-    
     try:
         print("[APP] Performing database integrity checks...")
         admin_users = User.query.join(Role).filter(
@@ -478,8 +496,7 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f"[APP] Error performing database integrity checks: {e}")
-    
-    # Healthcheck log
+    # Healthcheck log (now inside app context)
     try:
         from simple_healthcheck import check_database
         print("[STARTUP] Running healthcheck...")
@@ -489,7 +506,6 @@ with app.app_context():
             print("[STARTUP] Healthcheck FAILED: Database is not ready.")
     except Exception as e:
         print(f"[STARTUP] Healthcheck error: {e}")
-
     initialize_db_connection()
     ensure_db_schema()
     ensure_maintenance_records_schema()
@@ -884,41 +900,36 @@ def audits_page():
             flash(f'Error creating audit task: {str(e)}', 'danger')
             return redirect(url_for('audits_page'))
             
-        if request.method == 'POST' and request.form.get('checkoff') == '1':
-            updated = 0
-            ineligible = False
-            for task in audit_tasks:
-                for machine in task.machines:
-                    key = f'complete_{task.id}_{machine.id}'
-                    if key in request.form:
-                        # Check if already completed today
-                        if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed:
-                            continue
-                        # Strictly enforce interval: only allow if no previous completion or today >= next eligible date
-                        next_eligible = eligibility.get((task.id, machine.id))
-                        if next_eligible is not None and today < next_eligible:
-                            ineligible = True
-                            continue  # Not eligible yet
-                        # Only record completion if eligible (either no previous completion or today >= next_eligible)
-                        completion = AuditTaskCompletion(
-                            audit_task_id=task.id,
-                            machine_id=machine.id,
-                            date=today,
-                            completed=True,
-                            completed_by=current_user.id,
-                            completed_at=datetime.now()
-                        )
-                        db.session.add(completion)
-                        updated += 1
-            if ineligible and updated == 0:
-                flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'info')
-                return redirect(url_for('audits_page'), code=303)
-            if updated:
-                db.session.commit()
-                flash(f'{updated} audit task(s) checked off successfully.', 'success')
-            else:
-                flash('No eligible audit tasks were checked off.', 'info')
-            return redirect(url_for('audits_page'))
+    if request.method == 'POST' and request.form.get('checkoff') == '1':
+        updated = 0
+        for task in audit_tasks:
+            for machine in task.machines:
+                key = f'complete_{task.id}_{machine.id}'
+                if key in request.form:
+                    # Check if already completed today
+                    if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed:
+                        continue
+                    # Strictly enforce interval: only allow if no previous completion or today >= next eligible date
+                    next_eligible = eligibility.get((task.id, machine.id))
+                    if next_eligible is not None and today < next_eligible:
+                        continue  # Not eligible yet
+                    # Only record completion if eligible (either no previous completion or today >= next_eligible)
+                    completion = AuditTaskCompletion(
+                        audit_task_id=task.id,
+                        machine_id=machine.id,
+                        date=today,
+                        completed=True,
+                        completed_by=current_user.id,
+                        completed_at=datetime.now()
+                    )
+                    db.session.add(completion)
+                    updated += 1
+        if updated:
+            db.session.commit()
+            flash(f'{updated} audit task(s) checked off successfully.', 'success')
+        else:
+            flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'warning')
+        return redirect(url_for('audits_page'))
     
     return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility)
 
@@ -972,11 +983,11 @@ def admin_users():
                 return redirect('/admin/users')
             
             # Check if username or email already exist
-            if User.query.filter_by(username=username).first():
+            if User.query.filter_by(_username=encrypt_value(username)).first():
                 flash(f'Username "{username}" is already taken.', 'danger')
                 return redirect('/admin/users')
                 
-            if User.query.filter_by(email=email).first():
+            if User.query.filter_by(_email=encrypt_value(email)).first():
                 flash(f'Email "{email}" is already registered.', 'danger')
                 return redirect('/admin/users')
             
@@ -1119,61 +1130,46 @@ def admin_roles():
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
-    roles = Role.query.all()
-    all_permissions = get_all_permissions()
-    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
-
-@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
-@login_required
-def edit_role(role_id):
-    """Edit an existing role - admin only"""
-    if not is_admin_user(current_user):
-        flash('You do not have permission to edit roles.', 'danger')
-        return redirect(url_for('dashboard'))
     
-    # Replace get_or_404 for Role
-    role = db.session.get(Role, role_id)
-    if not role:
-        abort(404)
-    
-    all_permissions = get_all_permissions()
-    
+    # Handle form submission for creating a new role
     if request.method == 'POST':
         try:
             name = request.form.get('name')
             description = request.form.get('description', '')
-            
-            # Check if name is changed and already exists
-            if name != role.name and Role.query.filter_by(name=name).first():
-                flash(f'A role with the name "{name}" already exists.', 'danger')
-                return redirect(url_for='edit_role', role_id=role_id)
-            
-            # Update role details
-            role.name = name
-            role.description = description
-            
-            # Update permissions
             permissions = request.form.getlist('permissions')
-            role.permissions = ','.join(permissions) if permissions else ''
             
+            # Validate required fields
+            if not name:
+                flash('Role name is required.', 'danger')
+                return redirect(url_for('admin_roles'))
+            
+            # Check if role name already exists
+            if Role.query.filter_by(name=name).first():
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect(url_for('admin_roles'))
+            
+            # Create new role
+            new_role = Role(
+                name=name,
+                description=description,
+                permissions=','.join(permissions) if permissions else ''
+            )
+            
+            # Add role to database
+            db.session.add(new_role)
             db.session.commit()
-            flash(f'Role "{name}" updated successfully.', 'success')
-            return redirect(url_for='admin_roles')
             
+            flash(f'Role "{name}" created successfully.', 'success')
+            return redirect(url_for('admin_roles'))
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Error updating role: {e}")
-            flash(f'Error updating role: {str(e)}', 'danger')
+            app.logger.error(f"Error creating role: {e}")
+            flash(f'Error creating role: {str(e)}', 'danger')
     
-    # For GET requests, render the edit form with role's current permissions
-    current_permissions = role.permissions.split(',') if role.permissions else []
-    
-    return render_template('edit_role.html', 
-                          role=role,
-                          all_permissions=all_permissions,
-                          current_permissions=current_permissions)
-
-
+    # For GET requests or after POST processing
+    roles = Role.query.all()
+    all_permissions = get_all_permissions()
+    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
 
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
@@ -1694,7 +1690,7 @@ def login():
         # Add debug for login attempts
         app.logger.debug(f"Login attempt: username={username}")
         
-        user = User.query.filter_by(username=username).first()
+        user = User.query.filter_by(username_hash=hash_value(username)).first()
         
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
@@ -1726,7 +1722,7 @@ def forgot_password():
         
     if request.method == 'POST':
         email = request.form.get('email')
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter_by(email_hash=hash_value(email)).first()
         
         if user:
             # Generate a password reset token
@@ -1858,67 +1854,6 @@ def debug_info():
         })
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
 
-def add_default_admin_if_needed():
-    """Add a default admin user if no users exist in the database."""
-    try:
-        user_count = User.query.count()
-        if user_count == 0:
-            print("[APP] No users found, creating default admin user")
-            admin_role = Role.query.filter_by(name='admin').first()
-            if not admin_role:
-                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                db.session.add(admin_role)
-                db.session.commit()
-            admin = User(
-                username='admin',
-                email='admin@example.com',
-                password_hash=generate_password_hash('admin'),
-                role=admin_role
-            )
-            db.session.add(admin)
-            db.session.commit()
-            print("[APP] Default admin user created")
-        else:
-            # Ensure existing admin user has correct role
-            admin_user = User.query.filter_by(username='admin').first()
-            admin_role = Role.query.filter_by(name='admin').first()
-            if admin_user and (not admin_user.role or admin_user.role != admin_role):
-                print(f"[APP] Fixing admin role for user {admin_user.username}")
-                if not admin_role:
-                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                    db.session.add(admin_role)
-                    db.session.commit()
-                admin_user.role = admin_role
-                db.session.commit()
-    except Exception as e:
-        print(f"[APP] Error creating/updating default admin: {e}")
-
-def run_startup_migrations():
-    """Run all migration/update scripts and log results"""
-    import subprocess
-    import sys
-    migration_scripts = [
-        'add_password_reset_columns.py',
-        'add_maintenance_unit.py',
-        'update_schema.py',
-        'create_maintenance_table.py',
-        'add_notification_preferences.py',
-        'add_audit_task_columns.py',
-    ]
-    for script in migration_scripts:
-        script_path = os.path.join(os.path.dirname(__file__), script)
-        if os.path.exists(script_path):
-            print(f"[STARTUP] Running migration: {script}")
-            try:
-                result = subprocess.run([sys.executable, script_path], capture_output=True, text=True)
-                print(f"[STARTUP] {script} output:\n{result.stdout}")
-                if result.stderr:
-                    print(f"[STARTUP] {script} errors:\n{result.stderr}")
-            except Exception as e:
-                print(f"[STARTUP] Failed to run {script}: {e}")
-        else:
-            print(f"[STARTUP] Migration script not found: {script}")
-
 @app.route('/api/sync/status', methods=['GET'])
 def sync_status():
     """Get synchronization status information."""
@@ -1965,6 +1900,7 @@ def sync_data():
 
 @app.route('/health-check')
 def health_check():
+
     """Basic healthcheck endpoint."""
     try:
         # Update to use connection-based execute pattern
@@ -1978,7 +1914,7 @@ def health_check():
 @app.errorhandler(404)
 def page_not_found(e):
     try:
-        return render_template('errors/404.html'), 404
+             return render_template('errors/404.html'), 404
     except:
         return '''
         <!DOCTYPE html>
@@ -1989,6 +1925,7 @@ def page_not_found(e):
         </head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Page Not Found</h1>
+            <p>The requested page was not found. Please check the URL or go```html
             <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
@@ -2002,7 +1939,7 @@ def server_error(e):
         return '''
         <!DOCTYPE html>
         <html>
-        <head><title>Server Error</title>Server Error</title>
+        <head><title>Server Error</title></head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Server Error</h1>
             <p>Sorry, something went wrong on our end. Please try again later or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
@@ -2458,53 +2395,123 @@ def maintenance_records_page():
         selected_part=part_id
     )
 
+@app.route('/emergency-maintenance-request', methods=['POST'])
+@login_required
+def emergency_maintenance_request():
+    """Handle emergency maintenance request form submission"""
+    try:
+        # Get form data
+        machine_id = request.form.get('machine_id')
+        machine_name = request.form.get('machine_name')
+        site_name = request.form.get('site_name')
+        site_location = request.form.get('site_location', '')
+        part_id = request.form.get('part_id')
+        contact_name = request.form.get('contact_name')
+        contact_email = request.form.get('contact_email')
+        contact_phone = request.form.get('contact_phone', '')
+        issue_description = request.form.get('issue_description')
+        priority = request.form.get('priority', 'Critical')
+        
+        # Validate required fields
+        if not (machine_id and machine_name and contact_name and contact_email and issue_description):
+            flash('Missing required fields for emergency request.', 'danger')
+            return redirect(url_for('manage_machines'))
+        
+        # Get additional machine details
+        machine = db.session.get(Machine, int(machine_id))
+        if not machine:
+            flash('Machine not found.', 'danger')
+            return redirect(url_for('manage_machines'))
+            
+        # Get part details if specified
+        part_name = None
+        if part_id:
+            part = db.session.get(Part, int(part_id))
+            if part:
+                part_name = part.name
+        
+        # Get emergency contact email from environment
+        emergency_email = os.environ.get('EMERGENCY_CONTACT_EMAIL')
+        
+        # If no emergency email is configured, use a fallback approach
+        if not emergency_email:
+            app.logger.warning("No EMERGENCY_CONTACT_EMAIL configured. Using admin users as fallback.")
+            # Get emails of all admin users as fallback
+            admin_role = Role.query.filter_by(name='admin').first()
+            if admin_role:
+                admin_users = User.query.filter_by(role_id=admin_role.id).all()
+                emergency_emails = [user.email for user in admin_users if user.email]
+            else:
+                # Absolute fallback - use the system default sender
+                emergency_emails = [app.config['MAIL_DEFAULT_SENDER']]
+        else:
+            # Use the configured emergency email
+            emergency_emails = [emergency_email]
+        
+        # Prepare email context
+        context = {
+            'machine_name': machine_name,
+            'machine_model': machine.model,
+            'machine_number': machine.machine_number or 'N/A',
+            'serial_number': machine.serial_number or 'N/A',
+            'site_name': site_name,
+            'site_location': site_location,
+            'part_name': part_name,
+            'contact_name': contact_name,
+            'contact_email': contact_email,
+            'contact_phone': contact_phone,
+            'issue_description': issue_description,
+            'priority': priority,
+            'now': datetime.now()
+        }
+        
+        # Create subject line based on priority
+        if priority == 'Critical':
+            subject = f"URGENT: Critical Maintenance Required - {machine_name} at {site_name}"
+        elif priority == 'High':
+            subject = f"HIGH Priority: Maintenance Required - {machine_name} at {site_name}"
+        else:
+            subject = f"Maintenance Request - {machine_name} at {site_name}"
+        
+        # Send email
+        try:
+            msg = Message(
+                subject=subject,
+                recipients=emergency_emails,
+                html=render_template('email/emergency_request.html', **context),
+                sender=app.config['MAIL_DEFAULT_SENDER']
+            )
+            # Add reply-to header so technicians can reply directly to the requester
+            msg.reply_to = contact_email
+            
+            # Send the email
+            mail.send(msg)
+            
+            # Log the emergency request
+            app.logger.info(f"Emergency maintenance request sent for {machine_name} at {site_name} with {priority} priority")
+            
+            flash('Emergency maintenance request has been sent successfully. A technician will contact you shortly.', 'success')
+        except Exception as e:
+            app.logger.error(f"Failed to send emergency maintenance email: {str(e)}")
+            flash(f'Failed to send emergency request email: {str(e)}', 'danger')
+        
+        return redirect(url_for('manage_machines'))
+        
+    except Exception as e:
+        app.logger.error(f"Error processing emergency maintenance request: {str(e)}")
+        flash(f'Error processing emergency request: {str(e)}', 'danger')
+        return redirect(url_for('manage_machines'))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
     args = parser.parse_args()
-    with app.app_context():
-        try:
-            run_auto_migration()  # Ensure schema is up to date on launch
-        except Exception as e:
-            print(f'[AUTO_MIGRATE ERROR] {e}')
-        add_default_admin_if_needed()
-        
-        try:
-            print("[APP] Performing database integrity checks...")
-            admin_users = User.query.join(Role).filter(
-                or_(
-                    Role.name.ilike('admin'),
-                    User.username == 'admin'
-                )
-            ).all()
-            for user in admin_users:
-                if not user.role or user.role.name.lower() != 'admin':
-                    admin_role = Role.query.filter_by(name='admin').first()
-                    user.role = admin_role
-                    print(f"[APP] Fixed admin role for user {user.username}")
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f"[APP] Error performing database integrity checks: {e}")
-        
-        # Healthcheck log
-        try:
-            from simple_healthcheck import check_database
-            print("[STARTUP] Running healthcheck...")
-            if check_database():
-                print("[STARTUP] Healthcheck PASSED: Database is ready.")
-            else:
-                print("[STARTUP] Healthcheck FAILED: Database is not ready.")
-        except Exception as e:
-            print(f"[STARTUP] Healthcheck error: {e}")
-
     port = args.port or int(os.environ.get('PORT', 10000))
     debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
-
 
 
 

@@ -6,6 +6,51 @@ import uuid
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 from sqlalchemy.types import JSON as SA_JSON
 from sqlalchemy import Table, Column, Integer, ForeignKey, Date, Boolean
+from cryptography.fernet import Fernet, InvalidToken
+import base64
+import os
+import hashlib
+
+# --- Application-level encryption utilities ---
+# The encryption key MUST be set as an environment variable in production
+FERNET_KEY = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
+if not FERNET_KEY:
+    # Instead of generating a key, show an error message recommending proper setup
+    print("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
+    print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
+    print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
+    print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
+    # If application is starting up, we'll use a temporary key for testing only
+    # This is not secure and should not be used in production!
+    if os.environ.get('FLASK_ENV') == 'development' or os.environ.get('FLASK_DEBUG') == '1':
+        print("[SECURITY WARNING] Development mode detected. Using a temporary key for encryption.")
+        FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    else:
+        # For production, we don't want to silently continue with an insecure setup
+        raise ValueError("USER_FIELD_ENCRYPTION_KEY environment variable must be set in production.")
+
+# Initialize Fernet cipher with the key
+fernet = Fernet(FERNET_KEY)
+
+def encrypt_value(value):
+    if value is None:
+        return None
+    encrypted = fernet.encrypt(value.encode()).decode()
+    print(f"[ENCRYPTION] encrypt_value('{value}') = {encrypted}")
+    return encrypted
+
+def decrypt_value(value):
+    if value is None:
+        return None
+    try:
+        return fernet.decrypt(value.encode()).decode()
+    except (InvalidToken, AttributeError):
+        return None
+
+def hash_value(value):
+    if value is None:
+        return None
+    return hashlib.sha256(value.lower().encode()).hexdigest()
 
 db = SQLAlchemy()
 
@@ -26,10 +71,11 @@ machine_audit_task = Table(
 class User(UserMixin, db.Model):
     """User model for authentication and authorization"""
     __tablename__ = 'users'  # Explicit table name for PostgreSQL conventions
-    
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    _username = db.Column('username', db.Text, unique=True, nullable=False, index=True)
+    username_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    _email = db.Column('email', db.Text, unique=True, nullable=False)
+    email_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
@@ -54,7 +100,25 @@ class User(UserMixin, db.Model):
     
     # Define the one-to-many relationship with MaintenanceRecord
     maintenance_records = db.relationship('MaintenanceRecord', backref='user', lazy=True)
-    
+
+    @property
+    def username(self):
+        return decrypt_value(self._username)
+
+    @username.setter
+    def username(self, value):
+        self._username = encrypt_value(value)
+        self.username_hash = hash_value(value)
+
+    @property
+    def email(self):
+        return decrypt_value(self._email)
+
+    @email.setter
+    def email(self, value):
+        self._email = encrypt_value(value)
+        self.email_hash = hash_value(value)
+
     def set_password(self, password):
         """Set the password hash"""
         self.password_hash = generate_password_hash(password)

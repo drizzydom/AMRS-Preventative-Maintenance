@@ -1,24 +1,27 @@
 # AMRS Preventative Maintenance System
 
-A comprehensive desktop and web application for tracking and managing preventative maintenance for AMRS equipment. This system provides both online and offline functionality through a Python-based desktop application with a Flask backend.
+A comprehensive desktop and web application for tracking and managing preventative maintenance for AMRS equipment. The system provides both online and offline functionality through a Python-based desktop application with a Flask backend.
 
 <p align="center">
   <img src="static/img/logo.png" alt="AMRS Maintenance Tracker Logo" width="200"/>
 </p>
 
 ## Table of Contents
-
 - [Overview](#overview)
 - [Repository Structure](#repository-structure)
 - [System Requirements](#system-requirements)
-- [Development Setup](#development-setup)
-- [Building the Windows Client](#building-the-windows-client)
+- [Installation](#installation)
+  - [Server](#server)
+  - [Windows Client](#windows-client)
+- [Features](#features)
+- [Advanced Features](#advanced-features)
 - [Architecture](#architecture)
+- [Usage](#usage)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
-- [License and Legal](#license-and-legal)
 - [Audit Reminder System](#audit-reminder-system)
+- [License and Legal](#license-and-legal)
 
 ## Overview
 
@@ -31,6 +34,9 @@ AMRS Preventative Maintenance System combines a Flask web application with a Pyt
 - Analytics and reporting for maintenance trends
 - Scheduled maintenance reminders
 - Localization and accessibility features
+- Diagnostics and system health monitoring
+- Full offline/online synchronization
+- Standalone desktop experience (no web browser required)
 
 ## Repository Structure
 
@@ -60,41 +66,119 @@ AMRS-Preventative-Maintenance/
 - **SQLite** - Database (included with Python)
 - **Windows 10/11** - Primary target OS for the desktop client
 
-## Development Setup
+## Installation
 
-### Python Environment
+### Server
 
-1. **Create virtual environment**:
+#### Docker Installation (Recommended)
 
+```bash
+docker-compose up -d
+```
+
+This will start the server on port 9000 by default.
+
+#### Manual Installation
+
+1. Ensure Python 3.8+ is installed
+2. Create a virtual environment:
    ```bash
    python -m venv venv
-   source venv/bin/activate
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
-
-2. **Install Python dependencies**:
-
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-
-### Building the Windows Client
-
-1. Navigate to the `windows_client` directory:
+4. Configure the database:
    ```bash
-   cd windows_client
+   python manage.py migrate
+   ```
+5. Create an admin user:
+   ```bash
+   python manage.py createsuperuser
+   ```
+6. Start the server:
+   ```bash
+   python manage.py runserver 0.0.0.0:9000
    ```
 
-2. Install dependencies:
+### Windows Client
+
+#### Standard Installation
+
+1. Download the installer (`MaintenanceTracker-Setup.exe`) from the releases page
+2. Run the installer and follow the on-screen instructions
+3. The application will be installed in your Programs directory and shortcuts will be created
+
+#### Portable Installation
+
+1. Download the portable zip archive (`MaintenanceTrackerPortable.zip`)
+2. Extract the archive to any location (e.g., USB drive)
+3. Run `MaintenanceTracker.exe` from the extracted folder
+
+#### Building from Source
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
+   cd AMRS-Preventative-Maintenance/windows_client
+   ```
+2. Install requirements:
    ```bash
    pip install -r requirements.txt
    ```
-
 3. Build the application:
    ```bash
    python build.py
    ```
-
 4. The executable will be available in the `dist` folder.
+
+## Features
+
+- **Offline Operation**: Continue working without an internet connection
+- **Automatic Sync**: Data synchronizes when connectivity is restored
+- **Splash Screen**: Shows sync status at launch
+- **Pop-up Status**: Online/offline status bubble
+- **Background Synchronization**: Syncs in the background
+- **Secure Credential Storage**: Safely store login information
+- **Local Data Caching**: Store maintenance data locally
+- **Portable Mode**: Run without installation from any storage media
+- **Visual Indicators**: Clear status for maintenance items
+- **System Tray Integration**: Minimize to tray for background operation
+- **Dashboard View**: At-a-glance overview
+- **Analytics and Reporting**: Visual reports and trends
+- **Diagnostics**: System health and performance monitoring
+- **Scheduled Maintenance Reminders**: Notifications for upcoming/overdue maintenance
+- **Localization**: Multi-language support
+- **Accessibility**: High contrast mode, keyboard navigation, screen reader support
+
+## Advanced Features
+
+### Offline/Online Synchronization
+- The app detects network changes and syncs data automatically.
+- All changes made offline are queued and sent to the server when online.
+- Manual sync is available via the "Force Sync" button.
+- Conflict resolution strategies: Server Wins, Client Wins, Newest Wins, or Ask Me.
+
+### Analytics and Diagnostics
+- Built-in analytics dashboard for maintenance trends and system health.
+- Diagnostics tools for performance and error reporting.
+- Export reports in CSV or JSON format.
+
+### Accessibility & Localization
+- High contrast and accessible UI.
+- Keyboard navigation and screen reader compatibility.
+- Language switching and multi-language support.
+
+### Notifications & Reminders
+- System tray notifications for status and reminders.
+- Scheduled and on-demand maintenance reminders.
+- Customizable reminder intervals and notification preferences.
+
+### Security
+- Secure credential storage using keyring.
+- Encrypted local database (optional).
 
 ## Architecture
 
@@ -105,6 +189,14 @@ AMRS-Preventative-Maintenance/
 - **Analytics Module**: Generates visual reports and trends
 - **Scheduler**: Manages recurring maintenance reminders
 - **Localization**: Supports multiple languages for global users
+
+## Usage
+
+- On launch, a splash screen will show database synchronization status.
+- A pop-up bubble will indicate online/offline status.
+- The app works fully offline, with automatic sync when reconnected.
+- All features are available offline, including analytics and reporting.
+- The app runs as a standalone desktop application (not in a web browser).
 
 ## Testing
 
@@ -117,18 +209,23 @@ python -m unittest discover tests
 ## Troubleshooting
 
 ### Database Issues
-
 - Run database migrations if schema changes are required:
   ```bash
   python manage.py db upgrade
   ```
 
 ### Build Problems
-
 - Ensure all dependencies are installed:
   ```bash
   pip install -r requirements.txt
   ```
+
+### Windows Client Troubleshooting
+- Connection issues: Verify server URL, check server status, network configuration
+- Sync problems: Check log files, try "Force Sync", restart the app
+- Performance: Optimize database, clear cache, reduce offline data
+- Log files: `%USERPROFILE%\.amrs\logs` (installed) or `logs` folder (portable)
+- Data storage: `%USERPROFILE%\.amrs\` (installed) or `data\` folder (portable)
 
 ## Contributing
 
@@ -137,10 +234,6 @@ python -m unittest discover tests
 3. Make your changes
 4. Run tests to ensure functionality
 5. Submit a pull request
-
-## License and Legal
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Audit Reminder System
 
@@ -159,7 +252,7 @@ The AMRS Preventative Maintenance System supports automated audit reminder email
 
 To send audit reminders automatically, schedule the following command to run daily (e.g., at 5:00 PM):
 
-```
+```bash
 python notification_scheduler.py audit
 ```
 
@@ -197,14 +290,14 @@ python notification_scheduler.py audit
 
 2. Load the job:
 
-```
+```bash
 launchctl load ~/Library/LaunchAgents/com.amrs.auditreminder.plist
 ```
 
 ### Manual Run
 You can also run reminders manually at any time:
 
-```
+```bash
 python notification_scheduler.py audit
 ```
 
@@ -214,3 +307,7 @@ The reminder email uses `templates/email/audit_reminder.html`.
 ---
 
 For more information, see the user profile notification preferences and the [notification_scheduler.py](notification_scheduler.py) script.
+
+## License and Legal
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
