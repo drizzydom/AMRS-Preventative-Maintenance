@@ -1130,59 +1130,46 @@ def admin_roles():
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
-    roles = Role.query.all()
-    all_permissions = get_all_permissions()
-    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
-
-@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
-@login_required
-def edit_role(role_id):
-    """Edit an existing role - admin only"""
-    if not is_admin_user(current_user):
-        flash('You do not have permission to edit roles.', 'danger')
-        return redirect(url_for('dashboard'))
     
-    # Replace get_or_404 for Role
-    role = db.session.get(Role, role_id)
-    if not role:
-        abort(404)
-    
-    all_permissions = get_all_permissions()
-    
+    # Handle form submission for creating a new role
     if request.method == 'POST':
         try:
             name = request.form.get('name')
             description = request.form.get('description', '')
-            
-            # Check if name is changed and already exists
-            if name != role.name and Role.query.filter_by(name=name).first():
-                flash(f'A role with the name "{name}" already exists.', 'danger')
-                return redirect(url_for='edit_role', role_id=role_id)
-            
-            # Update role details
-            role.name = name
-            role.description = description
-            
-            # Update permissions
             permissions = request.form.getlist('permissions')
-            role.permissions = ','.join(permissions) if permissions else ''
             
+            # Validate required fields
+            if not name:
+                flash('Role name is required.', 'danger')
+                return redirect(url_for('admin_roles'))
+            
+            # Check if role name already exists
+            if Role.query.filter_by(name=name).first():
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect(url_for('admin_roles'))
+            
+            # Create new role
+            new_role = Role(
+                name=name,
+                description=description,
+                permissions=','.join(permissions) if permissions else ''
+            )
+            
+            # Add role to database
+            db.session.add(new_role)
             db.session.commit()
-            flash(f'Role "{name}" updated successfully.', 'success')
-            return redirect(url_for='admin_roles')
             
+            flash(f'Role "{name}" created successfully.', 'success')
+            return redirect(url_for('admin_roles'))
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Error updating role: {e}")
-            flash(f'Error updating role: {str(e)}', 'danger')
+            app.logger.error(f"Error creating role: {e}")
+            flash(f'Error creating role: {str(e)}', 'danger')
     
-    # For GET requests, render the edit form with role's current permissions
-    current_permissions = role.permissions.split(',') if role.permissions else []
-    
-    return render_template('edit_role.html', 
-                          role=role,
-                          all_permissions=all_permissions,
-                          current_permissions=current_permissions)
+    # For GET requests or after POST processing
+    roles = Role.query.all()
+    all_permissions = get_all_permissions()
+    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
 
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
@@ -1938,6 +1925,7 @@ def page_not_found(e):
         </head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Page Not Found</h1>
+            <p>The requested page was not found. Please check the URL or go```html
             <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
@@ -2524,5 +2512,6 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
