@@ -115,6 +115,10 @@ function filterSites(siteId) {
         const siteItem = document.querySelector(`.site-item[data-site-id="${siteId}"]`);
         if (siteItem) {
             siteItem.style.display = '';
+            
+            // Update machine statuses based on the visible parts
+            updateMachineStatuses(siteItem);
+            
             // Update counters for just this site
             updateCountersFromSite(siteItem);
         }
@@ -222,6 +226,75 @@ function updateCountersFromSite(siteItem) {
     if (dueSoonElement) dueSoonElement.textContent = dueSoonCount;
     if (okElement) okElement.textContent = okCount;
     if (totalElement) totalElement.textContent = totalCount;
+}
+
+// Update machine statuses for the selected site
+function updateMachineStatuses(siteItem) {
+    // Get all machines in this site
+    const machineRows = siteItem.querySelectorAll('.machine-row');
+    
+    machineRows.forEach(function(machineRow) {
+        // Find the machine's parts row to analyze its parts
+        const machineId = machineRow.querySelector('.toggle-parts-btn').getAttribute('data-target').substring(1);
+        const partsRow = document.getElementById(machineId);
+        
+        if (partsRow) {
+            // Count parts by status
+            let overdueParts = 0;
+            let dueSoonParts = 0;
+            const partBadges = partsRow.querySelectorAll('.badge');
+            
+            partBadges.forEach(function(badge) {
+                if (badge.classList.contains('bg-danger')) {
+                    overdueParts++;
+                } else if (badge.classList.contains('bg-warning')) {
+                    dueSoonParts++;
+                }
+            });
+            
+            // Update the status cell with correct badges
+            const statusCell = machineRow.querySelector('td:nth-child(3)');
+            if (statusCell) {
+                // Clear existing status badges
+                statusCell.innerHTML = '';
+                
+                if (overdueParts > 0) {
+                    const overdueBadge = document.createElement('span');
+                    overdueBadge.className = 'badge bg-danger';
+                    overdueBadge.textContent = `${overdueParts} Overdue`;
+                    statusCell.appendChild(overdueBadge);
+                }
+                
+                if (dueSoonParts > 0) {
+                    const spacer = document.createTextNode(' ');
+                    statusCell.appendChild(spacer);
+                    
+                    const dueSoonBadge = document.createElement('span');
+                    dueSoonBadge.className = 'badge bg-warning ms-1';
+                    dueSoonBadge.textContent = `${dueSoonParts} Due Soon`;
+                    statusCell.appendChild(dueSoonBadge);
+                }
+                
+                // If no overdue or due soon parts, show "All OK"
+                if (overdueParts === 0 && dueSoonParts === 0) {
+                    const okBadge = document.createElement('span');
+                    okBadge.className = 'badge bg-success';
+                    okBadge.textContent = 'All OK';
+                    statusCell.appendChild(okBadge);
+                }
+                
+                // Update the row class based on status
+                machineRow.classList.remove('machine-status-overdue', 'machine-status-due_soon', 'machine-status-ok');
+                if (overdueParts > 0) {
+                    machineRow.classList.add('machine-status-overdue');
+                } else if (dueSoonParts > 0) {
+                    machineRow.classList.add('machine-status-due_soon');
+                } else {
+                    machineRow.classList.add('machine-status-ok');
+                }
+            }
+        }
+    });
 }
 
 // Set up toggle all parts button
