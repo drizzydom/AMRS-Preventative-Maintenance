@@ -17,40 +17,43 @@
                 <form method="post" action="{{ url_for('maintenance_page') }}">
                     <div class="row">
                         <div class="col-md-3 mb-3">
-                            <label for="site_id" class="form-label">Site</label>
+                            <label for="site_id" class="form-label">Site <span class="text-danger">*</span></label>
                             <select class="form-select" id="site_id" name="site_id" required>
                                 <option value="">Select Site</option>
                                 {% for site in sites %}
                                 <option value="{{ site.id }}">{{ site.name }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="site-help" class="form-text">Select a site first</div>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label for="machine_id" class="form-label">Machine</label>
-                            <select class="form-select" id="machine_id" name="machine_id" required>
+                            <label for="machine_id" class="form-label">Machine <span class="text-danger">*</span></label>
+                            <select class="form-select" id="machine_id" name="machine_id" required disabled>
                                 <option value="">Select Machine</option>
                                 {% for machine in machines %}
                                 <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="machine-help" class="form-text text-muted">Please select a site first</div>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label for="part_id" class="form-label">Part</label>
-                            <select class="form-select" id="part_id" name="part_id" required>
+                            <label for="part_id" class="form-label">Part <span class="text-danger">*</span></label>
+                            <select class="form-select" id="part_id" name="part_id" required disabled>
                                 <option value="">Select Part</option>
                                 {% for part in parts %}
                                 <option value="{{ part.id }}" data-machine="{{ part.machine_id }}">{{ part.name }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="part-help" class="form-text text-muted">Please select a machine first</div>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label for="date" class="form-label">Date</label>
+                            <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="date" name="date" value="{{ now.strftime('%Y-%m-%d') }}" required>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-3 mb-3">
-                            <label for="maintenance_type" class="form-label">Maintenance Type</label>
+                            <label for="maintenance_type" class="form-label">Maintenance Type <span class="text-danger">*</span></label>
                             <select class="form-select" id="maintenance_type" name="maintenance_type" required>
                                 <option value="">Select Type</option>
                                 <option value="Routine">Routine</option>
@@ -62,7 +65,7 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label for="description" class="form-label">Description</label>
+                        <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="description" name="description" rows="2" placeholder="Describe the maintenance performed" required></textarea>
                     </div>
                     <div class="mb-3">
@@ -318,32 +321,136 @@
         }
     });
 
-    // Filter machines by site
+    // Enhanced dependent dropdown functionality
     const siteSelect = document.getElementById('site_id');
     const machineSelect = document.getElementById('machine_id');
     const partSelect = document.getElementById('part_id');
+    const machineHelp = document.getElementById('machine-help');
+    const partHelp = document.getElementById('part-help');
+    
     if(siteSelect && machineSelect && partSelect) {
+        // Initial state - count available options for each site and machine
+        const siteMachineCount = {};
+        const machineParts = {};
+        
+        // Count machines per site
+        for(const option of machineSelect.options) {
+            if(option.value === "") continue;
+            const siteId = option.getAttribute('data-site');
+            if (!siteMachineCount[siteId]) siteMachineCount[siteId] = 0;
+            siteMachineCount[siteId]++;
+        }
+        
+        // Count parts per machine
+        for(const option of partSelect.options) {
+            if(option.value === "") continue;
+            const machineId = option.getAttribute('data-machine');
+            if (!machineParts[machineId]) machineParts[machineId] = 0;
+            machineParts[machineId]++;
+        }
+        
+        // Site selection change handler
         siteSelect.addEventListener('change', function() {
             const siteId = this.value;
+            
+            // Reset and disable subsequent dropdowns if no site selected
+            if(!siteId) {
+                machineSelect.value = "";
+                machineSelect.disabled = true;
+                machineHelp.textContent = "Please select a site first";
+                
+                partSelect.value = "";
+                partSelect.disabled = true;
+                partHelp.textContent = "Please select a machine first";
+                return;
+            }
+            
+            // Enable machine dropdown since we have a site
+            machineSelect.disabled = false;
+            machineHelp.textContent = siteMachineCount[siteId] ? 
+                `${siteMachineCount[siteId]} machines available` : 
+                "No machines for this site";
+            
+            // Reset machine selection
+            machineSelect.value = "";
+            
+            // Show only machines for selected site
+            let availableMachines = 0;
             for(const option of machineSelect.options) {
                 if(option.value === "") continue;
-                option.style.display = option.getAttribute('data-site') === siteId ? '' : 'none';
+                const machineSiteId = option.getAttribute('data-site');
+                const shouldShow = machineSiteId === siteId;
+                option.style.display = shouldShow ? '' : 'none';
+                if(shouldShow) availableMachines++;
             }
-            machineSelect.value = "";
+            
+            // If no machines available for this site, keep machine dropdown disabled
+            if(availableMachines === 0) {
+                machineSelect.disabled = true;
+                machineHelp.textContent = "No machines available for this site";
+            }
+            
+            // Reset and disable part dropdown
+            partSelect.value = "";
+            partSelect.disabled = true;
+            partHelp.textContent = "Please select a machine first";
+            
+            // Hide all part options
             for(const option of partSelect.options) {
                 if(option.value === "") continue;
                 option.style.display = 'none';
             }
-            partSelect.value = "";
         });
+        
+        // Machine selection change handler
         machineSelect.addEventListener('change', function() {
             const machineId = this.value;
+            
+            // Reset and disable part dropdown if no machine selected
+            if(!machineId) {
+                partSelect.value = "";
+                partSelect.disabled = true;
+                partHelp.textContent = "Please select a machine first";
+                return;
+            }
+            
+            // Enable part dropdown since we have a machine
+            partSelect.disabled = false;
+            partHelp.textContent = machineParts[machineId] ?
+                `${machineParts[machineId]} parts available` :
+                "No parts for this machine";
+            
+            // Reset part selection
+            partSelect.value = "";
+            
+            // Show only parts for selected machine
+            let availableParts = 0;
             for(const option of partSelect.options) {
                 if(option.value === "") continue;
-                option.style.display = option.getAttribute('data-machine') === machineId ? '' : 'none';
+                const partMachineId = option.getAttribute('data-machine');
+                const shouldShow = partMachineId === machineId;
+                option.style.display = shouldShow ? '' : 'none';
+                if(shouldShow) availableParts++;
             }
-            partSelect.value = "";
+            
+            // If no parts available for this machine, keep part dropdown disabled
+            if(availableParts === 0) {
+                partSelect.disabled = true;
+                partHelp.textContent = "No parts available for this machine";
+            }
         });
+        
+        // Initialize the dropdowns on page load
+        if(siteSelect.value) {
+            // Trigger the change event to set up initial state if a site is pre-selected
+            const event = new Event('change');
+            siteSelect.dispatchEvent(event);
+            
+            // If machine is also pre-selected, trigger its change event too
+            if(machineSelect.value) {
+                machineSelect.dispatchEvent(event);
+            }
+        }
     }
 </script>
 {% endblock %}
