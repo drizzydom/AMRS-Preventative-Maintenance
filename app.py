@@ -1541,13 +1541,9 @@ def update_maintenance_alt():
             return redirect(url_for('maintenance_page'))
         part = Part.query.get_or_404(int(part_id))
         now = datetime.now()
-        # Debug: Log current and new values
-        print(f"[DEBUG] Updating maintenance for part_id={part.id}")
-        print(f"[DEBUG] Old last_maintenance: {part.last_maintenance}")
-        print(f"[DEBUG] Old next_maintenance: {part.next_maintenance}")
         # Update the last maintenance date
         part.last_maintenance = now
-        # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
+        # Calculate next maintenance date based on frequency and unit
         freq = part.maintenance_frequency or 1
         unit = part.maintenance_unit or 'day'
         if unit == 'week':
@@ -1559,8 +1555,6 @@ def update_maintenance_alt():
         else:
             delta = timedelta(days=freq)
         part.next_maintenance = now + delta
-        print(f"[DEBUG] New last_maintenance: {part.last_maintenance}")
-        print(f"[DEBUG] New next_maintenance: {part.next_maintenance}")
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
@@ -1570,7 +1564,6 @@ def update_maintenance_alt():
         )
         db.session.add(maintenance_record)
         db.session.commit()
-        print(f"[DEBUG] Commit successful for part_id={part.id}")
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
         referrer = request.referrer
         if referrer:
@@ -1579,7 +1572,6 @@ def update_maintenance_alt():
             return redirect(url_for('maintenance_page'))
     except Exception as e:
         db.session.rollback()
-        print(f"[DEBUG] Exception during maintenance update: {e}")
         flash(f'Error updating maintenance: {str(e)}', 'error')
         return redirect(url_for('maintenance_page'))
 
@@ -1930,10 +1922,10 @@ def reset_password(token):
         else:
             # Update password and clear reset token
             user.password_hash = generate_password_hash(password)
+            user.reset_token
             user.reset_token = None
-            user.reset_token_expiration= None
+            user.reset_token_expiration = None
             db.session.commit()
-            
             flash('Your password has been updated. Please log in.', 'success')
             return redirect(url_for('login'))
     return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
@@ -1964,8 +1956,9 @@ def reset_password(token):
 @app.route('/debug-info')
 def debug_info():
     """Display debug information including all available routes."""
-    if not app.debug:
-        return "Debug mode is disabled", 403
+    if not app:
+        if not app.debug:
+            return "Debug mode is disabled", 403
         
     routes = []
     for rule in app.url_map.iter_rules():
@@ -2710,6 +2703,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
