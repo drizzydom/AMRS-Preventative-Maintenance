@@ -438,13 +438,26 @@ def add_default_admin_if_needed():
             (User._username == encrypt_value(admin_username)) |
             (User._email == encrypt_value(admin_email))
         ).first()
+
+        # Ensure the admin role exists and has admin.full permission
+        admin_role = Role.query.filter_by(name='admin').first()
+        if not admin_role:
+            # Create admin role if it doesn't exist
+            admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+            db.session.add(admin_role)
+            db.session.commit()
+            print("[APP] Created admin role with full permissions")
+        elif 'admin.full' not in admin_role.permissions:
+            # Update existing admin role to include admin.full permission
+            current_permissions = admin_role.permissions.split(',') if admin_role.permissions else []
+            if 'admin.full' not in current_permissions:
+                current_permissions.append('admin.full')
+                admin_role.permissions = ','.join(current_permissions)
+                db.session.commit()
+                print("[APP] Updated admin role to include full permissions")
+        
         if not admin_user:
             print("[APP] No admin user found, creating default admin user")
-            admin_role = Role.query.filter_by(name='admin').first()
-            if not admin_role:
-                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                db.session.add(admin_role)
-                db.session.commit()
             admin = User(
                 username=admin_username,
                 email=admin_email,
@@ -456,13 +469,8 @@ def add_default_admin_if_needed():
             print(f"[APP] Default admin user created: {admin_username}")
         else:
             # Ensure admin user has admin role
-            admin_role = Role.query.filter_by(name='admin').first()
             if admin_user and (not admin_user.role or admin_user.role != admin_role):
                 print(f"[APP] Fixing admin role for user {admin_user.username}")
-                if not admin_role:
-                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                    db.session.add(admin_role)
-                    db.session.commit()
                 admin_user.role = admin_role
                 db.session.commit()
     except Exception as e:
@@ -620,6 +628,7 @@ def url_for_safe(endpoint, **values):
 def get_all_permissions():
     """Return a dictionary of all available permissions."""
     permissions = {
+        'admin.full': 'Full Administrator Access',
         'admin.view': 'View Admin Panel',
         'admin.users': 'Manage Users',
         'admin.roles': 'Manage Roles',
@@ -1923,7 +1932,7 @@ def health_check():
 
     """Basic healthcheck endpoint."""
     try:
-        # Update to use connection-based execute pattern
+        # Update to use connection-based execute pattern```python
         with db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return jsonify({'status': 'ok'}), 200
@@ -2608,6 +2617,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
