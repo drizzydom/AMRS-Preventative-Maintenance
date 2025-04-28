@@ -160,11 +160,6 @@ html body .sidebar {
     visibility: visible; /* Show when toggled */
   }
 
-  /* Update overlay handling for mobile */
-  body.sidebar-active .sidebar-overlay {
-    display: block;
-  }
-
   /* Make sure page names are visible on mobile */
   .sidebar-link-text {
     display: inline-block !important;
@@ -186,11 +181,6 @@ html body .sidebar {
   /* Prevent clicks on content when sidebar is open */
   body.sidebar-active .content-container {
     pointer-events: none; /* Prevent background clicks */
-  }
-  
-  /* Allow clicks on overlay but not content */
-  .sidebar-overlay {
-    pointer-events: auto !important;
   }
 }
 
@@ -226,37 +216,35 @@ html body .sidebar {
 }
 
 .sidebar-overlay {
-  display: none;
+  display: none !important; /* Never show the overlay */
+  /* Keep other properties for compatibility */
   position: fixed;
-  z-index: 1030; /* Lower than sidebar (1040) but higher than content */
+  z-index: 1030;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0,0,0,0.45);
-  transition: background 0.2s;
+  background: rgba(0,0,0,0); /* Transparent background */
 }
 
-/* Show the overlay only behind the sidebar, not on top of it */
+/* Remove all overlay-related styles */
 body.sidebar-active .sidebar-overlay {
-  display: block;
+  display: none !important; /* Ensure it stays hidden */
 }
 
-/* The sidebar must be on top of the overlay */
+/* Make sure the sidebar is still usable without the overlay */
 @media (max-width: 991.98px) {
-  .sidebar {
-    z-index: 1040; /* Higher than overlay (1030) */
-  }
-  
-  /* Remove pointer events completely from overlay when sidebar is shown */
-  body.sidebar-active .sidebar-overlay {
-    pointer-events: auto; /* Let clicks pass through to background content */
-  }
-  
-  /* Ensure the sidebar area is always clickable */
+  /* Keep sidebar visible and interactive when shown */
   .sidebar.show {
+    left: 0;
+    visibility: visible;
     z-index: 1040;
     pointer-events: auto !important;
+  }
+  
+  /* Allow interaction with page content even when sidebar is open */
+  body.sidebar-active .content-container {
+    pointer-events: auto !important; /* Allow content interaction */
   }
 }
 
@@ -324,11 +312,4 @@ body.sidebar-collapsed .sidebar-nav-item {
 body.sidebar-collapsed .sidebar-link {
   justify-content: center;
   padding: 0.75rem 0;
-}
-
-/* Ensure overlay is always top-to-bottom */
-.sidebar-overlay {
-  top: 0 !important;
-  bottom: 0 !important;
-  height: 100vh !important;
 }
