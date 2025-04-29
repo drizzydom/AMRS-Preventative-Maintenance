@@ -2786,6 +2786,13 @@ def emergency_maintenance_request():
         flash(f'Error processing emergency request: {str(e)}', 'danger')
         return redirect(url_for('manage_machines'))
 
+def bind_to_port():
+    """Helper function for binding the app to the PORT specified by the environment.
+    This ensures the app binds to a port when imported by Gunicorn or other WSGI servers."""
+    port = int(os.environ.get("PORT", 5000))
+    app.logger.info(f"Binding application to port {port}")
+    return app.run(host="0.0.0.0", port=port)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
@@ -2796,6 +2803,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
