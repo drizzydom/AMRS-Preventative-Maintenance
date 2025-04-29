@@ -303,11 +303,73 @@ def send_monthly_digest():
             except Exception as e:
                 print(f"Failed to send monthly digest to {user.email}: {str(e)}")
 
+# Add function to save audit completions at end of day
+def save_daily_audit_status(app):
+    """
+    Save the status of audit tasks at the end of each day to maintain a history.
+    This ensures we have a record of which audits were completed each day.
+    """
+    with app.app_context():
+        from models import db, AuditTask, AuditTaskCompletion
+        from datetime import datetime, date
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info("Starting daily audit status snapshot")
+        
+        today = date.today()
+        
+        try:
+            # Get all audit tasks
+            audit_tasks = AuditTask.query.all()
+            
+            # Count how many were already saved today
+            already_saved = AuditTaskCompletion.query.filter_by(date=today).count()
+            logger.info(f"Found {already_saved} audit task completions already saved for today")
+            
+            # Create a list to track newly saved completions
+            new_completions = []
+            
+            # For each task, check if it has a completion record for today
+            for task in audit_tasks:
+                for machine in task.machines:
+                    # Check if we already have a completion record for this task/machine today
+                    existing_completion = AuditTaskCompletion.query.filter_by(
+                        audit_task_id=task.id,
+                        machine_id=machine.id,
+                        date=today
+                    ).first()
+                    
+                    # If no record exists, create one with completed=False
+                    if not existing_completion:
+                        completion = AuditTaskCompletion(
+                            audit_task_id=task.id,
+                            machine_id=machine.id,
+                            date=today,
+                            completed=False
+                        )
+                        db.session.add(completion)
+                        new_completions.append((task.name, machine.name))
+            
+            # Save all new completions
+            if new_completions:
+                db.session.commit()
+                logger.info(f"Saved {len(new_completions)} new audit task completion records")
+                for task_name, machine_name in new_completions:
+                    logger.debug(f"Saved audit status for '{task_name}' on '{machine_name}'")
+            else:
+                logger.info("No new audit task completions needed to be saved")
+                
+        except Exception as e:
+            logger.error(f"Error saving daily audit status: {str(e)}")
+            db.session.rollback()
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] == "daily":
             send_daily_digest()
             send_audit_reminders()
+            save_daily_audit_status(app)
         elif sys.argv[1] == "weekly":
             send_weekly_digest()
         elif sys.argv[1] == "monthly":
@@ -316,7 +378,9 @@ if __name__ == "__main__":
             send_immediate_notifications()
         elif sys.argv[1] == "audit":
             send_audit_reminders()
+        elif sys.argv[1] == "save_audit_status":
+            save_daily_audit_status(app)
         else:
-            print("Please specify 'immediate', 'daily', 'weekly', 'monthly', or 'audit' as an argument")
+            print("Please specify 'immediate', 'daily', 'weekly', 'monthly', 'audit', or 'save_audit_status' as an argument")
     else:
-        print("Please specify 'immediate', 'daily', 'weekly', 'monthly', or 'audit' as an argument")
+        print("Please specify 'immediate', 'daily', 'weekly', 'monthly', 'audit', or 'save_audit_status' as an argument")

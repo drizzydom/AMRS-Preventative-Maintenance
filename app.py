@@ -1094,40 +1094,143 @@ def audits_page():
     
     return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility)
 
-@app.route('/audit_tasks/delete/<int:audit_task_id>', methods=['POST'])
+@app.route('/audit-history', methods=['GET'])
 @login_required
-def delete_audit_task(audit_task_id):
-    can_delete_audits = False
+def audit_history_page():
+    # Same permission checks as audits_page
     if current_user.is_admin:
-        can_delete_audits = True
+        can_access = True
     else:
         # Handle both cases where role is a Role object or a string
         if hasattr(current_user, 'role') and current_user.role:
             if hasattr(current_user.role, 'name'):
                 # Role is an object, use its permissions directly
                 permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
-                can_delete_audits = 'audits.delete' in permissions
+                can_access = 'audits.access' in permissions
             else:
                 # Role is a string, query for the role
                 user_role = Role.query.filter_by(name=current_user.role).first()
                 permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-                can_delete_audits = 'audits.delete' in permissions
+                can_access = 'audits.access' in permissions
+        else:
+            can_access = False
     
-    if not can_delete_audits:
-        flash('You do not have permission to delete audit tasks.', 'danger')
-        return redirect(url_for('audits_page'))
-    try:
-        # Replace get_or_404 for AuditTask
-        task = db.session.get(AuditTask, audit_task_id)
-        if not task:
-            abort(404)
-        db.session.delete(task)
-        db.session.commit()
-        flash('Audit task deleted successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting audit task: {str(e)}', 'danger')
-    return redirect(url_for('audits_page'))
+    if not can_access:
+        flash('You do not have permission to access audit history.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # Get date range for filtering
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    
+    today = datetime.now().date()
+    
+    # Default to last 30 days if no dates provided
+    if not start_date_str:
+        start_date = today - timedelta(days=30)
+    else:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = today - timedelta(days=30)
+            flash("Invalid start date format. Using default of 30 days ago.", "warning")
+    
+    if not end_date_str:
+        end_date = today
+    else:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = today
+            flash("Invalid end date format. Using today's date.", "warning")
+    
+    # Ensure start date is before end date
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+    
+    # Get site filter
+    site_id = request.args.get('site_id', type=int)
+    
+    # Restrict sites for non-admins
+    if current_user.is_admin:
+        sites = Site.query.all()
+        # If no site is selected and there are sites available, use the first one as default
+        if site_id is None and sites:
+            site_id = sites[0].id
+    else:
+        # Limit to user's assigned sites
+        user_site_ids = [site.id for site in current_user.sites]
+        sites = current_user.sites
+        # For non-admins with sites, default to their first site
+        if site_id is None and sites:
+            site_id = sites[0].id
+        # Ensure the selected site is one the user has access to
+        elif site_id not in user_site_ids:
+            if sites:
+                site_id = sites[0].id
+            else:
+                site_id = None
+    
+    # Query completions within the date range
+    query = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.date >= start_date,
+        AuditTaskCompletion.date <= end_date
+    ).order_by(AuditTaskCompletion.date.desc())
+    
+    # Apply site filter if specified
+    if site_id:
+        # Get all audit tasks for the selected site
+        site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
+        task_ids = [task.id for task in site_audit_tasks]
+        if task_ids:
+            query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+        else:
+            # No tasks for this site, return empty result
+            completions = []
+    else:
+        # If no site is selected but we have restricted sites
+        if not current_user.is_admin:
+            # Get all audit tasks for the user's sites
+            user_site_ids = [site.id for site in current_user.sites]
+            site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(user_site_ids)).all()
+            task_ids = [task.id for task in site_audit_tasks]
+            if task_ids:
+                query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+            else:
+                # No tasks for user's sites, return empty result
+                completions = []
+    
+    # Execute the query
+    completions = query.all()
+    
+    # Get related data for display
+    audit_tasks = {task.id: task for task in AuditTask.query.all()}
+    machines = {machine.id: machine for machine in Machine.query.all()}
+    users = {user.id: user for user in User.query.all()}
+    
+    # Group completions by date for better display
+    grouped_completions = {}
+    for completion in completions:
+        date_str = completion.date.strftime('%Y-%m-%d')
+        if date_str not in grouped_completions:
+            grouped_completions[date_str] = []
+        grouped_completions[date_str].append(completion)
+    
+    # Sort dates in reverse chronological order
+    sorted_dates = sorted(grouped_completions.keys(), reverse=True)
+    
+    return render_template('audit_history.html', 
+                          completions=completions,
+                          grouped_completions=grouped_completions,
+                          sorted_dates=sorted_dates,
+                          audit_tasks=audit_tasks,
+                          machines=machines,
+                          users=users,
+                          sites=sites,
+                          selected_site=site_id,
+                          start_date=start_date,
+                          end_date=end_date,
+                          today=today)
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
@@ -1830,6 +1933,7 @@ def user_profile():
                 # Handle notification preferences in a separate route to keep this one cleaner
                 return redirect(url_for('update_notification_preferences'))
                 
+            # Fallback for tests: handle```python
             # Fallback for tests: handle both email and password fields in one POST if form_type is missing
             elif not form_type:
                 # Support the test case scenario where all fields are submitted in one request
@@ -2318,11 +2422,10 @@ def edit_site(site_id):
                 
                 # Then add selected users
                 user_ids = request.form.getlist('user_ids')
-                if user_ids:
-                    for user_id in user_ids:
-                        user = User.query.get(int(user_id))
-                        if user:
-                            site.users.append(user)
+                for user_id in user_ids:
+                    user = User.query.get(int(user_id))
+                    if user:
+                        site.users.append(user)
             
             db.session.commit()
             flash(f'Site "{site.name}" has been updated successfully.', 'success')
@@ -2915,6 +3018,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
