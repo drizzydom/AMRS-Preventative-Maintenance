@@ -698,7 +698,8 @@ def inject_common_variables():
         'datetime': datetime,
         'now': datetime.now(),
         'hasattr': hasattr,  # Add hasattr function to be available in templates
-        'has_permission': has_permission  # Add permission checking helper
+        'has_permission': has_permission,  # Add permission checking helper
+        'Role': Role  # Add Role class to template context so it can be used in templates
     }
 
 def url_for_safe(endpoint, **values):
@@ -2901,15 +2902,6 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
-
-
-
-
-
-
-
-
-
 
 
 
