@@ -78,7 +78,7 @@ class User(UserMixin, db.Model):
     email_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
+    _is_admin_column = db.Column('is_admin', db.Boolean, default=False)  # Renamed column reference
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -123,8 +123,8 @@ class User(UserMixin, db.Model):
     def is_admin(self):
         """Check if user has admin privileges via role or direct flag."""
         try:
-            # First check the direct column value (not _is_admin)
-            if hasattr(self, 'is_admin') and isinstance(self.is_admin, bool) and self.is_admin is True:
+            # First check the direct column value using the renamed attribute
+            if self._is_admin_column is True:
                 return True
             
             # Then check via role
