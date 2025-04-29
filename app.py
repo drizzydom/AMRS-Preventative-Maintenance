@@ -574,13 +574,6 @@ def ensure_db_connection():
         return jsonify({'error': 'Database connection failure'}), 500
 
 # Helper: Always allow admins to access any page
-@app.before_request
-def allow_admin_everywhere():
-    if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and getattr(current_user, 'is_admin', False):
-        # Bypass permission checks for admins
-        return None
-
-# Replace the enhance_models function with a template context processor
 @app.context_processor
 def inject_site_helpers():
     """Add helper functions to templates without modifying models."""
