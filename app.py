@@ -1883,23 +1883,13 @@ def login():
         # Log the login attempt (without sensitive data)
         app.logger.info(f"Login attempt for username: {username}")
         
-        # Check all possible user storage methods
-        user = None
+        # Generate hash from username input
+        username_hash = hash_value(username)
         
-        # Method 1: Try direct username match
-        user = User.query.filter_by(username=username).first()
+        # Find user by username hash
+        user = User.query.filter_by(username_hash=username_hash).first()
         
-        if not user and hasattr(User, 'username_hash'):
-            # Method 2: Try username hash
-            username_hash = hash_value(username)
-            user = User.query.filter_by(username_hash=username_hash).first()
-            
-        if not user and hasattr(User, '_username'):
-            # Method 3: Try encrypted username
-            encrypted_username = encrypt_value(username)
-            user = User.query.filter(User._username == encrypted_username).first()
-        
-        # If we found a user by any method, verify the password
+        # If user exists, verify password
         if user and user.password_hash and check_password_hash(user.password_hash, password):
             # Login successful
             login_user(user)
@@ -1946,7 +1936,8 @@ def forgot_password():
         if user:
             # Generate a password reset token
             reset_token = secrets.token_urlsafe(32)
-            expires = datetime.now() + timedelta(hours=24)
+            expires = datetime.now()
+            + timedelta(hours=24)
             
             # Store token in database
             user.reset_token = reset_token
@@ -2804,6 +2795,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
