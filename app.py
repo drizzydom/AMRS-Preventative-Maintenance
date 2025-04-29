@@ -1867,66 +1867,59 @@ def update_notification_preferences():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle user login with comprehensive error handling."""
+    """Handle user login with a direct, simplified approach."""
     # Redirect authenticated users to dashboard
     if current_user.is_authenticated:
-        app.logger.debug("Already authenticated user redirected to dashboard")
         return redirect(url_for('dashboard'))
         
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # Add detailed debug logging for login attempts
-        app.logger.debug(f"Login attempt: username={username}")
+        if not username or not password:
+            flash('Username and password are required', 'danger')
+            return render_template('login.html')
         
-        # First try to find user by username
+        # Log the login attempt (without sensitive data)
+        app.logger.info(f"Login attempt for username: {username}")
+        
+        # Check all possible user storage methods
         user = None
-        try:
-            # Try several methods to find the user
-            # 1. First try direct username lookup (for newer users)
-            user = User.query.filter_by(username=username).first()
+        
+        # Method 1: Try direct username match
+        user = User.query.filter_by(username=username).first()
+        
+        if not user and hasattr(User, 'username_hash'):
+            # Method 2: Try username hash
+            username_hash = hash_value(username)
+            user = User.query.filter_by(username_hash=username_hash).first()
             
-            # 2. If not found, try username hash
-            if not user and hasattr(User, 'username_hash'):
-                username_hash = hash_value(username)
-                user = User.query.filter_by(username_hash=username_hash).first()
+        if not user and hasattr(User, '_username'):
+            # Method 3: Try encrypted username
+            encrypted_username = encrypt_value(username)
+            user = User.query.filter(User._username == encrypted_username).first()
+        
+        # If we found a user by any method, verify the password
+        if user and user.password_hash and check_password_hash(user.password_hash, password):
+            # Login successful
+            login_user(user)
             
-            # 3. Try encrypted username as fallback
-            if not user and hasattr(User, '_username'):
-                encrypted_username = encrypt_value(username)
-                user = User.query.filter(User._username == encrypted_username).first()
-                app.logger.debug("Username hash lookup failed, trying encrypted username")
+            # Update the last login timestamp
+            user.last_login = datetime.now()
+            db.session.commit()
             
-            if not user:
-                app.logger.debug(f"No user found for username '{username}'")
-                flash('Invalid username or password', 'danger')
-                return render_template('login.html')
-                
-            # Verify password
-            if check_password_hash(user.password_hash, password):
-                # Update last login timestamp
-                user.last_login = datetime.now()
-                db.session.commit()
-                
-                # Log the user in
-                login_user(user)
-                app.logger.debug(f"Login successful: user_id={user.id}, username={username}")
-                
-                # Force reload user data to ensure all properties are properly loaded
-                db.session.refresh(user)
-                
-                # Redirect to the requested page or dashboard
-                next_page = request.args.get('next')
-                if next_page and next_page.startswith('/'):
-                    return redirect(next_page)
-                return redirect(url_for('dashboard'))
-            else:
-                app.logger.debug(f"Invalid password for username '{username}'")
-                flash('Invalid username or password', 'danger')
-        except Exception as e:
-            app.logger.error(f"Login error: {str(e)}")
-            flash('An error occurred during login. Please try again.', 'danger')
+            # Log successful login
+            app.logger.info(f"Login successful for user_id={user.id}")
+            
+            # Redirect to requested page or dashboard
+            next_page = request.args.get('next')
+            if next_page and next_page.startswith('/'):
+                return redirect(next_page)
+            return redirect(url_for('dashboard'))
+        else:
+            # Login failed
+            app.logger.warning(f"Failed login attempt for username: {username}")
+            flash('Invalid username or password', 'danger')
     
     # For GET requests or failed logins
     return render_template('login.html')
@@ -1939,7 +1932,8 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
-@app.route('/forgot-password', methods=['GET', 'POST'])
+@app.route('/forgot-password', methods=['GET',
+    'POST'])
 def forgot_password():
     """Handle password reset request."""
     if current_user.is_authenticated:
@@ -1954,7 +1948,7 @@ def forgot_password():
             reset_token = secrets.token_urlsafe(32)
             expires = datetime.now() + timedelta(hours=24)
             
-            # Store token in database```python
+            # Store token in database
             user.reset_token = reset_token
             user.reset_token_expiration = expires
             db.session.commit()
@@ -2810,6 +2804,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
