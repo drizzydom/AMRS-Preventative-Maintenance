@@ -30,13 +30,6 @@ import smtplib
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
-# Patch is_admin property to User class immediately after import
-@property
-def is_admin(self):
-    """Add is_admin property to User class for template compatibility"""
-    return is_admin_user(self)
-User.is_admin = is_admin
-
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
 def parts_status(self, current_date=None):
@@ -235,19 +228,6 @@ login_manager.login_message_category = 'info'  # Flash message category for logi
 def load_user(user_id):
     # This must return None or a User object
     return db.session.get(User, int(user_id)) if user_id else None
-
-# Standardized function to check admin status
-def is_admin_user(user):
-    """Standardized function to check if a user has admin privileges."""
-    if not user or not getattr(user, 'is_authenticated', False):
-        return False
-    # Relationship-based check
-    if hasattr(user, 'role') and user.role and hasattr(user.role, 'name') and user.role.name and user.role.name.lower() == 'admin':
-        return True
-    # Fallback: username
-    if getattr(user, 'username', None) == 'admin':
-        return True
-    return False
 
 # Database connection checker
 def check_db_connection():
@@ -650,7 +630,7 @@ def inject_common_variables():
     except Exception:
         is_auth = False
     return {
-        'is_admin_user': is_admin_user(current_user) if is_auth else False,
+        'is_admin_user': is_admin(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
         'datetime': datetime,
         'now': datetime.now()
@@ -786,7 +766,7 @@ def dashboard():
 def admin():
     """Admin dashboard with overview information."""
     # Use standardized admin check
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -836,7 +816,7 @@ def admin():
 @app.route('/admin/audit-history')
 @login_required
 def admin_audit_history():
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     completions = AuditTaskCompletion.query.order_by(AuditTaskCompletion.completed_at.desc()).all()
@@ -849,7 +829,7 @@ def admin_audit_history():
 @login_required
 def admin_excel_import():
     """Admin page for Excel data import."""
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     # You can render a template or just show a simple message for now
@@ -1038,7 +1018,7 @@ def delete_audit_task(audit_task_id):
 def admin_users():
     """User management page."""
     # Use standardized admin check
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -1134,7 +1114,7 @@ def admin_users():
 @login_required
 def edit_user(user_id):
     """Edit an existing user - admin only"""
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to edit users.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -1230,7 +1210,7 @@ def edit_user(user_id):
 @login_required
 def admin_roles():
     """Redirect or render the roles management page."""
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -1402,7 +1382,7 @@ def site_history(site_id):
 @login_required
 def delete_role(role_id):
     """Delete a role - admin only."""
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to delete roles.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -1434,7 +1414,7 @@ def delete_role(role_id):
 @login_required
 def delete_user(user_id):
     """Delete a user - admin only."""
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to delete users.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -2115,7 +2095,7 @@ def forbidden(e):
 @app.route('/admin/<section>')
 @login_required
 def admin_section(section):
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
     if section == 'users':
@@ -2412,7 +2392,7 @@ def manage_users():
         return admin_users()
         
     # For GET requests, continue with normal redirect logic
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect('/dashboard')
     return redirect('/admin/users')
@@ -2421,7 +2401,7 @@ def manage_users():
 @login_required
 def import_excel_route():
     """Handle Excel file imports to add data to the system."""
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to import data.', 'danger')
         return redirect(url_for('dashboard'))
         
@@ -2501,7 +2481,7 @@ def edit_part(part_id):
 @login_required
 def edit_role(role_id):
     """Edit an existing role - admin only."""
-    if not is_admin_user(current_user):
+    if not is_admin(current_user):
         flash('You do not have permission to edit roles.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -2725,6 +2705,9 @@ def emergency_maintenance_request():
         app.logger.error(f"Error processing emergency maintenance request: {str(e)}")
         flash(f'Error processing emergency request: {str(e)}', 'danger')
         return redirect(url_for('manage_machines'))
+
+def is_admin(user):
+    return user.is_authenticated and user.role and ('admin.full' in (user.role.permissions or ''))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')

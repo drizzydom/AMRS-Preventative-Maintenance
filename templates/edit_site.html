@@ -45,7 +45,7 @@
                             <label class="form-check-label" for="enable_notifications">Enable Notifications</label>
                         </div>
 
-                        {% if is_admin and users %}
+                        {% if users %}  {# Removed is_admin check; use role/permission check if needed #}
                         <div class="mb-3">
                             <label for="user_ids" class="form-label">Assign Users</label>
                             <select class="form-select" id="user_ids" name="user_ids" multiple>
