@@ -19,7 +19,8 @@
         <p>There was a problem loading your dashboard data. Please try refreshing the page or contact support if the issue persists.</p>
     </div>
     {% else %}
-    <!-- Site Filter Dropdown -->
+    <!-- Site Filter Dropdown - Only show if user has access to multiple sites -->
+    {% if sites|length > 1 %}
     <div class="card mb-3">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
@@ -36,6 +37,10 @@
             </div>
         </div>
     </div>
+    {% else %}
+    <!-- Single site users don't need a filter dropdown -->
+    <div class="d-none" id="single-site-identifier" data-site-id="{{ sites[0].id if sites }}"></div>
+    {% endif %}
 
     <!-- Status counters -->
     <div class="row g-2 mb-4">
