@@ -52,7 +52,7 @@
                         </td>
                         <td>{{ user.email or '-' }}</td>
                         <td>{{ user.role.name if user.role else '-' }}</td>
-                        <td class="text-center">{% if user.is_admin %}<span class="badge bg-primary">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                        <!-- Admin status column removed. Use role/permission check here if needed. -->
                         <td class="text-center">{{ user.sites|length }}</td>
                         <td>
                             <div class="btn-group btn-group-sm">
@@ -114,11 +114,6 @@
                             <option value="{{ role.id }}">{{ role.name }}</option>
                             {% endfor %}
                         </select>
-                    </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="is_admin" name="is_admin">
-                        <label class="form-check-label" for="is_admin">Administrator Access</label>
                     </div>
                     
                     <div class="mb-3">
