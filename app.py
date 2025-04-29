@@ -1993,8 +1993,7 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
-@app.route('/forgot-password', methods=['GET',
-    'POST'])
+@app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     """Handle password reset request."""
     if current_user.is_authenticated:
@@ -2856,6 +2855,12 @@ def emergency_maintenance_request():
         flash(f'Error processing emergency request: {str(e)}', 'danger')
         return redirect(url_for('manage_machines'))
 
+# Configure session and cookie settings to work with Safari
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Using 'Lax' instead of 'Strict' for better compatibility
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # Longer session lifetime
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
@@ -2866,6 +2871,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
