@@ -236,16 +236,16 @@ def is_admin_user(user):
         return False
         
     # First check: Direct database column if it exists
-    if hasattr(user, 'is_admin') and isinstance(user.is_admin, bool) and user.is_admin:
-        return True
+    if hasattr(user, 'is_admin') and isinstance(user.is_admin, bool):
+        # Direct access to the column attribute, not through property
+        return bool(user.is_admin)
     
     # Second check: Role-based admin via relationship
     if hasattr(user, 'role') and user.role:
         # Check role name (case-insensitive)
-        if hasattr(user.role, 'name') and user.role.name:
-            role_name = user.role.name.lower()
-            if role_name in ['admin', 'administrator']:
-                return True
+        role_name = user.role.name.lower() if hasattr(user.role, 'name') and user.role.name else ''
+        if role_name in ['admin', 'administrator']:
+            return True
             
         # Check role permissions for admin.full
         if hasattr(user.role, 'permissions') and user.role.permissions:
@@ -1867,12 +1867,15 @@ def login():
         # First try to find user by username hash
         user = None
         try:
+            # Try username hash first (most efficient)
             username_hash = hash_value(username)
             user = User.query.filter_by(username_hash=username_hash).first()
             
             if not user:
-                # Try encrypted username as fallback
-                user = User.query.filter(User._username == encrypt_value(username)).first()
+                # Try encrypted username as fallback - this is slower but more reliable
+                encrypted_username = encrypt_value(username)
+                user = User.query.filter(User._username == encrypted_username).first()
+                app.logger.debug("Username hash lookup failed, trying encrypted username")
             
             if not user:
                 app.logger.debug(f"No user found for username '{username}'")
@@ -1888,6 +1891,9 @@ def login():
                 # Log the user in
                 login_user(user)
                 app.logger.debug(f"Login successful: user_id={user.id}, username={username}")
+                
+                # Force reload user data to ensure all properties are properly loaded
+                db.session.refresh(user)
                 
                 # Redirect to the requested page or dashboard
                 next_page = request.args.get('next')
@@ -1927,13 +1933,14 @@ def forgot_password():
             reset_token = secrets.token_urlsafe(32)
             expires = datetime.now() + timedelta(hours=24)
             
-            # Store token in database
+            # Store token in database```python
             user.reset_token = reset_token
             user.reset_token_expiration = expires
             db.session.commit()
             
             # In a production app, you would send an email with the reset link
             # For now, just flash a message with the token (for demonstration)
+            reset            # For now, just flash a message with the token (for demonstration)
             reset_url = url_for('reset_password', token=reset_token, _external=True)
             flash(f'Password reset link: {reset_url}', 'info')
             
@@ -2782,6 +2789,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
