@@ -78,7 +78,6 @@ class User(UserMixin, db.Model):
     email_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
