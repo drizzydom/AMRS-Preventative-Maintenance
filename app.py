@@ -1880,15 +1880,20 @@ def login():
         # Add detailed debug logging for login attempts
         app.logger.debug(f"Login attempt: username={username}")
         
-        # First try to find user by username hash
+        # First try to find user by username
         user = None
         try:
-            # Try username hash first (most efficient)
-            username_hash = hash_value(username)
-            user = User.query.filter_by(username_hash=username_hash).first()
+            # Try several methods to find the user
+            # 1. First try direct username lookup (for newer users)
+            user = User.query.filter_by(username=username).first()
             
-            if not user:
-                # Try encrypted username as fallback - this is slower but more reliable
+            # 2. If not found, try username hash
+            if not user and hasattr(User, 'username_hash'):
+                username_hash = hash_value(username)
+                user = User.query.filter_by(username_hash=username_hash).first()
+            
+            # 3. Try encrypted username as fallback
+            if not user and hasattr(User, '_username'):
                 encrypted_username = encrypt_value(username)
                 user = User.query.filter(User._username == encrypted_username).first()
                 app.logger.debug("Username hash lookup failed, trying encrypted username")
