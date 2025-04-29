@@ -30,13 +30,6 @@ import smtplib
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
-# Patch is_admin property to User class immediately after import
-@property
-def is_admin(self):
-    """Add is_admin property to User class for template compatibility"""
-    return is_admin_user(self)
-User.is_admin = is_admin
-
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
 def parts_status(self, current_date=None):
@@ -239,12 +232,14 @@ def load_user(user_id):
 # Standardized function to check admin status
 def is_admin_user(user):
     """Standardized function to check if a user has admin privileges."""
-    if not user or not getattr(user, 'is_authenticated', False):
+    if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
         return False
         
-    # IMPORTANT: Do not use getattr(user, 'is_admin') as it would cause infinite recursion
+    # First check: Direct database column if it exists
+    if hasattr(user, 'is_admin') and isinstance(user.is_admin, bool) and user.is_admin:
+        return True
     
-    # Relationship-based check
+    # Second check: Role-based admin via relationship
     if hasattr(user, 'role') and user.role:
         # Check role name (case-insensitive)
         if hasattr(user.role, 'name') and user.role.name:
@@ -253,11 +248,12 @@ def is_admin_user(user):
                 return True
             
         # Check role permissions for admin.full
-        if hasattr(user.role, 'permissions') and user.role.permissions and 'admin.full' in user.role.permissions:
-            return True
+        if hasattr(user.role, 'permissions') and user.role.permissions:
+            if 'admin.full' in user.role.permissions:
+                return True
             
-    # Fallback: username
-    if getattr(user, 'username', None) == 'admin':
+    # Third check: username-based fallback
+    if hasattr(user, 'username') and user.username == 'admin':
         return True
         
     return False
@@ -1855,31 +1851,57 @@ def update_notification_preferences():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle user login."""
+    """Handle user login with comprehensive error handling."""
+    # Redirect authenticated users to dashboard
     if current_user.is_authenticated:
+        app.logger.debug("Already authenticated user redirected to dashboard")
         return redirect(url_for('dashboard'))
         
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # Add debug for login attempts
+        # Add detailed debug logging for login attempts
         app.logger.debug(f"Login attempt: username={username}")
         
-        user = User.query.filter_by(username_hash=hash_value(username)).first()
-        
-        if user and check_password_hash(user.password_hash, password):
-            login_user(user)
-            app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
-        else:
-            if user:
-                app.logger.debug(f"Login failed: Invalid password for username={username}")
+        # First try to find user by username hash
+        user = None
+        try:
+            username_hash = hash_value(username)
+            user = User.query.filter_by(username_hash=username_hash).first()
+            
+            if not user:
+                # Try encrypted username as fallback
+                user = User.query.filter(User._username == encrypt_value(username)).first()
+            
+            if not user:
+                app.logger.debug(f"No user found for username '{username}'")
+                flash('Invalid username or password', 'danger')
+                return render_template('login.html')
+                
+            # Verify password
+            if check_password_hash(user.password_hash, password):
+                # Update last login timestamp
+                user.last_login = datetime.now()
+                db.session.commit()
+                
+                # Log the user in
+                login_user(user)
+                app.logger.debug(f"Login successful: user_id={user.id}, username={username}")
+                
+                # Redirect to the requested page or dashboard
+                next_page = request.args.get('next')
+                if next_page and next_page.startswith('/'):
+                    return redirect(next_page)
+                return redirect(url_for('dashboard'))
             else:
-                app.logger.debug(f"Login failed: No user found with username={username}")
-            flash('Invalid username or password', 'danger')
+                app.logger.debug(f"Invalid password for username '{username}'")
+                flash('Invalid username or password', 'danger')
+        except Exception as e:
+            app.logger.error(f"Login error: {str(e)}")
+            flash('An error occurred during login. Please try again.', 'danger')
     
+    # For GET requests or failed logins
     return render_template('login.html')
 
 @app.route('/logout')
@@ -1929,7 +1951,6 @@ def forgot_password():
         <div class="container mt-5">
             <div class="row justify-content-center">
                 <div class="col-md-6">
-                   ```html
                     <div class="card">
                         <div class="card-header">Reset Password</div>
                         <div class="card-body">
