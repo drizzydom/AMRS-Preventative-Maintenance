@@ -1148,28 +1148,38 @@ def audit_history_page():
     if start_date > end_date:
         start_date, end_date = end_date, start_date
     
-    # Get site filter
+    # Get site and machine filters
     site_id = request.args.get('site_id', type=int)
+    machine_id = request.args.get('machine_id', type=int)
     
     # Restrict sites for non-admins
     if current_user.is_admin:
         sites = Site.query.all()
-        # If no site is selected and there are sites available, use the first one as default
-        if site_id is None and sites:
-            site_id = sites[0].id
     else:
         # Limit to user's assigned sites
         user_site_ids = [site.id for site in current_user.sites]
         sites = current_user.sites
-        # For non-admins with sites, default to their first site
-        if site_id is None and sites:
-            site_id = sites[0].id
         # Ensure the selected site is one the user has access to
-        elif site_id not in user_site_ids:
+        if site_id and site_id not in user_site_ids:
             if sites:
                 site_id = sites[0].id
             else:
                 site_id = None
+    
+    # If only one site is available, automatically select it
+    if len(sites) == 1 and not site_id:
+        site_id = sites[0].id
+
+    # Get available machines based on selected site
+    if site_id:
+        machines = Machine.query.filter_by(site_id=site_id).all()
+    else:
+        # If no site selected but user has restricted sites
+        if not current_user.is_admin and sites:
+            site_ids = [site.id for site in sites]
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+        else:
+            machines = Machine.query.all()
     
     # Query completions within the date range
     query = AuditTaskCompletion.query.filter(
@@ -1189,23 +1199,31 @@ def audit_history_page():
             completions = []
     else:
         # If no site is selected but we have restricted sites
-        if not current_user.is_admin:
+        if not current_user.is_admin and sites:
             # Get all audit tasks for the user's sites
-            user_site_ids = [site.id for site in current_user.sites]
-            site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(user_site_ids)).all()
+            site_ids = [site.id for site in sites]
+            site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
             task_ids = [task.id for task in site_audit_tasks]
             if task_ids:
                 query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
             else:
                 # No tasks for user's sites, return empty result
                 completions = []
+
+    # Apply machine filter if specified
+    if machine_id:
+        query = query.filter(AuditTaskCompletion.machine_id == machine_id)
     
     # Execute the query
-    completions = query.all()
+    try:
+        completions = query.all()
+    except Exception as e:
+        app.logger.error(f"Error querying audit completions: {e}")
+        completions = []
     
     # Get related data for display
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
-    machines = {machine.id: machine for machine in Machine.query.all()}
+    machines_dict = {machine.id: machine for machine in Machine.query.all()}
     users = {user.id: user for user in User.query.all()}
     
     # Group completions by date for better display
@@ -1219,18 +1237,24 @@ def audit_history_page():
     # Sort dates in reverse chronological order
     sorted_dates = sorted(grouped_completions.keys(), reverse=True)
     
+    # Flag for if we only have a single site (to hide site dropdown)
+    show_site_dropdown = len(sites) > 1 or current_user.is_admin
+    
     return render_template('audit_history.html', 
                           completions=completions,
                           grouped_completions=grouped_completions,
                           sorted_dates=sorted_dates,
                           audit_tasks=audit_tasks,
-                          machines=machines,
+                          machines=machines_dict,
+                          available_machines=machines,
                           users=users,
                           sites=sites,
                           selected_site=site_id,
+                          selected_machine=machine_id,
                           start_date=start_date,
                           end_date=end_date,
-                          today=today)
+                          today=today,
+                          show_site_dropdown=show_site_dropdown)
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
@@ -1933,7 +1957,6 @@ def user_profile():
                 # Handle notification preferences in a separate route to keep this one cleaner
                 return redirect(url_for('update_notification_preferences'))
                 
-            # Fallback for tests: handle```python
             # Fallback for tests: handle both email and password fields in one POST if form_type is missing
             elif not form_type:
                 # Support the test case scenario where all fields are submitted in one request
@@ -1963,7 +1986,7 @@ def user_profile():
                     elif new_password != confirm_password:
                         flash('New passwords do not match.', 'danger')
                     else:
-                        user.password
+                        user.password_hash = generate_password_hash(new_password)
                         db.session.commit()
                         flash('Password updated successfully', 'success')
                 
@@ -3018,6 +3041,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
