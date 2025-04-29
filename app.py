@@ -249,6 +249,32 @@ def is_admin_user(user):
         return True
     return False
 
+def user_can_see_all_sites(user):
+    """Check if a user can see all sites or just their assigned sites.
+    
+    This function is used to implement site-based access restrictions.
+    It returns True if the user is an admin or has maintenance.record permission,
+    which means they can see all sites in the system.
+    It returns False if the user can only see their assigned sites.
+    
+    Args:
+        user: The user to check permissions for
+        
+    Returns:
+        bool: True if the user can see all sites, False if restricted to assigned sites
+    """
+    # Admin always sees all sites
+    if is_admin_user(user):
+        return True
+    
+    # Check for maintenance.record permission
+    if hasattr(user, 'role') and user.role and user.role.permissions:
+        if 'maintenance.record' in user.role.permissions.split(','):
+            return True
+            
+    # Otherwise, restrict to assigned sites
+    return False
+
 # Database connection checker
 def check_db_connection():
     """Check if database connection is working and reconnect if needed."""
@@ -655,12 +681,24 @@ def inject_common_variables():
         is_auth = getattr(current_user, 'is_authenticated', False)
     except Exception:
         is_auth = False
+    
+    def has_permission(permission_name):
+        """Check if current user has a specific permission"""
+        if not current_user.is_authenticated:
+            return False
+        if current_user.is_admin:
+            return True
+        if hasattr(current_user, 'role') and current_user.role and current_user.role.permissions:
+            return permission_name in current_user.role.permissions.split(',')
+        return False
+    
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
         'datetime': datetime,
         'now': datetime.now(),
-        'hasattr': hasattr  # Add hasattr function to be available in templates
+        'hasattr': hasattr,  # Add hasattr function to be available in templates
+        'has_permission': has_permission  # Add permission checking helper
     }
 
 def url_for_safe(endpoint, **values):
@@ -739,8 +777,8 @@ def index():
 def dashboard():
     try:
         # Get upcoming and overdue maintenance across all sites the user has access to
-        if current_user.is_admin:
-            # Admins can see all sites, eager load machines and parts
+        if user_can_see_all_sites(current_user):
+            # User can see all sites, eager load machines and parts
             sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
         else:
             # Check if user has any site assignments first
@@ -756,7 +794,7 @@ def dashboard():
                                       no_sites=True,  # Flag to show special message in template
                                       now=datetime.now())
             
-            # Non-admins can only see sites they're assigned to, eager load as well
+            # User can only see their assigned sites, eager load as well
             sites = (
                 Site.query.options(joinedload(Site.machines).joinedload(Machine.parts))
                 .filter(Site.id.in_([site.id for site in current_user.sites]))
@@ -1695,7 +1733,9 @@ def update_maintenance(part_id):
 def machine_history(machine_id):
     """Endpoint for viewing machine maintenance history."""
     try:
-        machine = Machine.query.get_or_404(machine_id)
+        machine = db.session.get(Machine, machine_id)
+        if not machine:
+            abort(404)
         return redirect(f'/maintenance?machine_id={machine_id}')
     except Exception as e:
         app.logger.error(f"Error in machine_history: {e}")
@@ -1906,6 +1946,7 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
+
 def forgot_password():
     """Handle password reset request."""
     if current_user.is_authenticated:
@@ -2167,10 +2208,19 @@ def admin_section(section):
 @login_required
 def manage_sites():
     """Handle site management page and site creation"""
-    sites = current_user.sites if not current_user.is_admin else Site.query.all()
+    # Filter sites based on user permissions
+    if user_can_see_all_sites(current_user):
+        sites = Site.query.all()
+    else:
+        sites = current_user.sites
     
     # Handle form submission for adding a new site
     if request.method == 'POST':
+        # Only admins can create sites
+        if not is_admin_user(current_user):
+            flash('You do not have permission to create sites.', 'danger')
+            return redirect(url_for('manage_sites'))
+            
         try:
             name = request.form['name']
             location = request.form.get('location', '')
@@ -2210,14 +2260,19 @@ def manage_sites():
     # For GET request or if POST processing fails
     users = User.query.all() if current_user.is_admin else None
     
+    # Define permissions for UI controls
+    can_create = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.create' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))
+    can_edit = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.edit' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) 
+    can_delete = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.delete' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))
+    
     return render_template('sites.html', 
                           sites=sites,
                           users=users,
                           is_admin=current_user.is_admin,
                           now=datetime.now(),
-                          can_create=True,
-                          can_edit=True,
-                          can_delete=True)
+                          can_create=can_create,
+                          can_edit=can_edit,
+                          can_delete=can_delete)
 
 @app.route('/site/edit/<int:site_id>', methods=['GET', 'POST'])
 @login_required
@@ -2272,16 +2327,31 @@ def manage_machines():
     try:
         site_id = request.args.get('site_id', type=int)
         
+        # Get accessible sites based on user permissions
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+            accessible_machines = Machine.query.all()
+        else:
+            sites = current_user.sites
+            site_ids = [site.id for site in sites]
+            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        machine_ids = [machine.id for machine in accessible_machines]
+        
         # Filter machines by site if site_id is provided
         if site_id:
+            # Make sure user has access to this site
+            if not user_can_see_all_sites(current_user) and site_id not in [site.id for site in current_user.sites]:
+                flash('You do not have access to this site.', 'danger')
+                return redirect(url_for('manage_machines'))
+            
+            # Filter machines by selected site
             machines = Machine.query.filter_by(site_id=site_id).all()
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
-            site_ids = [site.id for site in current_user.sites] if not current_user.is_admin else None
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else Machine.query.all()
+            # Show machines from all sites user has access to
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
             title = "Machines"
-        
-        sites = current_user.sites if not current_user.is_admin else Site.query.all()
         
         # Pre-generate URLs for admin navigation - provide ALL possible links needed by template
         safe_urls = {
@@ -2308,6 +2378,11 @@ def manage_machines():
                 machine_number = request.form.get('machine_number', '')
                 serial_number = request.form.get('serial_number', '')
                 site_id = request.form['site_id']
+                
+                # Verify user has access to the selected site
+                if not user_can_see_all_sites(current_user) and int(site_id) not in site_ids:
+                    flash('You do not have permission to add machines to this site.', 'danger')
+                    return redirect(url_for('manage_machines'))
                 
                 # Create new machine with minimal required fields only
                 new_machine = Machine(
@@ -2380,18 +2455,37 @@ def manage_parts():
     try:
         machine_id = request.args.get('machine_id', type=int)
         
+        # Get accessible sites based on user permissions
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+            accessible_machines = Machine.query.all()
+        else:
+            sites = current_user.sites
+            site_ids = [site.id for site in sites]
+            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        machine_ids = [machine.id for machine in accessible_machines]
+        
         # Filter parts by machine if machine_id is provided
         if machine_id:
+            # Make sure user has access to this machine's site
+            machine = Machine.query.get(machine_id)
+            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]):
+                flash('You do not have access to this machine.', 'danger')
+                return redirect(url_for('manage_parts'))
+            
+            # Filter parts by selected machine
             parts = Part.query.filter_by(machine_id=machine_id).all()
-            title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
+            title = f"Parts for {machine.name}"
         else:
-            machine_ids = [machine.id for machine in Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all()] if not current_user.is_admin else None
-            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else Part.query.all()
+            # Show parts from all machines user has access to
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
             title = "Parts"
         
-        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all() if not current_user.is_admin else Machine.query.all()
+        # Get machines user has access to for the form
+        machines = accessible_machines
         
-        # Pre-generate URLs for template use
+        # Pre-generate URLs for admin navigation - provide ALL possible links needed by template
         safe_urls = {
             'add_part': '/parts',
             'back_to_machines': '/machines',
@@ -2408,9 +2502,21 @@ def manage_parts():
                 machine_id = request.form['machine_id']
                 quantity = request.form.get('quantity', 0)  
                 notes = request.form.get('notes', '')
+                
+                # Check if user has access to the machine
+                machine = Machine.query.get(machine_id)
+                if not machine:
+                    flash('Invalid machine selected.', 'danger')
+                    return redirect(url_for('manage_parts'))
+                    
+                if not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]:
+                    flash('You do not have permission to add parts to this machine.', 'danger')
+                    return redirect(url_for('manage_parts'))
+                
                 # Get maintenance frequency and unit from form
                 maintenance_frequency = request.form.get('maintenance_frequency', 30)
                 maintenance_unit = request.form.get('maintenance_unit', 'day')
+                
                 # Create new part with all fields
                 new_part = Part(
                     name=name,
@@ -2419,6 +2525,7 @@ def manage_parts():
                     maintenance_frequency=maintenance_frequency,
                     maintenance_unit=maintenance_unit
                 )
+                
                 # Add part to database
                 db.session.add(new_part)
                 db.session.commit()
@@ -2573,20 +2680,14 @@ def edit_role(role_id):
             role.permissions = ','.join(permissions) if permissions else ''
             
             db.session.commit()
-            flash(f'Role "{name}" updated successfully.', 'success')
+            flash(f'Role "{name}" has been updated successfully.', 'success')
             return redirect(url_for('admin_roles'))
-            
-        # For GET requests, show the edit form
-        all_permissions = get_all_permissions()
-        role_permissions = role.permissions.split(',') if role.permissions else []
-        
-        return render_template('edit_role.html', 
-                            role=role, 
-                            all_permissions=all_permissions,
-                            role_permissions=role_permissions)
-                            
+        else:
+            # For GET requests, render the edit form with the all_permissions dictionary
+            all_permissions = get_all_permissions()
+            role_permissions = role.permissions.split(',') if role.permissions else []
+            return render_template('edit_role.html', role=role, all_permissions=all_permissions, role_permissions=role_permissions)
     except Exception as e:
-        db.session.rollback()
         app.logger.error(f"Error editing role: {e}")
         flash(f'Error editing role: {str(e)}', 'danger')
         return redirect(url_for('admin_roles'))
@@ -2595,10 +2696,11 @@ def edit_role(role_id):
 @login_required
 def maintenance_records_page():
     # Get all sites user can access
-    if current_user.is_admin:
+    if user_can_see_all_sites(current_user):
         sites = Site.query.all()
     else:
         sites = current_user.sites
+        
     site_id = request.args.get('site_id', type=int)
     machine_id = request.args.get('machine_id', type=int)
     part_id = request.args.get('part_id', type=int)
@@ -2611,6 +2713,11 @@ def maintenance_records_page():
     records = []
 
     if site_id:
+        # Verify user can access this site
+        if not user_can_see_all_sites(current_user) and site_id not in site_ids:
+            flash('You do not have access to this site.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+            
         # Filter machines by selected site
         machines = Machine.query.filter_by(site_id=site_id).all()
     else:
@@ -2620,6 +2727,12 @@ def maintenance_records_page():
     machine_ids = [machine.id for machine in machines]
     
     if machine_id:
+        # Verify user can access this machine
+        machine = Machine.query.get(machine_id)
+        if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
+            flash('You do not have access to this machine.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+            
         # Filter parts by selected machine
         parts = Part.query.filter_by(machine_id=machine_id).all()
     else:
@@ -2629,6 +2742,12 @@ def maintenance_records_page():
     part_ids = [part.id for part in parts]
     
     if part_id:
+        # Verify user can access this part
+        part = Part.query.get(part_id)
+        if not part or not part.machine or (not user_can_see_all_sites(current_user) and part.machine.site_id not in site_ids):
+            flash('You do not have access to this part.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+            
         # Filter records by selected part
         records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
     elif machine_id:
@@ -2775,6 +2894,8 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
+
 
 
 

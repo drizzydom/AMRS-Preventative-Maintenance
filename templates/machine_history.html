@@ -61,6 +61,7 @@
                             <td>{{ record.next_date.strftime('%Y-%m-%d') }}</td>
                             <td>{{ record.frequency }}</td>
                             <td>
+                                {% if has_permission('maintenance.record') %}
                                 <!-- Use plain HTML form with hardcoded action to avoid routing issues -->
                                 <form action="{{ url_for('update_maintenance') }}" method="POST" class="d-inline">
                                     <input type="hidden" name="part_id" value="{{ parts[loop.index0].id }}">
@@ -68,6 +69,7 @@
                                         <i class="fas fa-check-circle"></i> Record
                                     </button>
                                 </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

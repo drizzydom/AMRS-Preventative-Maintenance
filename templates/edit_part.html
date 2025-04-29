@@ -82,7 +82,9 @@
                     <p><strong>Next Maintenance:</strong> {{ part.next_maintenance.strftime('%Y-%m-%d') if part.next_maintenance }}</p>
                     
                     <div class="mt-3">
+                        {% if has_permission('maintenance.record') %}
                         <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="btn btn-sm btn-outline-primary">Record Maintenance</a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
