@@ -2330,6 +2330,8 @@ def manage_machines():
         # Get accessible sites based on user permissions
         if user_can_see_all_sites(current_user):
             sites = Site.query.all()
+            # Initialize site_ids for all sites
+            site_ids = [site.id for site in sites]
             accessible_machines = Machine.query.all()
         else:
             sites = current_user.sites
@@ -2341,7 +2343,7 @@ def manage_machines():
         # Filter machines by site if site_id is provided
         if site_id:
             # Make sure user has access to this site
-            if not user_can_see_all_sites(current_user) and site_id not in [site.id for site in current_user.sites]:
+            if not user_can_see_all_sites(current_user) and site_id not in site_ids:
                 flash('You do not have access to this site.', 'danger')
                 return redirect(url_for('manage_machines'))
             
@@ -2468,7 +2470,7 @@ def manage_parts():
         
         # Filter parts by machine if machine_id is provided
         if machine_id:
-            # Make sure user has access to this machine's site
+            # Make sure user has access to this machine
             machine = Machine.query.get(machine_id)
             if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]):
                 flash('You do not have access to this machine.', 'danger')
@@ -2721,7 +2723,7 @@ def maintenance_records_page():
         # Filter machines by selected site
         machines = Machine.query.filter_by(site_id=site_id).all()
     else:
-        # Get all machines for sites the user has access to
+        # Show machines from all sites user has access to
         machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
     
     machine_ids = [machine.id for machine in machines]
@@ -2894,6 +2896,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
