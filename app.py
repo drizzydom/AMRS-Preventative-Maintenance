@@ -766,6 +766,7 @@ def index():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    app.logger.debug(f"Dashboard accessed. Authenticated: {current_user.is_authenticated}, User: {getattr(current_user, 'username', None)}")
     try:
         # Get upcoming and overdue maintenance across all sites the user has access to
         if current_user.is_admin:
@@ -1924,13 +1925,12 @@ def login():
             app.logger.debug(f"Redirecting to {dashboard_url} via direct HTML")
             
             # Return direct HTML with JavaScript and meta refresh redirection
-            # This bypasses Flask's redirect which may not work properly in Safari
+            # This bypasses Flask's redirect which may not work properly in Safari```html
             return f"""
             <!DOCTYPE html>
             <html>
             <head>
                 <title>Login Successful - Redirecting...</title>
-                <```html
                 <meta http-equiv="refresh" content="0;URL='{dashboard_url}'">
                 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
                 <meta http-equiv="Pragma" content="no-cache">
@@ -2858,8 +2858,9 @@ def emergency_maintenance_request():
 # Configure session and cookie settings to work with Safari
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Using 'Lax' instead of 'Strict' for better compatibility
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # Longer session lifetime
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['SESSION_COOKIE_DOMAIN'] = '.amrs-preventative-maintenance.onrender.com'  # Explicit domain for cookie
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
@@ -2871,6 +2872,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
