@@ -611,10 +611,17 @@ def ensure_db_connection():
 def allow_admin_everywhere():
     """Allow admin users to access all pages without additional permission checks."""
     if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
-        # Use the standardized is_admin_user function instead of directly accessing is_admin property
-        # This prevents infinite recursion
-        if is_admin_user(current_user):
-            # Bypass permission checks for admins
+        # Direct check for admin privileges without using the is_admin property
+        if hasattr(current_user, 'role') and current_user.role:
+            if hasattr(current_user.role, 'name') and current_user.role.name:
+                role_name = current_user.role.name.lower()
+                if role_name in ['admin', 'administrator']:
+                    # Bypass permission checks for admins
+                    return None
+                    
+        # Fallback: check username directly
+        if getattr(current_user, 'username', None) == 'admin':
+            # Bypass permission checks for admin username
             return None
 
 # Replace the enhance_models function with a template context processor
@@ -1922,14 +1929,14 @@ def forgot_password():
         <div class="container mt-5">
             <div class="row justify-content-center">
                 <div class="col-md-6">
+                   ```html
                     <div class="card">
                         <div class="card-header">Reset Password</div>
                         <div class="card-body">
                             <form method="post">
                                 <div class="mb-3">
                                     <label for="email" class="form-label">Email</label>
-                                    <input type="email" class="form-control"```html
-                                    id="email" name="email" required>
+                                    <input type="email" class="form-control" id="email" name="email" required>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Send Reset Link</button>
                             </form>
@@ -2754,6 +2761,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
