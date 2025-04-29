@@ -610,30 +610,21 @@ def allow_admin_everywhere():
     if request.path.startswith('/static/') or request.path in ['/login', '/logout', '/health-check']:
         return None
         
-    if not current_user or not hasattr(current_user, 'is_authenticated') or not current_user.is_authenticated:
-        # Not authenticated users should be handled by login_required decorator elsewhere
+    # If user is not authenticated, let the route functions handle it
+    if not current_user or not current_user.is_authenticated:
         return None
         
     try:
-        # Direct check for admin privileges without using the is_admin property
-        if hasattr(current_user, 'role') and current_user.role:
-            if hasattr(current_user.role, 'name') and current_user.role.name:
-                role_name = current_user.role.name.lower()
-                if role_name in ['admin', 'administrator']:
-                    # Bypass permission checks for admins
-                    return None
-                    
-        # Fallback: check username directly
-        if getattr(current_user, 'username', None) == 'admin':
-            # Bypass permission checks for admin username
+        # Use standard admin check function rather than accessing property directly
+        if is_admin_user(current_user):
+            # Admin users bypass permission checks
             return None
             
-        # For non-admin users, we just allow the request to proceed normally
-        # No redirection here, just let the route function handle permissions
+        # For non-admin users, just continue normal request processing
         return None
     except Exception as e:
         app.logger.error(f"Error in allow_admin_everywhere: {e}")
-        # Don't redirect on error - let the request proceed to avoid loops
+        # Don't redirect on error - let the request proceed
         return None
 
 # Replace the enhance_models function with a template context processor
@@ -1946,17 +1937,17 @@ def forgot_password():
         
         if user:
             # Generate a password reset token
+            reset_token
             reset_token = secrets.token_urlsafe(32)
             expires = datetime.now() + timedelta(hours=24)
             
-            # Store token in database```python
+            # Store token in database
             user.reset_token = reset_token
             user.reset_token_expiration = expires
             db.session.commit()
             
             # In a production app, you would send an email with the reset link
             # For now, just flash a message with the token (for demonstration)
-            reset            # For now, just flash a message with the token (for demonstration)
             reset_url = url_for('reset_password', token=reset_token, _external=True)
             flash(f'Password reset link: {reset_url}', 'info')
             
@@ -2805,6 +2796,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
