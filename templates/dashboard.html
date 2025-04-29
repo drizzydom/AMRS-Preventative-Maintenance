@@ -140,9 +140,12 @@
                                                     <td><span class="text-danger fw-bold">{{ -days_until }} days</span></td>
                                                     <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                                     <td>
+                                                        <!-- Maintenance button in the overdue parts panel -->
+                                                        {% if has_permission('maintenance.record') %}
                                                         <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
                                                             <i class="fas fa-tools"></i> Maintenance
                                                         </a>
+                                                        {% endif %}
                                                     </td>
                                                 </tr>
                                             {% endif %}
@@ -166,9 +169,12 @@
                                         <div><span class="text-danger fw-bold">Overdue: {{ -days_until }} days</span></div>
                                         <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                                         <div class="mt-2">
+                                            <!-- Mobile card-list version - maintenance button -->
+                                            {% if has_permission('maintenance.record') %}
                                             <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
                                                 <i class="fas fa-tools"></i> Maintenance
                                             </a>
+                                            {% endif %}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -218,9 +224,11 @@
                                                     <td><span class="text-warning fw-bold">{{ days_until }} days</span></td>
                                                     <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                                     <td>
+                                                        {% if has_permission('maintenance.record') %}
                                                         <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
                                                             <i class="fas fa-tools"></i> Maintenance
                                                         </a>
+                                                        {% endif %}
                                                     </td>
                                                 </tr>
                                             {% endif %}
@@ -244,9 +252,12 @@
                                         <div><span class="text-warning fw-bold">Due In: {{ days_until }} days</span></div>
                                         <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                                         <div class="mt-2">
+                                            <!-- Mobile card-list version - maintenance button -->
+                                            {% if has_permission('maintenance.record') %}
                                             <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
                                                 <i class="fas fa-tools"></i> Maintenance
                                             </a>
+                                            {% endif %}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -412,9 +423,11 @@
                                                         {% endif %}
                                                       </td>
                                                       <td>
+                                                        {% if has_permission('maintenance.record') %}
                                                         <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-secondary">
                                                           <i class="fas fa-tools"></i> Maintenance
                                                         </a>
+                                                        {% endif %}
                                                       </td>
                                                     </tr>
                                                     {% endfor %}
