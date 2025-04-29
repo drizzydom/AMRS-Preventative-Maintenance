@@ -6,6 +6,19 @@
 
 {% block content %}
 <div class="dashboard">
+    {% if no_sites %}
+    <!-- Display message for users with no site assignments -->
+    <div class="alert alert-warning">
+        <h4><i class="fas fa-exclamation-triangle me-2"></i>No Sites Assigned</h4>
+        <p>You don't have any sites assigned to your account. Please contact your administrator to get access to sites.</p>
+    </div>
+    {% elif error %}
+    <!-- Display error message when dashboard fails to load -->
+    <div class="alert alert-danger">
+        <h4><i class="fas fa-exclamation-circle me-2"></i>Error Loading Dashboard</h4>
+        <p>There was a problem loading your dashboard data. Please try refreshing the page or contact support if the issue persists.</p>
+    </div>
+    {% else %}
     <!-- Site Filter Dropdown -->
     <div class="card mb-3">
         <div class="card-body py-2">

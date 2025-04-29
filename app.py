@@ -659,7 +659,8 @@ def inject_common_variables():
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
         'datetime': datetime,
-        'now': datetime.now()
+        'now': datetime.now(),
+        'hasattr': hasattr  # Add hasattr function to be available in templates
     }
 
 def url_for_safe(endpoint, **values):
