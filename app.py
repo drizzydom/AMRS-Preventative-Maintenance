@@ -603,38 +603,38 @@ def ensure_db_connection():
         return jsonify({'error': 'Database connection failure'}), 500
 
 # Helper: Always allow admins to access any page
-@app.before_request
-def allow_admin_everywhere():
-    """Allow admin users to access all pages without additional permission checks."""
-    # Skip for static files and specific public routes
-    if request.path.startswith('/static/') or request.path in ['/login', '/logout', '/health-check']:
-        return None
-        
-    if not current_user or not hasattr(current_user, 'is_authenticated') or not current_user.is_authenticated:
-        # Not authenticated users should be handled by login_required decorator elsewhere
-        return None
-        
-    try:
-        # Direct check for admin privileges without using the is_admin property
-        if hasattr(current_user, 'role') and current_user.role:
-            if hasattr(current_user.role, 'name') and current_user.role.name:
-                role_name = current_user.role.name.lower()
-                if role_name in ['admin', 'administrator']:
-                    # Bypass permission checks for admins
-                    return None
-                    
-        # Fallback: check username directly
-        if getattr(current_user, 'username', None) == 'admin':
-            # Bypass permission checks for admin username
-            return None
-            
-        # For non-admin users, we just allow the request to proceed normally
-        # No redirection here, just let the route function handle permissions
-        return None
-    except Exception as e:
-        app.logger.error(f"Error in allow_admin_everywhere: {e}")
-        # Don't redirect on error - let the request proceed to avoid loops
-        return None
+# @app.before_request
+# def allow_admin_everywhere():
+#     """Allow admin users to access all pages without additional permission checks."""
+#     # Skip for static files and specific public routes
+#     if request.path.startswith('/static/') or request.path in ['/login', '/logout', '/health-check']:
+#         return None
+#         
+#     if not current_user or not hasattr(current_user, 'is_authenticated') or not current_user.is_authenticated:
+#         # Not authenticated users should be handled by login_required decorator elsewhere
+#         return None
+#         
+#     try:
+#         # Direct check for admin privileges without using the is_admin property
+#         if hasattr(current_user, 'role') and current_user.role:
+#             if hasattr(current_user.role, 'name') and current_user.role.name:
+#                 role_name = current_user.role.name.lower()
+#                 if role_name in ['admin', 'administrator']:
+#                     # Bypass permission checks for admins
+#                     return None
+#                     
+#         # Fallback: check username directly
+#         if getattr(current_user, 'username', None) == 'admin':
+#             # Bypass permission checks for admin username
+#             return None
+#             
+#         # For non-admin users, we just allow the request to proceed normally
+#         # No redirection here, just let the route function handle permissions
+#         return None
+#     except Exception as e:
+#         app.logger.error(f"Error in allow_admin_everywhere: {e}")
+#         # Don't redirect on error - let the request proceed to avoid loops
+#         return None
 
 # Replace the enhance_models function with a template context processor
 @app.context_processor
