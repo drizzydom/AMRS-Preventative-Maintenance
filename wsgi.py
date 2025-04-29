@@ -26,18 +26,39 @@ except Exception as e:
 
 logger.info(f"FLASK_APP: {os.environ.get('FLASK_APP', 'Not set')}")
 logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
+logger.info(f"PORT: {os.environ.get('PORT', '5000')}")  # Log the PORT variable for debugging
 
 from auto_migrate import run_auto_migration
 run_auto_migration()
 
-# Import the Flask app from render_app.py (which imports from app.py)
-from render_app import app
+# Import the Flask app from app.py
+try:
+    logger.info("Attempting to import app from app module...")
+    from app import app
+    logger.info("Successfully imported app from app.py")
+except ImportError as e:
+    logger.error(f"Failed to import app from app.py: {e}")
+    
+    # Try to import from render_app.py as a fallback
+    try:
+        logger.info("Attempting to import app from render_app module...")
+        from render_app import app
+        logger.info("Successfully imported app from render_app.py")
+    except ImportError as e:
+        logger.error(f"Failed to import app from render_app.py: {e}")
+        raise RuntimeError("Could not initialize Flask app through any available method")
 
 # Ensure all tables are created before serving requests
 from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine, Part, MaintenanceRecord
 with app.app_context():
     db.create_all()
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+# This is needed for Render.com to detect the app is listening on the right port
+# The variable must be called 'app' for the WSGI server to find it
+# No main block needed as Gunicorn will import this module and use the 'app' variable
+
+# Log which port we'll be using
+port = int(os.environ.get("PORT", 5000))
+logger.info(f"Application configured to use port {port}")
+
+# No app.run() call here as Gunicorn handles that part
