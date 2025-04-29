@@ -118,28 +118,26 @@ class User(UserMixin, db.Model):
     def email(self, value):
         self._email = encrypt_value(value)
         self.email_hash = hash_value(value)
-
-    def set_password(self, password):
-        """Set the password hash"""
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        """Check the password against the stored hash"""
-        return check_password_hash(self.password_hash, password)
-    
-    def has_permission(self, permission):
-        """Check if user has a specific permission"""
-        # Admin users have all permissions
-        if self.is_admin:
+        
+    @property
+    def is_admin(self):
+        """Check if user has admin privileges via role or direct flag."""
+        # First check the direct column
+        if hasattr(self, '_is_admin') and self._is_admin:
             return True
         
-        # Users with no role have no permissions
-        if not self.role:
-            return False
-        
-        # Check if the user's role has the permission
-        return self.role.has_permission(permission)
-    
+        # Then check via role
+        if self.role and hasattr(self.role, 'name'):
+            if self.role.name.lower() == 'admin':
+                return True
+                
+        # Also check permissions if role exists
+        if self.role and hasattr(self.role, 'permissions') and self.role.permissions:
+            if 'admin.full' in self.role.permissions:
+                return True
+                
+        return False
+
     def get_notification_preferences(self):
         default = {
             'enable_email': True,
