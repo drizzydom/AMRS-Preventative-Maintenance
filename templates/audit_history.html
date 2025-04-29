@@ -219,17 +219,21 @@
         }
         
         // Get machines for the selected site
-        const machines = {
-            {% for machine in available_machines %}
-                {% if machine.site_id %}
-                    "{{ machine.id }}": {
-                        "id": {{ machine.id }},
-                        "name": "{{ machine.name }}",
-                        "site_id": {{ machine.site_id }}
-                    },
-                {% endif %}
-            {% endfor %}
-        };
+        const machines = {};
+        
+        // Convert Python data to JavaScript object
+        const availableMachines = JSON.parse('{{ available_machines|tojson|safe }}');
+        
+        // Populate the machines object
+        availableMachines.forEach(machine => {
+            if (machine.site_id) {
+                machines[machine.id] = {
+                    "id": machine.id,
+                    "name": machine.name,
+                    "site_id": machine.site_id
+                };
+            }
+        });
         
         // Add machines for the selected site
         for (const [id, machine] of Object.entries(machines)) {
@@ -252,7 +256,7 @@
                 
                 // Restore previously selected machine if any
                 const machineDropdown = document.getElementById('machine_id');
-                const selectedMachine = {{ selected_machine or 'null' }};
+                const selectedMachine = JSON.parse('{{ selected_machine|default("null")|tojson|safe }}');
                 if (selectedMachine) {
                     for (let i = 0; i < machineDropdown.options.length; i++) {
                         if (machineDropdown.options[i].value == selectedMachine) {
