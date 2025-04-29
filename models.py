@@ -78,7 +78,7 @@ class User(UserMixin, db.Model):
     email_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
+    is_admin = db.Column(db.Boolean, default=False)  # Database column
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -118,30 +118,13 @@ class User(UserMixin, db.Model):
     def email(self, value):
         self._email = encrypt_value(value)
         self.email_hash = hash_value(value)
-        
+    
+    # Simplified is_admin property that doesn't override the database column
     @property
-    def is_admin(self):
-        """Check if user has admin privileges via role or direct flag."""
+    def has_admin_role(self):
+        """Check if user has admin privileges via role."""
         try:
-            # First check the direct column value using __dict__ to avoid recursion
-            if '_sa_instance_state' in self.__dict__:
-                # SQLAlchemy approach - check the column attribute directly
-                is_admin_column = getattr(self.__class__.is_admin, 'property', None)
-                if is_admin_column:
-                    column_name = is_admin_column.key
-                    if column_name in self.__dict__ and self.__dict__[column_name] is True:
-                        return True
-                        
-            # Direct check using __table__ reflection to get column name
-            if hasattr(self.__class__, '__table__') and 'is_admin' in self.__class__.__table__.columns:
-                # Get the raw value from SQLAlchemy internal state
-                column_name = 'is_admin'
-                if '_sa_instance_state' in self.__dict__ and hasattr(self.__dict__['_sa_instance_state'], 'dict'):
-                    state_dict = self.__dict__['_sa_instance_state'].dict
-                    if column_name in state_dict and state_dict[column_name] is True:
-                        return True
-            
-            # Then check via role
+            # Check via role
             if hasattr(self, 'role') and self.role:
                 # Check role name
                 if self.role.name and self.role.name.lower() == 'admin':
@@ -156,7 +139,7 @@ class User(UserMixin, db.Model):
             return False
         except Exception as e:
             # Safely handle any errors in permission checking
-            print(f"Error in is_admin property: {e}")
+            print(f"Error in has_admin_role property: {e}")
             return False
 
     def get_notification_preferences(self):
