@@ -1867,9 +1867,10 @@ def update_notification_preferences():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle user login with a direct, simplified approach."""
+    """Handle user login with explicit session handling and Safari compatibility fix."""
     # Redirect authenticated users to dashboard
     if current_user.is_authenticated:
+        app.logger.debug("User already authenticated, redirecting to dashboard")
         return redirect(url_for('dashboard'))
         
     if request.method == 'POST':
@@ -1892,20 +1893,50 @@ def login():
         # If user exists, verify password
         if user and user.password_hash and check_password_hash(user.password_hash, password):
             # Login successful
-            login_user(user)
+            app.logger.info(f"Login successful for user_id={user.id}")
             
             # Update the last login timestamp
             user.last_login = datetime.now()
             db.session.commit()
             
-            # Log successful login
-            app.logger.info(f"Login successful for user_id={user.id}")
+            # Login user with explicit session parameters that work in Safari
+            login_user(user, remember=True)
             
-            # Redirect to requested page or dashboard
-            next_page = request.args.get('next')
-            if next_page and next_page.startswith('/'):
-                return redirect(next_page)
-            return redirect(url_for('dashboard'))
+            try:
+                # Force session save for Safari compatibility
+                session.permanent = True
+                session.modified = True
+                
+                # Get the requested dashboard path
+                next_page = request.args.get('next') or url_for('dashboard')
+                
+                # Create a response with explicit cookie parameters that work with Safari
+                response = redirect(next_page)
+                
+                # Set strong cache control headers to prevent caching issues in Safari
+                response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+                response.headers['Pragma'] = 'no-cache'
+                response.headers['Expires'] = '0'
+                
+                # Return response with all headers properly set
+                app.logger.debug(f"Redirecting to {next_page}")
+                return response
+            except Exception as e:
+                app.logger.error(f"Error during redirect after login: {str(e)}")
+                # Fallback - Try direct HTML rendering
+                return f"""
+                <html>
+                <head>
+                    <meta http-equiv="refresh" content="0;url```html
+                    <meta http-equiv="refresh" content="0;url={url_for('dashboard')}">
+                    <title>Redirecting...</title>
+                </head>
+                <body>
+                    <p>Login successful. If you are not redirected, <a href="{url_for('dashboard')}">click here</a>.</p>
+                    <script>window.location.href = "{url_for('dashboard')}";</script>
+                </body>
+                </html>
+                """
         else:
             # Login failed
             app.logger.warning(f"Failed login attempt for username: {username}")
@@ -2795,6 +2826,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
