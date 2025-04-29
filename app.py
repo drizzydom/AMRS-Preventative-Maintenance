@@ -965,12 +965,16 @@ def audits_page():
         can_delete_audits = True
         can_complete_audits = True
     else:
-        # Fix: Access the role name if it's a Role object, or use it directly if it's a string
-        if hasattr(current_user, 'role'):
-            if current_user.role:
-                # Handle case where role is a Role object (get its name) or a string (use directly)
-                role_name = current_user.role.name if hasattr(current_user.role, 'name') else current_user.role
-                user_role = Role.query.filter_by(name=role_name).first()
+        # Handle both cases where role is a Role object or a string
+        if hasattr(current_user, 'role') and current_user.role:
+            if hasattr(current_user.role, 'name'):
+                # Role is an object, use its permissions directly
+                permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
+                can_delete_audits = 'audits.delete' in permissions
+                can_complete_audits = 'audits.complete' in permissions
+            else:
+                # Role is a string, query for the role
+                user_role = Role.query.filter_by(name=current_user.role).first()
                 permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
                 can_delete_audits = 'audits.delete' in permissions
                 can_complete_audits = 'audits.complete' in permissions
@@ -1097,9 +1101,18 @@ def delete_audit_task(audit_task_id):
     if current_user.is_admin:
         can_delete_audits = True
     else:
-        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
-        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-        can_delete_audits = 'audits.delete' in permissions
+        # Handle both cases where role is a Role object or a string
+        if hasattr(current_user, 'role') and current_user.role:
+            if hasattr(current_user.role, 'name'):
+                # Role is an object, use its permissions directly
+                permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
+                can_delete_audits = 'audits.delete' in permissions
+            else:
+                # Role is a string, query for the role
+                user_role = Role.query.filter_by(name=current_user.role).first()
+                permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+                can_delete_audits = 'audits.delete' in permissions
+    
     if not can_delete_audits:
         flash('You do not have permission to delete audit tasks.', 'danger')
         return redirect(url_for('audits_page'))
@@ -1916,7 +1929,7 @@ def update_notification_preferences():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle user login."""
+    """Handle userlogin."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
         
