@@ -475,6 +475,12 @@
                                 <span class="sidebar-link-text">Audits</span>
                             </a>
                         </li>
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('audit_history_page') }}" class="sidebar-link {% if request.endpoint == 'audit_history_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-history"></i>
+                                <span class="sidebar-link-text">Audit History</span>
+                            </a>
+                        </li>
                         {% endif %}
                         
                         {# Maintenance Records - requires maintenance.view permission #}
