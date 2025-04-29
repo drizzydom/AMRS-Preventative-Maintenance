@@ -596,9 +596,15 @@ def ensure_db_connection():
 # Helper: Always allow admins to access any page
 @app.before_request
 def allow_admin_everywhere():
+    """
+    Special handling for admin users: bypass permission checks
+    Non-admin users proceed normally through the request cycle
+    """
+    # Only return early for admin users, for everyone else just continue the request
     if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and getattr(current_user, 'is_admin', False):
         # Bypass permission checks for admins
         return None
+    # For non-admin users, don't return anything and let the request continue normally
 
 # Replace the enhance_models function with a template context processor
 @app.context_processor
@@ -736,23 +742,39 @@ def dashboard():
             # Admins can see all sites, eager load machines and parts
             sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
         else:
+            # Check if user has any site assignments first
+            if not hasattr(current_user, 'sites') or not current_user.sites:
+                # Handle case where user has no site assignments
+                app.logger.warning(f"User {current_user.username} (ID: {current_user.id}) has no site assignments")
+                return render_template('dashboard.html', 
+                                      sites=[], 
+                                      overdue_count=0, 
+                                      due_soon_count=0, 
+                                      ok_count=0, 
+                                      total_parts=0,
+                                      no_sites=True,  # Flag to show special message in template
+                                      now=datetime.now())
+            
             # Non-admins can only see sites they're assigned to, eager load as well
             sites = (
                 Site.query.options(joinedload(Site.machines).joinedload(Machine.parts))
                 .filter(Site.id.in_([site.id for site in current_user.sites]))
                 .all()
             )
+        
         # Get all machines across accessible sites
         machines = []
         site_ids = [site.id for site in sites]
         if site_ids:
             machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+        
         # Get all parts that need maintenance soon or are overdue
         parts = []
         machine_ids = [machine.id for machine in machines]
         if machine_ids:
             # Get all parts for these machines
             parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
+        
         # Get statistics
         stats = {
             'sites_count': len(sites),
@@ -776,10 +798,26 @@ def dashboard():
             else:
                 ok_count += 1
         total_parts = len(parts)
-        return render_template('dashboard.html', sites=sites, overdue_count=overdue_count, due_soon_count=due_soon_count, ok_count=ok_count, total_parts=total_parts, now=now)
+        
+        return render_template('dashboard.html', 
+                              sites=sites, 
+                              overdue_count=overdue_count, 
+                              due_soon_count=due_soon_count, 
+                              ok_count=ok_count, 
+                              total_parts=total_parts, 
+                              now=now)
     except Exception as e:
-        flash(f'Error loading dashboard: {str(e)}', 'error')
-        return redirect(url_for('index'))
+        app.logger.error(f"Dashboard error: {str(e)}")
+        # Instead of redirecting, show a minimal dashboard with an error message
+        flash(f'Error loading dashboard data: {str(e)}', 'error')
+        return render_template('dashboard.html', 
+                              sites=[], 
+                              overdue_count=0, 
+                              due_soon_count=0, 
+                              ok_count=0, 
+                              total_parts=0,
+                              error=True,  # Flag to show error message in template
+                              now=datetime.now())
 
 @app.route('/admin')
 @login_required
