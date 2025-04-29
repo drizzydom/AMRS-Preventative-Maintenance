@@ -1867,11 +1867,24 @@ def update_notification_preferences():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle user login with explicit session handling and Safari compatibility fix."""
+    """Handle user login with direct HTML response bypass for Safari."""
     # Redirect authenticated users to dashboard
     if current_user.is_authenticated:
         app.logger.debug("User already authenticated, redirecting to dashboard")
-        return redirect(url_for('dashboard'))
+        dashboard_url = url_for('dashboard')
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Redirecting...</title>
+            <meta http-equiv="refresh" content="0;URL='{dashboard_url}'">
+            <script>window.location.href = "{dashboard_url}";</script>
+        </head>
+        <body>
+            <p>Already logged in. Redirecting to <a href="{dashboard_url}">dashboard</a>...</p>
+        </body>
+        </html>
+        """
         
     if request.method == 'POST':
         username = request.form.get('username')
@@ -1899,44 +1912,71 @@ def login():
             user.last_login = datetime.now()
             db.session.commit()
             
-            # Login user with explicit session parameters that work in Safari
+            # Login the user with Flask-Login
             login_user(user, remember=True)
             
-            try:
-                # Force session save for Safari compatibility
-                session.permanent = True
-                session.modified = True
-                
-                # Get the requested dashboard path
-                next_page = request.args.get('next') or url_for('dashboard')
-                
-                # Create a response with explicit cookie parameters that work with Safari
-                response = redirect(next_page)
-                
-                # Set strong cache control headers to prevent caching issues in Safari
-                response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
-                response.headers['Pragma'] = 'no-cache'
-                response.headers['Expires'] = '0'
-                
-                # Return response with all headers properly set
-                app.logger.debug(f"Redirecting to {next_page}")
-                return response
-            except Exception as e:
-                app.logger.error(f"Error during redirect after login: {str(e)}")
-                # Fallback - Try direct HTML rendering
-                return f"""
-                <html>
-                <head>
-                    <meta http-equiv="refresh" content="0;url```html
-                    <meta http-equiv="refresh" content="0;url={url_for('dashboard')}">
-                    <title>Redirecting...</title>
-                </head>
-                <body>
-                    <p>Login successful. If you are not redirected, <a href="{url_for('dashboard')}">click here</a>.</p>
-                    <script>window.location.href = "{url_for('dashboard')}";</script>
-                </body>
-                </html>
-                """
+            # Force session save
+            session.permanent = True
+            session.modified = True
+            
+            # Get the dashboard URL
+            dashboard_url = url_for('dashboard')
+            app.logger.debug(f"Redirecting to {dashboard_url} via direct HTML")
+            
+            # Return direct HTML with JavaScript and meta refresh redirection
+            # This bypasses Flask's redirect which may not work properly in Safari
+            return f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Login Successful - Redirecting...</title>
+                <```html
+                <meta http-equiv="refresh" content="0;URL='{dashboard_url}'">
+                <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+                <meta http-equiv="Pragma" content="no-cache">
+                <meta http-equiv="Expires" content="0">
+                <script>
+                    // Try to set a cookie to test if cookies are enabled
+                    document.cookie = "testcookie=1; path=/; SameSite=Lax";
+                    
+                    // Redirect with JavaScript
+                    window.location.href = "{dashboard_url}";
+                </script>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        text-align: center;
+                        padding: 40px;
+                    }}
+                    .spinner {{
+                        border: 6px solid #f3f3f3;
+                        border-top: 6px solid #3498db;
+                        border-radius: 50%;
+                        width: 50px;
+                        height: 50px;
+                        animation: spin 1s linear infinite;
+                        margin: 20px auto;
+                    }}
+                    @keyframes spin {{
+                        0% {{ transform: rotate(0deg); }}
+                        100% {{ transform: rotate(360deg); }}
+                    }}
+                </style>
+            </head>
+            <body>
+                <h2>Login Successful!</h2>
+                <p>Redirecting you to the dashboard...</p>
+                <div class="spinner"></div>
+                <p>If you are not redirected automatically, please <a href="{dashboard_url}">click here</a>.</p>
+                <script>
+                    // Backup redirect after a short delay
+                    setTimeout(function() {{
+                        window.location.href = "{dashboard_url}";
+                    }}, 1000);
+                </script>
+            </body>
+            </html>
+            """
         else:
             # Login failed
             app.logger.warning(f"Failed login attempt for username: {username}")
@@ -2826,6 +2866,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
