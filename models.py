@@ -122,21 +122,28 @@ class User(UserMixin, db.Model):
     @property
     def is_admin(self):
         """Check if user has admin privileges via role or direct flag."""
-        # First check the direct column
-        if hasattr(self, '_is_admin') and self._is_admin:
-            return True
-        
-        # Then check via role
-        if self.role and hasattr(self.role, 'name'):
-            if self.role.name.lower() == 'admin':
+        try:
+            # First check the direct column value (not _is_admin)
+            if hasattr(self, 'is_admin') and isinstance(self.is_admin, bool) and self.is_admin is True:
                 return True
-                
-        # Also check permissions if role exists
-        if self.role and hasattr(self.role, 'permissions') and self.role.permissions:
-            if 'admin.full' in self.role.permissions:
-                return True
-                
-        return False
+            
+            # Then check via role
+            if hasattr(self, 'role') and self.role:
+                # Check role name
+                if self.role.name and self.role.name.lower() == 'admin':
+                    return True
+                    
+                # Also check permissions if role exists
+                if hasattr(self.role, 'permissions') and self.role.permissions:
+                    permissions = self.role.permissions
+                    if isinstance(permissions, str) and 'admin.full' in permissions:
+                        return True
+                    
+            return False
+        except Exception as e:
+            # Safely handle any errors in permission checking
+            print(f"Error in is_admin property: {e}")
+            return False
 
     def get_notification_preferences(self):
         default = {
