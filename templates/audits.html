@@ -19,7 +19,10 @@
   {% endif %}
 {% endwith %}
 
-{% if not (current_user.is_admin or (current_user.is_authenticated and current_user.role and (Role.query.filter_by(name=current_user.role).first() and 'audits.access' in (Role.query.filter_by(name=current_user.role).first().permissions or '')))) %}
+{% if not (current_user.is_admin or (current_user.is_authenticated and current_user.role and (
+    (hasattr(current_user.role, 'name') and 'audits.access' in (current_user.role.permissions or '')) or
+    (not hasattr(current_user.role, 'name') and Role.query.filter_by(name=current_user.role).first() and 'audits.access' in (Role.query.filter_by(name=current_user.role).first().permissions or ''))
+))) %}
   <div class="alert alert-warning text-center my-4" role="alert">
       <h4 class="alert-heading">Audits Feature Not Enabled</h4>
       <p>This feature is not available in your current plan. If you would like access to the Audits module, please contact <a href="mailto:sales@accuratemachinerepair.com">sales@accuratemachinerepair.com</a> for more information.</p>
