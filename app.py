@@ -964,10 +964,15 @@ def audits_page():
         can_delete_audits = True
         can_complete_audits = True
     else:
-        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
-        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-        can_delete_audits = 'audits.delete' in permissions
-        can_complete_audits = 'audits.complete' in permissions
+        # Fix: Access the role name if it's a Role object, or use it directly if it's a string
+        if hasattr(current_user, 'role'):
+            if current_user.role:
+                # Handle case where role is a Role object (get its name) or a string (use directly)
+                role_name = current_user.role.name if hasattr(current_user.role, 'name') else current_user.role
+                user_role = Role.query.filter_by(name=role_name).first()
+                permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+                can_delete_audits = 'audits.delete' in permissions
+                can_complete_audits = 'audits.complete' in permissions
 
     # Restrict sites for non-admins
     if current_user.is_admin:
@@ -2342,11 +2347,11 @@ def manage_machines():
         
         # Filter machines by site if site_id is provided
         if site_id:
-            # Make sure user has access to this site
+            # Verify user can access this site
             if not user_can_see_all_sites(current_user) and site_id not in site_ids:
                 flash('You do not have access to this site.', 'danger')
                 return redirect(url_for('manage_machines'))
-            
+                
             # Filter machines by selected site
             machines = Machine.query.filter_by(site_id=site_id).all()
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
@@ -2470,7 +2475,7 @@ def manage_parts():
         
         # Filter parts by machine if machine_id is provided
         if machine_id:
-            # Make sure user has access to this machine
+            # Verify user can access this machine
             machine = Machine.query.get(machine_id)
             if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]):
                 flash('You do not have access to this machine.', 'danger')
