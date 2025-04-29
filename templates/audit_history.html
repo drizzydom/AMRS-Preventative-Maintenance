@@ -203,6 +203,24 @@
 
 {% block scripts %}
 <script>
+    // Store machine data in a JavaScript variable
+    // This completely separates Jinja template logic from JavaScript
+    var machineData = [
+        {% for machine in available_machines %}
+            {% if machine.site_id is defined %}
+            {
+                id: "{{ machine.id }}",
+                name: "{{ machine.name|replace('"', '\\"')|replace("'", "\\'") }}",
+                siteId: "{{ machine.site_id }}"
+            }{% if not loop.last %},{% endif %}
+            {% endif %}
+        {% endfor %}
+    ];
+    
+    // Store the selected values in JavaScript variables
+    var selectedSiteId = "{{ sites[0].id if sites and not show_site_dropdown else selected_site|default('') }}";
+    var selectedMachineId = "{{ selected_machine|default('') }}";
+    
     // Function to update available machines when site selection changes
     function updateMachines(siteId) {
         // Get the machine dropdown
@@ -218,54 +236,32 @@
             return;
         }
         
-        // Get machines for the selected site
-        const machines = {};
-        
-        // Convert Python data to JavaScript object
-        const availableMachines = JSON.parse('{{ available_machines|tojson|safe }}');
-        
-        // Populate the machines object
-        availableMachines.forEach(machine => {
-            if (machine.site_id) {
-                machines[machine.id] = {
-                    "id": machine.id,
-                    "name": machine.name,
-                    "site_id": machine.site_id
-                };
-            }
-        });
-        
         // Add machines for the selected site
-        for (const [id, machine] of Object.entries(machines)) {
-            if (machine.site_id == siteId) {
+        machineData.forEach(function(machine) {
+            if (machine.siteId === siteId) {
                 const option = document.createElement('option');
                 option.value = machine.id;
                 option.text = machine.name;
                 machineDropdown.add(option);
             }
+        });
+        
+        // If we have a previously selected machine, try to restore it
+        if (selectedMachineId) {
+            for (let i = 0; i < machineDropdown.options.length; i++) {
+                if (machineDropdown.options[i].value === selectedMachineId) {
+                    machineDropdown.selectedIndex = i;
+                    break;
+                }
+            }
         }
     }
     
-    // Initialize the machine dropdown based on the initial site selection
+    // Initialize the machine dropdown when the page loads
     document.addEventListener('DOMContentLoaded', function() {
         const siteDropdown = document.getElementById('site_id');
-        if (siteDropdown) {
-            const selectedSite = siteDropdown.value;
-            if (selectedSite) {
-                updateMachines(selectedSite);
-                
-                // Restore previously selected machine if any
-                const machineDropdown = document.getElementById('machine_id');
-                const selectedMachine = JSON.parse('{{ selected_machine|default("null")|tojson|safe }}');
-                if (selectedMachine) {
-                    for (let i = 0; i < machineDropdown.options.length; i++) {
-                        if (machineDropdown.options[i].value == selectedMachine) {
-                            machineDropdown.selectedIndex = i;
-                            break;
-                        }
-                    }
-                }
-            }
+        if (siteDropdown && siteDropdown.value) {
+            updateMachines(siteDropdown.value);
         }
     });
 </script>
