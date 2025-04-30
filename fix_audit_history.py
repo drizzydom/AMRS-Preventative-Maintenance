@@ -8,6 +8,7 @@ from functools import wraps
 from datetime import datetime, timedelta, date
 import sys
 import traceback
+from sqlalchemy import text
 
 # Configure more detailed logging
 logger = logging.getLogger(__name__)
@@ -17,6 +18,26 @@ formatter = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s] %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
+
+def ensure_audit_task_color_column():
+    try:
+        from app import db
+        with db.engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='audit_tasks' AND column_name='color'
+            """))
+            if not result.fetchone():
+                print("[AUTO] Adding 'color' column to 'audit_tasks' table...")
+                conn.execute(text("ALTER TABLE audit_tasks ADD COLUMN color VARCHAR(32)"))
+                print("[AUTO] Column 'color' added to 'audit_tasks'.")
+            else:
+                print("[AUTO] 'color' column already exists in 'audit_tasks'.")
+    except Exception as e:
+        print(f"[AUTO] Error ensuring 'color' column: {e}")
+
+# Ensure the column exists before any queries or model imports
+ensure_audit_task_color_column()
 
 def fix_audit_task_machine_ids(db_session):
     """
@@ -76,7 +97,7 @@ def fix_audit_task_machine_ids(db_session):
                 
         # Commit changes if any repairs were made
         if repaired_count > 0:
-            db_session.commit()
+            db.session.commit()
             logger.info(f"[AUDIT FIX] Successfully repaired {repaired_count} audit task completions")
         
         # Fix machine_id attribute in AuditTask objects if needed
