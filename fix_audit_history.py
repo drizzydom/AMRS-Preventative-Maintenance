@@ -6,8 +6,17 @@ This file is imported during app startup to patch both audit history related fun
 import logging
 from functools import wraps
 from datetime import datetime, timedelta, date
+import sys
+import traceback
 
+# Configure more detailed logging
 logger = logging.getLogger(__name__)
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 def patch_audit_history_functions():
     """
@@ -18,7 +27,7 @@ def patch_audit_history_functions():
         # Import the app and required models after this module is imported
         from app import app, db
         from models import AuditTaskCompletion, AuditTask, Machine, User, Site
-        from flask import render_template, flash, redirect, url_for, request
+        from flask import render_template, flash, redirect, url_for, request, jsonify
         from flask_login import current_user
         
         # Define our improved version of the admin_audit_history function
@@ -59,233 +68,345 @@ def patch_audit_history_functions():
                                   machines=machines,
                                   users=users)
         
-        # Define our improved version of the audit_history_page function
-        def fixed_audit_history_page():
-            # Same permission checks as original function
-            if current_user.is_admin:
-                can_access = True
-            else:
-                if hasattr(current_user, 'role') and current_user.role:
-                    if hasattr(current_user.role, 'name'):
-                        # Role is an object, use its permissions directly
-                        permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
-                        can_access = 'audits.access' in permissions
-                    else:
-                        # Role is a string, query for the role
-                        from models import Role
-                        user_role = Role.query.filter_by(name=current_user.role).first()
-                        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-                        can_access = 'audits.access' in permissions
+        # Add debug route to diagnose audit data
+        def debug_audit_history():
+            try:
+                # Same permission checks as original function
+                if not hasattr(current_user, 'is_authenticated') or not current_user.is_authenticated:
+                    return jsonify({"error": "Authentication required"}), 401
+                    
+                if current_user.is_admin:
+                    can_access = True
                 else:
-                    can_access = False
-            
-            if not can_access:
-                flash('You do not have permission to access audit history.', 'danger')
-                return redirect(url_for('dashboard'))
-
-            # Get date range for filtering
-            start_date_str = request.args.get('start_date')
-            end_date_str = request.args.get('end_date')
-            
-            today = datetime.now().date()
-            
-            # Default to last 365 days if no dates provided
-            if not start_date_str:
-                start_date = today - timedelta(days=365)
-            else:
-                try:
-                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-                except ValueError:
-                    start_date = today - timedelta(days=365)
-                    flash("Invalid start date format. Using default of 365 days ago.", "warning")
-            
-            if not end_date_str:
-                end_date = today
-            else:
-                try:
-                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-                except ValueError:
-                    end_date = today
-                    flash("Invalid end date format. Using today's date.", "warning")
-            
-            # Ensure start date is before end date
-            if start_date > end_date:
-                start_date, end_date = end_date, start_date
-            
-            # Get site and machine filters - default is None (All Sites, All Machines)
-            site_id = request.args.get('site_id', type=int)
-            machine_id = request.args.get('machine_id', type=int)
-            
-            # Restrict sites for non-admins
-            if current_user.is_admin:
-                sites = Site.query.all()
-            else:
-                # Limit to user's assigned sites
-                user_site_ids = [site.id for site in current_user.sites]
-                sites = current_user.sites
-                # Ensure the selected site is one the user has access to
-                if site_id and site_id not in user_site_ids:
-                    if sites:
-                        # Don't auto-select the first site, let it default to "All Sites"
-                        site_id = None
+                    if hasattr(current_user, 'role') and current_user.role:
+                        if hasattr(current_user.role, 'name'):
+                            # Role is an object, use its permissions directly
+                            permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
+                            can_access = 'audits.access' in permissions
+                        else:
+                            # Role is a string, query for the role
+                            from models import Role
+                            user_role = Role.query.filter_by(name=current_user.role).first()
+                            permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+                            can_access = 'audits.access' in permissions
                     else:
-                        site_id = None
-            
-            # Never auto-select a site if none is specified in the request
-            if not request.args.get('site_id'):
-                site_id = None
-            
-            # Get available machines for filtering
-            if site_id:
-                machines = Machine.query.filter_by(site_id=site_id).all()
-            else:
-                if not current_user.is_admin and sites:
-                    site_ids = [site.id for site in sites]
-                    machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
-                else:
-                    machines = Machine.query.all()
-            
-            # Build the query based on the filters
-            query = AuditTaskCompletion.query.filter(
-                AuditTaskCompletion.date >= start_date,
-                AuditTaskCompletion.date <= end_date,
-                AuditTaskCompletion.completed == True  # Only show completed tasks
-            ).order_by(AuditTaskCompletion.date.desc())
-
-            # Apply site filter
-            if site_id:
-                # Get all audit tasks for the selected site
-                site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
-                task_ids = [task.id for task in site_audit_tasks]
-                if task_ids:
-                    query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
-            elif not current_user.is_admin and sites:
-                # If no site is selected but user access is restricted, filter by all allowed site tasks
-                site_ids = [site.id for site in sites]
-                site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
-                task_ids = [task.id for task in site_audit_tasks]
-                if task_ids:
-                    query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
-
-            # Apply machine filter
-            if machine_id:
-                query = query.filter(AuditTaskCompletion.machine_id == machine_id)
-            
-            # Execute the query
-            completions = query.all()
-
-            # Ensure we have all machines in the dictionary for proper rendering
-            all_machines = []
-            
-            # Add machines with audit data
-            machine_ids_with_completions = set(c.machine_id for c in completions)
-            if machine_ids_with_completions:
-                machines_with_completions = Machine.query.filter(
-                    Machine.id.in_(machine_ids_with_completions)
+                        can_access = False
+                
+                if not can_access:
+                    return jsonify({"error": "Permission denied"}), 403
+                    
+                # Get all audit completions for the last 365 days
+                start_date = datetime.now().date() - timedelta(days=365)
+                end_date = datetime.now().date()
+                
+                completions = AuditTaskCompletion.query.filter(
+                    AuditTaskCompletion.date >= start_date,
+                    AuditTaskCompletion.date <= end_date,
+                    AuditTaskCompletion.completed == True
                 ).all()
                 
-                # Only include machines the user has access to
-                if not current_user.is_admin and sites:
-                    site_ids = [site.id for site in sites]
-                    machines_with_completions = [m for m in machines_with_completions if m.site_id in site_ids]
+                # Count by machine
+                machine_counts = {}
+                for completion in completions:
+                    if completion.machine_id:
+                        if completion.machine_id not in machine_counts:
+                            machine_counts[completion.machine_id] = 0
+                        machine_counts[completion.machine_id] += 1
                 
-                all_machines.extend(machines_with_completions)
-            
-            # Get all necessary reference data
-            audit_tasks = {task.id: task for task in AuditTask.query.all()}
-            machines_dict = {machine.id: machine for machine in Machine.query.all()}
-            users = {user.id: user for user in User.query.all()}
-            
-            # Group completions by date for display
-            grouped_completions = {}
-            for completion in completions:
-                date_str = completion.date.strftime('%Y-%m-%d')
-                if date_str not in grouped_completions:
-                    grouped_completions[date_str] = []
-                grouped_completions[date_str].append(completion)
-            
-            # Build machine_data dictionary - critical for display
-            machine_data = {}
-            for completion in completions:
-                if not completion.machine_id:
-                    # Skip entries without a machine_id
-                    continue
+                # Get machine details
+                machines = Machine.query.filter(Machine.id.in_(machine_counts.keys())).all()
+                machine_data = {}
+                for machine in machines:
+                    machine_data[machine.id] = {
+                        "id": machine.id,
+                        "name": machine.name,
+                        "count": machine_counts.get(machine.id, 0),
+                        "site_id": machine.site_id
+                    }
                     
-                machine_id = completion.machine_id
-                date_str = completion.date.strftime('%Y-%m-%d')
+                # Get sites 
+                site_ids = set(machine.site_id for machine in machines if machine.site_id)
+                sites = Site.query.filter(Site.id.in_(site_ids)).all()
+                site_data = {site.id: site.name for site in sites}
                 
-                # Ensure machine_id exists in machine_data
-                if machine_id not in machine_data:
-                    machine_data[machine_id] = {}
+                # Return as JSON
+                return jsonify({
+                    "total_completions": len(completions),
+                    "machine_data": machine_data,
+                    "site_data": site_data,
+                    "date_range": {
+                        "start": start_date.isoformat(),
+                        "end": end_date.isoformat()
+                    }
+                })
+                
+            except Exception as e:
+                traceback.print_exc()
+                return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+        
+        # Define our improved version of the audit_history_page function
+        def fixed_audit_history_page():
+            try:
+                # Add detailed debug logging
+                logger.info("Starting audit_history_page function")
+                
+                # Same permission checks as original function
+                if current_user.is_admin:
+                    can_access = True
+                else:
+                    if hasattr(current_user, 'role') and current_user.role:
+                        if hasattr(current_user.role, 'name'):
+                            # Role is an object, use its permissions directly
+                            permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
+                            can_access = 'audits.access' in permissions
+                        else:
+                            # Role is a string, query for the role
+                            from models import Role
+                            user_role = Role.query.filter_by(name=current_user.role).first()
+                            permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+                            can_access = 'audits.access' in permissions
+                    else:
+                        can_access = False
+                
+                if not can_access:
+                    flash('You do not have permission to access audit history.', 'danger')
+                    return redirect(url_for('dashboard'))
+
+                logger.info("Permission check passed")
+
+                # Get date range for filtering
+                start_date_str = request.args.get('start_date')
+                end_date_str = request.args.get('end_date')
+                
+                today = datetime.now().date()
+                
+                # Default to last 365 days if no dates provided
+                if not start_date_str:
+                    start_date = today - timedelta(days=365)
+                else:
+                    try:
+                        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        start_date = today - timedelta(days=365)
+                        flash("Invalid start date format. Using default of 365 days ago.", "warning")
+                
+                if not end_date_str:
+                    end_date = today
+                else:
+                    try:
+                        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        end_date = today
+                        flash("Invalid end date format. Using today's date.", "warning")
+                
+                # Ensure start date is before end date
+                if start_date > end_date:
+                    start_date, end_date = end_date, start_date
                     
-                # Ensure date_str exists in machine_data[machine_id]
-                if date_str not in machine_data[machine_id]:
-                    machine_data[machine_id][date_str] = []
+                logger.info(f"Date range: {start_date} to {end_date}")
                 
-                # Add completion to the machine_data dictionary
-                machine_data[machine_id][date_str].append(completion)
-            
-            # Sort dates in reverse chronological order
-            sorted_dates = sorted(grouped_completions.keys(), reverse=True)
-            
-            # Flag for if we have multiple sites (to show site dropdown)
-            show_site_dropdown = len(sites) > 1 or current_user.is_admin
-            
-            # Define helper functions for the template
-            def get_date_range(start, end):
-                """Get a list of dates between start and end, inclusive."""
-                delta = end - start
-                return [start + timedelta(days=i) for i in range(delta.days + 1)]
-            
-            def get_calendar_weeks(start, end):
-                """Get calendar weeks for the date range."""
-                # Find the first Sunday before or on the start date
-                first_day = start - timedelta(days=start.weekday() + 1)
-                if first_day.weekday() != 6:  # If not Sunday
-                    first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+                # Get site and machine filters - default is None (All Sites, All Machines)
+                site_id = request.args.get('site_id', type=int)
+                machine_id = request.args.get('machine_id', type=int)
                 
-                # Find the last Saturday after or on the end date
-                last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+                logger.info(f"Filters: site_id={site_id}, machine_id={machine_id}")
                 
-                # Generate weeks
-                weeks = []
-                current = first_day
-                while current <= last_day:
-                    week = []
-                    for _ in range(7):
-                        week.append(current if current >= start and current <= end else None)
-                        current = current + timedelta(days=1)
-                    weeks.append(week)
+                # Restrict sites for non-admins
+                if current_user.is_admin:
+                    sites = Site.query.all()
+                    logger.info(f"Admin user: Found {len(sites)} sites")
+                else:
+                    # Limit to user's assigned sites
+                    if hasattr(current_user, 'sites'):
+                        user_site_ids = [site.id for site in current_user.sites]
+                        sites = current_user.sites
+                        logger.info(f"Regular user: Found {len(sites)} assigned sites")
+                    else:
+                        logger.warning("User does not have sites attribute")
+                        sites = []
+                        user_site_ids = []
+                    
+                    # Ensure the selected site is one the user has access to
+                    if site_id and site_id not in user_site_ids:
+                        logger.warning(f"User tried to access unauthorized site_id: {site_id}")
+                        site_id = None
                 
-                return weeks
-            
-            # Debug logging
-            logger.info(f"Audit history: Found {len(completions)} completions across {len(machine_data)} machines")
-            
-            # If we don't have machines to display, use all available machines for dropdowns
-            available_machines = machines
-            if not all_machines and site_id is None:
-                # If no machines with audit data and no site filter, show all machines
-                all_machines = Machine.query.all() if current_user.is_admin else machines
-            
-            return render_template('audit_history.html', 
-                                completions=completions,
-                                grouped_completions=grouped_completions,
-                                sorted_dates=sorted_dates,
-                                audit_tasks=audit_tasks,
-                                machines=machines_dict,  # For fetching machine details by id
-                                available_machines=available_machines,  # For dropdown
-                                users=users,
-                                sites=sites,
-                                selected_site=site_id,
-                                selected_machine=machine_id,
-                                start_date=start_date,
-                                end_date=end_date,
-                                today=today,
-                                show_site_dropdown=show_site_dropdown,
-                                machine_data=machine_data,
-                                get_date_range=get_date_range,
-                                get_calendar_weeks=get_calendar_weeks)
+                # Get available machines based on site filter
+                if site_id:
+                    available_machines = Machine.query.filter_by(site_id=site_id).all()
+                    logger.info(f"For site_id {site_id}: Found {len(available_machines)} machines")
+                else:
+                    if not current_user.is_admin and hasattr(current_user, 'sites') and current_user.sites:
+                        site_ids = [site.id for site in current_user.sites]
+                        available_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+                        logger.info(f"For user's sites: Found {len(available_machines)} machines")
+                    else:
+                        available_machines = Machine.query.all()
+                        logger.info(f"All machines: Found {len(available_machines)} machines")
+                
+                # Debug dump available machines
+                logger.info(f"Available machines: {[(m.id, m.name, m.site_id) for m in available_machines]}")
+                
+                # Build the query for audit completions
+                query = AuditTaskCompletion.query.filter(
+                    AuditTaskCompletion.date >= start_date,
+                    AuditTaskCompletion.date <= end_date,
+                    AuditTaskCompletion.completed == True  # Only show completed tasks
+                ).order_by(AuditTaskCompletion.date.desc())
+                
+                # Apply site filter if specified
+                if site_id:
+                    # Get all audit tasks for the selected site
+                    site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
+                    task_ids = [task.id for task in site_audit_tasks]
+                    logger.info(f"For site_id {site_id}: Found {len(task_ids)} audit tasks")
+                    if task_ids:
+                        query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+                elif not current_user.is_admin and hasattr(current_user, 'sites') and current_user.sites:
+                    # If no site is selected but user access is restricted, filter by all allowed site tasks
+                    site_ids = [site.id for site in current_user.sites]
+                    site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
+                    task_ids = [task.id for task in site_audit_tasks]
+                    logger.info(f"For user's sites: Found {len(task_ids)} audit tasks")
+                    if task_ids:
+                        query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+
+                # Apply machine filter if specified
+                if machine_id:
+                    query = query.filter(AuditTaskCompletion.machine_id == machine_id)
+                
+                # Execute the query
+                try:
+                    completions = query.all()
+                    logger.info(f"Found {len(completions)} audit completions")
+                except Exception as e:
+                    logger.error(f"Error querying audit completions: {e}")
+                    completions = []
+                
+                # Count completions by machine for debugging
+                machine_counts = {}
+                for completion in completions:
+                    if completion.machine_id:
+                        if completion.machine_id not in machine_counts:
+                            machine_counts[completion.machine_id] = 0
+                        machine_counts[completion.machine_id] += 1
+                
+                logger.info(f"Completion counts by machine: {machine_counts}")
+
+                # Get all necessary reference data
+                audit_tasks = {task.id: task for task in AuditTask.query.all()}
+                logger.info(f"Found {len(audit_tasks)} total audit tasks")
+                
+                machines_dict = {}
+                for machine in Machine.query.all():
+                    machines_dict[machine.id] = machine
+                logger.info(f"Found {len(machines_dict)} total machines")
+                
+                users = {user.id: user for user in User.query.all()}
+                logger.info(f"Found {len(users)} users")
+                
+                # Build machine_data dictionary - critical for display
+                machine_data = {}
+                for completion in completions:
+                    if not completion.machine_id:
+                        logger.warning(f"Skipping completion with no machine_id: {completion.id}")
+                        continue
+                        
+                    machine_id = completion.machine_id
+                    date_str = completion.date.strftime('%Y-%m-%d')
+                    
+                    # Ensure machine_id exists in machine_data
+                    if machine_id not in machine_data:
+                        machine_data[machine_id] = {}
+                        
+                    # Ensure date_str exists in machine_data[machine_id]
+                    if date_str not in machine_data[machine_id]:
+                        machine_data[machine_id][date_str] = []
+                    
+                    # Add completion to the machine_data dictionary
+                    machine_data[machine_id][date_str].append(completion)
+                
+                logger.info(f"Built machine_data for {len(machine_data)} machines")
+                
+                # Group completions by date for display
+                grouped_completions = {}
+                for completion in completions:
+                    date_str = completion.date.strftime('%Y-%m-%d')
+                    if date_str not in grouped_completions:
+                        grouped_completions[date_str] = []
+                    grouped_completions[date_str].append(completion)
+                
+                # Sort dates in reverse chronological order
+                sorted_dates = sorted(grouped_completions.keys(), reverse=True)
+                
+                # Flag for if we have multiple sites (to show site dropdown)
+                show_site_dropdown = len(sites) > 1 or current_user.is_admin
+                
+                # Prepare machines for display (the ones with completions)
+                display_machines = []
+                for machine_id in machine_data.keys():
+                    if machine_id in machines_dict:
+                        machine = machines_dict[machine_id]
+                        display_machines.append(machine)
+                
+                logger.info(f"Display machines count: {len(display_machines)}")
+                
+                # Define helper functions for the template
+                def get_date_range(start, end):
+                    """Get a list of dates between start and end, inclusive."""
+                    delta = end - start
+                    return [start + timedelta(days=i) for i in range(delta.days + 1)]
+                
+                def get_calendar_weeks(start, end):
+                    """Get calendar weeks for the date range."""
+                    # Find the first Sunday before or on the start date
+                    first_day = start - timedelta(days=start.weekday() + 1)
+                    if first_day.weekday() != 6:  # If not Sunday
+                        first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+                    
+                    # Find the last Saturday after or on the end date
+                    last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+                    
+                    # Generate weeks
+                    weeks = []
+                    current = first_day
+                    while current <= last_day:
+                        week = []
+                        for _ in range(7):
+                            week.append(current if current >= start and current <= end else None)
+                            current = current + timedelta(days=1)
+                        weeks.append(week)
+                    
+                    return weeks
+                
+                # Final debug logging before render
+                logger.info(f"Rendering template with {len(completions)} completions and {len(display_machines)} machines")
+                
+                return render_template('audit_history.html', 
+                                    completions=completions,
+                                    grouped_completions=grouped_completions,
+                                    sorted_dates=sorted_dates,
+                                    audit_tasks=audit_tasks,
+                                    machines=machines_dict,  # For fetching machine details by id
+                                    available_machines=available_machines,  # For dropdown
+                                    users=users,
+                                    sites=sites,
+                                    selected_site=site_id,
+                                    selected_machine=machine_id,
+                                    start_date=start_date,
+                                    end_date=end_date,
+                                    today=today,
+                                    show_site_dropdown=show_site_dropdown,
+                                    machine_data=machine_data,
+                                    get_date_range=get_date_range,
+                                    get_calendar_weeks=get_calendar_weeks)
+                                    
+            except Exception as e:
+                # Capture and log the full traceback
+                logger.error(f"Error in audit_history_page: {str(e)}")
+                logger.error(traceback.format_exc())
+                flash(f'An error occurred processing audit history: {str(e)}', 'danger')
+                return redirect(url_for('dashboard'))
         
         # Replace the original functions with our fixed versions
         try:
@@ -301,6 +422,10 @@ def patch_audit_history_functions():
             logger.info("Successfully patched audit_history_page function")
         except (ImportError, AttributeError) as e:
             logger.warning(f"Could not patch audit_history_page: {e}")
+        
+        # Register the debug endpoint
+        app.route('/debug/audit-data')(debug_audit_history)
+        logger.info("Registered debug endpoint at /debug/audit-data")
             
         return True
         
@@ -309,6 +434,7 @@ def patch_audit_history_functions():
         return False
     except Exception as e:
         logger.error(f"Failed to patch audit history functions: {e}")
+        logger.error(traceback.format_exc())  # Print the full traceback
         return False
 
 # The patch will be applied when this module is imported
