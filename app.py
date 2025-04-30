@@ -1131,19 +1131,31 @@ def audit_history_page():
         flash('You do not have permission to access audit history.', 'danger')
         return redirect(url_for('dashboard'))
 
-    # --- NEW: Month/Year selection ---
     from calendar import monthrange
     today = datetime.now().date()
-    # Get selected month/year from query params, default to current month/year
-    month = request.args.get('month', type=int) or today.month
-    year = request.args.get('year', type=int) or today.year
-    # First and last day of the month
+    # --- Parse month/year from month_year param ---
+    month_year = request.args.get('month_year')
+    if month_year:
+        try:
+            year, month = map(int, month_year.split('-'))
+        except Exception:
+            month = today.month
+            year = today.year
+    else:
+        month = today.month
+        year = today.year
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    # Get site and machine filters (optional, keep for future use)
+    # Get site and machine filters
     site_id = request.args.get('site_id', type=int)
-    machine_id = request.args.get('machine_id', type=int)
+    machine_id = request.args.get('machine_id')
+    selected_machine = machine_id if machine_id else ''
+    if machine_id:
+        try:
+            machine_id = int(machine_id)
+        except Exception:
+            machine_id = None
 
     # Restrict sites for non-admins
     if current_user.is_admin:
@@ -1158,13 +1170,13 @@ def audit_history_page():
 
     # Get available machines based on selected site
     if site_id:
-        machines = Machine.query.filter_by(site_id=site_id).all()
+        available_machines = Machine.query.filter_by(site_id=site_id).all()
     else:
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            available_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
         else:
-            machines = Machine.query.all()
+            available_machines = Machine.query.all()
 
     # Query completions for the selected month
     query = AuditTaskCompletion.query.filter(
@@ -1179,7 +1191,7 @@ def audit_history_page():
         else:
             completions = []
             machine_data = {}
-            return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=machine_id)
+            return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=[], available_machines=available_machines)
     else:
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
@@ -1190,7 +1202,7 @@ def audit_history_page():
             else:
                 completions = []
                 machine_data = {}
-                return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=machine_id)
+                return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=[], available_machines=available_machines)
     if machine_id:
         query = query.filter(AuditTaskCompletion.machine_id == machine_id)
     completions = query.all()
@@ -1198,7 +1210,7 @@ def audit_history_page():
     # --- Build calendar weeks for the month ---
     import calendar
     cal = calendar.Calendar(firstweekday=6)  # Sunday start
-    month_weeks = list(cal.monthdatescalendar(year, month))
+    month_weeks = list(cal.monthdayscalendar(year, month))
 
     # --- Build machine_data: {machine_id: {date: [completions]}} ---
     machine_data = {}
@@ -1213,9 +1225,9 @@ def audit_history_page():
 
     # --- Build audit_tasks and unique_tasks for legend ---
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
-    unique_tasks = list({completion.audit_task_id for completion in completions})
+    unique_tasks = [audit_tasks[tid] for tid in {completion.audit_task_id for completion in completions if completion.audit_task_id in audit_tasks}]
 
-    machines_dict = {machine.id: machine for machine in machines}
+    machines_dict = {machine.id: machine for machine in available_machines}
     users = {user.id: user for user in User.query.all()}
 
     # --- Generate available months for dropdown (from April 2025 to current month) ---
@@ -1225,13 +1237,15 @@ def audit_history_page():
     available_months = []
     y, m = start_year, start_month
     while (y < today.year) or (y == today.year and m <= today.month):
-        available_months.append({'year': y, 'month': m})
+        value = f"{y:04d}-{m:02d}"
+        display = f"{calendar.month_name[m]} {y}"
+        available_months.append({'value': value, 'display': display})
         m += 1
         if m > 12:
             m = 1
             y += 1
-    # Sort descending (latest first)
-    available_months = sorted(available_months, key=lambda x: (x['year'], x['month']), reverse=True)
+    available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+    selected_month = f"{year:04d}-{month:02d}"
 
     return render_template('audit_history.html',
         completions=completions,
@@ -1245,8 +1259,10 @@ def audit_history_page():
         users=users,
         sites=sites,
         selected_site=site_id,
-        selected_machine=machine_id,
-        available_months=available_months
+        selected_machine=selected_machine,
+        available_months=available_months,
+        available_machines=available_machines,
+        selected_month=selected_month
     )
 
 @app.route('/audit-history/pdf')
