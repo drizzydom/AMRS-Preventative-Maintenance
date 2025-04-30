@@ -1218,6 +1218,21 @@ def audit_history_page():
     machines_dict = {machine.id: machine for machine in machines}
     users = {user.id: user for user in User.query.all()}
 
+    # --- Generate available months for dropdown (from April 2025 to current month) ---
+    from collections import OrderedDict
+    start_month = 4
+    start_year = 2025
+    available_months = []
+    y, m = start_year, start_month
+    while (y < today.year) or (y == today.year and m <= today.month):
+        available_months.append({'year': y, 'month': m})
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    # Sort descending (latest first)
+    available_months = sorted(available_months, key=lambda x: (x['year'], x['month']), reverse=True)
+
     return render_template('audit_history.html',
         completions=completions,
         month=month,
@@ -1230,7 +1245,8 @@ def audit_history_page():
         users=users,
         sites=sites,
         selected_site=site_id,
-        selected_machine=machine_id
+        selected_machine=machine_id,
+        available_months=available_months
     )
 
 @app.route('/audit-history/pdf')
