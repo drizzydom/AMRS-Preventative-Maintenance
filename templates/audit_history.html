@@ -117,7 +117,7 @@
                             <table class="meta-table">
                                 <tr>
                                     <th>Total Machines:</th>
-                                    <td>{{ machines|length }}</td>
+                                    <td>{{ display_machines|length }}</td>
                                 </tr>
                                 <tr>
                                     <th>Total Records:</th>
@@ -128,10 +128,10 @@
                     </div>
                 </div>
 
-                {% for machine in machines %}
+                {% for machine in display_machines %}
                 <div class="machine-section">
                     <div class="machine-title">
-                        {{ machine.name }} ({{ machine.machine_id }})
+                        {{ machine.name }} {% if machine.machine_id %}({{ machine.machine_id }}){% endif %}
                     </div>
                     {% if machine.id in machine_data %}
                         {% set date_range = get_date_range(start_date, end_date) %}
@@ -159,9 +159,9 @@
                                                 {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
                                                     {% for audit in machine_data[machine.id][date_str] %}
                                                         <div class="audit-entry">
-                                                            <div class="audit-time">{{ audit.created_at.strftime('%H:%M') }}</div>
-                                                            <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name }}</div>
-                                                            <div class="audit-user">{{ users[audit.user_id].full_name }}</div>
+                                                            <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
+                                                            <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
+                                                            <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
                                                         </div>
                                                     {% endfor %}
                                                 {% endif %}
@@ -189,10 +189,16 @@
 
             <!-- Screen-only regular view -->
             <div class="d-print-none">
-                {% for machine in machines %}
+                {% if display_machines|length == 0 %}
+                <div class="alert alert-info">
+                    No machine audit data found for the selected date range and filters.
+                </div>
+                {% endif %}
+                
+                {% for machine in display_machines %}
                 <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">{{ machine.name }} ({{ machine.machine_id }})</h5>
+                        <h5 class="mb-0">{{ machine.name }} {% if machine.machine_id %}({{ machine.machine_id }}){% endif %}</h5>
                     </div>
                     <div class="card-body">
                         {% if machine.id in machine_data %}
@@ -221,9 +227,9 @@
                                                     {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
                                                         {% for audit in machine_data[machine.id][date_str] %}
                                                             <div class="audit-entry">
-                                                                <div class="audit-time">{{ audit.created_at.strftime('%H:%M') }}</div>
-                                                                <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name }}</div>
-                                                                <div class="audit-user">{{ users[audit.user_id].full_name }}</div>
+                                                                <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
+                                                                <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
+                                                                <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
                                                             </div>
                                                         {% endfor %}
                                                     {% endif %}
@@ -267,7 +273,7 @@
     ];
     
     // Store the selected values in JavaScript variables
-    var selectedSiteId = "{{ sites[0].id if sites and not show_site_dropdown else selected_site|default('') }}";
+    var selectedSiteId = "{{ selected_site|default('') }}";
     var selectedMachineId = "{{ selected_machine|default('') }}";
     
     // Function to update available machines when site selection changes
@@ -280,8 +286,14 @@
             machineDropdown.remove(1);
         }
         
-        // If no site selected, we're done (keep just "All Machines" option)
+        // If no site selected, show all machines
         if (!siteId) {
+            machineData.forEach(function(machine) {
+                const option = document.createElement('option');
+                option.value = machine.id;
+                option.text = machine.name;
+                machineDropdown.add(option);
+            });
             return;
         }
         
@@ -329,9 +341,9 @@
     // Initialize the machine dropdown when the page loads
     document.addEventListener('DOMContentLoaded', function() {
         const siteDropdown = document.getElementById('site_id');
-        if (siteDropdown && siteDropdown.value) {
-            updateMachines(siteDropdown.value);
-        }
+        
+        // Always initialize the machine dropdown, even with blank site
+        updateMachines(siteDropdown ? siteDropdown.value : '');
         
         // Set up print button with custom handler
         document.getElementById('printButton').addEventListener('click', function() {
