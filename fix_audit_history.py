@@ -43,7 +43,7 @@ def patch_audit_history_functions():
                 if records_to_fix:
                     logger.info(f"Fixing {len(records_to_fix)} audit records with missing timestamps")
                     for record in records_to_fix:
-                        record.completed_at = record.created_at
+                        record.completed_at = record.created_at or datetime.now()
                     db.session.commit()
             except Exception as e:
                 logger.error(f"Error fixing audit records: {e}")
@@ -112,7 +112,7 @@ def patch_audit_history_functions():
             if start_date > end_date:
                 start_date, end_date = end_date, start_date
             
-            # Get site and machine filters
+            # Get site and machine filters - default is None (All Sites, All Machines)
             site_id = request.args.get('site_id', type=int)
             machine_id = request.args.get('machine_id', type=int)
             
@@ -126,15 +126,16 @@ def patch_audit_history_functions():
                 # Ensure the selected site is one the user has access to
                 if site_id and site_id not in user_site_ids:
                     if sites:
-                        site_id = sites[0].id
+                        # Don't auto-select the first site, let it default to "All Sites"
+                        site_id = None
                     else:
                         site_id = None
             
-            # If only one site is available, automatically select it
-            if len(sites) == 1 and not site_id:
-                site_id = sites[0].id
-
-            # Get available machines based on selected site
+            # Never auto-select a site if none is specified in the request
+            if not request.args.get('site_id'):
+                site_id = None
+            
+            # Get available machines for filtering
             if site_id:
                 machines = Machine.query.filter_by(site_id=site_id).all()
             else:
@@ -143,106 +144,59 @@ def patch_audit_history_functions():
                     machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
                 else:
                     machines = Machine.query.all()
-
-            # Query completions within the date range
+            
+            # Build the query based on the filters
             query = AuditTaskCompletion.query.filter(
                 AuditTaskCompletion.date >= start_date,
-                AuditTaskCompletion.date <= end_date
+                AuditTaskCompletion.date <= end_date,
+                AuditTaskCompletion.completed == True  # Only show completed tasks
             ).order_by(AuditTaskCompletion.date.desc())
-            
-            # Apply site filter if specified
+
+            # Apply site filter
             if site_id:
                 # Get all audit tasks for the selected site
                 site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
                 task_ids = [task.id for task in site_audit_tasks]
                 if task_ids:
                     query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
-                else:
-                    # No tasks for this site, return empty result
-                    completions = []
-                    machine_data = {}
-                    show_site_dropdown = len(sites) > 1 or current_user.is_admin
-                    return render_template('audit_history.html', 
-                                        completions=completions,
-                                        grouped_completions={},
-                                        sorted_dates=[],
-                                        audit_tasks={},
-                                        machines={},
-                                        available_machines=machines,
-                                        users={},
-                                        sites=sites,
-                                        selected_site=site_id,
-                                        selected_machine=machine_id,
-                                        start_date=start_date,
-                                        end_date=end_date,
-                                        today=today,
-                                        show_site_dropdown=show_site_dropdown,
-                                        machine_data=machine_data)
-            else:
-                # If no site is selected but we have restricted sites
-                if not current_user.is_admin and sites:
-                    # Get all audit tasks for the user's sites
-                    site_ids = [site.id for site in sites]
-                    site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
-                    task_ids = [task.id for task in site_audit_tasks]
-                    if task_ids:
-                        query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
-                    else:
-                        # No tasks for user's sites, return empty result
-                        completions = []
-                        machine_data = {}
-                        show_site_dropdown = len(sites) > 1 or current_user.is_admin
-                        return render_template('audit_history.html', 
-                                            completions=completions,
-                                            grouped_completions={},
-                                            sorted_dates=[],
-                                            audit_tasks={},
-                                            machines={},
-                                            available_machines=machines,
-                                            users={},
-                                            sites=sites,
-                                            selected_site=site_id,
-                                            selected_machine=machine_id,
-                                            start_date=start_date,
-                                            end_date=end_date,
-                                            today=today,
-                                            show_site_dropdown=show_site_dropdown,
-                                            machine_data=machine_data)
+            elif not current_user.is_admin and sites:
+                # If no site is selected but user access is restricted, filter by all allowed site tasks
+                site_ids = [site.id for site in sites]
+                site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
+                task_ids = [task.id for task in site_audit_tasks]
+                if task_ids:
+                    query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
 
-            # Apply machine filter if specified
+            # Apply machine filter
             if machine_id:
                 query = query.filter(AuditTaskCompletion.machine_id == machine_id)
             
             # Execute the query
-            try:
-                completions = query.all()
-            except Exception as e:
-                logger.error(f"Error querying audit completions: {e}")
-                completions = []
+            completions = query.all()
 
-            # --- Ensure all machines with completions are included in the list ---
+            # Ensure we have all machines in the dictionary for proper rendering
+            all_machines = []
+            
+            # Add machines with audit data
             machine_ids_with_completions = set(c.machine_id for c in completions)
-            machine_ids_in_list = set(m.id for m in machines)
-            missing_machine_ids = machine_ids_with_completions - machine_ids_in_list
-            if missing_machine_ids:
-                # Only add machines the user is allowed to see
-                allowed_machine_ids = set(m.id for m in Machine.query.filter(Machine.id.in_(missing_machine_ids)).all())
-                # If user is admin, allow all; otherwise, restrict to user's sites
+            if machine_ids_with_completions:
+                machines_with_completions = Machine.query.filter(
+                    Machine.id.in_(machine_ids_with_completions)
+                ).all()
+                
+                # Only include machines the user has access to
                 if not current_user.is_admin and sites:
-                    allowed_site_ids = set(site.id for site in sites)
-                    allowed_machine_ids = set(m.id for m in Machine.query.filter(
-                        Machine.id.in_(missing_machine_ids), 
-                        Machine.site_id.in_(allowed_site_ids)).all())
-                # Add missing machines
-                if allowed_machine_ids:
-                    machines += Machine.query.filter(Machine.id.in_(allowed_machine_ids)).all()
-
-            # Get related data for display
+                    site_ids = [site.id for site in sites]
+                    machines_with_completions = [m for m in machines_with_completions if m.site_id in site_ids]
+                
+                all_machines.extend(machines_with_completions)
+            
+            # Get all necessary reference data
             audit_tasks = {task.id: task for task in AuditTask.query.all()}
             machines_dict = {machine.id: machine for machine in Machine.query.all()}
             users = {user.id: user for user in User.query.all()}
             
-            # Group completions by date for better display
+            # Group completions by date for display
             grouped_completions = {}
             for completion in completions:
                 date_str = completion.date.strftime('%Y-%m-%d')
@@ -250,9 +204,13 @@ def patch_audit_history_functions():
                     grouped_completions[date_str] = []
                 grouped_completions[date_str].append(completion)
             
-            # Build machine_data dictionary with proper structure
+            # Build machine_data dictionary - critical for display
             machine_data = {}
             for completion in completions:
+                if not completion.machine_id:
+                    # Skip entries without a machine_id
+                    continue
+                    
                 machine_id = completion.machine_id
                 date_str = completion.date.strftime('%Y-%m-%d')
                 
@@ -270,16 +228,15 @@ def patch_audit_history_functions():
             # Sort dates in reverse chronological order
             sorted_dates = sorted(grouped_completions.keys(), reverse=True)
             
-            # Flag for if we only have a single site (to hide site dropdown)
+            # Flag for if we have multiple sites (to show site dropdown)
             show_site_dropdown = len(sites) > 1 or current_user.is_admin
             
-            # Define helper function for template
+            # Define helper functions for the template
             def get_date_range(start, end):
                 """Get a list of dates between start and end, inclusive."""
                 delta = end - start
                 return [start + timedelta(days=i) for i in range(delta.days + 1)]
             
-            # Define helper function for template
             def get_calendar_weeks(start, end):
                 """Get calendar weeks for the date range."""
                 # Find the first Sunday before or on the start date
@@ -302,13 +259,22 @@ def patch_audit_history_functions():
                 
                 return weeks
             
+            # Debug logging
+            logger.info(f"Audit history: Found {len(completions)} completions across {len(machine_data)} machines")
+            
+            # If we don't have machines to display, use all available machines for dropdowns
+            available_machines = machines
+            if not all_machines and site_id is None:
+                # If no machines with audit data and no site filter, show all machines
+                all_machines = Machine.query.all() if current_user.is_admin else machines
+            
             return render_template('audit_history.html', 
                                 completions=completions,
                                 grouped_completions=grouped_completions,
                                 sorted_dates=sorted_dates,
                                 audit_tasks=audit_tasks,
-                                machines=machines_dict,
-                                available_machines=machines,
+                                machines=machines_dict,  # For fetching machine details by id
+                                available_machines=available_machines,  # For dropdown
                                 users=users,
                                 sites=sites,
                                 selected_site=site_id,
