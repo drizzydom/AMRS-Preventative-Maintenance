@@ -1197,6 +1197,23 @@ def audit_history_page():
         else:
             # No tasks for this site, return empty result
             completions = []
+            machine_data = {}
+            return render_template('audit_history.html', 
+                                  completions=completions,
+                                  grouped_completions={},
+                                  sorted_dates=[],
+                                  audit_tasks={},
+                                  machines={},
+                                  available_machines=machines,
+                                  users={},
+                                  sites=sites,
+                                  selected_site=site_id,
+                                  selected_machine=machine_id,
+                                  start_date=start_date,
+                                  end_date=end_date,
+                                  today=today,
+                                  show_site_dropdown=show_site_dropdown,
+                                  machine_data=machine_data)
     else:
         # If no site is selected but we have restricted sites
         if not current_user.is_admin and sites:
@@ -1209,6 +1226,23 @@ def audit_history_page():
             else:
                 # No tasks for user's sites, return empty result
                 completions = []
+                machine_data = {}
+                return render_template('audit_history.html', 
+                                      completions=completions,
+                                      grouped_completions={},
+                                      sorted_dates=[],
+                                      audit_tasks={},
+                                      machines={},
+                                      available_machines=machines,
+                                      users={},
+                                      sites=sites,
+                                      selected_site=site_id,
+                                      selected_machine=machine_id,
+                                      start_date=start_date,
+                                      end_date=end_date,
+                                      today=today,
+                                      show_site_dropdown=show_site_dropdown,
+                                      machine_data=machine_data)
 
     # Apply machine filter if specified
     if machine_id:
@@ -1234,6 +1268,14 @@ def audit_history_page():
             grouped_completions[date_str] = []
         grouped_completions[date_str].append(completion)
     
+    # Build machine_data: {machine_id: [completions]}
+    machine_data = {}
+    for completion in completions:
+        machine_id = completion.machine_id
+        if machine_id not in machine_data:
+            machine_data[machine_id] = []
+        machine_data[machine_id].append(completion)
+    
     # Sort dates in reverse chronological order
     sorted_dates = sorted(grouped_completions.keys(), reverse=True)
     
@@ -1254,7 +1296,8 @@ def audit_history_page():
                           start_date=start_date,
                           end_date=end_date,
                           today=today,
-                          show_site_dropdown=show_site_dropdown)
+                          show_site_dropdown=show_site_dropdown,
+                          machine_data=machine_data)
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
@@ -1927,13 +1970,6 @@ def user_profile():
                 current_password = request.form.get('current_password')
                 new_password = request.form.get('new_password')
                 confirm_password = request.form.get('confirm_password')
-
-                # Validate password fields
-                if not current_password or not new_password or not confirm_password:
-                    flash('All password fields are required.', 'danger')
-                    return redirect(url_for('user_profile'))
-                
-                # Verify current password is correct
                 if not user.password_hash or not check_password_hash(user.password_hash, current_password):
                     flash('Current password is incorrect.', 'danger')
                     return redirect(url_for('user_profile'))
