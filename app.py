@@ -1325,7 +1325,7 @@ def audit_history_page():
                           show_site_dropdown=show_site_dropdown,
                           machine_data=machine_data)
 
-@app.route('/audit_history/pdf')
+@app.route('/audit-history/pdf')
 @login_required
 def audit_history_pdf():
     """Generate PDF of the audit history report."""
@@ -3254,6 +3254,47 @@ def emergency_maintenance_request():
         flash(f'Error processing emergency request: {str(e)}', 'danger')
         return redirect(url_for('manage_machines'))
 
+@app.route('/audit-task/delete/<int:audit_task_id>', methods=['POST'])
+@login_required
+def delete_audit_task(audit_task_id):
+    """Delete an audit task."""
+    # Check permissions
+    if not current_user.is_admin:
+        # If not admin, check if user has specific permission
+        if not hasattr(current_user, 'role') or not current_user.role or not current_user.role.permissions or 'audits.delete' not in current_user.role.permissions.split(','):
+            flash('You do not have permission to delete audit tasks.', 'danger')
+            return redirect(url_for('audits_page'))
+    
+    try:
+        # Get the audit task
+        audit_task = AuditTask.query.get_or_404(audit_task_id)
+        
+        # Check if the user has access to this site
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites]
+            if audit_task.site_id not in user_site_ids:
+                flash('You do not have permission to delete audit tasks for this site.', 'danger')
+                return redirect(url_for('audits_page'))
+        
+        task_name = audit_task.name
+        
+        # Delete all completions first (to avoid foreign key constraint violations)
+        # The cascade should handle this but we'll do it explicitly to be safe
+        AuditTaskCompletion.query.filter_by(audit_task_id=audit_task_id).delete()
+        
+        # Delete the audit task
+        db.session.delete(audit_task)
+        db.session.commit()
+        
+        flash(f'Audit task "{task_name}" deleted successfully.', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting audit task: {e}")
+        flash(f'An error occurred while deleting the audit task: {str(e)}', 'danger')
+    
+    return redirect(url_for('audits_page'))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
@@ -3264,6 +3305,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
