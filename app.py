@@ -11,13 +11,6 @@ from functools import wraps
 import traceback
 from io import BytesIO
 
-# Import the audit history fix
-try:
-    import fix_audit_history
-    print("[APP] Audit history fix imported successfully")
-except Exception as e:
-    print(f"[APP] Warning: Could not import audit history fix: {str(e)}")
-
 # --- TEST DB PATCH: Force in-memory SQLite for pytest runs ---
 if any('pytest' in arg for arg in sys.argv):
     os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
@@ -3321,6 +3314,13 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
+# Import and patch audit history at the very end to avoid circular import
+try:
+    import fix_audit_history
+    print("[APP] Audit history fix imported successfully (imported at end of app.py)")
+except Exception as e:
+    print(f"[APP] Warning: Could not import audit history fix at end of app.py: {str(e)}")
 
 
 
