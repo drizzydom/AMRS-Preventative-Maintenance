@@ -71,6 +71,7 @@
             width: 14.28%;
             vertical-align: top;
             padding: 5px;
+            position: relative;
         }
         .calendar .day-number {
             font-weight: bold;
@@ -127,6 +128,16 @@
         <h3>{{ machine.name }} ({{ machine.site.name if machine.site else 'No Site' }})</h3>
     </div>
 
+    <!-- Add legend for all assigned tasks -->
+    <div class="legend-items" style="margin-bottom: 20px;">
+      {% for task in all_tasks_per_machine[machine.id] %}
+        <span style="display:inline-block; margin-right:10px;">
+          <span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:#ccc; vertical-align:middle; margin-right:4px; background-color:{% if task.category == 'electrical' %}#dc3545{% elif task.category == 'mechanical' %}#0d6efd{% elif task.category == 'hydraulic' %}#fd7e14{% elif task.category == 'pneumatic' %}#6f42c1{% elif task.category == 'general' %}#198754{% elif task.category == 'electronic' %}#20c997{% elif task.category == 'structural' %}#6c757d{% else %}#ccc{% endif %}; opacity:0.7;"></span>
+          <span style="font-size:0.95em;">{{ task.name }}</span>
+        </span>
+      {% endfor %}
+    </div>
+
     {% set machine_start_date = start_date.replace(day=1) %}
     {% set machine_end_date = (end_date.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1) %}
     
@@ -158,6 +169,18 @@
                                     </div>
                                 {% endfor %}
                             {% endif %}
+                            <!-- Render interval bars in the calendar -->
+                            {% for task in all_tasks_per_machine[machine.id] %}
+                                {% if interval_bars[machine.id][task.id] %}
+                                    {% for bar in interval_bars[machine.id][task.id] %}
+                                        {% set bar_start = bar[0] %}
+                                        {% set bar_end = bar[1] %}
+                                        {% if day >= bar_start and day <= bar_end %}
+                                            <div style="height:7px; border-radius:4px; width:100%; position:absolute; left:0; bottom:0; opacity:0.3; background-color:{% if task.category == 'electrical' %}#dc3545{% elif task.category == 'mechanical' %}#0d6efd{% elif task.category == 'hydraulic' %}#fd7e14{% elif task.category == 'pneumatic' %}#6f42c1{% elif task.category == 'general' %}#198754{% elif task.category == 'electronic' %}#20c997{% elif task.category == 'structural' %}#6c757d{% else %}#ccc{% endif %};"></div>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            {% endfor %}
                         </td>
                     {% endfor %}
                 </tr>
