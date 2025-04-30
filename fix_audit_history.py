@@ -535,6 +535,38 @@ def patch_audit_history_functions():
                     
                     return weeks
                 
+                # --- Build all_tasks_per_machine: {machine_id: [AuditTask, ...]} ---
+                all_tasks_per_machine = {}
+                for machine in available_machines:
+                    all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in getattr(task, 'machines', [])]
+
+                # --- Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}} ---
+                from collections import defaultdict
+                interval_bars = defaultdict(lambda: defaultdict(list))
+                # Use start_date and end_date for the calendar range if available, else today
+                calendar_start = start_date if 'start_date' in locals() else today
+                calendar_end = end_date if 'end_date' in locals() else today
+                for machine in available_machines:
+                    for task in all_tasks_per_machine[machine.id]:
+                        # Only for interval-based tasks (not daily)
+                        if getattr(task, 'interval', None) in ('weekly', 'monthly') or (getattr(task, 'interval', None) == 'custom' and getattr(task, 'custom_interval_days', None)):
+                            # Determine interval length
+                            if task.interval == 'weekly':
+                                interval_days = 7
+                            elif task.interval == 'monthly':
+                                interval_days = 30
+                            elif task.interval == 'custom' and task.custom_interval_days:
+                                interval_days = task.custom_interval_days
+                            else:
+                                continue
+                            # Find the first interval start <= calendar_end
+                            current = calendar_start
+                            while current <= calendar_end:
+                                start = current
+                                end = min(current + timedelta(days=interval_days - 1), calendar_end)
+                                interval_bars[machine.id][task.id].append((start, end))
+                                current = end + timedelta(days=1)
+
                 # Final debug logging before render
                 logger.info(f"Rendering template with {len(completions)} completions and {len(display_machines)} machines")
                 
@@ -556,7 +588,9 @@ def patch_audit_history_functions():
                                     show_site_dropdown=show_site_dropdown,
                                     machine_data=machine_data,
                                     get_date_range=get_date_range,
-                                    get_calendar_weeks=get_calendar_weeks)
+                                    get_calendar_weeks=get_calendar_weeks,
+                                    all_tasks_per_machine=all_tasks_per_machine,
+                                    interval_bars=interval_bars)
                                     
             except Exception as e:
                 # Capture and log the full traceback
