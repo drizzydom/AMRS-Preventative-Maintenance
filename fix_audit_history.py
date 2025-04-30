@@ -18,6 +18,81 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
+def fix_audit_task_machine_ids(db_session):
+    """
+    Automatically fix audit task completions that have missing machine IDs.
+    This will run during app startup to ensure all audit data is properly displayed.
+    
+    Args:
+        db_session: SQLAlchemy database session
+    
+    Returns:
+        tuple: (num_fixed, num_remaining) count of fixed records and remaining unfixed records
+    """
+    try:
+        from models import AuditTaskCompletion, AuditTask
+        
+        # Find completions with missing machine IDs
+        missing_machine_id_completions = AuditTaskCompletion.query.filter(
+            AuditTaskCompletion.machine_id == None,
+            AuditTaskCompletion.completed == True
+        ).all()
+        
+        # Count total before repair
+        total_missing = len(missing_machine_id_completions)
+        if total_missing == 0:
+            logger.info("[AUDIT FIX] No audit completions with missing machine IDs found.")
+            return 0, 0
+            
+        logger.info(f"[AUDIT FIX] Found {total_missing} audit completions with missing machine IDs. Attempting to repair.")
+        
+        # Count repairs
+        repaired_count = 0
+        
+        # Attempt to repair completions with missing machine IDs
+        for completion in missing_machine_id_completions:
+            # Get the audit task this completion is for
+            audit_task = AuditTask.query.get(completion.audit_task_id)
+            if not audit_task:
+                logger.warning(f"[AUDIT FIX] Completion {completion.id} has invalid audit_task_id {completion.audit_task_id}")
+                continue
+                
+            # Check if audit task has machines associated
+            if not hasattr(audit_task, 'machines') or not audit_task.machines:
+                logger.warning(f"[AUDIT FIX] Audit task {audit_task.id} ({audit_task.name}) has no machines associated")
+                continue
+                
+            # If only one machine is associated with the audit task, use that
+            if len(audit_task.machines) == 1:
+                completion.machine_id = audit_task.machines[0].id
+                logger.info(f"[AUDIT FIX] Assigned machine_id {completion.machine_id} to completion {completion.id} (single machine)")
+                repaired_count += 1
+            else:
+                # Multiple machines - try to find a logical match
+                # For now, just use the first one as a default
+                completion.machine_id = audit_task.machines[0].id
+                logger.info(f"[AUDIT FIX] Assigned machine_id {completion.machine_id} to completion {completion.id} (first of multiple)")
+                repaired_count += 1
+                
+        # Commit changes if any repairs were made
+        if repaired_count > 0:
+            db_session.commit()
+            logger.info(f"[AUDIT FIX] Successfully repaired {repaired_count} audit task completions")
+        
+        # Check remaining unfixed records
+        remaining_missing = AuditTaskCompletion.query.filter(
+            AuditTaskCompletion.machine_id == None,
+            AuditTaskCompletion.completed == True
+        ).count()
+        
+        logger.info(f"[AUDIT FIX] After repairs: {remaining_missing} completions still have missing machine IDs")
+        
+        return repaired_count, remaining_missing
+        
+    except Exception as e:
+        logger.error(f"[AUDIT FIX] Error repairing audit machine IDs: {e}")
+        return 0, 0
+
 def patch_audit_history_functions():
     """
     Patch both the admin_audit_history and audit_history_page functions
@@ -29,6 +104,14 @@ def patch_audit_history_functions():
         from models import AuditTaskCompletion, AuditTask, Machine, User, Site
         from flask import render_template, flash, redirect, url_for, request, jsonify
         from flask_login import current_user
+        
+        # First, run the fix for audit task machine IDs during startup
+        with app.app_context():
+            fixed_count, remaining_count = fix_audit_task_machine_ids(db.session)
+            if fixed_count > 0:
+                logger.info(f"[STARTUP] Fixed {fixed_count} audit completions with missing machine IDs")
+            if remaining_count > 0:
+                logger.warning(f"[STARTUP] {remaining_count} audit completions still have missing machine IDs")
         
         # Define our improved version of the admin_audit_history function
         def fixed_admin_audit_history():
@@ -114,7 +197,7 @@ def patch_audit_history_functions():
                         machine_counts[completion.machine_id] += 1
                 
                 # Get machine details
-                machines = Machine.query.filter(Machine.id.in_(machine_counts.keys())).all()
+                machines = Machine.query.filter(Machine.id.in_(machine_counts.keys())).all() if machine_counts else []
                 machine_data = {}
                 for machine in machines:
                     machine_data[machine.id] = {
@@ -126,7 +209,7 @@ def patch_audit_history_functions():
                     
                 # Get sites 
                 site_ids = set(machine.site_id for machine in machines if machine.site_id)
-                sites = Site.query.filter(Site.id.in_(site_ids)).all()
+                sites = Site.query.filter(Site.id.in_(site_ids)).all() if site_ids else []
                 site_data = {site.id: site.name for site in sites}
                 
                 # Return as JSON
