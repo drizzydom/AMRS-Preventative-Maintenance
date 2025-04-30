@@ -1147,6 +1147,24 @@ def audit_history_page():
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
+    # --- Generate available months for dropdown (from April 2025 to current month) ---
+    import calendar
+    from collections import OrderedDict
+    start_month = 4
+    start_year = 2025
+    available_months = []
+    y, m = start_year, start_month
+    while (y < today.year) or (y == today.year and m <= today.month):
+        value = f"{y:04d}-{m:02d}"
+        display = f"{calendar.month_name[m]} {y}"
+        available_months.append({'value': value, 'display': display})
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+    selected_month = f"{year:04d}-{month:02d}"
+
     # Get site and machine filters
     site_id = request.args.get('site_id', type=int)
     machine_id = request.args.get('machine_id')
@@ -1191,7 +1209,7 @@ def audit_history_page():
         else:
             completions = []
             machine_data = {}
-            return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=[], available_machines=available_machines)
+            return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
     else:
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
@@ -1202,9 +1220,7 @@ def audit_history_page():
             else:
                 completions = []
                 machine_data = {}
-                return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=[], available_machines=available_machines)
-    if machine_id:
-        query = query.filter(AuditTaskCompletion.machine_id == machine_id)
+                return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
     completions = query.all()
 
     # --- Build calendar weeks for the month ---
@@ -1229,23 +1245,6 @@ def audit_history_page():
 
     machines_dict = {machine.id: machine for machine in available_machines}
     users = {user.id: user for user in User.query.all()}
-
-    # --- Generate available months for dropdown (from April 2025 to current month) ---
-    from collections import OrderedDict
-    start_month = 4
-    start_year = 2025
-    available_months = []
-    y, m = start_year, start_month
-    while (y < today.year) or (y == today.year and m <= today.month):
-        value = f"{y:04d}-{m:02d}"
-        display = f"{calendar.month_name[m]} {y}"
-        available_months.append({'value': value, 'display': display})
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
-    available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
-    selected_month = f"{year:04d}-{month:02d}"
 
     return render_template('audit_history.html',
         completions=completions,
@@ -1784,7 +1783,9 @@ def site_history(site_id):
     if not site:
         abort(404)
     machines = Machine.query.filter_by(site_id=site_id).all()
-    parts = Part.query.filter_by(machine_id=machine_id).all()
+    parts = []
+    for machine in machines:
+        parts.extend(Part.query.filter_by(machine_id=machine.id).all())
     # Gather all maintenance records for all parts in this site
     maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).order_by(MaintenanceRecord.date.desc()).all()
     return render_template('site_history.html', site=site, machines=machines, parts=parts, maintenance_records=maintenance_records, now=datetime.now())
