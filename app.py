@@ -9,13 +9,14 @@ import argparse
 from datetime import datetime, timedelta, date
 from functools import wraps
 import traceback
+from io import BytesIO
 
 # --- TEST DB PATCH: Force in-memory SQLite for pytest runs ---
 if any('pytest' in arg for arg in sys.argv):
     os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
 # Third-party imports
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app, send_file
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
 from sqlalchemy import or_, text
@@ -25,6 +26,8 @@ from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
 import smtplib
+from weasyprint import HTML, CSS
+from jinja2 import Environment, FileSystemLoader
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
@@ -94,6 +97,19 @@ app = Flask(__name__, instance_relative_config=True)
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
+
+# Add custom Jinja2 filters
+@app.template_filter('format_datetime')
+def format_datetime(value, fmt='%Y%m%d%H%M%S'):
+    """Format a date or datetime object as string using the specified format."""
+    if isinstance(value, str):
+        # If value is a string format, treat it as a format pattern
+        return datetime.now().strftime(value)
+    elif isinstance(value, (datetime, date)):
+        # If value is a date or datetime, format it directly
+        return value.strftime(fmt)
+    else:
+        return ""
 
 # Email configuration (all secrets from environment)
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
@@ -1302,6 +1318,166 @@ def audit_history_page():
                           show_site_dropdown=show_site_dropdown,
                           machine_data=machine_data)
 
+@app.route('/audit_history/pdf')
+@login_required
+def audit_history_pdf():
+    """Generate PDF of the audit history report."""
+    # Get the same filter parameters as in the audit_history route
+    site_id = request.args.get('site_id', None, type=int)
+    machine_id = request.args.get('machine_id', None, type=int)
+    
+    # Date range defaults to last 30 days if not provided
+    today = datetime.now().date()
+    start_date_str = request.args.get('start_date', None)
+    end_date_str = request.args.get('end_date', None)
+    
+    if start_date_str:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    else:
+        start_date = today - timedelta(days=30)
+        
+    if end_date_str:
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    else:
+        end_date = today
+    
+    # Check permission to access the audit feature
+    user_has_audit_access = current_user.is_admin or (
+        current_user.is_authenticated and current_user.role and 
+        'audits.access' in (current_user.role.permissions or '')
+    )
+    
+    if not user_has_audit_access:
+        flash("You don't have permission to access this feature.", "warning")
+        return redirect(url_for('dashboard'))
+    
+    # Get sites based on user permissions
+    if current_user.is_admin or user_can_see_all_sites(current_user):
+        available_sites = Site.query.order_by(Site.name).all()
+    else:
+        # Users only see their assigned sites
+        available_sites = current_user.sites
+    
+    # Get machines based on site filter
+    if site_id:
+        site = Site.query.get_or_404(site_id)
+        # Check if user has access to this site
+        if not current_user.is_admin and site not in available_sites:
+            flash("You don't have permission to access this site.", "warning")
+            return redirect(url_for('dashboard'))
+        
+        # Filter machines by the selected site
+        machines_query = Machine.query.filter_by(site_id=site_id)
+    else:
+        # Get machines from all available sites
+        site_ids = [s.id for s in available_sites]
+        machines_query = Machine.query.filter(Machine.site_id.in_(site_ids))
+    
+    # Apply machine filter if provided
+    if machine_id:
+        machines_query = machines_query.filter_by(id=machine_id)
+    
+    # Get the machines
+    machines = machines_query.order_by(Machine.name).all()
+    
+    # Get audit task completions for the time period
+    start_datetime = datetime.combine(start_date, datetime.min.time())
+    end_datetime = datetime.combine(end_date, datetime.max.time())
+    
+    # Get machine IDs
+    machine_ids = [m.id for m in machines]
+    
+    # Get audit task completions
+    completions_query = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.machine_id.in_(machine_ids),
+        AuditTaskCompletion.created_at.between(start_datetime, end_datetime)
+    ).order_by(AuditTaskCompletion.created_at)
+    
+    completions = completions_query.all()
+    
+    # Organize data by machine and date
+    machine_data = {}
+    for completion in completions:
+        # Get the date string from the completion date
+        date_str = completion.created_at.date().strftime('%Y-%m-%d')
+        
+        # Initialize machine entry if not exists
+        if completion.machine_id not in machine_data:
+            machine_data[completion.machine_id] = {}
+        
+        # Initialize date entry if not exists
+        if date_str not in machine_data[completion.machine_id]:
+            machine_data[completion.machine_id][date_str] = []
+        
+        # Add completion to the appropriate machine/date
+        machine_data[completion.machine_id][date_str].append(completion)
+    
+    # Get all audit tasks for reference
+    audit_tasks = {task.id: task for task in AuditTask.query.all()}
+    
+    # Get all users for reference
+    users = {user.id: user for user in User.query.all()}
+    
+    # Helper functions for the template
+    def get_date_range(start, end):
+        """Get a list of dates between start and end, inclusive."""
+        delta = end - start
+        return [start + timedelta(days=i) for i in range(delta.days + 1)]
+    
+    def get_calendar_weeks(start, end):
+        """Get calendar weeks for the date range."""
+        # Find the first Sunday before or on the start date
+        first_day = start - timedelta(days=start.weekday() + 1)
+        if first_day.weekday() != 6:  # If not Sunday
+            first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+        
+        # Find the last Saturday after or on the end date
+        last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+        
+        # Generate weeks
+        weeks = []
+        current = first_day
+        while current <= last_day:
+            week = []
+            for _ in range(7):
+                week.append(current if current >= start and current <= end else None)
+                current = current + timedelta(days=1)
+            weeks.append(week)
+        
+        return weeks
+    
+    # Render the template to HTML
+    html = render_template(
+        'audit_history_pdf.html',
+        machines=machines,
+        machine_data=machine_data,
+        audit_tasks=audit_tasks,
+        users=users,
+        today=today,
+        start_date=start_date,
+        end_date=end_date,
+        completions=completions,
+        get_date_range=get_date_range,
+        get_calendar_weeks=get_calendar_weeks
+    )
+    
+    # Generate PDF from the HTML
+    pdf_file = BytesIO()
+    HTML(string=html).write_pdf(pdf_file)
+    pdf_file.seek(0)
+    
+    # Create a unique filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    filename = f"audit_history_{timestamp}.pdf"
+    
+    # Return the PDF as a downloadable file
+    return send_file(
+        pdf_file,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
+
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
 def admin_users():
@@ -1661,7 +1837,7 @@ def site_history(site_id):
     if not site:
         abort(404)
     machines = Machine.query.filter_by(site_id=site_id).all()
-    parts = Part.query.filter(Part.machine_id.in_([m.id for m in machines])).all()
+    parts = Part.query.filter_by(machine_id=machine_id).all()
     # Gather all maintenance records for all parts in this site
     maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).order_by(MaintenanceRecord.date.desc()).all()
     return render_template('site_history.html', site=site, machines=machines, parts=parts, maintenance_records=maintenance_records, now=datetime.now())
@@ -1942,7 +2118,7 @@ def user_profile():
         user = current_user  # Always use the logged-in user
         if request.method == 'POST':
             form_type = request.form.get('form_type')
-            # Profile form submission```python
+            # Profile form submission
             if form_type == 'profile':
                 email = request.form.get('email')
                 full_name = request.form.get('full_name')
@@ -2907,7 +3083,8 @@ def maintenance_records_page():
         # Filter machines by selected site
         machines = Machine.query.filter_by(site_id=site_id).all()
     else:
-        # Show machines from all sites user has access to
+        # Show machines from all available sites
+        site_ids = [s.id for s in sites]
         machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
     
     machine_ids = [machine.id for machine in machines]
@@ -2937,12 +3114,12 @@ def maintenance_records_page():
         # Filter records by selected part
         records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
     elif machine_id:
-        # If machine is selected but no part, show records for all parts of that machine
+        # If a machine is selected but no part, show records for all parts of that machine
         parts_for_machine = Part.query.filter_by(machine_id=machine_id).all()
         part_ids_for_machine = [part.id for part in parts_for_machine]
         records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_machine)).order_by(MaintenanceRecord.date.desc()).all()
     elif site_id:
-        # If site is selected but no machine/part, show records for all parts of all machines at that site
+        # If a site is selected but no machine/part, show records for all parts of all machines at that site
         machines_for_site = Machine.query.filter_by(site_id=site_id).all()
         machine_ids_for_site = [machine.id for machine in machines_for_site]
         parts_for_site = Part.query.filter(Part.machine_id.in_(machine_ids_for_site)).all()
@@ -3080,6 +3257,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
