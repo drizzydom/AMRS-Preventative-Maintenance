@@ -1050,19 +1050,26 @@ def audits_page():
                 custom_interval_days = value * 30
             else:
                 custom_interval_days = value
-        # Ensure machine_ids is always a list
         machine_ids = request.form.getlist('machine_ids')
         if not (request.form.get('name') and request.form.get('site_id') and machine_ids):
             flash('Task name, site, and at least one machine are required.', 'danger')
             return redirect(url_for('audits_page'))
         try:
+            site_id = int(request.form.get('site_id'))
+            # Get all existing tasks for this site (before adding the new one)
+            existing_tasks = AuditTask.query.filter_by(site_id=site_id).order_by(AuditTask.id).all()
+            color_index = len(existing_tasks)
+            num_colors = color_index + 1  # include the new one
+            hue = int((color_index * 360) / num_colors) % 360
+            color = f"hsl({hue}, 70%, 50%)"
             audit_task = AuditTask(
                 name=request.form.get('name'),
                 description=request.form.get('description'),
-                site_id=request.form.get('site_id'),
+                site_id=site_id,
                 created_by=current_user.id,
                 interval=interval,
-                custom_interval_days=custom_interval_days
+                custom_interval_days=custom_interval_days,
+                color=color
             )
             for machine_id in machine_ids:
                 machine = Machine.query.get(int(machine_id))
