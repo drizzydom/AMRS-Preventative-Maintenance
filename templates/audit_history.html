@@ -141,19 +141,26 @@
                             <!-- Begin Calendar View -->
                             <div class="calendar-table-container">
                                 <table class="calendar-table excel-calendar">
-                                    <thead>
-                                        <tr>
-                                            <th class="calendar-heading">Sunday</th>
-                                            <th class="calendar-heading">Monday</th>
-                                            <th class="calendar-heading">Tuesday</th>
-                                            <th class="calendar-heading">Wednesday</th>
-                                            <th class="calendar-heading">Thursday</th>
-                                            <th class="calendar-heading">Friday</th>
-                                            <th class="calendar-heading">Saturday</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for week in get_calendar_weeks(start_date, end_date) %}
+                                    {% set current_month = None %}
+                                    {% for week in get_calendar_weeks(start_date, end_date) %}
+                                        {% set first_date_in_week = week|select('defined')|first %}
+                                        {% if first_date_in_week and (current_month != first_date_in_week.month) %}
+                                            {% set current_month = first_date_in_week.month %}
+                                            <tr>
+                                                <td colspan="7" class="month-header">
+                                                    {{ first_date_in_week.strftime('%B %Y') }}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th class="calendar-heading">Sunday</th>
+                                                <th class="calendar-heading">Monday</th>
+                                                <th class="calendar-heading">Tuesday</th>
+                                                <th class="calendar-heading">Wednesday</th>
+                                                <th class="calendar-heading">Thursday</th>
+                                                <th class="calendar-heading">Friday</th>
+                                                <th class="calendar-heading">Saturday</th>
+                                            </tr>
+                                        {% endif %}
                                         <tr>
                                             {% for date in week %}
                                                 <td class="calendar-day{% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %} today{% endif %}">
@@ -178,8 +185,7 @@
                                                 </td>
                                             {% endfor %}
                                         </tr>
-                                        {% endfor %}
-                                    </tbody>
+                                    {% endfor %}
                                 </table>
                             </div>
                             
@@ -253,22 +259,29 @@
                                 <!-- Begin Calendar View using TABLE inside a container div -->
                                 <div class="calendar-table-container">
                                     <table class="calendar-table excel-style-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Sunday</th>
-                                                <th>Monday</th>
-                                                <th>Tuesday</th>
-                                                <th>Wednesday</th>
-                                                <th>Thursday</th>
-                                                <th>Friday</th>
-                                                <th>Saturday</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for week in get_calendar_weeks(start_date, end_date) %}
+                                        {% set current_month = None %}
+                                        {% for week in get_calendar_weeks(start_date, end_date) %}
+                                            {% set first_date_in_week = week|select('defined')|first %}
+                                            {% if first_date_in_week and (current_month != first_date_in_week.month) %}
+                                                {% set current_month = first_date_in_week.month %}
+                                                <tr>
+                                                    <td colspan="7" class="month-header">
+                                                        {{ first_date_in_week.strftime('%B %Y') }}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Sunday</th>
+                                                    <th>Monday</th>
+                                                    <th>Tuesday</th>
+                                                    <th>Wednesday</th>
+                                                    <th>Thursday</th>
+                                                    <th>Friday</th>
+                                                    <th>Saturday</th>
+                                                </tr>
+                                            {% endif %}
                                             <tr>
                                                 {% for date in week %}
-                                                <td class="calendar-day {% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
+                                                <td class="calendar-day {% if not date %}empty-day{% endif %} {% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
                                                     {% if date %}
                                                         <div class="calendar-date">{{ date.day }}</div>
                                                         <div class="calendar-entries">
@@ -290,8 +303,7 @@
                                                 </td>
                                                 {% endfor %}
                                             </tr>
-                                            {% endfor %}
-                                        </tbody>
+                                        {% endfor %}
                                     </table>
                                 </div>
                                 
@@ -456,80 +468,96 @@
 <style>
     /* Reset calendar view completely with basic, reliable table formatting */
     .calendar-table {
-        table-layout: fixed !important; /* Force equal column distribution */
+        table-layout: fixed !important;
         width: 100% !important;
         border-collapse: collapse !important;
-        border: 3px solid #217346 !important; /* Excel green border */
+        border: 3px solid #217346 !important;
         margin-bottom: 20px !important;
     }
     
-    /* Force columns to be equal width no matter what */
-    .calendar-table th, 
-    .calendar-table td {
-        width: 14.2857% !important; /* Exactly 1/7 of the table width */
-        display: table-cell !important; /* Force display as table cell */
-        border: 2px solid #b6d7a8 !important; 
+    /* Month header styling */
+    .month-header {
+        background-color: #217346 !important; 
+        color: white !important;
+        font-weight: bold !important;
         text-align: center !important;
+        padding: 8px !important;
+        font-size: 1.1rem !important;
+        border-bottom: 2px solid #1a5c38 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
+        position: relative !important;
+    }
+    
+    /* Day of week header styling */
+    .calendar-table thead th {
+        background-color: #d9ead3 !important;
+        color: #215732 !important;
+        font-weight: bold !important;
+        padding: 8px 5px !important;
+        border: 2px solid #b6d7a8 !important;
+        text-align: center !important;
+        width: 14.2857% !important; /* Equal 7 day columns */
+    }
+    
+    /* Force columns to be equal width */
+    .calendar-table td {
+        width: 14.2857% !important;
+        display: table-cell !important;
+        border: 2px solid #b6d7a8 !important; 
         vertical-align: top !important;
         padding: 5px !important;
         position: relative !important;
+        height: 100px !important; /* Fixed height for consistency */
     }
     
     /* Apply very specific styling to ensure proper display */
     .calendar-table tr {
         display: table-row !important;
-        border-bottom: 2px solid #b6d7a8 !important;
     }
 
-    /* Calendar legend and layout */
+    /* Calendar with legend layout */
     .calendar-with-legend {
         display: flex !important;
         flex-direction: row !important;
-        flex-wrap: nowrap !important; /* Prevent wrapping */
+        flex-wrap: nowrap !important;
         gap: 20px !important;
         align-items: flex-start !important;
-        width: 100% !important;
     }
     
     .calendar-table-container {
-        width: 75% !important; /* Fix the width of the table container */
-        overflow-x: auto !important; /* In case it gets too narrow */
+        width: 80% !important;
+        flex-grow: 1 !important;
+        overflow-x: auto !important; /* For small screens */
     }
     
     .calendar-legend {
         width: 20% !important;
-        flex-shrink: 0 !important; /* Prevent shrinking */
-        max-width: 250px !important;
-        margin-top: 0 !important;
+        max-width: 220px !important;
+        flex-shrink: 0 !important;
         padding: 12px !important;
         border: 1px solid #217346 !important;
         background-color: #f8f9fa !important;
         border-radius: 5px !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+        position: sticky !important;
+        top: 10px !important;
     }
     
-    /* Header styling */
-    .calendar-table thead th {
-        background-color: #d9ead3 !important; /* Excel header green */
-        color: #215732 !important;
-        font-weight: bold !important;
-        padding: 8px 5px !important;
-        border-bottom: 3px solid #217346 !important;
-        text-align: center !important;
-    }
-    
-    /* Cell content styling */
-    .calendar-day {
-        min-height: 90px !important; /* Minimum height */
-        height: 100px !important; /* Fixed minimum height for consistency */
-    }
-    
+    /* Date number styling */
     .calendar-date {
         font-weight: bold !important;
         text-align: right !important;
         margin-bottom: 5px !important;
         font-size: 0.9rem !important;
         color: #215732 !important;
+        border-bottom: 1px solid #b6d7a8 !important;
+        padding-bottom: 2px !important;
+    }
+    
+    /* Empty date cell styling */
+    .calendar-day.empty-day {
+        background-color: #f8f9fa !important;
+        border-color: #e9ecef !important;
     }
     
     .calendar-entries {
@@ -537,6 +565,15 @@
         text-align: left !important;
         max-height: 70px !important;
         overflow-y: auto !important;
+    }
+    
+    /* Simple colored checkmark system for the legend */
+    .status-indicator {
+        display: inline-block !important;
+        width: 12px !important;
+        height: 12px !important;
+        margin-right: 5px !important;
+        border-radius: 50% !important;
     }
     
     /* Legend styling */
@@ -655,7 +692,23 @@
     
     /* Print styles */
     @media print {
-        /* Common styles for printing */
+        .print-calendar-with-legend {
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 20px !important;
+        }
+        
+        .calendar-table-container {
+            width: 80% !important;
+            flex-grow: 1 !important;
+        }
+        
+        .print-calendar-legend {
+            width: 20% !important;
+            max-width: 200px !important;
+            flex-shrink: 0 !important;
+        }
+        
         .excel-calendar {
             table-layout: fixed !important;
             width: 100% !important;
@@ -663,9 +716,14 @@
             border: 2px solid #217346 !important;
         }
         
-        .excel-calendar th, .excel-calendar td {
+        .excel-calendar th, 
+        .excel-calendar td {
             width: 14.2857% !important;
             border: 2px solid #b6d7a8 !important;
+        }
+        
+        .month-header {
+            page-break-inside: avoid !important;
         }
     }
 </style>
