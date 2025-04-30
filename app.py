@@ -1939,7 +1939,7 @@ def maintenance_page():
             machine_id = request.form.get('machine_id')
             part_id = request.form.get('part_id')
             user_id = current_user.id
-            maintenance_type = request.form.get('maintenance_type')
+            maintenance_type =request.form.get('maintenance_type')
             description = request.form.get('description')
             date_str = request.form.get('date')
             performed_by = request.form.get('performed_by', '')
@@ -3294,6 +3294,8 @@ def delete_audit_task(audit_task_id):
         flash(f'An error occurred while deleting the audit task: {str(e)}', 'danger')
     
     return redirect(url_for('audits_page'))
+
+import app_debug_helper  # Register debug routes
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
