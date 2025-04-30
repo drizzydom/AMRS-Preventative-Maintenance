@@ -526,6 +526,21 @@ with app.app_context():
     except Exception as e:
         print(f'[AUTO_MIGRATE ERROR] {e}')
     try:
+        # --- Ensure audit_tasks.color column exists ---
+        from sqlalchemy import text
+        engine = db.engine
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='audit_tasks' AND column_name='color'
+            """))
+            if not result.fetchone():
+                print("[APP] Adding 'color' column to 'audit_tasks' table...")
+                conn.execute(text("ALTER TABLE audit_tasks ADD COLUMN color VARCHAR(32)"))
+                print("[APP] Column 'color' added to 'audit_tasks'.")
+            else:
+                print("[APP] 'color' column already exists in 'audit_tasks'.")
+        # ...existing code...
         import expand_user_fields
     except Exception as e:
         print(f"[STARTUP] User field length expansion migration failed: {e}")
