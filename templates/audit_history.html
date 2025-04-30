@@ -65,9 +65,9 @@
                         <div class="col-md-3">
                             <label for="machine_id" class="form-label">Machine</label>
                             <select class="form-select" id="machine_id" name="machine_id">
-                                <option value="">All Machines</option>
+                                <option value="" {% if not selected_machine or selected_machine == '' or selected_machine == '0' %}selected{% endif %}>All Machines</option>
                                 {% for machine in available_machines %}
-                                <option value="{{ machine.id }}" {% if selected_machine == machine.id %}selected{% endif %}>{{ machine.name }}</option>
+                                <option value="{{ machine.id }}" {% if selected_machine == machine.id|string %}selected{% endif %}>{{ machine.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
