@@ -1193,17 +1193,16 @@ def audit_history_page():
     if len(sites) == 1 and not site_id:
         site_id = sites[0].id
 
-    # Get available machines based on selected site
+    # Get available machines based on selected site (but ensure all machines with completions are included)
     if site_id:
         machines = Machine.query.filter_by(site_id=site_id).all()
     else:
-        # If no site selected but user has restricted sites
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
             machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
         else:
             machines = Machine.query.all()
-    
+
     # Query completions within the date range
     query = AuditTaskCompletion.query.filter(
         AuditTaskCompletion.date >= start_date,
@@ -1277,7 +1276,22 @@ def audit_history_page():
     except Exception as e:
         app.logger.error(f"Error querying audit completions: {e}")
         completions = []
-    
+
+    # --- Ensure all machines with completions are included in the list ---
+    machine_ids_with_completions = set(c.machine_id for c in completions)
+    machine_ids_in_list = set(m.id for m in machines)
+    missing_machine_ids = machine_ids_with_completions - machine_ids_in_list
+    if missing_machine_ids:
+        # Only add machines the user is allowed to see
+        allowed_machine_ids = set(m.id for m in Machine.query.filter(Machine.id.in_(missing_machine_ids)).all())
+        # If user is admin, allow all; otherwise, restrict to user's sites
+        if not current_user.is_admin and sites:
+            allowed_site_ids = set(site.id for site in sites)
+            allowed_machine_ids = set(m.id for m in Machine.query.filter(Machine.id.in_(missing_machine_ids), Machine.site_id.in_(allowed_site_ids)).all())
+        # Add missing machines
+        if allowed_machine_ids:
+            machines += Machine.query.filter(Machine.id.in_(allowed_machine_ids)).all()
+
     # Get related data for display
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
     machines_dict = {machine.id: machine for machine in Machine.query.all()}
@@ -3307,6 +3321,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
