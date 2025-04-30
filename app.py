@@ -1268,13 +1268,16 @@ def audit_history_page():
             grouped_completions[date_str] = []
         grouped_completions[date_str].append(completion)
     
-    # Build machine_data: {machine_id: [completions]}
+    # Build machine_data: {machine_id: {date_str: [completions]}}
     machine_data = {}
     for completion in completions:
         machine_id = completion.machine_id
+        date_str = completion.date.strftime('%Y-%m-%d')
         if machine_id not in machine_data:
-            machine_data[machine_id] = []
-        machine_data[machine_id].append(completion)
+            machine_data[machine_id] = {}
+        if date_str not in machine_data[machine_id]:
+            machine_data[machine_id][date_str] = []
+        machine_data[machine_id][date_str].append(completion)
     
     # Sort dates in reverse chronological order
     sorted_dates = sorted(grouped_completions.keys(), reverse=True)
@@ -1939,7 +1942,7 @@ def user_profile():
         user = current_user  # Always use the logged-in user
         if request.method == 'POST':
             form_type = request.form.get('form_type')
-            # Profile form submission
+            # Profile form submission```python
             if form_type == 'profile':
                 email = request.form.get('email')
                 full_name = request.form.get('full_name')
@@ -3077,6 +3080,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
