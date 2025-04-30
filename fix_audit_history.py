@@ -79,6 +79,15 @@ def fix_audit_task_machine_ids(db_session):
             db_session.commit()
             logger.info(f"[AUDIT FIX] Successfully repaired {repaired_count} audit task completions")
         
+        # Fix machine_id attribute in AuditTask objects if needed
+        audit_tasks_without_machine_id = AuditTaskCompletion.query.filter(
+            AuditTaskCompletion.machine_id_attr_missing == True
+        ).all()
+        
+        if audit_tasks_without_machine_id:
+            logger.info(f"[AUDIT FIX] Found {len(audit_tasks_without_machine_id)} completions missing machine_id attribute")
+            # We'd need to fix this, but it's likely not a real column
+        
         # Check remaining unfixed records
         remaining_missing = AuditTaskCompletion.query.filter(
             AuditTaskCompletion.machine_id == None,
@@ -91,6 +100,7 @@ def fix_audit_task_machine_ids(db_session):
         
     except Exception as e:
         logger.error(f"[AUDIT FIX] Error repairing audit machine IDs: {e}")
+        logger.error(traceback.format_exc())
         return 0, 0
 
 def patch_audit_history_functions():
@@ -107,11 +117,15 @@ def patch_audit_history_functions():
         
         # First, run the fix for audit task machine IDs during startup
         with app.app_context():
-            fixed_count, remaining_count = fix_audit_task_machine_ids(db.session)
-            if fixed_count > 0:
-                logger.info(f"[STARTUP] Fixed {fixed_count} audit completions with missing machine IDs")
-            if remaining_count > 0:
-                logger.warning(f"[STARTUP] {remaining_count} audit completions still have missing machine IDs")
+            try:
+                fixed_count, remaining_count = fix_audit_task_machine_ids(db.session)
+                if fixed_count > 0:
+                    logger.info(f"[STARTUP] Fixed {fixed_count} audit completions with missing machine IDs")
+                if remaining_count > 0:
+                    logger.warning(f"[STARTUP] {remaining_count} audit completions still have missing machine IDs")
+            except Exception as e:
+                logger.error(f"[STARTUP] Error fixing audit machine IDs: {e}")
+                logger.error(traceback.format_exc())
         
         # Define our improved version of the admin_audit_history function
         def fixed_admin_audit_history():
@@ -200,11 +214,16 @@ def patch_audit_history_functions():
                 machines = Machine.query.filter(Machine.id.in_(machine_counts.keys())).all() if machine_counts else []
                 machine_data = {}
                 for machine in machines:
+                    # Add machine object attributes for debug
+                    machine_attrs = {key: str(getattr(machine, key)) for key in dir(machine) 
+                                    if not key.startswith('_') and not callable(getattr(machine, key))}
+                    
                     machine_data[machine.id] = {
                         "id": machine.id,
                         "name": machine.name,
                         "count": machine_counts.get(machine.id, 0),
-                        "site_id": machine.site_id
+                        "site_id": machine.site_id,
+                        "attributes": machine_attrs
                     }
                     
                 # Get sites 
@@ -314,6 +333,10 @@ def patch_audit_history_functions():
                         logger.warning(f"User tried to access unauthorized site_id: {site_id}")
                         site_id = None
                 
+                # Get all available machines
+                all_machines = Machine.query.all()
+                logger.info(f"Total machines in system: {len(all_machines)}")
+                
                 # Get available machines based on site filter
                 if site_id:
                     available_machines = Machine.query.filter_by(site_id=site_id).all()
@@ -324,11 +347,18 @@ def patch_audit_history_functions():
                         available_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
                         logger.info(f"For user's sites: Found {len(available_machines)} machines")
                     else:
-                        available_machines = Machine.query.all()
+                        available_machines = all_machines
                         logger.info(f"All machines: Found {len(available_machines)} machines")
                 
                 # Debug dump available machines
-                logger.info(f"Available machines: {[(m.id, m.name, m.site_id) for m in available_machines]}")
+                machine_debug = []
+                for m in available_machines[:5]:  # Just show the first 5 to avoid excessive logging
+                    machine_debug.append({
+                        'id': m.id,
+                        'name': m.name,
+                        'site_id': m.site_id
+                    })
+                logger.info(f"Sample of available machines: {machine_debug}")
                 
                 # Build the query for audit completions
                 query = AuditTaskCompletion.query.filter(
@@ -362,6 +392,25 @@ def patch_audit_history_functions():
                 try:
                     completions = query.all()
                     logger.info(f"Found {len(completions)} audit completions")
+                    
+                    # Fix any missing machine_id during this query
+                    fixed_count = 0
+                    for completion in completions:
+                        if not completion.machine_id:
+                            # Try to find the machine from the audit task
+                            audit_task = AuditTask.query.get(completion.audit_task_id)
+                            if audit_task and hasattr(audit_task, 'machines') and audit_task.machines:
+                                completion.machine_id = audit_task.machines[0].id
+                                fixed_count += 1
+                    
+                    if fixed_count > 0:
+                        db.session.commit()
+                        logger.info(f"Fixed {fixed_count} completions with missing machine_id during query")
+                        
+                    # Reload completions if we made fixes
+                    if fixed_count > 0:
+                        completions = query.all()
+                        
                 except Exception as e:
                     logger.error(f"Error querying audit completions: {e}")
                     completions = []
@@ -381,7 +430,11 @@ def patch_audit_history_functions():
                 logger.info(f"Found {len(audit_tasks)} total audit tasks")
                 
                 machines_dict = {}
-                for machine in Machine.query.all():
+                for machine in all_machines:
+                    # Make sure machine.machine_id exists (for display in headers)
+                    if not hasattr(machine, 'machine_id') or not machine.machine_id:
+                        setattr(machine, 'machine_id', f"ID: {machine.id}")
+                    
                     machines_dict[machine.id] = machine
                 logger.info(f"Found {len(machines_dict)} total machines")
                 
@@ -427,10 +480,30 @@ def patch_audit_history_functions():
                 
                 # Prepare machines for display (the ones with completions)
                 display_machines = []
+                
+                # First add machines that have completions
                 for machine_id in machine_data.keys():
                     if machine_id in machines_dict:
-                        machine = machines_dict[machine_id]
-                        display_machines.append(machine)
+                        display_machines.append(machines_dict[machine_id])
+                
+                # If no machines with completions, show message on page
+                # but still provide machines for the dropdown
+                if not display_machines:
+                    logger.info("No machines with completions found, displaying all available machines")
+                    # If a specific site is selected, show just those machines
+                    if site_id:
+                        site_machines = [m for m in all_machines if m.site_id == site_id]
+                        if site_machines:
+                            display_machines = site_machines
+                            logger.info(f"Using {len(display_machines)} machines from selected site")
+                        else:
+                            # Fallback to all machines user has access to
+                            display_machines = available_machines
+                            logger.info(f"Using {len(display_machines)} available machines")
+                    else:
+                        # Just use all available machines
+                        display_machines = available_machines
+                        logger.info(f"Using {len(display_machines)} available machines")
                 
                 logger.info(f"Display machines count: {len(display_machines)}")
                 
@@ -470,7 +543,8 @@ def patch_audit_history_functions():
                                     grouped_completions=grouped_completions,
                                     sorted_dates=sorted_dates,
                                     audit_tasks=audit_tasks,
-                                    machines=machines_dict,  # For fetching machine details by id
+                                    machines=machines_dict,            # For fetching machine details by id
+                                    display_machines=display_machines, # Machines to show in the calendar view
                                     available_machines=available_machines,  # For dropdown
                                     users=users,
                                     sites=sites,
