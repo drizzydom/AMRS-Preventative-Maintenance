@@ -373,11 +373,19 @@
         border: 1px solid #dee2e6;
         border-radius: 4px;
         overflow: hidden;
+        width: 100%;
     }
     
     /* Excel-style calendar for web view */
     .excel-style-calendar {
         border: 2px solid #217346; /* Excel green border */
+        display: grid !important; /* Force grid display */
+        grid-template-columns: repeat(7, 1fr) !important; /* Force 7 columns */
+    }
+    
+    .excel-style-calendar .calendar-row {
+        display: contents !important;
+        width: 100%;
     }
     
     .excel-style-calendar .calendar-heading {
@@ -391,6 +399,9 @@
     .excel-style-calendar .calendar-day {
         border: 1px solid #b6d7a8;
         background-color: #ffffff;
+        min-height: 100px;
+        height: auto;
+        overflow: visible;
     }
     
     .excel-style-calendar .calendar-date {
@@ -410,6 +421,7 @@
     
     .calendar-row {
         display: contents;
+        width: 100%;
     }
     
     .calendar-heading {
@@ -504,14 +516,17 @@
             table-layout: fixed !important;
             border: 2px solid #217346 !important; /* Excel green border */
             background: #fff !important;
+            page-break-inside: avoid !important;
         }
         
         .excel-calendar .calendar-row {
             display: table-row !important;
+            width: 100% !important;
         }
         
         .excel-calendar .calendar-heading {
             display: table-cell !important;
+            width: calc(100% / 7) !important;
             font-weight: bold !important;
             background-color: #d9ead3 !important; /* Excel header green */
             color: #215732 !important;
@@ -523,7 +538,7 @@
         
         .excel-calendar .calendar-day {
             display: table-cell !important;
-            min-width: 80px !important;
+            width: calc(100% / 7) !important;
             min-height: 70px !important;
             border: 1px solid #b6d7a8 !important;
             vertical-align: top !important;
