@@ -139,47 +139,49 @@
                         <!-- Calendar with Legend Layout -->
                         <div class="print-calendar-with-legend">
                             <!-- Begin Calendar View -->
-                            <table class="calendar-table excel-calendar">
-                                <thead>
-                                    <tr>
-                                        <th class="calendar-heading">Sunday</th>
-                                        <th class="calendar-heading">Monday</th>
-                                        <th class="calendar-heading">Tuesday</th>
-                                        <th class="calendar-heading">Wednesday</th>
-                                        <th class="calendar-heading">Thursday</th>
-                                        <th class="calendar-heading">Friday</th>
-                                        <th class="calendar-heading">Saturday</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for week in get_calendar_weeks(start_date, end_date) %}
-                                    <tr>
-                                        {% for date in week %}
-                                            <td class="calendar-day{% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %} today{% endif %}">
-                                                {% if date %}
-                                                    <div class="calendar-date">{{ date.day }}</div>
-                                                    <div class="calendar-entries">
-                                                        {% set date_str = date.strftime('%Y-%m-%d') %}
-                                                        {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
-                                                            {% for audit in machine_data[machine.id][date_str] %}
-                                                                <div class="audit-entry"
-                                                                    {% if audit.audit_task_id in audit_tasks %}
-                                                                    data-task-type="{{ audit_tasks[audit.audit_task_id].category if audit_tasks[audit.audit_task_id].category else 'general' }}"
-                                                                    {% endif %}>
-                                                                    <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
-                                                                    <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
-                                                                    <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
-                                                                </div>
-                                                            {% endfor %}
-                                                        {% endif %}
-                                                    </div>
-                                                {% endif %}
-                                            </td>
+                            <div class="calendar-table-container">
+                                <table class="calendar-table excel-calendar">
+                                    <thead>
+                                        <tr>
+                                            <th class="calendar-heading">Sunday</th>
+                                            <th class="calendar-heading">Monday</th>
+                                            <th class="calendar-heading">Tuesday</th>
+                                            <th class="calendar-heading">Wednesday</th>
+                                            <th class="calendar-heading">Thursday</th>
+                                            <th class="calendar-heading">Friday</th>
+                                            <th class="calendar-heading">Saturday</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for week in get_calendar_weeks(start_date, end_date) %}
+                                        <tr>
+                                            {% for date in week %}
+                                                <td class="calendar-day{% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %} today{% endif %}">
+                                                    {% if date %}
+                                                        <div class="calendar-date">{{ date.day }}</div>
+                                                        <div class="calendar-entries">
+                                                            {% set date_str = date.strftime('%Y-%m-%d') %}
+                                                            {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
+                                                                {% for audit in machine_data[machine.id][date_str] %}
+                                                                    <div class="audit-entry"
+                                                                        {% if audit.audit_task_id in audit_tasks %}
+                                                                        data-task-type="{{ audit_tasks[audit.audit_task_id].category if audit_tasks[audit.audit_task_id].category else 'general' }}"
+                                                                        {% endif %}>
+                                                                        <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
+                                                                        <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
+                                                                        <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
+                                                                    </div>
+                                                                {% endfor %}
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endif %}
+                                                </td>
+                                            {% endfor %}
+                                        </tr>
                                         {% endfor %}
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
                             
                             <!-- Print Legend -->
                             <div class="print-calendar-legend">
@@ -248,48 +250,50 @@
                             {% set date_range = get_date_range(start_date, end_date) %}
                             <!-- Calendar with Legend Layout -->
                             <div class="calendar-with-legend">
-                                <!-- Begin Calendar View using TABLE instead of CSS Grid -->
-                                <table class="calendar-table excel-style-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Sunday</th>
-                                            <th>Monday</th>
-                                            <th>Tuesday</th>
-                                            <th>Wednesday</th>
-                                            <th>Thursday</th>
-                                            <th>Friday</th>
-                                            <th>Saturday</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for week in get_calendar_weeks(start_date, end_date) %}
-                                        <tr>
-                                            {% for date in week %}
-                                            <td class="calendar-day {% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
-                                                {% if date %}
-                                                    <div class="calendar-date">{{ date.day }}</div>
-                                                    <div class="calendar-entries">
-                                                        {% set date_str = date.strftime('%Y-%m-%d') %}
-                                                        {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
-                                                            {% for audit in machine_data[machine.id][date_str] %}
-                                                                <div class="audit-entry" 
-                                                                    {% if audit.audit_task_id in audit_tasks %}
-                                                                    data-task-type="{{ audit_tasks[audit.audit_task_id].category if audit_tasks[audit.audit_task_id].category else 'general' }}"
-                                                                    {% endif %}>
-                                                                    <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
-                                                                    <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
-                                                                    <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
-                                                                </div>
-                                                            {% endfor %}
-                                                        {% endif %}
-                                                    </div>
-                                                {% endif %}
-                                            </td>
+                                <!-- Begin Calendar View using TABLE inside a container div -->
+                                <div class="calendar-table-container">
+                                    <table class="calendar-table excel-style-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Sunday</th>
+                                                <th>Monday</th>
+                                                <th>Tuesday</th>
+                                                <th>Wednesday</th>
+                                                <th>Thursday</th>
+                                                <th>Friday</th>
+                                                <th>Saturday</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for week in get_calendar_weeks(start_date, end_date) %}
+                                            <tr>
+                                                {% for date in week %}
+                                                <td class="calendar-day {% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
+                                                    {% if date %}
+                                                        <div class="calendar-date">{{ date.day }}</div>
+                                                        <div class="calendar-entries">
+                                                            {% set date_str = date.strftime('%Y-%m-%d') %}
+                                                            {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
+                                                                {% for audit in machine_data[machine.id][date_str] %}
+                                                                    <div class="audit-entry" 
+                                                                        {% if audit.audit_task_id in audit_tasks %}
+                                                                        data-task-type="{{ audit_tasks[audit.audit_task_id].category if audit_tasks[audit.audit_task_id].category else 'general' }}"
+                                                                        {% endif %}>
+                                                                        <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
+                                                                        <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
+                                                                        <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
+                                                                    </div>
+                                                                {% endfor %}
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endif %}
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
                                             {% endfor %}
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                                        </tbody>
+                                    </table>
+                                </div>
                                 
                                 <!-- Legend Section -->
                                 <div class="calendar-legend">
@@ -450,450 +454,218 @@
 {% block styles %}
 {{ super() }}
 <style>
-    /* Calendar with legend layout */
-    .calendar-with-legend {
-        display: flex;
-        flex-direction: row;
-        gap: 20px;
-        align-items: flex-start;
+    /* Reset calendar view completely with basic, reliable table formatting */
+    .calendar-table {
+        table-layout: fixed !important; /* Force equal column distribution */
+        width: 100% !important;
+        border-collapse: collapse !important;
+        border: 3px solid #217346 !important; /* Excel green border */
+        margin-bottom: 20px !important;
     }
     
-    .calendar-table {
-        width: 78%; /* Give more room for the calendar */
-        border-collapse: collapse;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.15); /* Add subtle shadow for depth */
+    /* Force columns to be equal width no matter what */
+    .calendar-table th, 
+    .calendar-table td {
+        width: 14.2857% !important; /* Exactly 1/7 of the table width */
+        display: table-cell !important; /* Force display as table cell */
+        border: 2px solid #b6d7a8 !important; 
+        text-align: center !important;
+        vertical-align: top !important;
+        padding: 5px !important;
+        position: relative !important;
+    }
+    
+    /* Apply very specific styling to ensure proper display */
+    .calendar-table tr {
+        display: table-row !important;
+        border-bottom: 2px solid #b6d7a8 !important;
+    }
+
+    /* Calendar legend and layout */
+    .calendar-with-legend {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important; /* Prevent wrapping */
+        gap: 20px !important;
+        align-items: flex-start !important;
+        width: 100% !important;
+    }
+    
+    .calendar-table-container {
+        width: 75% !important; /* Fix the width of the table container */
+        overflow-x: auto !important; /* In case it gets too narrow */
     }
     
     .calendar-legend {
-        width: 20%;
-        max-width: 250px;
-        margin-top: 0;
-        margin-left: auto;
-        padding: 12px;
-        border: 1px solid #217346;
-        background-color: #f8f9fa;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        width: 20% !important;
+        flex-shrink: 0 !important; /* Prevent shrinking */
+        max-width: 250px !important;
+        margin-top: 0 !important;
+        padding: 12px !important;
+        border: 1px solid #217346 !important;
+        background-color: #f8f9fa !important;
+        border-radius: 5px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
     }
     
-    /* Print layout for calendar with legend */
-    .print-calendar-with-legend {
-        display: flex;
-        flex-direction: row;
-        gap: 20px;
-        align-items: flex-start;
+    /* Header styling */
+    .calendar-table thead th {
+        background-color: #d9ead3 !important; /* Excel header green */
+        color: #215732 !important;
+        font-weight: bold !important;
+        padding: 8px 5px !important;
+        border-bottom: 3px solid #217346 !important;
+        text-align: center !important;
     }
     
-    .print-calendar-legend {
-        width: 20%;
-        max-width: 180px;
-        margin-top: 0;
-        padding: 10px;
-        border: 1px solid #217346;
-        background-color: #f8f9fa;
-        border-radius: 5px;
+    /* Cell content styling */
+    .calendar-day {
+        min-height: 90px !important; /* Minimum height */
+        height: 100px !important; /* Fixed minimum height for consistency */
     }
     
-    /* Enhanced table borders */
-    .calendar-table th, .calendar-table td {
-        border: 2px solid #b6d7a8; /* Thicker borders for better visibility */
-        text-align: center;
-        vertical-align: top;
-        padding: 4px;
-        width: 14.28%; /* Equal width for each day (100% ÷ 7) */
+    .calendar-date {
+        font-weight: bold !important;
+        text-align: right !important;
+        margin-bottom: 5px !important;
+        font-size: 0.9rem !important;
+        color: #215732 !important;
     }
     
-    .calendar-table th {
-        background-color: #d9ead3;
-        color: #215732;
-        font-weight: bold;
-        padding: 10px 5px;
-        border-bottom: 3px solid #217346; /* Extra thick bottom border for headers */
-    }
-    
-    /* Excel-style formatting for web view */
-    .excel-style-table {
-        border: 3px solid #217346; /* Thicker outer border */
-    }
-    
-    .excel-style-table tr {
-        border-bottom: 2px solid #b6d7a8; /* Make row separators clearer */
-    }
-    
-    .excel-style-table th {
-        border-right: 2px solid #217346; /* Stronger column separators in header */
-    }
-    
-    .excel-style-table td {
-        border: 2px solid #b6d7a8;
-        background-color: #ffffff;
+    .calendar-entries {
+        font-size: 0.8rem !important;
+        text-align: left !important;
+        max-height: 70px !important;
+        overflow-y: auto !important;
     }
     
     /* Legend styling */
     .legend-title {
-        font-size: 1rem;
-        font-weight: bold;
-        margin-bottom: 12px;
-        color: #215732;
-        border-bottom: 1px solid #217346;
-        padding-bottom: 5px;
+        font-size: 1rem !important;
+        font-weight: bold !important;
+        margin-bottom: 12px !important;
+        color: #215732 !important;
+        border-bottom: 1px solid #217346 !important;
+        padding-bottom: 5px !important;
     }
     
     .legend-items {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
     }
     
     .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
     }
     
     .legend-color {
-        width: 16px;
-        height: 16px;
-        border-radius: 3px;
-        display: inline-block;
-        border: 1px solid rgba(0,0,0,0.2);
+        width: 16px !important;
+        height: 16px !important;
+        border-radius: 3px !important;
+        display: inline-block !important;
+        border: 1px solid rgba(0,0,0,0.2) !important;
     }
     
-    /* Default color for general tasks */
+    /* Color coding for tasks */
     .legend-color, [data-task-type="general"] {
-        background-color: #e2f0d9;
-        border-left-color: #217346;
+        background-color: #e2f0d9 !important;
+        border-left-color: #217346 !important;
     }
     
-    /* Generate colors for different task categories */
     .legend-color.category-preventative, [data-task-type="preventative"] {
-        background-color: #c6e0b4;
-        border-left-color: #548235;
+        background-color: #c6e0b4 !important;
+        border-left-color: #548235 !important;
     }
     
     .legend-color.category-scheduled, [data-task-type="scheduled"] {
-        background-color: #b4c7e7;
-        border-left-color: #2f5597;
+        background-color: #b4c7e7 !important;
+        border-left-color: #2f5597 !important;
     }
     
     .legend-color.category-emergency, [data-task-type="emergency"] {
-        background-color: #f8cbad;
-        border-left-color: #c65911;
+        background-color: #f8cbad !important;
+        border-left-color: #c65911 !important;
     }
     
     .legend-color.category-inspection, [data-task-type="inspection"] {
-        background-color: #fff2cc;
-        border-left-color: #bf9000;
+        background-color: #fff2cc !important;
+        border-left-color: #bf9000 !important;
     }
     
     .legend-color.category-repair, [data-task-type="repair"] {
-        background-color: #d9d9d9;
-        border-left-color: #7f7f7f;
+        background-color: #d9d9d9 !important;
+        border-left-color: #7f7f7f !important;
     }
     
     .legend-color.today-indicator, .today {
-        background-color: #ffeb9c;
-        border: 1px solid #9c6500;
+        background-color: #ffeb9c !important;
+        border: 1px solid #9c6500 !important;
     }
     
     .legend-text {
-        font-size: 0.85rem;
-        color: #333;
-    }
-    
-    .calendar-day {
-        min-height: 100px;
-        position: relative;
-        height: 100px; /* Fixed height for consistency */
-        transition: background-color 0.2s;
-    }
-    
-    .calendar-day:hover {
-        background-color: #f0f9eb; /* Subtle highlight on hover */
-    }
-    
-    .calendar-date {
-        font-weight: bold;
-        text-align: right;
-        margin-bottom: 4px;
-        font-size: 0.85rem;
-        color: #215732;
-    }
-    
-    .calendar-entries {
-        font-size: 0.75rem;
-        text-align: left;
-        max-height: 70px;
-        overflow-y: auto;
-    }
-    
-    /* Style the scrollbar */
-    .calendar-entries::-webkit-scrollbar {
-        width: 5px;
-    }
-    
-    .calendar-entries::-webkit-scrollbar-track {
-        background: #f1f1f1;
-    }
-    
-    .calendar-entries::-webkit-scrollbar-thumb {
-        background: #b6d7a8;
+        font-size: 0.85rem !important;
+        color: #333 !important;
     }
     
     .audit-entry {
-        margin-bottom: 4px;
-        padding: 4px;
-        background-color: #e2f0d9;
-        border-radius: 3px;
-        border-left: 3px solid #217346;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        margin-bottom: 5px !important;
+        padding: 4px !important;
+        background-color: #e2f0d9 !important;
+        border-radius: 3px !important;
+        border-left: 3px solid #217346 !important;
     }
     
     .audit-time {
-        font-size: 0.7rem;
-        color: #595959;
-        font-weight: 500;
+        font-size: 0.7rem !important;
+        color: #595959 !important;
+        font-weight: bold !important;
     }
     
     .audit-task {
-        font-weight: 600;
-        color: #215732;
+        font-weight: 600 !important;
+        color: #215732 !important;
     }
     
     .audit-user {
-        font-size: 0.7rem;
-        font-style: italic;
-        color: #595959;
+        font-size: 0.7rem !important;
+        font-style: italic !important;
+        color: #595959 !important;
     }
     
     .today {
-        background-color: #ffeb9c !important; /* Brighter yellow for today */
-        box-shadow: inset 0 0 5px rgba(156, 101, 0, 0.3);
+        background-color: #ffeb9c !important;
+        box-shadow: inset 0 0 5px rgba(156, 101, 0, 0.3) !important;
     }
     
-    .machine-title {
-        font-size: 1.25rem;
-        font-weight: bold;
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid #217346;
-        color: #215732;
-    }
-    
-    .no-data {
-        text-align: center;
-        padding: 2rem;
-        font-style: italic;
-        color: #6c757d;
-        border: 1px dashed #dee2e6;
-        border-radius: 5px;
-        margin: 1rem 0;
-    }
-    
-    /* Responsive adjustments for smaller screens */
+    /* Responsive behavior for small screens */
     @media (max-width: 992px) {
         .calendar-with-legend {
-            flex-direction: column;
+            flex-direction: column !important;
         }
         
-        .calendar-table,
+        .calendar-table-container,
         .calendar-legend {
-            width: 100%;
-            max-width: 100%;
-        }
-        
-        .legend-items {
-            flex-direction: row;
-            flex-wrap: wrap;
+            width: 100% !important;
+            max-width: 100% !important;
         }
     }
     
-    /* Print-specific styles */
+    /* Print styles */
     @media print {
-        /* Reset any visibility problems */
-        body * {
-            visibility: visible !important;
-        }
-        
-        .d-print-none {
-            display: none !important;
-            visibility: hidden !important;
-        }
-        
-        .d-none.d-print-block {
-            display: block !important;
-            visibility: visible !important;
-        }
-        
-        /* Excel-like calendar table styles */
+        /* Common styles for printing */
         .excel-calendar {
-            width: 80% !important;
+            table-layout: fixed !important;
+            width: 100% !important;
             border-collapse: collapse !important;
-            border: 2px solid #217346 !important; /* Excel green border */
-            background: #fff !important;
-            page-break-inside: avoid !important;
+            border: 2px solid #217346 !important;
         }
         
         .excel-calendar th, .excel-calendar td {
-            border: 1px solid #b6d7a8 !important;
-            text-align: center !important;
-            vertical-align: top !important;
-            padding: 4px !important;
-        }
-        
-        .excel-calendar th {
-            background-color: #d9ead3 !important; /* Excel header green */
-            color: #215732 !important;
-            font-weight: bold !important;
-            border-bottom: 2px solid #217346 !important;
-        }
-        
-        .excel-calendar .calendar-date {
-            font-weight: bold !important;
-            color: #215732 !important;
-            text-align: right !important;
-            font-size: 10pt !important;
-            margin-bottom: 2px !important;
-        }
-        
-        .excel-calendar .calendar-entries {
-            font-size: 8pt !important;
-        }
-        
-        .excel-calendar .audit-entry {
-            margin: 2px 0 !important;
-            padding: 2px 4px !important;
-            background-color: #e2f0d9 !important;
-            border-left: 2px solid #217346 !important;
-        }
-        
-        .excel-calendar .today {
-            background-color: #fff2cc !important;
-        }
-        
-        /* Print legend styling */
-        .print-calendar-legend {
-            border: 1px solid #217346 !important;
-            padding: 8px !important;
-            width: 18% !important;
-            margin-left: 2% !important;
-        }
-        
-        .print-calendar-legend .legend-title {
-            font-size: 9pt !important;
-            margin-bottom: 5px !important;
-            padding-bottom: 3px !important;
-        }
-        
-        .print-calendar-legend .legend-item {
-            margin-bottom: 3px !important;
-        }
-        
-        .print-calendar-legend .legend-color {
-            width: 10px !important;
-            height: 10px !important;
-        }
-        
-        .print-calendar-legend .legend-text {
-            font-size: 8pt !important;
-        }
-        
-        /* Remove image/logo at top (if any) */
-        .company-header img, .company-logo { 
-            display: none !important; 
-        }
-        
-        /* Print-specific layout */
-        .print-header {
-            margin-bottom: 1.5rem !important;
-        }
-        
-        .company-info h1 {
-            font-size: 18pt !important;
-            margin-bottom: 0 !important;
-        }
-        
-        .company-info p {
-            font-size: 12pt !important;
-            color: #555 !important;
-        }
-        
-        .report-title h2 {
-            font-size: 16pt !important;
-            margin: 1rem 0 0.25rem 0 !important;
-        }
-        
-        .report-id {
-            font-size: 10pt !important;
-            color: #666 !important;
-        }
-        
-        .report-meta {
-            display: flex !important;
-            justify-content: space-between !important;
-            margin: 1rem 0 !important;
-        }
-        
-        .meta-table {
-            border-collapse: collapse !important;
-        }
-        
-        .meta-table th, .meta-table td {
-            padding: 2px 8px !important;
-            font-size: 9pt !important;
-            text-align: left !important;
-        }
-        
-        .meta-table th {
-            font-weight: bold !important;
-        }
-        
-        /* Page layout settings */
-        @page {
-            size: landscape !important;
-            margin: 0.4in !important;
-            margin-bottom: 0.6in !important;
-        }
-        
-        /* Forcible page break between each machine */
-        .machine-section {
-            page-break-after: always !important;
-            page-break-inside: avoid !important;
-            display: block !important;
-            width: 100% !important;
-            margin-bottom: 1.5in !important; /* Space for the certification */
-            position: relative !important;
-        }
-        
-        .machine-section:last-child {
-            page-break-after: auto !important;
-        }
-        
-        /* Certification footer at bottom of each page */
-        .certification-footer {
-            position: fixed !important;
-            bottom: 0.5in !important;
-            left: 0.4in !important;
-            right: 0.4in !important;
-            font-size: 8pt !important;
-            text-align: center !important;
-            border-top: 1px solid #217346 !important;
-            padding: 10px 0 !important;
-            font-style: italic !important;
-            color: #215732 !important;
-        }
-        
-        /* Adjust parent containers */
-        .content-container, .container, .container-fluid, .row, .col-12 {
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        
-        /* Fix navbar and sidebar visibility in print */
-        nav, .sidebar {
-            display: none !important;
+            width: 14.2857% !important;
+            border: 2px solid #b6d7a8 !important;
         }
     }
 </style>
