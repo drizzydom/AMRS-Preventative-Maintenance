@@ -482,359 +482,376 @@
     
     /* Professional Print Styling with Calendar Layout */
     @media print {
+        /* Force landscape orientation */
         @page {
-            size: letter landscape;  /* Changed to landscape for better calendar view */
-            margin: 0.4in;
+            size: landscape !important;
+            margin: 0.4in !important;
         }
         
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 10pt;  /* Reduced font size for compactness */
-            line-height: 1.3;
-            color: #000;
-            background: #fff;
-            margin: 0;
-            padding: 0;
+        /* Reset body styles */
+        html, body {
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 10pt !important;
+            line-height: 1.3 !important;
+            color: #000 !important;
+            background: #fff !important;
+            display: block !important;
+            position: static !important; 
         }
         
-        /* Override base.html print styles to remove sidebar and header */
-        header, .sidebar, .sidebar-container, .footer {
+        /* Aggressively hide page elements */
+        header, .navbar, nav, .sidebar, .sidebar-container, .sidebar-nav, .footer,
+        .d-print-none, .page-header, #hamburger-btn, .sidebar-toggle-btn,
+        .centered-layout > .row > .col-md-auto {
             display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            position: absolute !important; 
+            left: -9999px !important;
+            visibility: hidden !important;
+            overflow: hidden !important;
         }
         
-        /* Full width content when printing */
-        .content-container {
-            margin-left: 0 !important;
+        /* Force full page width for content */
+        .content-container, .centered-content-col, .container-fluid, .row, .col,
+        .col-12, .centered-layout, .page-content {
+            display: block !important;
             width: 100% !important;
             max-width: 100% !important;
-        }
-        
-        /* Hide screen-only elements */
-        .d-print-none {
-            display: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            margin-left: 0 !important;
+            left: 0 !important;
+            position: static !important;
         }
         
         /* Show print-only elements */
         .d-none.d-print-block {
             display: block !important;
+            width: 100% !important;
         }
         
         /* Company Header */
         .print-header {
-            margin-bottom: 15px;
+            margin-bottom: 15px !important;
+            display: block !important;
         }
         
         .company-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #2c3e50;
-            padding-bottom: 8px;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            margin-bottom: 15px !important;
+            border-bottom: 2px solid #2c3e50 !important;
+            padding-bottom: 8px !important;
         }
         
         .company-logo {
-            height: 50px;
-            width: auto;
+            height: 50px !important;
+            width: auto !important;
         }
         
         .company-info {
-            text-align: right;
+            text-align: right !important;
         }
         
         .company-info h1 {
-            font-size: 16pt;
-            font-weight: bold;
-            margin: 0;
-            color: #2c3e50;
+            font-size: 16pt !important;
+            font-weight: bold !important;
+            margin: 0 !important;
+            color: #2c3e50 !important;
         }
         
         .company-info p {
-            font-size: 10pt;
-            margin: 0;
-            color: #7f8c8d;
+            font-size: 10pt !important;
+            margin: 0 !important;
+            color: #7f8c8d !important;
         }
         
         /* Report Title */
         .report-title {
-            text-align: center;
-            margin-bottom: 15px;
-            position: relative;
+            text-align: center !important;
+            margin-bottom: 15px !important;
+            position: relative !important;
         }
         
         .report-title h2 {
-            font-size: 14pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin: 0;
-            padding: 8px 0;
-            color: #2c3e50;
-            border-bottom: 1px solid #bdc3c7;
-            border-top: 1px solid #bdc3c7;
+            font-size: 14pt !important;
+            font-weight: bold !important;
+            text-transform: uppercase !important;
+            margin: 0 !important;
+            padding: 8px 0 !important;
+            color: #2c3e50 !important;
+            border-bottom: 1px solid #bdc3c7 !important;
+            border-top: 1px solid #bdc3c7 !important;
         }
         
         .report-id {
-            position: absolute;
-            top: 0;
-            right: 0;
-            font-size: 9pt;
-            color: #7f8c8d;
+            position: absolute !important;
+            top: 0 !important;
+            right: 0 !important;
+            font-size: 9pt !important;
+            color: #7f8c8d !important;
         }
         
         /* Report Meta Information */
         .report-meta {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            font-size: 9pt;
+            display: flex !important;
+            justify-content: space-between !important;
+            margin-bottom: 20px !important;
+            font-size: 9pt !important;
         }
         
         .report-section {
-            width: 48%;
+            width: 48% !important;
         }
         
         .meta-table {
-            width: 100%;
-            border-collapse: collapse;
+            width: 100% !important;
+            border-collapse: collapse !important;
         }
         
         .meta-table th {
-            text-align: left;
-            padding: 4px;
-            font-weight: bold;
-            width: 35%;
-            vertical-align: top;
+            text-align: left !important;
+            padding: 4px !important;
+            font-weight: bold !important;
+            width: 35% !important;
+            vertical-align: top !important;
         }
         
         .meta-table td {
-            padding: 4px;
-            border-bottom: 1px dotted #ddd;
+            padding: 4px !important;
+            border-bottom: 1px dotted #ddd !important;
         }
         
         /* Executive Summary - More compact */
         .executive-summary {
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            margin-bottom: 15px !important;
+            padding: 10px !important;
+            background-color: #f8f9fa !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            display: block !important;
         }
         
         .executive-summary h3 {
-            font-size: 12pt;
-            margin: 0 0 8px 0;
-            color: #2c3e50;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 4px;
+            font-size: 12pt !important;
+            margin: 0 0 8px 0 !important;
+            color: #2c3e50 !important;
+            border-bottom: 1px solid #ddd !important;
+            padding-bottom: 4px !important;
         }
         
         .executive-summary p {
-            margin: 0 0 8px 0;
-            font-size: 9pt;
+            margin: 0 0 8px 0 !important;
+            font-size: 9pt !important;
         }
         
         .summary-metrics {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 10px;
+            display: flex !important;
+            justify-content: space-around !important;
+            margin-top: 10px !important;
         }
         
         .metric-box {
-            text-align: center;
-            padding: 8px;
-            background-color: #fff;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            width: 30%;
+            text-align: center !important;
+            padding: 8px !important;
+            background-color: #fff !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            width: 30% !important;
         }
         
         .metric-value {
-            display: block;
-            font-size: 18pt;
-            font-weight: bold;
-            color: #16a085;
+            display: block !important;
+            font-size: 18pt !important;
+            font-weight: bold !important;
+            color: #16a085 !important;
         }
         
         .metric-label {
-            display: block;
-            font-size: 8pt;
-            color: #7f8c8d;
-            text-transform: uppercase;
+            display: block !important;
+            font-size: 8pt !important;
+            color: #7f8c8d !important;
+            text-transform: uppercase !important;
         }
         
         /* Calendar Layout Styling */
         .report-content {
-            margin-bottom: 20px;
+            margin-bottom: 20px !important;
+            display: block !important;
+            page-break-before: avoid !important;
         }
         
         .report-content h3 {
-            font-size: 12pt;
-            margin: 0 0 10px 0;
-            color: #2c3e50;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 5px;
-            text-align: center;
+            font-size: 12pt !important;
+            margin: 0 0 10px 0 !important;
+            color: #2c3e50 !important;
+            border-bottom: 1px solid #ddd !important;
+            padding-bottom: 5px !important;
+            text-align: center !important;
         }
         
         .machine-section {
-            margin-bottom: 20px;
-            break-inside: avoid;
+            margin-bottom: 20px !important;
+            page-break-inside: avoid !important;
+            display: block !important;
         }
         
         .machine-title {
-            font-size: 11pt;
-            margin: 0 0 8px 0;
-            padding: 4px 8px;
-            background-color: #34495e;
-            color: #fff;
-            border-radius: 4px;
+            font-size: 11pt !important;
+            margin: 0 0 8px 0 !important;
+            padding: 4px 8px !important;
+            background-color: #34495e !important;
+            color: #fff !important;
+            border-radius: 4px !important;
         }
         
         .calendar-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 15px;
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 8px !important;
+            margin-bottom: 15px !important;
         }
         
         .calendar-day {
-            width: calc(33.33% - 6px); /* 3 days per row */
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            overflow: hidden;
-            background-color: #fff;
+            border: 1px solid #ddd !important;
+            border-radius: 4px !important;
+            overflow: hidden !important;
+            background-color: #fff !important;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
         }
         
         .calendar-date {
-            background-color: #ecf0f1;
-            padding: 3px 6px;
-            font-weight: bold;
-            font-size: 9pt;
-            border-bottom: 1px solid #ddd;
+            background-color: #ecf0f1 !important;
+            padding: 3px 6px !important;
+            font-weight: bold !important;
+            font-size: 9pt !important;
+            border-bottom: 1px solid #ddd !important;
         }
         
         .calendar-entries {
-            padding: 0;
-            max-height: 180px;
-            overflow: hidden;
+            padding: 0 !important;
+            max-height: 180px !important;
+            overflow: hidden !important;
         }
         
         .audit-entry {
-            padding: 5px;
-            border-bottom: 1px dotted #ddd;
-            font-size: 8.5pt;
+            padding: 5px !important;
+            border-bottom: 1px dotted #ddd !important;
+            font-size: 8.5pt !important;
         }
         
         .audit-entry:last-child {
-            border-bottom: none;
+            border-bottom: none !important;
         }
         
         .audit-time {
-            font-weight: bold;
-            color: #3498db;
+            font-weight: bold !important;
+            color: #3498db !important;
         }
         
         .audit-task {
-            font-weight: bold;
-            margin: 2px 0;
+            font-weight: bold !important;
+            margin: 2px 0 !important;
         }
         
         .audit-user {
-            font-size: 8pt;
-            color: #7f8c8d;
+            font-size: 8pt !important;
+            color: #7f8c8d !important;
         }
         
         /* No Data Message */
         .no-data {
-            text-align: center;
-            padding: 20px;
-            margin: 15px 0;
-            border: 1px dashed #bdc3c7;
-            background-color: #f8f9fa;
+            text-align: center !important;
+            padding: 20px !important;
+            margin: 15px 0 !important;
+            border: 1px dashed #bdc3c7 !important;
+            background-color: #f8f9fa !important;
         }
         
         .no-data h3 {
-            font-size: 12pt;
-            color: #e74c3c;
-            margin: 0 0 8px 0;
+            font-size: 12pt !important;
+            color: #e74c3c !important;
+            margin: 0 0 8px 0 !important;
         }
         
         .no-data p {
-            color: #7f8c8d;
-            margin: 0;
+            color: #7f8c8d !important;
+            margin: 0 !important;
         }
         
         /* Certification Footer */
         .certification {
-            margin-top: 20px;
-            border-top: 1px solid #bdc3c7;
-            padding-top: 15px;
+            margin-top: 20px !important;
+            border-top: 1px solid #bdc3c7 !important;
+            padding-top: 15px !important;
+            page-break-before: auto !important;
+            page-break-inside: avoid !important;
+            display: block !important;
         }
         
         .certification h3 {
-            font-size: 11pt;
-            margin: 0 0 8px 0;
-            color: #2c3e50;
+            font-size: 11pt !important;
+            margin: 0 0 8px 0 !important;
+            color: #2c3e50 !important;
         }
         
         .certification p {
-            font-size: 8pt;
-            margin: 0 0 12px 0;
+            font-size: 8pt !important;
+            margin: 0 0 12px 0 !important;
         }
         
         .signatures {
-            display: flex;
-            justify-content: space-around;
-            margin: 20px 0;
+            display: flex !important;
+            justify-content: space-around !important;
+            margin: 20px 0 !important;
         }
         
         .signature-block {
-            width: 40%;
-            text-align: center;
+            width: 40% !important;
+            text-align: center !important;
         }
         
         .signature-line {
-            border-bottom: 1px solid #000;
-            height: 30px;
-            margin-bottom: 4px;
+            border-bottom: 1px solid #000 !important;
+            height: 30px !important;
+            margin-bottom: 4px !important;
         }
         
         .signature-block p {
-            margin: 0;
-            font-size: 8pt;
+            margin: 0 !important;
+            font-size: 8pt !important;
         }
         
         .document-footer {
-            margin-top: 20px;
-            text-align: center;
-            font-size: 7pt;
-            color: #7f8c8d;
-            border-top: 1px solid #bdc3c7;
-            padding-top: 8px;
+            margin-top: 20px !important;
+            text-align: center !important;
+            font-size: 7pt !important;
+            color: #7f8c8d !important;
+            border-top: 1px solid #bdc3c7 !important;
+            padding-top: 8px !important;
         }
         
         .document-footer p {
-            margin: 2px 0;
+            margin: 2px 0 !important;
         }
         
         .page-number {
-            margin-top: 5px;
+            margin-top: 5px !important;
         }
         
-        /* Adjust for landscape page breaks */
-        @page {
-            counter-increment: page;
-        }
-        
-        /* Media query for small landscape pages */
-        @media print and (max-height: 8.5in) {
-            .calendar-day {
-                width: calc(50% - 4px); /* 2 days per row on smaller pages */
-            }
-            
-            .calendar-entries {
-                max-height: 150px;
-            }
+        /* Force page breaks between machine sections */
+        .machine-section + .machine-section {
+            page-break-before: always !important;
         }
     }
 </style>
@@ -842,18 +859,32 @@
 <script>
     // Script to handle page numbering when printing
     window.onbeforeprint = function() {
-        // Create page counter style elements - will only run in print preview
+        // Create page counter style elements
         var style = document.createElement('style');
         style.type = 'text/css';
         style.innerHTML = `
+            @page { size: landscape; }
             .page::after {
                 content: counter(page);
             }
             .pages::after {
                 content: counter(pages);
             }
+            
+            /* Fix display of calendar grid for print */
+            .calendar-grid {
+                display: grid !important;
+                grid-template-columns: repeat(3, 1fr) !important;
+            }
         `;
         document.head.appendChild(style);
+        
+        // Fix flex display issues in WebKit browsers
+        var calendarGrids = document.querySelectorAll('.calendar-grid');
+        calendarGrids.forEach(function(grid) {
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        });
     };
 </script>
 {% endblock %}
