@@ -172,6 +172,18 @@
                                                                  data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"></div>
                                                         {% endfor %}
                                                     {% endif %}
+                                                    {% for task in all_tasks_per_machine[machine.id] %}
+                                                      {% if interval_bars[machine.id][task.id] %}
+                                                        {% for bar in interval_bars[machine.id][task.id] %}
+                                                          {% set bar_start = bar[0] %}
+                                                          {% set bar_end = bar[1] %}
+                                                          {% set day_date_obj = datetime(current_year, current_month, day) %}
+                                                          {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
+                                                            <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
+                                                          {% endif %}
+                                                        {% endfor %}
+                                                      {% endif %}
+                                                    {% endfor %}
                                                 </div>
                                                 {% endif %}
                                             </td>
@@ -184,7 +196,7 @@
                                 <div class="calendar-legend">
                                     <h6 class="legend-title">Legend</h6>
                                     <div class="legend-items">
-                                        {% for task in unique_tasks %}
+                                        {% for task in all_tasks_per_machine[machine.id] %}
                                         <div class="legend-item">
                                             <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}"></span>
                                             <span class="legend-text">{{ task.name }}</span>
@@ -269,6 +281,18 @@
                                                                      title="{{ task.name }}"></div>
                                                             {% endfor %}
                                                         {% endif %}
+                                                        {% for task in all_tasks_per_machine[machine.id] %}
+                                                          {% if interval_bars[machine.id][task.id] %}
+                                                            {% for bar in interval_bars[machine.id][task.id] %}
+                                                              {% set bar_start = bar[0] %}
+                                                              {% set bar_end = bar[1] %}
+                                                              {% set day_date_obj = datetime(current_year, current_month, day) %}
+                                                              {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
+                                                                <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
+                                                              {% endif %}
+                                                            {% endfor %}
+                                                          {% endif %}
+                                                        {% endfor %}
                                                     </div>
                                                     {% endif %}
                                                 </td>
@@ -283,7 +307,7 @@
                                     <div class="calendar-legend">
                                         <h6 class="legend-title">Task Legend</h6>
                                         <div class="legend-items">
-                                            {% for task in unique_tasks %}
+                                            {% for task in all_tasks_per_machine[machine.id] %}
                                             <div class="legend-item">
                                                 <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}"></span>
                                                 <span class="legend-text">{{ task.name }}</span>
@@ -395,39 +419,58 @@
         cursor: pointer;
     }
     
+    .interval-bar {
+        height: 8px;
+        border-radius: 4px;
+        margin: 2px 0;
+        width: 100%;
+        opacity: 0.4;
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        z-index: 1;
+    }
+    
     /* Category-specific colors */
     .task-marker[data-category="electrical"], 
-    .legend-marker.category-electrical {
+    .legend-marker.category-electrical,
+    .interval-bar.category-electrical {
         background-color: #dc3545;
     }
     
     .task-marker[data-category="mechanical"], 
-    .legend-marker.category-mechanical {
+    .legend-marker.category-mechanical,
+    .interval-bar.category-mechanical {
         background-color: #0d6efd;
     }
     
     .task-marker[data-category="hydraulic"], 
-    .legend-marker.category-hydraulic {
+    .legend-marker.category-hydraulic,
+    .interval-bar.category-hydraulic {
         background-color: #fd7e14;
     }
     
     .task-marker[data-category="pneumatic"], 
-    .legend-marker.category-pneumatic {
+    .legend-marker.category-pneumatic,
+    .interval-bar.category-pneumatic {
         background-color: #6f42c1;
     }
     
     .task-marker[data-category="general"], 
-    .legend-marker.category-general {
+    .legend-marker.category-general,
+    .interval-bar.category-general {
         background-color: #198754;
     }
     
     .task-marker[data-category="electronic"], 
-    .legend-marker.category-electronic {
+    .legend-marker.category-electronic,
+    .interval-bar.category-electronic {
         background-color: #20c997;
     }
     
     .task-marker[data-category="structural"], 
-    .legend-marker.category-structural {
+    .legend-marker.category-structural,
+    .interval-bar.category-structural {
         background-color: #6c757d;
     }
     

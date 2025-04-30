@@ -1247,6 +1247,36 @@ def audit_history_page():
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
     unique_tasks = [audit_tasks[tid] for tid in {completion.audit_task_id for completion in completions if completion.audit_task_id in audit_tasks}]
 
+    # --- Build all_tasks_per_machine: {machine_id: [AuditTask, ...]} ---
+    all_tasks_per_machine = {}
+    for machine in available_machines:
+        all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
+
+    # --- Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}} ---
+    from collections import defaultdict
+    interval_bars = defaultdict(lambda: defaultdict(list))
+    for machine in available_machines:
+        for task in all_tasks_per_machine[machine.id]:
+            # Only for interval-based tasks (not daily)
+            if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
+                # Determine interval length
+                if task.interval == 'weekly':
+                    interval_days = 7
+                elif task.interval == 'monthly':
+                    interval_days = 30
+                elif task.interval == 'custom' and task.custom_interval_days:
+                    interval_days = task.custom_interval_days
+                else:
+                    continue
+                # Find the first interval start <= last_day
+                # For simplicity, assume the interval starts from the first day of the month
+                current = first_day
+                while current <= last_day:
+                    start = current
+                    end = min(current + timedelta(days=interval_days - 1), last_day)
+                    interval_bars[machine.id][task.id].append((start, end))
+                    current = end + timedelta(days=1)
+
     machines_dict = {machine.id: machine for machine in available_machines}
     users = {user.id: user for user in User.query.all()}
 
@@ -1265,7 +1295,9 @@ def audit_history_page():
         selected_machine=selected_machine,
         available_months=available_months,
         available_machines=available_machines,
-        selected_month=selected_month
+        selected_month=selected_month,
+        all_tasks_per_machine=all_tasks_per_machine,
+        interval_bars=interval_bars
     )
 
 @app.route('/audit-history/pdf')
