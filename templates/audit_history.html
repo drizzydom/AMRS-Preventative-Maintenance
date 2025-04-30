@@ -473,6 +473,61 @@
             updateMachines(siteDropdown.value);
         }
     });
+
+    // Enhanced print handling
+    window.onbeforeprint = function() {
+        // Force page to landscape orientation
+        const forceLandscape = document.createElement('style');
+        forceLandscape.type = 'text/css';
+        forceLandscape.innerHTML = `
+            @page { size: landscape !important; margin: 0.4in !important; }
+            
+            .page::after { content: counter(page); }
+            .pages::after { content: counter(pages); }
+            
+            /* Force grid display in WebKit browsers */
+            .calendar-grid {
+                display: grid !important;
+                grid-template-columns: repeat(3, 1fr) !important;
+                width: 100% !important;
+            }
+            
+            /* Ensure color backgrounds print */
+            .calendar-date, .machine-title, .executive-summary {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            
+            /* Last minute fixes for print mode */
+            @media print {
+                body * {
+                    visibility: hidden !important;
+                }
+                
+                .d-none.d-print-block, 
+                .d-none.d-print-block * {
+                    visibility: visible !important;
+                    display: block !important;
+                }
+                
+                html body .content-container {
+                    margin-left: 0 !important;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+            }
+        `;
+        document.head.appendChild(forceLandscape);
+        
+        // Make specific adjustments to DOM elements for printing
+        const calendarGrids = document.querySelectorAll('.calendar-grid');
+        calendarGrids.forEach(function(grid) {
+            grid.style.setProperty('display', 'grid', 'important');
+            grid.style.setProperty('grid-template-columns', 'repeat(3, 1fr)', 'important');
+            grid.style.setProperty('width', '100%', 'important');
+        });
+    };
 </script>
 {% endblock %}
 
@@ -631,7 +686,7 @@
             border-bottom: 1px dotted #ddd !important;
         }
         
-        /* Executive Summary - More compact */
+        /* Executive Summary */
         .executive-summary {
             margin-bottom: 15px !important;
             padding: 10px !important;
@@ -856,35 +911,4 @@
     }
 </style>
 
-<script>
-    // Script to handle page numbering when printing
-    window.onbeforeprint = function() {
-        // Create page counter style elements
-        var style = document.createElement('style');
-        style.type = 'text/css';
-        style.innerHTML = `
-            @page { size: landscape; }
-            .page::after {
-                content: counter(page);
-            }
-            .pages::after {
-                content: counter(pages);
-            }
-            
-            /* Fix display of calendar grid for print */
-            .calendar-grid {
-                display: grid !important;
-                grid-template-columns: repeat(3, 1fr) !important;
-            }
-        `;
-        document.head.appendChild(style);
-        
-        // Fix flex display issues in WebKit browsers
-        var calendarGrids = document.querySelectorAll('.calendar-grid');
-        calendarGrids.forEach(function(grid) {
-            grid.style.display = 'grid';
-            grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-        });
-    };
-</script>
 {% endblock %}
