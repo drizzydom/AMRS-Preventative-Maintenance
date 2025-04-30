@@ -179,7 +179,14 @@
                     
                     {% for date_str in sorted_dates %}
                     <div class="audit-date-section">
-                        <h4>{{ date_str|datetime('Y-m-d', '%B %d, %Y') }}</h4>
+                        <h4>
+                        {% set date_obj = date_str.split('-') %}
+                        {% if date_obj|length == 3 %}
+                            {{ date_obj[1] }}/{{ date_obj[2] }}/{{ date_obj[0] }}
+                        {% else %}
+                            {{ date_str }}
+                        {% endif %}
+                        </h4>
                         <table class="audit-table">
                             <thead>
                                 <tr>
