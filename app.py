@@ -1154,7 +1154,8 @@ def audit_history_page():
     start_year = 2025
     available_months = []
     y, m = start_year, start_month
-    while (y < today.year) or (y == today.year and m <= today.month):
+    end_year, end_month = today.year, today.month
+    while (y < end_year) or (y == end_year and m <= end_month):
         value = f"{y:04d}-{m:02d}"
         display = f"{calendar.month_name[m]} {y}"
         available_months.append({'value': value, 'display': display})
@@ -1162,6 +1163,9 @@ def audit_history_page():
         if m > 12:
             m = 1
             y += 1
+    # Ensure start month is always included
+    if not any(month['value'] == f'{start_year:04d}-{start_month:02d}' for month in available_months):
+        available_months.append({'value': f'{start_year:04d}-{start_month:02d}', 'display': f'{calendar.month_name[start_month]} {start_year}'})
     available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
     selected_month = f"{year:04d}-{month:02d}"
 
