@@ -136,42 +136,44 @@
                     {% if machine.id in machine_data %}
                         {% set date_range = get_date_range(start_date, end_date) %}
                         <!-- Begin Calendar View -->
-                        <div class="calendar-grid excel-calendar">
-                            <!-- Calendar Headers (Days of Week) -->
-                            <div class="calendar-row">
-                                <div class="calendar-heading">Sunday</div>
-                                <div class="calendar-heading">Monday</div>
-                                <div class="calendar-heading">Tuesday</div>
-                                <div class="calendar-heading">Wednesday</div>
-                                <div class="calendar-heading">Thursday</div>
-                                <div class="calendar-heading">Friday</div>
-                                <div class="calendar-heading">Saturday</div>
-                            </div>
-                            <!-- Calendar Days -->
-                            {% for week in get_calendar_weeks(start_date, end_date) %}
-                            <div class="calendar-row">
-                                {% for date in week %}
-                                    <div class="calendar-day{% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %} today{% endif %}">
-                                        {% if date %}
-                                            <div class="calendar-date">{{ date.day }}</div>
-                                            <div class="calendar-entries">
-                                                {% set date_str = date.strftime('%Y-%m-%d') %}
-                                                {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
-                                                    {% for audit in machine_data[machine.id][date_str] %}
-                                                        <div class="audit-entry">
-                                                            <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
-                                                            <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
-                                                            <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
-                                                        </div>
-                                                    {% endfor %}
-                                                {% endif %}
-                                            </div>
-                                        {% endif %}
-                                    </div>
+                        <table class="calendar-table excel-calendar">
+                            <thead>
+                                <tr>
+                                    <th class="calendar-heading">Sunday</th>
+                                    <th class="calendar-heading">Monday</th>
+                                    <th class="calendar-heading">Tuesday</th>
+                                    <th class="calendar-heading">Wednesday</th>
+                                    <th class="calendar-heading">Thursday</th>
+                                    <th class="calendar-heading">Friday</th>
+                                    <th class="calendar-heading">Saturday</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for week in get_calendar_weeks(start_date, end_date) %}
+                                <tr>
+                                    {% for date in week %}
+                                        <td class="calendar-day{% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %} today{% endif %}">
+                                            {% if date %}
+                                                <div class="calendar-date">{{ date.day }}</div>
+                                                <div class="calendar-entries">
+                                                    {% set date_str = date.strftime('%Y-%m-%d') %}
+                                                    {% if machine.id in machine_data and date_str in machine_data[machine.id] %}
+                                                        {% for audit in machine_data[machine.id][date_str] %}
+                                                            <div class="audit-entry">
+                                                                <div class="audit-time">{{ audit.completed_at.strftime('%H:%M') if audit.completed_at else '' }}</div>
+                                                                <div class="audit-task">{{ audit_tasks[audit.audit_task_id].name if audit.audit_task_id in audit_tasks else 'Unknown Task' }}</div>
+                                                                <div class="audit-user">{{ users[audit.completed_by].full_name if audit.completed_by in users else 'Unknown User' }}</div>
+                                                            </div>
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
                                 {% endfor %}
-                            </div>
-                            {% endfor %}
-                        </div>
+                            </tbody>
+                        </table>
                         <!-- End Calendar View -->
                     {% else %}
                         <div class="no-data">
@@ -203,23 +205,24 @@
                     <div class="card-body">
                         {% if machine.id in machine_data %}
                             {% set date_range = get_date_range(start_date, end_date) %}
-                            <!-- Begin Calendar View -->
-                            <div class="calendar-grid excel-style-calendar">
-                                <!-- Calendar Headers (Days of Week) -->
-                                <div class="calendar-row">
-                                    <div class="calendar-heading">Sunday</div>
-                                    <div class="calendar-heading">Monday</div>
-                                    <div class="calendar-heading">Tuesday</div>
-                                    <div class="calendar-heading">Wednesday</div>
-                                    <div class="calendar-heading">Thursday</div>
-                                    <div class="calendar-heading">Friday</div>
-                                    <div class="calendar-heading">Saturday</div>
-                                </div>
-                                <!-- Calendar Days -->
-                                {% for week in get_calendar_weeks(start_date, end_date) %}
-                                <div class="calendar-row">
-                                    {% for date in week %}
-                                        <div class="calendar-day{% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %} today{% endif %}">
+                            <!-- Begin Calendar View using TABLE instead of CSS Grid -->
+                            <table class="calendar-table excel-style-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sunday</th>
+                                        <th>Monday</th>
+                                        <th>Tuesday</th>
+                                        <th>Wednesday</th>
+                                        <th>Thursday</th>
+                                        <th>Friday</th>
+                                        <th>Saturday</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for week in get_calendar_weeks(start_date, end_date) %}
+                                    <tr>
+                                        {% for date in week %}
+                                        <td class="calendar-day {% if date and date.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
                                             {% if date %}
                                                 <div class="calendar-date">{{ date.day }}</div>
                                                 <div class="calendar-entries">
@@ -235,11 +238,12 @@
                                                     {% endif %}
                                                 </div>
                                             {% endif %}
-                                        </div>
+                                        </td>
+                                        {% endfor %}
+                                    </tr>
                                     {% endfor %}
-                                </div>
-                                {% endfor %}
-                            </div>
+                                </tbody>
+                            </table>
                             <!-- End Calendar View -->
                         {% else %}
                             <div class="no-data">
@@ -366,77 +370,58 @@
 {{ super() }}
 <style>
     /* Screen styles for calendar */
-    .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 2px;
+    .calendar-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    
+    .calendar-table th, .calendar-table td {
         border: 1px solid #dee2e6;
-        border-radius: 4px;
-        overflow: hidden;
-        width: 100%;
+        text-align: center;
+        vertical-align: top;
+        padding: 4px;
+        width: 14.28%; /* Equal width for each day (100% ÷ 7) */
     }
     
-    /* Excel-style calendar for web view */
-    .excel-style-calendar {
+    .calendar-table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+        padding: 8px 5px;
+    }
+    
+    /* Excel-style formatting for web view */
+    .excel-style-table {
         border: 2px solid #217346; /* Excel green border */
-        display: grid !important; /* Force grid display */
-        grid-template-columns: repeat(7, 1fr) !important; /* Force 7 columns */
     }
     
-    .excel-style-calendar .calendar-row {
-        display: contents !important;
-        width: 100%;
-    }
-    
-    .excel-style-calendar .calendar-heading {
+    .excel-style-table th {
         background-color: #d9ead3; /* Excel header green */
         color: #215732;
         border: 1px solid #217346;
-        padding: 10px 5px;
         font-weight: bold;
+        padding: 10px 5px;
     }
     
-    .excel-style-calendar .calendar-day {
+    .excel-style-table td {
         border: 1px solid #b6d7a8;
         background-color: #ffffff;
-        min-height: 100px;
-        height: auto;
-        overflow: visible;
     }
     
-    .excel-style-calendar .calendar-date {
-        color: #215732;
-        font-weight: bold;
-    }
-    
-    .excel-style-calendar .audit-entry {
+    .excel-style-table .audit-entry {
         background-color: #e2f0d9;
         border-left: 2px solid #217346;
         margin: 2px 0;
     }
     
-    .excel-style-calendar .today {
+    .excel-style-table .today {
         background-color: #fff2cc; /* Light yellow for today */
-    }
-    
-    .calendar-row {
-        display: contents;
-        width: 100%;
-    }
-    
-    .calendar-heading {
-        background-color: #f8f9fa;
-        font-weight: bold;
-        padding: 8px;
-        text-align: center;
-        border-bottom: 1px solid #dee2e6;
     }
     
     .calendar-day {
         min-height: 100px;
-        border: 1px solid #dee2e6;
-        padding: 4px;
         position: relative;
+        height: 100px; /* Fixed height for consistency */
     }
     
     .calendar-date {
@@ -448,6 +433,9 @@
     
     .calendar-entries {
         font-size: 0.75rem;
+        text-align: left;
+        max-height: 70px;
+        overflow-y: auto;
     }
     
     .audit-entry {
@@ -508,42 +496,26 @@
             visibility: visible !important;
         }
         
-        /* Excel-like calendar grid styles */
+        /* Excel-like calendar table styles */
         .excel-calendar {
-            display: table !important;
             width: 100% !important;
             border-collapse: collapse !important;
-            table-layout: fixed !important;
             border: 2px solid #217346 !important; /* Excel green border */
             background: #fff !important;
             page-break-inside: avoid !important;
         }
         
-        .excel-calendar .calendar-row {
-            display: table-row !important;
-            width: 100% !important;
+        .excel-calendar th, .excel-calendar td {
+            border: 1px solid #b6d7a8 !important;
+            text-align: center !important;
+            vertical-align: top !important;
+            padding: 4px !important;
         }
         
-        .excel-calendar .calendar-heading {
-            display: table-cell !important;
-            width: calc(100% / 7) !important;
-            font-weight: bold !important;
+        .excel-calendar th {
             background-color: #d9ead3 !important; /* Excel header green */
             color: #215732 !important;
-            border: 1px solid #217346 !important;
-            text-align: center !important;
-            font-size: 10pt !important;
-            padding: 6px 0 !important;
-        }
-        
-        .excel-calendar .calendar-day {
-            display: table-cell !important;
-            width: calc(100% / 7) !important;
-            min-height: 70px !important;
-            border: 1px solid #b6d7a8 !important;
-            vertical-align: top !important;
-            background: #fff !important;
-            padding: 4px !important;
+            font-weight: bold !important;
         }
         
         .excel-calendar .calendar-date {
