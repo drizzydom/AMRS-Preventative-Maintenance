@@ -204,7 +204,7 @@
                         {% if machine.id in machine_data %}
                             {% set date_range = get_date_range(start_date, end_date) %}
                             <!-- Begin Calendar View -->
-                            <div class="calendar-grid">
+                            <div class="calendar-grid excel-style-calendar">
                                 <!-- Calendar Headers (Days of Week) -->
                                 <div class="calendar-row">
                                     <div class="calendar-heading">Sunday</div>
@@ -373,6 +373,39 @@
         border: 1px solid #dee2e6;
         border-radius: 4px;
         overflow: hidden;
+    }
+    
+    /* Excel-style calendar for web view */
+    .excel-style-calendar {
+        border: 2px solid #217346; /* Excel green border */
+    }
+    
+    .excel-style-calendar .calendar-heading {
+        background-color: #d9ead3; /* Excel header green */
+        color: #215732;
+        border: 1px solid #217346;
+        padding: 10px 5px;
+        font-weight: bold;
+    }
+    
+    .excel-style-calendar .calendar-day {
+        border: 1px solid #b6d7a8;
+        background-color: #ffffff;
+    }
+    
+    .excel-style-calendar .calendar-date {
+        color: #215732;
+        font-weight: bold;
+    }
+    
+    .excel-style-calendar .audit-entry {
+        background-color: #e2f0d9;
+        border-left: 2px solid #217346;
+        margin: 2px 0;
+    }
+    
+    .excel-style-calendar .today {
+        background-color: #fff2cc; /* Light yellow for today */
     }
     
     .calendar-row {
