@@ -86,7 +86,7 @@
                 </div>
             </div>
 
-            <!-- Professional Print View (only visible when printing) -->
+            <!-- Enhanced Compact Print View (only visible when printing) -->
             <div class="d-none d-print-block">
                 <!-- Company Header -->
                 <div class="print-header">
@@ -172,92 +172,118 @@
                     </div>
                 </div>
 
-                <!-- Report Content -->
+                <!-- Calendar-like Machine-Organized Report Content -->
                 {% if sorted_dates %}
                 <div class="report-content">
-                    <h3>DETAILED AUDIT RECORDS</h3>
+                    <h3>CALENDAR VIEW BY MACHINE</h3>
                     
-                    {% for date_str in sorted_dates %}
-                    <div class="audit-date-section">
-                        <h4>
-                        {% set date_obj = date_str.split('-') %}
-                        {% if date_obj|length == 3 %}
-                            {{ date_obj[1] }}/{{ date_obj[2] }}/{{ date_obj[0] }}
-                        {% else %}
-                            {{ date_str }}
-                        {% endif %}
-                        </h4>
-                        <table class="audit-table">
-                            <thead>
-                                <tr>
-                                    <th>Task ID</th>
-                                    <th>Task Name</th>
-                                    <th>Machine</th>
-                                    <th>Site</th>
-                                    <th>Completed By</th>
-                                    <th>Time</th>
-                                    <th>Frequency</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for completion in grouped_completions[date_str] %}
-                                <tr>
-                                    <td class="task-id">AT-{{ completion.audit_task_id }}</td>
-                                    <td>
-                                        {% if audit_tasks.get(completion.audit_task_id) %}
-                                            {{ audit_tasks.get(completion.audit_task_id).name }}
+                    {% if selected_machine %}
+                        <!-- Single machine view - organize by date -->
+                        {% set machine_name = available_machines|selectattr('id', 'eq', selected_machine)|map(attribute='name')|list|first %}
+                        <div class="machine-section">
+                            <h4 class="machine-title">{{ machine_name }}</h4>
+                            <div class="calendar-grid">
+                                {% for date_str in sorted_dates %}
+                                {% set date_obj = date_str.split('-') %}
+                                <div class="calendar-day">
+                                    <div class="calendar-date">
+                                        {% if date_obj|length == 3 %}
+                                            {{ date_obj[1] }}/{{ date_obj[2] }}/{{ date_obj[0] }}
                                         {% else %}
-                                            Unknown Task
+                                            {{ date_str }}
                                         {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if machines.get(completion.machine_id) %}
-                                            {{ machines.get(completion.machine_id).name }}
-                                        {% else %}
-                                            Unknown Machine
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if audit_tasks.get(completion.audit_task_id) %}
-                                            {% set task = audit_tasks.get(completion.audit_task_id) %}
-                                            {% for site in sites if site.id == task.site_id %}
-                                                {{ site.name }}
-                                            {% endfor %}
-                                        {% else %}
-                                            Unknown Site
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if users.get(completion.completed_by) %}
-                                            {{ users.get(completion.completed_by).full_name or users.get(completion.completed_by).username }}
-                                        {% else %}
-                                            Unknown User
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if completion.completed_at %}
-                                            {{ completion.completed_at.strftime('%H:%M') }}
-                                        {% else %}
-                                            --
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if audit_tasks.get(completion.audit_task_id) %}
-                                            {% if audit_tasks.get(completion.audit_task_id).interval == 'custom' %}
-                                                Custom ({{ audit_tasks.get(completion.audit_task_id).custom_interval_days }} days)
-                                            {% else %}
-                                                {{ audit_tasks.get(completion.audit_task_id).interval|capitalize }}
+                                    </div>
+                                    <div class="calendar-entries">
+                                        {% for completion in grouped_completions[date_str] %}
+                                            {% if completion.machine_id == selected_machine %}
+                                            <div class="audit-entry">
+                                                <div class="audit-time">{{ completion.completed_at.strftime('%H:%M') if completion.completed_at else '--' }}</div>
+                                                <div class="audit-task">
+                                                    {% if audit_tasks.get(completion.audit_task_id) %}
+                                                        {{ audit_tasks.get(completion.audit_task_id).name }}
+                                                    {% else %}
+                                                        Unknown Task
+                                                    {% endif %}
+                                                </div>
+                                                <div class="audit-user">
+                                                    By: {% if users.get(completion.completed_by) %}
+                                                        {{ users.get(completion.completed_by).full_name or users.get(completion.completed_by).username }}
+                                                    {% else %}
+                                                        Unknown User
+                                                    {% endif %}
+                                                </div>
+                                            </div>
                                             {% endif %}
-                                        {% else %}
-                                            Unknown
-                                        {% endif %}
-                                    </td>
-                                </tr>
+                                        {% endfor %}
+                                    </div>
+                                </div>
                                 {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Multi-machine view - organize first by machine, then by date -->
+                        {% set machine_completions = {} %}
+                        {% for completion in completions %}
+                            {% set machine_id = completion.machine_id %}
+                            {% if machine_id not in machine_completions %}
+                                {% set _ = machine_completions.update({machine_id: []}) %}
+                            {% endif %}
+                            {% set _ = machine_completions[machine_id].append(completion) %}
+                        {% endfor %}
+                        
+                        {% for machine_id, machine_audits in machine_completions.items() %}
+                            {% if machines.get(machine_id) %}
+                                <div class="machine-section">
+                                    <h4 class="machine-title">{{ machines.get(machine_id).name }}</h4>
+                                    
+                                    {% set machine_dates = {} %}
+                                    {% for completion in machine_audits %}
+                                        {% set date_str = completion.date.strftime('%Y-%m-%d') %}
+                                        {% if date_str not in machine_dates %}
+                                            {% set _ = machine_dates.update({date_str: []}) %}
+                                        {% endif %}
+                                        {% set _ = machine_dates[date_str].append(completion) %}
+                                    {% endfor %}
+                                    
+                                    <div class="calendar-grid">
+                                        {% for date_str in machine_dates|sort(reverse=true) %}
+                                            {% set date_obj = date_str.split('-') %}
+                                            <div class="calendar-day">
+                                                <div class="calendar-date">
+                                                    {% if date_obj|length == 3 %}
+                                                        {{ date_obj[1] }}/{{ date_obj[2] }}/{{ date_obj[0] }}
+                                                    {% else %}
+                                                        {{ date_str }}
+                                                    {% endif %}
+                                                </div>
+                                                <div class="calendar-entries">
+                                                    {% for completion in machine_dates[date_str] %}
+                                                    <div class="audit-entry">
+                                                        <div class="audit-time">{{ completion.completed_at.strftime('%H:%M') if completion.completed_at else '--' }}</div>
+                                                        <div class="audit-task">
+                                                            {% if audit_tasks.get(completion.audit_task_id) %}
+                                                                {{ audit_tasks.get(completion.audit_task_id).name }}
+                                                            {% else %}
+                                                                Unknown Task
+                                                            {% endif %}
+                                                        </div>
+                                                        <div class="audit-user">
+                                                            By: {% if users.get(completion.completed_by) %}
+                                                                {{ users.get(completion.completed_by).full_name or users.get(completion.completed_by).username }}
+                                                            {% else %}
+                                                                Unknown User
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
                 </div>
                 {% else %}
                 <div class="no-data">
@@ -454,21 +480,33 @@
 <style>
     /* Regular styles remain unchanged */
     
-    /* Professional Print Styling */
+    /* Professional Print Styling with Calendar Layout */
     @media print {
         @page {
-            size: letter portrait;
-            margin: 0.5in;
+            size: letter landscape;  /* Changed to landscape for better calendar view */
+            margin: 0.4in;
         }
         
         body {
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 11pt;
-            line-height: 1.4;
+            font-size: 10pt;  /* Reduced font size for compactness */
+            line-height: 1.3;
             color: #000;
             background: #fff;
             margin: 0;
             padding: 0;
+        }
+        
+        /* Override base.html print styles to remove sidebar and header */
+        header, .sidebar, .sidebar-container, .footer {
+            display: none !important;
+        }
+        
+        /* Full width content when printing */
+        .content-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
         }
         
         /* Hide screen-only elements */
@@ -483,20 +521,20 @@
         
         /* Company Header */
         .print-header {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .company-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border-bottom: 2px solid #2c3e50;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
         
         .company-logo {
-            height: 60px;
+            height: 50px;
             width: auto;
         }
         
@@ -505,14 +543,14 @@
         }
         
         .company-info h1 {
-            font-size: 18pt;
+            font-size: 16pt;
             font-weight: bold;
             margin: 0;
             color: #2c3e50;
         }
         
         .company-info p {
-            font-size: 12pt;
+            font-size: 10pt;
             margin: 0;
             color: #7f8c8d;
         }
@@ -520,16 +558,16 @@
         /* Report Title */
         .report-title {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             position: relative;
         }
         
         .report-title h2 {
-            font-size: 16pt;
+            font-size: 14pt;
             font-weight: bold;
             text-transform: uppercase;
             margin: 0;
-            padding: 10px 0;
+            padding: 8px 0;
             color: #2c3e50;
             border-bottom: 1px solid #bdc3c7;
             border-top: 1px solid #bdc3c7;
@@ -539,7 +577,7 @@
             position: absolute;
             top: 0;
             right: 0;
-            font-size: 10pt;
+            font-size: 9pt;
             color: #7f8c8d;
         }
         
@@ -547,8 +585,8 @@
         .report-meta {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 30px;
-            font-size: 10pt;
+            margin-bottom: 20px;
+            font-size: 9pt;
         }
         
         .report-section {
@@ -562,48 +600,48 @@
         
         .meta-table th {
             text-align: left;
-            padding: 5px;
+            padding: 4px;
             font-weight: bold;
             width: 35%;
             vertical-align: top;
         }
         
         .meta-table td {
-            padding: 5px;
+            padding: 4px;
             border-bottom: 1px dotted #ddd;
         }
         
-        /* Executive Summary */
+        /* Executive Summary - More compact */
         .executive-summary {
-            margin-bottom: 30px;
-            padding: 15px;
+            margin-bottom: 15px;
+            padding: 10px;
             background-color: #f8f9fa;
             border: 1px solid #ddd;
             border-radius: 5px;
         }
         
         .executive-summary h3 {
-            font-size: 14pt;
-            margin: 0 0 10px 0;
+            font-size: 12pt;
+            margin: 0 0 8px 0;
             color: #2c3e50;
             border-bottom: 1px solid #ddd;
-            padding-bottom: 5px;
+            padding-bottom: 4px;
         }
         
         .executive-summary p {
-            margin: 0 0 15px 0;
-            font-size: 10pt;
+            margin: 0 0 8px 0;
+            font-size: 9pt;
         }
         
         .summary-metrics {
             display: flex;
             justify-content: space-around;
-            margin-top: 15px;
+            margin-top: 10px;
         }
         
         .metric-box {
             text-align: center;
-            padding: 10px;
+            padding: 8px;
             background-color: #fff;
             border: 1px solid #ddd;
             border-radius: 5px;
@@ -612,89 +650,113 @@
         
         .metric-value {
             display: block;
-            font-size: 20pt;
+            font-size: 18pt;
             font-weight: bold;
             color: #16a085;
         }
         
         .metric-label {
             display: block;
-            font-size: 9pt;
+            font-size: 8pt;
             color: #7f8c8d;
             text-transform: uppercase;
         }
         
-        /* Report Content */
+        /* Calendar Layout Styling */
         .report-content {
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
         
         .report-content h3 {
-            font-size: 14pt;
-            margin: 0 0 15px 0;
+            font-size: 12pt;
+            margin: 0 0 10px 0;
             color: #2c3e50;
             border-bottom: 1px solid #ddd;
             padding-bottom: 5px;
+            text-align: center;
         }
         
-        .audit-date-section {
-            margin-bottom: 30px;
-            page-break-inside: avoid;
+        .machine-section {
+            margin-bottom: 20px;
+            break-inside: avoid;
         }
         
-        .audit-date-section h4 {
-            font-size: 12pt;
-            margin: 0 0 10px 0;
-            padding: 5px 10px;
-            background-color: #ecf0f1;
-            border-left: 4px solid #3498db;
+        .machine-title {
+            font-size: 11pt;
+            margin: 0 0 8px 0;
+            padding: 4px 8px;
+            background-color: #34495e;
+            color: #fff;
+            border-radius: 4px;
         }
         
-        .audit-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 9pt;
+        .calendar-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
             margin-bottom: 15px;
         }
         
-        .audit-table th {
-            background-color: #34495e;
-            color: #fff;
+        .calendar-day {
+            width: calc(33.33% - 6px); /* 3 days per row */
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: #fff;
+        }
+        
+        .calendar-date {
+            background-color: #ecf0f1;
+            padding: 3px 6px;
             font-weight: bold;
-            text-align: left;
-            padding: 8px;
-            border: 1px solid #2c3e50;
+            font-size: 9pt;
+            border-bottom: 1px solid #ddd;
         }
         
-        .audit-table td {
-            padding: 6px 8px;
-            border: 1px solid #bdc3c7;
-            vertical-align: top;
+        .calendar-entries {
+            padding: 0;
+            max-height: 180px;
+            overflow: hidden;
         }
         
-        .audit-table tr:nth-child(even) {
-            background-color: #f9f9f9;
+        .audit-entry {
+            padding: 5px;
+            border-bottom: 1px dotted #ddd;
+            font-size: 8.5pt;
         }
         
-        .task-id {
-            font-family: "Courier New", monospace;
+        .audit-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .audit-time {
             font-weight: bold;
+            color: #3498db;
+        }
+        
+        .audit-task {
+            font-weight: bold;
+            margin: 2px 0;
+        }
+        
+        .audit-user {
+            font-size: 8pt;
             color: #7f8c8d;
         }
         
         /* No Data Message */
         .no-data {
             text-align: center;
-            padding: 30px;
-            margin: 20px 0;
+            padding: 20px;
+            margin: 15px 0;
             border: 1px dashed #bdc3c7;
             background-color: #f8f9fa;
         }
         
         .no-data h3 {
-            font-size: 14pt;
+            font-size: 12pt;
             color: #e74c3c;
-            margin: 0 0 10px 0;
+            margin: 0 0 8px 0;
         }
         
         .no-data p {
@@ -704,26 +766,26 @@
         
         /* Certification Footer */
         .certification {
-            margin-top: 40px;
+            margin-top: 20px;
             border-top: 1px solid #bdc3c7;
-            padding-top: 20px;
+            padding-top: 15px;
         }
         
         .certification h3 {
-            font-size: 12pt;
-            margin: 0 0 10px 0;
+            font-size: 11pt;
+            margin: 0 0 8px 0;
             color: #2c3e50;
         }
         
         .certification p {
-            font-size: 9pt;
-            margin: 0 0 20px 0;
+            font-size: 8pt;
+            margin: 0 0 12px 0;
         }
         
         .signatures {
             display: flex;
             justify-content: space-around;
-            margin: 30px 0;
+            margin: 20px 0;
         }
         
         .signature-block {
@@ -733,43 +795,46 @@
         
         .signature-line {
             border-bottom: 1px solid #000;
-            height: 40px;
-            margin-bottom: 5px;
+            height: 30px;
+            margin-bottom: 4px;
         }
         
         .signature-block p {
             margin: 0;
-            font-size: 9pt;
+            font-size: 8pt;
         }
         
         .document-footer {
-            margin-top: 40px;
+            margin-top: 20px;
             text-align: center;
-            font-size: 8pt;
+            font-size: 7pt;
             color: #7f8c8d;
             border-top: 1px solid #bdc3c7;
-            padding-top: 10px;
+            padding-top: 8px;
         }
         
         .document-footer p {
-            margin: 3px 0;
+            margin: 2px 0;
         }
         
         .page-number {
-            margin-top: 10px;
+            margin-top: 5px;
         }
         
-        .page-number::after {
-            content: counter(page);
+        /* Adjust for landscape page breaks */
+        @page {
+            counter-increment: page;
         }
         
-        .pages::after {
-            content: counter(pages);
-        }
-        
-        /* Fix for date formatting */
-        .formatted-date::before {
-            content: attr(data-date);
+        /* Media query for small landscape pages */
+        @media print and (max-height: 8.5in) {
+            .calendar-day {
+                width: calc(50% - 4px); /* 2 days per row on smaller pages */
+            }
+            
+            .calendar-entries {
+                max-height: 150px;
+            }
         }
     }
 </style>
@@ -781,12 +846,6 @@
         var style = document.createElement('style');
         style.type = 'text/css';
         style.innerHTML = `
-            @page {
-                counter-increment: page;
-            }
-            body {
-                counter-reset: pages ${document.querySelectorAll('.audit-date-section').length + 1};
-            }
             .page::after {
                 content: counter(page);
             }
