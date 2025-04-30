@@ -1148,15 +1148,15 @@ def audit_history_page():
     
     today = datetime.now().date()
     
-    # Default to last 30 days if no dates provided
+    # Default to last 365 days if no dates provided (was 30)
     if not start_date_str:
-        start_date = today - timedelta(days=30)
+        start_date = today - timedelta(days=365)
     else:
         try:
             start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
         except ValueError:
-            start_date = today - timedelta(days=30)
-            flash("Invalid start date format. Using default of 30 days ago.", "warning")
+            start_date = today - timedelta(days=365)
+            flash("Invalid start date format. Using default of 365 days ago.", "warning")
     
     if not end_date_str:
         end_date = today
@@ -3307,6 +3307,7 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
 
 
 
