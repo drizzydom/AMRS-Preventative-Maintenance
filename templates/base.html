@@ -27,6 +27,9 @@
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
+    <!-- Print CSS must be loaded absolutely last to override all other styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
+    
     {% block extra_css %}{% endblock %}
     
     <!-- Core layout styles - using higher specificity instead of !important -->
