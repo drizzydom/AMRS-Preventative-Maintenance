@@ -4,6 +4,10 @@ Helper script to debug app.py in packaged environment
 import os
 import sys
 import traceback
+from flask import Flask
+from flask_login import login_required
+from models import db, AuditTaskCompletion
+from app import app
 
 def debug_app():
     """Run diagnostic checks for app packaging"""
@@ -76,6 +80,22 @@ def debug_app():
         print("Directory listing saved to resources-files.txt")
     except Exception as e:
         print(f"Error saving directory listing: {e}")
+
+@app.route('/debug/audit-completions')
+@login_required
+def debug_audit_completions():
+    records = AuditTaskCompletion.query.order_by(AuditTaskCompletion.id.desc()).limit(20).all()
+    output = []
+    for r in records:
+        output.append({
+            'id': r.id,
+            'audit_task_id': r.audit_task_id,
+            'machine_id': r.machine_id,
+            'date': str(r.date),
+            'completed': r.completed,
+            'completed_at': str(r.completed_at),
+        })
+    return {'records': output}
 
 if __name__ == "__main__":
     print("Running app.py diagnostics...")
