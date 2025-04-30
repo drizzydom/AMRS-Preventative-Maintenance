@@ -166,7 +166,7 @@
                             <span class="metric-label">Days with Activity</span>
                         </div>
                         <div class="metric-box">
-                            <span class="metric-value">{{ completions|map(attribute='completed_by')|list|unique|length }}</span>
+                            <span class="metric-value">{{ completions|map(attribute='completed_by')|list|unique|list|length }}</span>
                             <span class="metric-label">Staff Members</span>
                         </div>
                     </div>
