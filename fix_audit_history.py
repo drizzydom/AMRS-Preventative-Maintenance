@@ -120,7 +120,33 @@ def patch_audit_history_functions():
         from flask import render_template, flash, redirect, url_for, request, jsonify
         from flask_login import current_user
         
-        # First, run the fix for audit task machine IDs during startup
+        # First, check and fix the audit_tasks table to ensure the color column exists
+        # This is a direct fix that doesn't rely on the auto_migrate process
+        with app.app_context():
+            try:
+                # Direct SQL approach to add the color column if it doesn't exist
+                db.session.execute(db.text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name='audit_tasks' AND column_name='color'
+                    ) THEN
+                        ALTER TABLE audit_tasks ADD COLUMN color VARCHAR(32) DEFAULT '#007bff';
+                        RAISE NOTICE 'Added color column to audit_tasks table';
+                    END IF;
+                EXCEPTION WHEN OTHERS THEN
+                    -- Do nothing, the column might already exist or we can't add it
+                    RAISE NOTICE 'Error adding color column: %', SQLERRM;
+                END $$;
+                """))
+                db.session.commit()
+                logger.info("[AUDIT FIX] Checked and potentially added color column to audit_tasks table")
+            except Exception as e:
+                logger.error(f"[AUDIT FIX] Error ensuring color column: {e}")
+                logger.error(traceback.format_exc())
+        
+        # Next, run the fix for audit task machine IDs during startup
         with app.app_context():
             try:
                 fixed_count, remaining_count = fix_audit_task_machine_ids(db.session)
