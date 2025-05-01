@@ -544,25 +544,42 @@ def patch_audit_history_functions():
                     delta = end - start
                     return [start + timedelta(days=i) for i in range(delta.days + 1)]
                 
-                def get_calendar_weeks(start, end):
-                    """Get calendar weeks for the date range."""
-                    # Find the first Sunday before or on the start date
-                    first_day = start - timedelta(days=start.weekday() + 1)
-                    if first_day.weekday() != 6:  # If not Sunday
-                        first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+                def get_calendar_weeks(year, month):
+                    """Get calendar weeks for an entire month.
                     
-                    # Find the last Saturday after or on the end date
-                    last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+                    Args:
+                        year: The year (as int)
+                        month: The month (as int, 1-12)
+                        
+                    Returns:
+                        List of weeks, where each week is a list of day numbers (0 for padding days)
+                    """
+                    # Get the first day of the month and the number of days in the month
+                    first_day = datetime(year, month, 1)
+                    if month == 12:
+                        last_day = datetime(year + 1, 1, 1) - timedelta(days=1)
+                    else:
+                        last_day = datetime(year, month + 1, 1) - timedelta(days=1)
                     
-                    # Generate weeks
+                    num_days = last_day.day
+                    
+                    # Calculate how many padding days we need at the start (0 = Monday in Python's datetime)
+                    # We want Sunday to be the first day (6 in Python's datetime)
+                    padding_days = first_day.weekday() + 1  # +1 because we want Sunday as first day
+                    if padding_days == 7:  # If it's already Sunday
+                        padding_days = 0
+                    
+                    # Generate calendar grid with padding
+                    days = [0] * padding_days + list(range(1, num_days + 1))
+                    
+                    # Add padding at the end to complete the last week
+                    while len(days) % 7 != 0:
+                        days.append(0)
+                    
+                    # Split into weeks
                     weeks = []
-                    current = first_day
-                    while current <= last_day:
-                        week = []
-                        for _ in range(7):
-                            week.append(current if current >= start and current <= end else None)
-                            current = current + timedelta(days=1)
-                        weeks.append(week)
+                    for i in range(0, len(days), 7):
+                        weeks.append(days[i:i+7])
                     
                     return weeks
                 

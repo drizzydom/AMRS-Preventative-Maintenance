@@ -88,6 +88,21 @@
                 </div>
             </div>
 
+            <!-- Month/Year Selection from URL parameters -->
+            {% set month_year = request.args.get('month_year', '') %}
+            {% if month_year %}
+                {% set parts = month_year.split('-') %}
+                {% set current_year = parts[0]|int %}
+                {% set current_month = parts[1]|int %}
+            {% else %}
+                {% set current_year = today.year %}
+                {% set current_month = today.month %}
+            {% endif %}
+            {% set display_month = '%s %s'|format(current_month|month_name, current_year) %}
+            
+            <!-- Generate full month calendar -->
+            {% set month_weeks = get_calendar_weeks(current_year, current_month) %}
+
             <!-- Print-only view -->
             <div class="d-none d-print-block" id="printView">
                 <div class="print-header">
@@ -348,49 +363,64 @@
     .monthly-calendar {
         flex: 1;
         min-width: 60%;
+        box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
     }
     
     .month-header {
-        font-size: 1.25rem;
+        font-size: 1.5rem;
         font-weight: bold;
-        margin-bottom: 10px;
-        color: #333;
+        margin-bottom: 0;
+        color: #334155;
         text-align: center;
+        padding: 15px;
+        background-color: #f1f5f9;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+        border: 2px solid #c8d1d9;
+        border-bottom: none;
     }
     
     .calendar-table {
         width: 100%;
-        border-collapse: separate;
-        border-spacing: 2px;
+        border-collapse: collapse;
+        border: 2px solid #c8d1d9;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     
     .calendar-header th {
-        background-color: #f8f9fa;
-        padding: 8px;
+        background-color: #f1f5f9;
+        padding: 10px;
         text-align: center;
         font-weight: 600;
-        border-radius: 4px;
+        border: 1px solid #c8d1d9;
+        color: #334155;
     }
     
     .calendar-day {
-        height: 80px;
+        height: 90px;
         width: 14.28%;
         vertical-align: top;
-        padding: 5px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
+        padding: 8px;
+        border: 1px solid #c8d1d9;
         position: relative;
         background-color: #fff;
+        transition: background-color 0.2s;
+    }
+    
+    .calendar-day:hover {
+        background-color: #f8fafc;
     }
     
     .empty-day {
-        background-color: #f8f9fa;
-        border: 1px dashed #dee2e6;
+        background-color: #f1f5f9;
+        border: 1px solid #c8d1d9;
     }
     
     .today {
         background-color: #e8f4ff;
-        border: 2px solid #007bff;
+        border: 2px solid #007bff !important;
     }
     
     .date-number {
@@ -409,6 +439,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 3px;
+        min-height: 30px;
     }
     
     .task-marker {
