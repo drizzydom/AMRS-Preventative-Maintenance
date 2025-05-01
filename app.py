@@ -519,6 +519,100 @@ def add_default_admin_if_needed():
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
 
+# --- Function to assign colors to audit tasks that don't have them ---
+def assign_colors_to_audit_tasks():
+    """
+    Assign unique colors to audit tasks using site-specific color wheels.
+    
+    This function:
+    1. Finds tasks without colors and assigns them new ones
+    2. Detects and fixes tasks with duplicate colors within the same site
+    3. Ensures each site has its own independent color wheel (sites can reuse colors)
+    4. Handles all task types that are visualized in the UI
+    """
+    try:
+        # Get all audit tasks
+        all_tasks = AuditTask.query.all()
+        if not all_tasks:
+            print("[APP] No audit tasks found.")
+            return
+            
+        print(f"[APP] Found {len(all_tasks)} total audit tasks, checking colors...")
+        
+        # Group all tasks by site_id
+        tasks_by_site = {}
+        for task in all_tasks:
+            if task.site_id not in tasks_by_site:
+                tasks_by_site[task.site_id] = []
+            tasks_by_site[task.site_id].append(task)
+        
+        # Track total number of updates needed
+        tasks_updated = 0
+        
+        # For each site, ensure all tasks have unique colors
+        for site_id, site_tasks in tasks_by_site.items():
+            # Track colors already assigned at this site
+            used_colors = set()
+            tasks_to_update = []
+            
+            # First pass: Identify tasks with no color or duplicate colors
+            for task in site_tasks:
+                if task.color is None:
+                    # No color assigned yet
+                    tasks_to_update.append(task)
+                elif task.color in used_colors:
+                    # Duplicate color detected
+                    tasks_to_update.append(task)
+                else:
+                    # Valid unique color
+                    used_colors.add(task.color)
+            
+            # Second pass: Assign new colors to tasks needing updates
+            if tasks_to_update:
+                # Calculate evenly distributed colors based on total number of tasks at this site
+                total_tasks = len(site_tasks)
+                
+                for task in tasks_to_update:
+                    # Find an unused position in the color wheel
+                    for i in range(total_tasks * 2):  # Double the range to ensure we find an available color
+                        # Calculate a potential hue value with even distribution
+                        hue = int((i * 360) / total_tasks) % 360
+                        # Create a color with good contrast and brightness
+                        potential_color = f"hsl({hue}, 70%, 50%)"
+                        
+                        # Use this color if it's not already in use
+                        if potential_color not in used_colors:
+                            task.color = potential_color
+                            used_colors.add(potential_color)
+                            tasks_updated += 1
+                            break
+            
+            # Verify we don't have any duplicate colors after updates
+            check_colors = {}
+            duplicates_found = False
+            
+            for task in site_tasks:
+                if task.color in check_colors:
+                    print(f"[APP] Warning: Duplicate color {task.color} found for tasks: {check_colors[task.color].id} and {task.id}")
+                    duplicates_found = True
+                else:
+                    check_colors[task.color] = task
+            
+            if duplicates_found:
+                print(f"[APP] Warning: Site {site_id} still has duplicate colors after assignment")
+        
+        # Commit all changes if any tasks were updated
+        if tasks_updated > 0:
+            db.session.commit()
+            print(f"[APP] Successfully assigned unique colors to {tasks_updated} audit tasks.")
+        else:
+            print("[APP] All audit tasks already have unique colors within their respective sites.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[APP] Error assigning colors to audit tasks: {e}")
+        import traceback
+        print(traceback.format_exc())
+
 # --- Move all startup DB logic inside a single app context ---
 with app.app_context():
     try:
@@ -636,6 +730,7 @@ with app.app_context():
     initialize_db_connection()
     ensure_db_schema()
     ensure_maintenance_records_schema()
+    assign_colors_to_audit_tasks()  # Add colors to any audit tasks that don't have them yet
     db.create_all()
 
 # Add database connection check before requests
