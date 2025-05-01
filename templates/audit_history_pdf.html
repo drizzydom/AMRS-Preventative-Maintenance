@@ -283,12 +283,18 @@
         
         /* Footer */
         .certification-footer {
-            margin-top: 30px;
+            margin-top: 20px;
             font-size: 9pt;
             color: #666;
             border-top: 1px solid #aaa;
             padding-top: 10px;
             font-style: italic;
+            page-break-inside: avoid;
+        }
+        
+        /* Complete machine section with content and footer */
+        .machine-content-with-footer {
+            page-break-inside: avoid;
         }
         
         @page {
@@ -341,99 +347,109 @@
             {{ machine.name }} {% if machine.machine_id %}({{ machine.machine_id }}){% endif %}
         </div>
         
-        {% if machine.id in machine_data %}
-            <!-- Monthly Calendar with Legend Layout -->
-            <div class="print-calendar-container">
-                <div class="monthly-calendar-with-legend">
-                    <div class="monthly-calendar">
-                        {% set start_month = start_date.month %}
-                        {% set start_year = start_date.year %}
-                        {% set month_display = start_date.strftime('%B %Y') %}
-                        
-                        <div class="month-header">{{ month_display }}</div>
-                        <table class="calendar-table">
-                            <tr class="calendar-header">
-                                <th>Sun</th>
-                                <th>Mon</th>
-                                <th>Tue</th>
-                                <th>Wed</th>
-                                <th>Thu</th>
-                                <th>Fri</th>
-                                <th>Sat</th>
-                            </tr>
-                            {% set month_weeks = get_calendar_weeks(start_date, end_date) %}
-                            {% for week in month_weeks %}
-                            <tr>
-                                {% for day in week %}
-                                <td class="calendar-day {% if day.month != start_month %}empty-day{% endif %} {% if day.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
-                                    <div class="date-number">{{ day.day }}</div>
-                                    {% set day_date = day.strftime('%Y-%m-%d') %}
-                                    <div class="task-markers">
-                                        {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
-                                            {% set day_audit_tasks = {} %}
-                                            {% for completion in machine_data[machine.id][day_date] %}
-                                                {% if completion.audit_task_id in audit_tasks %}
-                                                    {% set task = audit_tasks[completion.audit_task_id] %}
-                                                    {% if task.id not in day_audit_tasks %}
-                                                        {% if day_audit_tasks.update({task.id: task}) %}{% endif %}
+        <div class="machine-content-with-footer">
+            {% if machine.id in machine_data %}
+                <!-- Monthly Calendar with Legend Layout -->
+                <div class="print-calendar-container">
+                    <div class="monthly-calendar-with-legend">
+                        <div class="monthly-calendar">
+                            {% set start_month = start_date.month %}
+                            {% set start_year = start_date.year %}
+                            {% set month_display = start_date.strftime('%B %Y') %}
+                            
+                            <div class="month-header">{{ month_display }}</div>
+                            <table class="calendar-table">
+                                <tr class="calendar-header">
+                                    <th>Sun</th>
+                                    <th>Mon</th>
+                                    <th>Tue</th>
+                                    <th>Wed</th>
+                                    <th>Thu</th>
+                                    <th>Fri</th>
+                                    <th>Sat</th>
+                                </tr>
+                                {% set month_weeks = get_calendar_weeks(start_date, end_date) %}
+                                {% for week in month_weeks %}
+                                <tr>
+                                    {% for day in week %}
+                                    <td class="calendar-day {% if day.month != start_month %}empty-day{% endif %} {% if day.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
+                                        <div class="date-number">{{ day.day }}</div>
+                                        {% set day_date = day.strftime('%Y-%m-%d') %}
+                                        <div class="task-markers">
+                                            {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
+                                                {% set day_audit_tasks = {} %}
+                                                {% for completion in machine_data[machine.id][day_date] %}
+                                                    {% if completion.audit_task_id in audit_tasks %}
+                                                        {% set task = audit_tasks[completion.audit_task_id] %}
+                                                        {% if task.id not in day_audit_tasks %}
+                                                            {% if day_audit_tasks.update({task.id: task}) %}{% endif %}
+                                                        {% endif %}
                                                     {% endif %}
+                                                {% endfor %}
+                                                
+                                                {% for task_id, task in day_audit_tasks.items() %}
+                                                    <div class="task-marker" data-task-id="{{ task.id }}" 
+                                                         data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
+                                                         {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
+                                                         title="{{ task.name }}"></div>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <!-- Interval bars for Weekly/Monthly/Custom tasks -->
+                                        {% if machine.id in all_tasks_per_machine %}
+                                            {% for task in all_tasks_per_machine[machine.id] %}
+                                                {% if machine.id in interval_bars and task.id in interval_bars[machine.id] %}
+                                                    {% for bar in interval_bars[machine.id][task.id] %}
+                                                        {% set bar_start = bar[0] %}
+                                                        {% set bar_end = bar[1] %}
+                                                        {% if day.date() >= bar_start and day.date() <= bar_end %}
+                                                            <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" 
+                                                                 title="{{ task.name }} interval"
+                                                                 {% if task.color %}style="background-color: {{ task.color }}; opacity: 0.4;"{% endif %}></div>
+                                                        {% endif %}
+                                                    {% endfor %}
                                                 {% endif %}
                                             {% endfor %}
-                                            
-                                            {% for task_id, task in day_audit_tasks.items() %}
-                                                <div class="task-marker" data-task-id="{{ task.id }}" 
-                                                     data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
-                                                     {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
-                                                     title="{{ task.name }}"></div>
-                                            {% endfor %}
                                         {% endif %}
-                                        {% for task in all_tasks_per_machine[machine.id] %}
-                                          {% if interval_bars[machine.id][task.id] %}
-                                            {% for bar in interval_bars[machine.id][task.id] %}
-                                              {% set bar_start = bar[0] %}
-                                              {% set bar_end = bar[1] %}
-                                              {% if day.date() >= bar_start and day.date() <= bar_end %}
-                                                <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
-                                              {% endif %}
-                                            {% endfor %}
-                                          {% endif %}
-                                        {% endfor %}
-                                    </div>
-                                </td>
+                                    </td>
+                                    {% endfor %}
+                                </tr>
                                 {% endfor %}
-                            </tr>
-                            {% endfor %}
-                        </table>
-                    </div>
-                    
-                    <div class="calendar-legend">
-                        <h6 class="legend-title">Legend</h6>
-                        <div class="legend-items">
-                            {% for task in all_tasks_per_machine[machine.id] %}
-                                <div class="legend-item">
-                                    <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
-                                    <span class="legend-text">{{ task.name }}</span>
+                            </table>
+                        </div>
+                        
+                        <div class="calendar-legend">
+                            <h6 class="legend-title">Legend</h6>
+                            <div class="legend-items">
+                                {% if machine.id in all_tasks_per_machine %}
+                                    {% for task in all_tasks_per_machine[machine.id] %}
+                                        <div class="legend-item">
+                                            <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
+                                            <span class="legend-text">{{ task.name }}</span>
+                                        </div>
+                                    {% endfor %}
+                                {% endif %}
+                                
+                                <div class="legend-item mt-3">
+                                    <span class="legend-marker today-marker"></span>
+                                    <span class="legend-text">Today</span>
                                 </div>
-                            {% endfor %}
-                            
-                            <div class="legend-item mt-3">
-                                <span class="legend-marker today-marker"></span>
-                                <span class="legend-text">Today</span>
                             </div>
                         </div>
                     </div>
                 </div>
+            {% else %}
+                <div class="no-data">
+                    No audit records found for this machine in the selected date range.
+                </div>
+            {% endif %}
+            
+            <!-- Certification Footer - now inside the machine-content-with-footer div to keep it with the content -->
+            <div class="certification-footer">
+                This document certifies that all recorded maintenance tasks have been performed according to 
+                AMRS Preventative Maintenance standards and protocols. Report ID: {{ today.strftime('%Y%m%d%H%M%S') }}
             </div>
-        {% else %}
-            <div class="no-data">
-                No audit records found for this machine in the selected date range.
-            </div>
-        {% endif %}
-        
-        <!-- Certification Footer -->
-        <div class="certification-footer">
-            This document certifies that all recorded maintenance tasks have been performed according to 
-            AMRS Preventative Maintenance standards and protocols. Report ID: {{ today.strftime('%Y%m%d%H%M%S') }}
         </div>
     </div>
     {% endfor %}
