@@ -394,9 +394,10 @@ def setup_enhanced_audit_history():
                 logger.debug("Generating available months for dropdown")
                 start_month, start_year = 4, 2025  # Starting from April 2025
                 available_months = []
-                
+
                 y, m = start_year, start_month
-                while (y < today.year) or (y == today.year and m <= today.month):
+                curr_date = datetime.now().date()
+                while (y < curr_date.year) or (y == curr_date.year and m <= curr_date.month):
                     value = f"{y:04d}-{m:02d}"
                     display = f"{calendar.month_name[m]} {y}"
                     available_months.append({'value': value, 'display': display})
@@ -405,9 +406,24 @@ def setup_enhanced_audit_history():
                     if m > 12:
                         m = 1
                         y += 1
-                
+
+                # Sort in reverse chronological order (newest first)
                 available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
                 selected_month = f"{year:04d}-{month:02d}"
+
+                # Make sure there's at least one month in the dropdown
+                if not available_months:
+                    # If somehow we have no months, add the current month
+                    curr_month = today.month
+                    curr_year = today.year
+                    available_months.append({
+                        'value': f"{curr_year:04d}-{curr_month:02d}",
+                        'display': f"{calendar.month_name[curr_month]} {curr_year}"
+                    })
+                    logger.warning("Had to add current month as fallback - no months were generated")
+
+                logger.debug(f"Generated {len(available_months)} months for dropdown")
+                logger.debug(f"First month: {available_months[0]['display'] if available_months else 'none'}")
                 
                 # Format for display in template
                 display_month = datetime(year, month, 1).strftime('%B %Y')
