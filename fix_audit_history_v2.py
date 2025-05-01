@@ -392,50 +392,51 @@ def setup_enhanced_audit_history():
                 
                 # --- Generate available months for dropdown ---
                 logger.debug("Generating available months for dropdown")
-                start_month, start_year = 4, 2025  # Starting from April 2025
+                # Start from April 2025 (or adjust this date as needed for your application)
+                start_month, start_year = 4, 2025
                 available_months = []
 
-                y, m = start_year, start_month
+                # Get current date for comparison
                 curr_date = datetime.now().date()
                 
-                # Ensure we include the current month (especially important on the first day of the month)
-                while (y < curr_date.year) or (y == curr_date.year and m <= curr_date.month):
+                # Generate months from start date through current month
+                current_year, current_month = curr_date.year, curr_date.month
+                
+                # Generate the dropdown options
+                temp_date = date(start_year, start_month, 1)
+                end_date = date(current_year, current_month, 1)
+                
+                # Loop through months until we reach or exceed current month
+                while temp_date <= end_date:
+                    m = temp_date.month
+                    y = temp_date.year
                     value = f"{y:04d}-{m:02d}"
                     display = f"{calendar.month_name[m]} {y}"
                     available_months.append({'value': value, 'display': display})
                     
-                    m += 1
-                    if m > 12:
-                        m = 1
-                        y += 1
+                    # Move to next month
+                    if m == 12:
+                        temp_date = date(y + 1, 1, 1)
+                    else:
+                        temp_date = date(y, m + 1, 1)
 
-                # Explicitly check if we need to add the current month (for first of month)
-                current_month_value = f"{curr_date.year:04d}-{curr_date.month:02d}"
-                if not any(month['value'] == current_month_value for month in available_months):
-                    available_months.append({
-                        'value': current_month_value,
-                        'display': f"{calendar.month_name[curr_date.month]} {curr_date.year}"
-                    })
-                    logger.info(f"Added current month {current_month_value} to dropdown (first day of month detection)")
-
+                # Debug output
+                logger.info(f"Generated {len(available_months)} months for dropdown")
+                for month in available_months:
+                    logger.debug(f"Available month: {month['display']} ({month['value']})")
+                
                 # Sort in reverse chronological order (newest first)
                 available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
                 
-                selected_month = f"{year:04d}-{month:02d}"
-
-                # Make sure there's at least one month in the dropdown
+                # Safety check - if somehow we have no months, add current month
                 if not available_months:
-                    # If somehow we have no months, add the current month
-                    curr_month = today.month
-                    curr_year = today.year
+                    logger.warning("No months were generated - adding current month as fallback")
                     available_months.append({
-                        'value': f"{curr_year:04d}-{curr_month:02d}",
-                        'display': f"{calendar.month_name[curr_month]} {curr_year}"
+                        'value': f"{current_year:04d}-{current_month:02d}",
+                        'display': f"{calendar.month_name[current_month]} {current_year}"
                     })
-                    logger.warning("Had to add current month as fallback - no months were generated")
 
-                logger.debug(f"Generated {len(available_months)} months for dropdown")
-                logger.debug(f"First month: {available_months[0]['display'] if available_months else 'none'}")
+                selected_month = f"{year:04d}-{month:02d}"
                 
                 # Format for display in template
                 display_month = datetime(year, month, 1).strftime('%B %Y')
