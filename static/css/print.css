@@ -91,7 +91,7 @@
     /* Hide browser UI elements during print */
     @page {
         margin: 0.5in !important; /* Standard margin for printing */
-        size: portrait !important; /* Default to portrait, can be overridden */
+        size: landscape !important; /* Default to landscape */
     }
     
     /* Ensure page breaks don't occur in bad places */
