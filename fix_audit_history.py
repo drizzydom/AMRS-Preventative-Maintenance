@@ -120,8 +120,27 @@ def patch_audit_history_functions():
         from flask import render_template, flash, redirect, url_for, request, jsonify
         from flask_login import current_user
         
+        # Register a custom Jinja filter for month name
+        @app.template_filter('month_name')
+        def month_name_filter(month_number):
+            """Convert month number to month name."""
+            months = {
+                1: 'January',
+                2: 'February',
+                3: 'March',
+                4: 'April',
+                5: 'May',
+                6: 'June',
+                7: 'July',
+                8: 'August',
+                9: 'September',
+                10: 'October',
+                11: 'November',
+                12: 'December'
+            }
+            return months.get(month_number, 'Unknown')
+        
         # First, check and fix the audit_tasks table to ensure the color column exists
-        # This is a direct fix that doesn't rely on the auto_migrate process
         with app.app_context():
             try:
                 # Direct SQL approach to add the color column if it doesn't exist

@@ -98,6 +98,8 @@
                 {% set current_year = today.year %}
                 {% set current_month = today.month %}
             {% endif %}
+            
+            <!-- Using the month_name filter we've added in fix_audit_history.py -->
             {% set display_month = '%s %s'|format(current_month|month_name, current_year) %}
             
             <!-- Generate full month calendar -->
