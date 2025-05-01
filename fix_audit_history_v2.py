@@ -397,6 +397,8 @@ def setup_enhanced_audit_history():
 
                 y, m = start_year, start_month
                 curr_date = datetime.now().date()
+                
+                # Ensure we include the current month (especially important on the first day of the month)
                 while (y < curr_date.year) or (y == curr_date.year and m <= curr_date.month):
                     value = f"{y:04d}-{m:02d}"
                     display = f"{calendar.month_name[m]} {y}"
@@ -407,8 +409,18 @@ def setup_enhanced_audit_history():
                         m = 1
                         y += 1
 
+                # Explicitly check if we need to add the current month (for first of month)
+                current_month_value = f"{curr_date.year:04d}-{curr_date.month:02d}"
+                if not any(month['value'] == current_month_value for month in available_months):
+                    available_months.append({
+                        'value': current_month_value,
+                        'display': f"{calendar.month_name[curr_date.month]} {curr_date.year}"
+                    })
+                    logger.info(f"Added current month {current_month_value} to dropdown (first day of month detection)")
+
                 # Sort in reverse chronological order (newest first)
                 available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+                
                 selected_month = f"{year:04d}-{month:02d}"
 
                 # Make sure there's at least one month in the dropdown

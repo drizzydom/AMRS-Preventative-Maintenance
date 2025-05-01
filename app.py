@@ -1280,6 +1280,16 @@ def audit_history_page():
         if m > 12:
             m = 1
             y += 1
+    
+    # Explicitly check if we need to add the current month (for first of month)
+    current_month_value = f"{today.year:04d}-{today.month:02d}"
+    if not any(month['value'] == current_month_value for month in available_months):
+        available_months.append({
+            'value': current_month_value,
+            'display': f"{calendar.month_name[today.month]} {today.year}"
+        })
+        app.logger.info(f"Added current month {current_month_value} to dropdown (first day of month detection)")
+    
     # Ensure start month is always included
     if not any(month['value'] == f'{start_year:04d}-{start_month:02d}' for month in available_months):
         available_months.append({'value': f'{start_year:04d}-{start_month:02d}', 'display': f'{calendar.month_name[start_month]} {start_year}'})
