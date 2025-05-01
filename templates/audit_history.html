@@ -194,7 +194,7 @@
                                                         {% for bar in interval_bars[machine.id][task.id] %}
                                                           {% set bar_start = bar[0] %}
                                                           {% set bar_end = bar[1] %}
-                                                          {% set day_date_obj = datetime(current_year, current_month, day) %}
+                                                          {% set day_date_obj = datetime(current_year, current_month, day).date() %}
                                                           {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
                                                             <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
                                                           {% endif %}
@@ -303,7 +303,7 @@
                                                             {% for bar in interval_bars[machine.id][task.id] %}
                                                               {% set bar_start = bar[0] %}
                                                               {% set bar_end = bar[1] %}
-                                                              {% set day_date_obj = datetime(current_year, current_month, day) %}
+                                                              {% set day_date_obj = datetime(current_year, current_month, day).date() %}
                                                               {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
                                                                 <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
                                                               {% endif %}
