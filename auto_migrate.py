@@ -50,7 +50,7 @@ def run_auto_migration():
         # Ensure audit_tasks columns
         add_column_if_not_exists(engine, 'audit_tasks', 'interval', "VARCHAR(20) DEFAULT 'daily'")
         add_column_if_not_exists(engine, 'audit_tasks', 'custom_interval_days', "INTEGER")
-        add_column_if_not_exists(engine, 'audit_tasks', 'color', "VARCHAR(20) DEFAULT '#007bff'")  # Add color column
+        add_column_if_not_exists(engine, 'audit_tasks', 'color', "VARCHAR(32) DEFAULT '#007bff'")
         # Ensure audit_task_completions columns
         add_column_if_not_exists(engine, 'audit_task_completions', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         add_column_if_not_exists(engine, 'audit_task_completions', 'updated_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
@@ -63,6 +63,15 @@ def run_auto_migration():
         # Run data fixes
         run_data_fix(engine, fix_audit_completions_timestamps, 
                     "Fix audit completion records with missing timestamps")
+        
+        # Explicitly run the color column migration from the dedicated script
+        try:
+            # Import and run the dedicated color column migration
+            from add_audit_task_color_column import add_audit_task_color_column
+            add_audit_task_color_column()
+            logger.info("[AUTO_MIGRATE] Ran dedicated audit_task color column migration")
+        except Exception as e:
+            logger.error(f"[AUTO_MIGRATE] Error running audit_task color column migration: {e}")
         
         # Example of how to add more fixes:
         # run_data_fix(engine, fix_another_issue_function, "Description of the fix")
