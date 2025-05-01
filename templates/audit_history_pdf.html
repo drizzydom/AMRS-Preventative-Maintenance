@@ -9,40 +9,41 @@
             margin: 0;
             padding: 20px;
             color: #333;
+            font-size: 9pt; /* Reduced overall font size */
         }
         
         /* Header & Print Layout */
         .print-header {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border-bottom: 2px solid #000;
-            padding-bottom: 15px;
+            padding-bottom: 10px;
         }
         
         .company-info {
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
         
         .company-info h1 {
-            font-size: 22pt;
-            margin: 0;
-        }
-        
-        .company-info p {
-            font-size: 14pt;
-            margin: 5px 0 0;
-        }
-        
-        .report-title {
-            margin-bottom: 15px;
-        }
-        
-        .report-title h2 {
             font-size: 18pt;
             margin: 0;
         }
         
+        .company-info p {
+            font-size: 12pt;
+            margin: 5px 0 0;
+        }
+        
+        .report-title {
+            margin-bottom: 10px;
+        }
+        
+        .report-title h2 {
+            font-size: 16pt;
+            margin: 0;
+        }
+        
         .report-id {
-            font-size: 10pt;
+            font-size: 9pt;
             color: #666;
         }
         
@@ -62,36 +63,33 @@
         
         /* Machine Section */
         .machine-section {
-            page-break-before: always;
-            margin-bottom: 30px;
-        }
-        
-        .machine-section:first-child {
-            page-break-before: auto;
+            /* Remove page break */
+            /* page-break-before: always; */
+            margin-bottom: 15px;
+            page-break-inside: avoid; /* Keep each machine section together */
         }
         
         /* Machine Header with Details */
         .machine-header {
-            page-break-inside: avoid;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         .machine-title {
-            font-size: 18pt;
+            font-size: 14pt;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 3px;
             border-bottom: 1px solid #000;
-            padding-bottom: 5px;
+            padding-bottom: 3px;
         }
         
         .machine-details {
             display: flex;
             flex-wrap: wrap;
-            gap: 15px;
-            font-size: 11pt;
+            gap: 10px;
+            font-size: 9pt;
             color: #555;
-            margin-bottom: 10px;
-            padding: 8px;
+            margin-bottom: 5px;
+            padding: 5px;
             background-color: #f8f9fa;
             border-radius: 4px;
         }
@@ -108,53 +106,53 @@
         /* Calendar Styles */
         .monthly-calendar-with-legend {
             display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
+            flex-wrap: nowrap; /* Prevent wrapping */
+            gap: 10px;
         }
         
         .monthly-calendar {
-            flex: 1;
-            min-width: 60%;
+            flex: 2;
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
             border-radius: 8px;
             overflow: hidden;
         }
         
         .month-header {
-            font-size: 1.5rem;
+            font-size: 1.1rem;
             font-weight: bold;
             margin-bottom: 0;
             color: #334155;
             text-align: center;
-            padding: 15px;
+            padding: 8px;
             background-color: #f1f5f9;
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
-            border: 2px solid #c8d1d9;
+            border: 1px solid #c8d1d9;
             border-bottom: none;
         }
         
         .calendar-table {
             width: 100%;
             border-collapse: collapse;
-            border: 2px solid #c8d1d9;
+            border: 1px solid #c8d1d9;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
         .calendar-header th {
             background-color: #f1f5f9;
-            padding: 10px;
+            padding: 5px;
             text-align: center;
             font-weight: 600;
             border: 1px solid #c8d1d9;
             color: #334155;
+            font-size: 0.85rem;
         }
         
         .calendar-day {
-            height: 60px;
+            height: 40px; /* Reduced height */
             width: 14.28%;
             vertical-align: top;
-            padding: 8px;
+            padding: 4px;
             border: 1px solid #c8d1d9;
             position: relative;
             background-color: #fff;
@@ -172,9 +170,9 @@
         
         .date-number {
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
             text-align: right;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: #495057;
         }
         
@@ -185,21 +183,21 @@
         .task-markers {
             display: flex;
             flex-wrap: wrap;
-            gap: 3px;
-            min-height: 30px;
+            gap: 2px;
+            min-height: 15px;
         }
         
         .task-marker {
-            width: 12px;
-            height: 12px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             background-color: #ccc;
         }
         
         /* Interval Tasks Section */
         .interval-tasks-section {
-            margin-top: 15px;
-            padding: 10px;
+            margin-top: 10px;
+            padding: 8px;
             background-color: #f8f9fa;
             border-radius: 8px;
             border: 1px solid #dee2e6;
@@ -207,29 +205,30 @@
         
         .interval-section-title {
             font-weight: 600;
-            font-size: 0.9rem;
-            margin-bottom: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
             color: #495057;
             border-bottom: 1px solid #dee2e6;
-            padding-bottom: 5px;
+            padding-bottom: 3px;
         }
         
         .interval-tasks-list {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            flex-wrap: wrap; /* Allow tasks to wrap for better space usage */
+            gap: 5px;
         }
         
         .interval-task-item {
             display: flex;
-            gap: 8px;
-            font-size: 0.85rem;
+            gap: 5px;
+            font-size: 0.75rem;
             align-items: center;
+            width: 48%; /* Set width to create two columns */
         }
         
         .interval-task-indicator {
-            width: 12px;
-            height: 12px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             flex-shrink: 0;
         }
@@ -244,7 +243,7 @@
         
         .interval-task-schedule {
             font-style: italic;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: #6c757d;
         }
         
@@ -298,36 +297,38 @@
         
         /* Legend Styles */
         .calendar-legend {
-            padding: 15px;
+            padding: 8px;
             background-color: #f8f9fa;
             border-radius: 8px;
             height: fit-content;
-            min-width: 200px;
+            min-width: 150px;
+            flex: 1;
         }
         
         .legend-title {
             font-weight: 600;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             color: #495057;
             border-bottom: 1px solid #dee2e6;
-            padding-bottom: 8px;
+            padding-bottom: 3px;
+            font-size: 0.85rem;
         }
         
         .legend-items {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 3px;
         }
         
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 5px;
         }
         
         .legend-marker {
-            width: 15px;
-            height: 15px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             display: inline-block;
         }
@@ -338,13 +339,13 @@
         }
         
         .legend-text {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: #495057;
         }
         
         /* No-data message */
         .no-data {
-            padding: 20px;
+            padding: 10px;
             text-align: center;
             color: #6c757d;
             font-style: italic;
@@ -355,13 +356,12 @@
         
         /* Footer */
         .certification-footer {
-            margin-top: 20px;
-            font-size: 9pt;
+            margin-top: 10px;
+            font-size: 8pt;
             color: #666;
             border-top: 1px solid #aaa;
-            padding-top: 10px;
+            padding-top: 5px;
             font-style: italic;
-            page-break-inside: avoid;
         }
         
         /* Complete machine section with content and footer */
@@ -369,9 +369,17 @@
             page-break-inside: avoid;
         }
         
+        /* Print specific styles to optimize layout */
         @page {
-            size: letter;
-            margin: 2cm;
+            size: letter landscape;
+            margin: 1.5cm; /* Reduced margins for more content space */
+        }
+        
+        /* Container for the entire calendar + legend + tasks layout */
+        .print-calendar-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
     </style>
 </head>
