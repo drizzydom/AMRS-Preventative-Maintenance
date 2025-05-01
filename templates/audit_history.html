@@ -186,7 +186,9 @@
                                                         
                                                         {% for task_id, task in day_audit_tasks.items() %}
                                                             <div class="task-marker" data-task-id="{{ task.id }}" 
-                                                                 data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"></div>
+                                                                 data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
+                                                                 {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
+                                                                 title="{{ task.name }}"></div>
                                                         {% endfor %}
                                                     {% endif %}
                                                     {% for task in all_tasks_per_machine[machine.id] %}
@@ -214,10 +216,10 @@
                                     <h6 class="legend-title">Legend</h6>
                                     <div class="legend-items">
                                         {% for task in all_tasks_per_machine[machine.id] %}
-                                        <div class="legend-item">
-                                            <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}"></span>
-                                            <span class="legend-text">{{ task.name }}</span>
-                                        </div>
+                                            <div class="legend-item">
+                                                <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
+                                                <span class="legend-text">{{ task.name }}</span>
+                                            </div>
                                         {% endfor %}
                                         
                                         <div class="legend-item">
@@ -295,6 +297,7 @@
                                                             {% for task_id, task in day_audit_tasks.items() %}
                                                                 <div class="task-marker" data-task-id="{{ task.id }}" 
                                                                      data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
+                                                                     {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
                                                                      title="{{ task.name }}"></div>
                                                             {% endfor %}
                                                         {% endif %}
@@ -325,10 +328,10 @@
                                         <h6 class="legend-title">Task Legend</h6>
                                         <div class="legend-items">
                                             {% for task in all_tasks_per_machine[machine.id] %}
-                                            <div class="legend-item">
-                                                <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}"></span>
-                                                <span class="legend-text">{{ task.name }}</span>
-                                            </div>
+                                                <div class="legend-item">
+                                                    <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
+                                                    <span class="legend-text">{{ task.name }}</span>
+                                                </div>
                                             {% endfor %}
                                             
                                             <div class="legend-item mt-3">
@@ -464,45 +467,52 @@
         z-index: 1;
     }
     
-    /* Category-specific colors */
-    .task-marker[data-category="electrical"], 
-    .legend-marker.category-electrical,
+    /* Style for custom task colors */
+    .task-marker[style],
+    .legend-marker[style] {
+        /* These styles will apply to markers with custom colors */
+        background-color: attr(data-color);
+    }
+    
+    /* Category-specific colors (fallback) */
+    .task-marker:not([style])[data-category="electrical"], 
+    .legend-marker:not([style]).category-electrical,
     .interval-bar.category-electrical {
         background-color: #dc3545;
     }
     
-    .task-marker[data-category="mechanical"], 
-    .legend-marker.category-mechanical,
+    .task-marker:not([style])[data-category="mechanical"], 
+    .legend-marker:not([style]).category-mechanical,
     .interval-bar.category-mechanical {
         background-color: #0d6efd;
     }
     
-    .task-marker[data-category="hydraulic"], 
-    .legend-marker.category-hydraulic,
+    .task-marker:not([style])[data-category="hydraulic"], 
+    .legend-marker:not([style]).category-hydraulic,
     .interval-bar.category-hydraulic {
         background-color: #fd7e14;
     }
     
-    .task-marker[data-category="pneumatic"], 
-    .legend-marker.category-pneumatic,
+    .task-marker:not([style])[data-category="pneumatic"], 
+    .legend-marker:not([style]).category-pneumatic,
     .interval-bar.category-pneumatic {
         background-color: #6f42c1;
     }
     
-    .task-marker[data-category="general"], 
-    .legend-marker.category-general,
+    .task-marker:not([style])[data-category="general"], 
+    .legend-marker:not([style]).category-general,
     .interval-bar.category-general {
         background-color: #198754;
     }
     
-    .task-marker[data-category="electronic"], 
-    .legend-marker.category-electronic,
+    .task-marker:not([style])[data-category="electronic"], 
+    .legend-marker:not([style]).category-electronic,
     .interval-bar.category-electronic {
         background-color: #20c997;
     }
     
-    .task-marker[data-category="structural"], 
-    .legend-marker.category-structural,
+    .task-marker:not([style])[data-category="structural"], 
+    .legend-marker:not([style]).category-structural,
     .interval-bar.category-structural {
         background-color: #6c757d;
     }
