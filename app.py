@@ -1514,8 +1514,23 @@ def audit_history_pdf():
     # Get all audit tasks for reference
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
     
+    # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
+    all_tasks_per_machine = {}
+    for machine in machines:
+        all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
+    
     # Get all users for reference
     users = {user.id: user for user in User.query.all()}
+    
+    # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
+    from collections import defaultdict
+    interval_bars = defaultdict(lambda: defaultdict(list))
+    for machine in machines:
+        for task in all_tasks_per_machine[machine.id]:
+            # Only for interval-based tasks (not daily)
+            if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
+                # We'll keep this empty for now, just making sure the structure exists
+                pass
     
     # Helper functions for the template
     def get_date_range(start, end):
@@ -1539,7 +1554,7 @@ def audit_history_pdf():
         while current <= last_day:
             week = []
             for _ in range(7):
-                week.append(current if current >= start and current <= end else None)
+                week.append(current)
                 current = current + timedelta(days=1)
             weeks.append(week)
         
@@ -1557,7 +1572,12 @@ def audit_history_pdf():
         end_date=end_date,
         completions=completions,
         get_date_range=get_date_range,
-        get_calendar_weeks=get_calendar_weeks
+        get_calendar_weeks=get_calendar_weeks,
+        all_tasks_per_machine=all_tasks_per_machine,
+        interval_bars=interval_bars,
+        current_user=current_user,
+        datetime=datetime,
+        timedelta=timedelta
     )
     
     # Generate PDF from the HTML
