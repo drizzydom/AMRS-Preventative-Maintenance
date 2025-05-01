@@ -50,6 +50,7 @@ def run_auto_migration():
         # Ensure audit_tasks columns
         add_column_if_not_exists(engine, 'audit_tasks', 'interval', "VARCHAR(20) DEFAULT 'daily'")
         add_column_if_not_exists(engine, 'audit_tasks', 'custom_interval_days', "INTEGER")
+        add_column_if_not_exists(engine, 'audit_tasks', 'color', "VARCHAR(20) DEFAULT '#007bff'")  # Add color column
         # Ensure audit_task_completions columns
         add_column_if_not_exists(engine, 'audit_task_completions', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         add_column_if_not_exists(engine, 'audit_task_completions', 'updated_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
