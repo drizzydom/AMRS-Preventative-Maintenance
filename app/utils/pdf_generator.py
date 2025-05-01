@@ -1,16 +1,46 @@
 import os
 import datetime
-from flask import url_for
-from weasyprint import HTML, CSS
-from weasyprint.text.fonts import FontConfiguration
-from io import BytesIO
-import uuid
+import gc  # Garbage collection
 import tempfile
+import uuid
+import logging
+from io import BytesIO
+import psutil  # For memory monitoring
+import time
+from flask import url_for, send_file, after_this_request
+
+# ReportLab imports
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+
+# WeasyPrint imports
+from weasyprint import HTML, CSS
+from weasyprint.text.fonts import FontConfiguration
+
+
+# Memory monitoring function
+def log_memory_usage(label):
+    """Log current memory usage with a label for tracking"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / 1024 / 1024
+        logging.info(f"Memory usage at {label}: {memory_mb:.2f} MB")
+        
+        # Force garbage collection if memory exceeds threshold
+        if memory_mb > 200:  # If we're getting close to the 256MB limit
+            logging.warning(f"High memory usage detected: {memory_mb:.2f} MB - forcing garbage collection")
+            gc.collect()
+            
+            # Log memory after collection
+            memory_info = process.memory_info()
+            memory_mb = memory_info.rss / 1024 / 1024
+            logging.info(f"Memory after forced GC: {memory_mb:.2f} MB")
+    except Exception as e:
+        logging.error(f"Error monitoring memory: {e}")
 
 
 def generate_audit_pdf(
@@ -25,6 +55,7 @@ def generate_audit_pdf(
 ):
     """
     Generate a PDF audit report based on the same data used in the HTML template.
+    Optimized for low-memory environments (256MB).
     
     Args:
         machines: List of machine objects
@@ -37,14 +68,18 @@ def generate_audit_pdf(
         get_calendar_weeks: Function to generate calendar weeks
         
     Returns:
-        BytesIO object containing the PDF data
+        Path to temporary PDF file
     """
-    # Create a BytesIO buffer to receive the PDF data
-    buffer = BytesIO()
+    log_memory_usage("Starting PDF generation")
     
-    # Create the PDF document using ReportLab
+    # Create a temporary file to store the PDF
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+    temp_filename = temp_file.name
+    temp_file.close()
+    
+    # Create the PDF document using ReportLab with the temporary file
     doc = SimpleDocTemplate(
-        buffer,
+        temp_filename,
         pagesize=landscape(letter),
         rightMargin=0.5*inch,
         leftMargin=0.5*inch,
@@ -120,129 +155,357 @@ def generate_audit_pdf(
     elements.append(meta_table)
     elements.append(Spacer(1, 0.2*inch))
     
-    # Process each machine
-    for machine in machines:
-        elements.append(Paragraph(f"{machine.name} (ID: {machine.machine_id})", machine_title_style))
+    # Reduce batch size further for lower memory usage
+    max_machines_per_batch = 3  # Reduced from 5
+    
+    log_memory_usage("Before processing machine batches")
+    
+    # Process machines in batches to reduce memory usage
+    for i in range(0, len(machines), max_machines_per_batch):
+        batch = machines[i:i+max_machines_per_batch]
+        batch_elements = []  # Store elements for this batch
         
-        if machine.id in machine_data:
-            # Create calendar display for this machine
-            calendar_data = []
+        for machine in batch:
+            batch_elements.append(Paragraph(f"{machine.name} (ID: {machine.machine_id})", machine_title_style))
             
-            # Add calendar headers
-            calendar_data.append(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
-            
-            # Get weeks data using the provided function
-            weeks = get_calendar_weeks(start_date, end_date)
-            
-            # Process each week
-            for week in weeks:
-                week_row = []
-                for date in week:
-                    if date:
-                        # Format the cell content for this date
-                        date_content = f"{date.day}"
-                        
-                        # Add audit entries if they exist for this date
-                        date_str = date.strftime('%Y-%m-%d')
-                        if machine.id in machine_data and date_str in machine_data[machine.id]:
-                            for audit in machine_data[machine.id][date_str]:
-                                task_name = audit_tasks[audit.audit_task_id].name
-                                user_name = users[audit.user_id].full_name
-                                time_str = audit.created_at.strftime('%H:%M')
-                                date_content += f"\n{time_str} - {task_name}\n{user_name}"
-                        
-                        week_row.append(date_content)
-                    else:
-                        week_row.append("")
+            if machine.id in machine_data:
+                # Create calendar display for this machine
+                calendar_data = []
                 
-                calendar_data.append(week_row)
+                # Add calendar headers
+                calendar_data.append(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
+                
+                # Get weeks data using the provided function
+                weeks = get_calendar_weeks(start_date, end_date)
+                
+                # Process each week
+                for week in weeks:
+                    week_row = []
+                    for date in week:
+                        if date:
+                            # Format the cell content for this date
+                            date_content = f"{date.day}"
+                            
+                            # Add audit entries if they exist for this date
+                            date_str = date.strftime('%Y-%m-%d')
+                            if machine.id in machine_data and date_str in machine_data[machine.id]:
+                                for audit in machine_data[machine.id][date_str]:
+                                    task_name = audit_tasks[audit.audit_task_id].name
+                                    user_name = users[audit.user_id].full_name
+                                    time_str = audit.created_at.strftime('%H:%M')
+                                    date_content += f"\n{time_str} - {task_name}\n{user_name}"
+                            
+                            week_row.append(date_content)
+                        else:
+                            week_row.append("")
+                    
+                    calendar_data.append(week_row)
+                
+                # Create the calendar table
+                cal_table = Table(calendar_data, colWidths=[1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch])
+                
+                # Style the calendar
+                table_style = [
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Headers bold
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgreen),  # Header background
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.darkgreen),  # Header text color
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Center align headers
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Top align all cells
+                    ('BOX', (0, 0), (-1, -1), 1, colors.green),  # Box around table
+                    ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.green),  # Inner grid lines
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),  # Smaller font for calendar entries
+                ]
+                
+                # Apply additional styling for specific dates if needed
+                today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+                for i, week in enumerate(weeks):
+                    for j, date in enumerate(week):
+                        if date and date.strftime('%Y-%m-%d') == today_str:
+                            table_style.append(('BACKGROUND', (j, i+1), (j, i+1), colors.lightyellow))
+                
+                cal_table.setStyle(TableStyle(table_style))
+                batch_elements.append(cal_table)
+                
+            else:
+                # No data for this machine
+                batch_elements.append(Paragraph("No audit records found for this machine in the selected date range.", normal_style))
             
-            # Create the calendar table
-            cal_table = Table(calendar_data, colWidths=[1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch, 1.4*inch])
+            batch_elements.append(Spacer(1, 0.2*inch))
             
-            # Style the calendar
-            table_style = [
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Headers bold
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgreen),  # Header background
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.darkgreen),  # Header text color
-                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Center align headers
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Top align all cells
-                ('BOX', (0, 0), (-1, -1), 1, colors.green),  # Box around table
-                ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.green),  # Inner grid lines
-                ('FONTSIZE', (0, 1), (-1, -1), 8),  # Smaller font for calendar entries
-            ]
+            # Add certification text for this machine section
+            certification_text = (
+                f"This document certifies that all recorded maintenance tasks have been performed according to "
+                f"AMRS Preventative Maintenance standards and protocols. Report ID: {report_id}"
+            )
+            batch_elements.append(Paragraph(certification_text, certification_style))
             
-            # Apply additional styling for specific dates if needed
-            today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-            for i, week in enumerate(weeks):
-                for j, date in enumerate(week):
-                    if date and date.strftime('%Y-%m-%d') == today_str:
-                        table_style.append(('BACKGROUND', (j, i+1), (j, i+1), colors.lightyellow))
-            
-            cal_table.setStyle(TableStyle(table_style))
-            elements.append(cal_table)
-            
-        else:
-            # No data for this machine
-            elements.append(Paragraph("No audit records found for this machine in the selected date range.", normal_style))
+            # Add a page break after each machine except the last one
+            if machine != machines[-1] and machine != batch[-1]:
+                batch_elements.append(Spacer(1, 0.5*inch))
+                batch_elements.append(PageBreak())
         
-        elements.append(Spacer(1, 0.2*inch))
+        # Add batch elements to document elements
+        elements.extend(batch_elements)
         
-        # Add certification text for this machine section
-        certification_text = (
-            f"This document certifies that all recorded maintenance tasks have been performed according to "
-            f"AMRS Preventative Maintenance standards and protocols. Report ID: {report_id}"
-        )
-        elements.append(Paragraph(certification_text, certification_style))
+        # Clear references to allow garbage collection
+        batch_elements = None
+        calendar_data = None
         
-        # Add a page break after each machine except the last one
-        if machine != machines[-1]:
-            elements.append(Spacer(1, 0.5*inch))
+        # Force garbage collection after processing a batch
+        log_memory_usage(f"After processing batch of {len(batch)} machines")
+        gc.collect()
+        
+        # Add a page break between batches if not the last batch
+        if i + max_machines_per_batch < len(machines):
             elements.append(PageBreak())
     
     # Build the PDF document
+    log_memory_usage("Before building PDF document")
     doc.build(elements)
+    log_memory_usage("After building PDF document")
     
-    # Reset buffer position to the beginning
-    buffer.seek(0)
-    return buffer
+    # Clear references to help garbage collection
+    elements = None
+    
+    # Force garbage collection
+    gc.collect()
+    
+    # Return the path to the temporary file
+    return temp_filename
 
 
-# Function to generate HTML to PDF using WeasyPrint for more complex layouts
-def generate_audit_pdf_from_html(html_content, base_url=None):
+# Wrapper to handle streaming response for Flask
+def get_pdf_response(pdf_path, filename="audit_report.pdf"):
     """
-    Generate a PDF from HTML content using WeasyPrint
+    Create a streaming response for a PDF file
+    
+    Args:
+        pdf_path: Path to the temporary PDF file
+        filename: Name to use for the downloaded file
+    
+    Returns:
+        A Flask response object with the PDF file
+    """
+    log_memory_usage("Before sending PDF response")
+    
+    @after_this_request
+    def cleanup(response):
+        try:
+            # Delete temporary file after response is sent
+            os.unlink(pdf_path)
+            log_memory_usage("After sending PDF and cleanup")
+        except Exception as e:
+            logging.error(f"Error removing temporary file: {e}")
+        return response
+    
+    return send_file(
+        pdf_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/pdf'
+    )
+
+
+# Optimized function to generate HTML to PDF using WeasyPrint for more complex layouts
+def generate_audit_pdf_from_html(html_content, base_url=None, chunk_size=5):
+    """
+    Generate a PDF from HTML content using WeasyPrint.
+    Optimized for low-memory environments by chunking the content.
     
     Args:
         html_content: HTML string content
         base_url: Base URL for resolving links
+        chunk_size: Number of pages to process at once (for pagination)
         
     Returns:
-        BytesIO object containing the PDF data
+        Path to temporary PDF file
     """
-    font_config = FontConfiguration()
-    html = HTML(string=html_content, base_url=base_url)
+    log_memory_usage("Before WeasyPrint PDF generation")
     
-    # Create custom CSS for PDF rendering
-    css = CSS(string='''
-        @page {
-            size: letter landscape;
-            margin: 1cm;
-            @bottom-center {
-                content: "Page " counter(page) " of " counter(pages);
+    # Create a temporary file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+    temp_filename = temp_file.name
+    temp_file.close()
+    
+    # Check if the HTML content is very large and might need pagination
+    # (Rough estimate: 1 MB of HTML could produce a large PDF that consumes significant memory)
+    html_size_mb = len(html_content) / (1024 * 1024)
+    
+    if html_size_mb > 0.5:  # If HTML content is more than 0.5MB
+        # Use a chunking approach for large documents
+        logging.info(f"Large HTML content detected ({html_size_mb:.2f} MB), using paginated approach")
+        return _generate_chunked_pdf(html_content, base_url, temp_filename, chunk_size)
+    else:
+        # For smaller documents, use the direct approach
+        font_config = FontConfiguration()
+        html = HTML(string=html_content, base_url=base_url)
+        
+        # Create custom CSS for PDF rendering
+        css = CSS(string='''
+            @page {
+                size: letter landscape;
+                margin: 1cm;
+                @bottom-center {
+                    content: "Page " counter(page) " of " counter(pages);
+                }
             }
-        }
-        body {
-            font-family: sans-serif;
-        }
-    ''', font_config=font_config)
+            body {
+                font-family: sans-serif;
+            }
+        ''', font_config=font_config)
+        
+        # Generate PDF directly to file instead of memory buffer
+        html.write_pdf(temp_filename, stylesheets=[css], font_config=font_config)
+        
+        # Force garbage collection
+        html = None
+        css = None
+        font_config = None
+        gc.collect()
+        
+        log_memory_usage("After WeasyPrint PDF generation")
+        
+        # Return path to the file
+        return temp_filename
+
+
+def _generate_chunked_pdf(html_content, base_url, output_filename, chunk_size=5):
+    """
+    Generate a PDF by splitting the HTML content into chunks to reduce memory usage.
     
-    # Generate PDF
-    buffer = BytesIO()
-    html.write_pdf(buffer, stylesheets=[css], font_config=font_config)
-    buffer.seek(0)
-    return buffer
+    Args:
+        html_content: Full HTML content to render
+        base_url: Base URL for resolving links
+        output_filename: Path to the output PDF file
+        chunk_size: Number of elements to process in each chunk
+        
+    Returns:
+        Path to the generated PDF file
+    """
+    from pdfrw import PdfReader, PdfWriter
+    import re
+    
+    # Create a lightweight HTML splitter using regex
+    # This is a simplified approach - in production you may need more robust HTML parsing
+    split_pattern = r'<div\s+class=["\']page-break["\'][^>]*>|<div\s+style=["\'][^"\']*page-break-before:\s*always[^"\']*["\'][^>]*>'
+    html_parts = re.split(split_pattern, html_content)
+    
+    if len(html_parts) <= 1:
+        # If no logical page breaks found, try to estimate reasonable chunks
+        estimated_chunks = max(1, int(len(html_content) / 100000))  # ~100KB per chunk
+        chunk_size = len(html_content) // estimated_chunks
+        
+        html_parts = [html_content[i:i+chunk_size] for i in range(0, len(html_content), chunk_size)]
+    
+    # Process chunks
+    pdf_parts = []
+    
+    for i in range(0, len(html_parts), chunk_size):
+        chunk = html_parts[i:i+chunk_size]
+        
+        # Create complete HTML for each chunk
+        # Extract head section from original HTML
+        head_match = re.search(r'<head>.*?</head>', html_content, re.DOTALL)
+        head_content = head_match.group(0) if head_match else '<head><meta charset="UTF-8"></head>'
+        
+        chunk_html = f'<!DOCTYPE html><html>{head_content}<body>'
+        for part in chunk:
+            chunk_html += part
+        chunk_html += '</body></html>'
+        
+        # Create a temporary file for this chunk
+        temp_chunk = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        temp_chunk_name = temp_chunk.name
+        temp_chunk.close()
+        pdf_parts.append(temp_chunk_name)
+        
+        # Render this chunk
+        font_config = FontConfiguration()
+        html = HTML(string=chunk_html, base_url=base_url)
+        css = CSS(string='''
+            @page {
+                size: letter landscape;
+                margin: 1cm;
+            }
+            body {
+                font-family: sans-serif;
+            }
+        ''', font_config=font_config)
+        
+        html.write_pdf(temp_chunk_name, stylesheets=[css], font_config=font_config)
+        
+        # Clean up to free memory
+        html = None
+        css = None
+        font_config = None
+        chunk_html = None
+        gc.collect()
+        
+        log_memory_usage(f"After processing chunk {i//chunk_size + 1}/{(len(html_parts)-1)//chunk_size + 1}")
+    
+    # Combine all PDFs
+    writer = PdfWriter()
+    
+    for part in pdf_parts:
+        reader = PdfReader(part)
+        writer.addpages(reader.pages)
+        reader = None  # Free memory
+    
+    writer.write(output_filename)
+    
+    # Cleanup temporary files
+    for part in pdf_parts:
+        try:
+            os.unlink(part)
+        except Exception as e:
+            logging.error(f"Error removing temporary chunk file: {e}")
+    
+    # Force garbage collection
+    writer = None
+    pdf_parts = None
+    html_parts = None
+    gc.collect()
+    
+    log_memory_usage("After combining PDF chunks")
+    
+    return output_filename
 
 
-# Import needed for page breaks
-from reportlab.platypus import PageBreak
+# Split the HTML content into pages for the paginated approach
+def split_html_into_pages(html_content, max_elements_per_page=100):
+    """
+    Split HTML content into multiple pages by adding page breaks
+    
+    Args:
+        html_content: HTML string content
+        max_elements_per_page: Maximum number of elements per page
+        
+    Returns:
+        HTML content with added page breaks
+    """
+    # This is a simplified approach - in production you may need more robust HTML parsing
+    import re
+    
+    # Count elements that might contribute to page size
+    element_pattern = r'<(table|div|tr|h[1-6]|p|img|ul|ol)[\s>]'
+    elements = re.findall(element_pattern, html_content, re.IGNORECASE)
+    
+    if len(elements) <= max_elements_per_page:
+        return html_content
+    
+    # Insert page breaks every max_elements_per_page elements
+    # Find all element start positions
+    positions = [m.start() for m in re.finditer(element_pattern, html_content, re.IGNORECASE)]
+    
+    # Insert page breaks at appropriate positions
+    result = html_content
+    offset = 0
+    page_break = '<div style="page-break-before: always;"></div>'
+    
+    for i in range(max_elements_per_page, len(positions), max_elements_per_page):
+        if i < len(positions):
+            insert_pos = positions[i] + offset
+            result = result[:insert_pos] + page_break + result[insert_pos:]
+            offset += len(page_break)
+    
+    return result
