@@ -64,11 +64,11 @@
         
         /* Machine Section */
         .machine-section {
-            margin-bottom: 60px; /* Increased space between machine sections */
+            margin-bottom: 80px; /* Increased from 60px */
             page-break-inside: avoid;
             width: 100%;
             position: relative;
-            padding-bottom: 30px; /* Add padding at bottom of each section */
+            padding-bottom: 50px; /* Increased from 30px */
         }
         
         /* Machine Header with Details */
@@ -105,72 +105,51 @@
             margin-right: 5px;
         }
         
-        /* Calendar Styles */
+        /* Calendar Styles - Fixed to prevent rows from being cut off */
         .monthly-calendar-with-legend {
             display: flex;
             flex-wrap: nowrap;
             gap: 10px;
             width: 100%;
-            min-height: 380px; /* Establish a minimum height to fill more of the page */
+            min-height: 420px; /* Increased minimum height for more space */
+            margin-bottom: 50px; /* Extra bottom margin */
         }
         
         .monthly-calendar {
-            flex: 4; /* Further increased for even better calendar space usage */
+            flex: 4;
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible; /* Changed from hidden to visible */
             display: flex;
-            flex-direction: column; /* Stack children vertically */
-            margin-bottom: 40px;
+            flex-direction: column;
+            margin-bottom: 60px; /* Increased bottom margin */
+            min-height: 420px; /* Specific minimum height */
         }
         
-        .month-header {
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-bottom: 0;
-            color: #334155;
-            text-align: center;
-            padding: 8px;
-            background-color: #f1f5f9;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-            border: 1px solid #c8d1d9;
-            border-bottom: none;
-            flex-shrink: 0; /* Prevent header from shrinking */
-        }
-        
-        /* Calendar Table Scaling */
+        /* Calendar Table Scaling - Improved to avoid cut-off rows */
         .calendar-table {
             width: 100%;
             border-collapse: collapse;
             border: 1px solid #c8d1d9;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            flex-grow: 1; /* Allow the table to grow and fill available space */
-            table-layout: fixed; /* Ensure columns have equal width */
-            height: 100%; /* Make sure table takes full height */
+            flex-grow: 1;
+            table-layout: fixed;
+            min-height: 380px; /* Minimum height to fit all rows */
+            margin-bottom: 30px; /* Added bottom margin */
         }
         
         .calendar-table tbody {
-            height: 100%; /* Full height */
+            min-height: 360px; /* Ensure tbody has minimum height */
         }
         
         .calendar-table tr {
-            height: 16.66%; /* Even distribution for 6 rows (typical calendar month) */
-        }
-        
-        .calendar-header th {
-            background-color: #f1f5f9;
-            padding: 5px;
-            text-align: center;
-            font-weight: 600;
-            border: 1px solid #c8d1d9;
-            color: #334155;
-            font-size: 0.85rem;
+            height: 60px; /* Fixed absolute height instead of percentage */
+            min-height: 60px; /* Ensure minimum height for each row */
         }
         
         .calendar-day {
-            min-height: 45px; /* Minimum height */
-            height: 80px; /* Fixed height with scrolling for overflow */
+            min-height: 55px; /* Increased minimum height */
+            height: 60px; /* Fixed absolute height */
             width: 14.28%;
             vertical-align: top;
             padding: 4px;
@@ -180,144 +159,30 @@
             overflow: auto;
         }
         
-        .empty-day {
-            background-color: #f1f5f9;
-            border: 1px solid #c8d1d9;
-        }
-        
-        .today {
-            background-color: #e8f4ff;
-            border: 2px solid #007bff !important;
-        }
-        
-        .date-number {
-            font-weight: bold;
-            margin-bottom: 2px;
-            text-align: right;
-            font-size: 0.75rem;
-            color: #495057;
-        }
-        
-        .today .date-number {
-            color: #007bff;
-        }
-        
-        .task-markers {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 2px;
-            min-height: 15px;
-        }
-        
-        .task-marker {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: #ccc;
-        }
-        
-        /* Category-specific colors */
-        .task-marker[data-category="electrical"], 
-        .legend-marker.category-electrical {
-            background-color: #dc3545;
-        }
-        
-        .task-marker[data-category="mechanical"], 
-        .legend-marker.category-mechanical {
-            background-color: #0d6efd;
-        }
-        
-        .task-marker[data-category="hydraulic"], 
-        .legend-marker.category-hydraulic {
-            background-color: #fd7e14;
-        }
-        
-        .task-marker[data-category="pneumatic"], 
-        .legend-marker.category-pneumatic {
-            background-color: #6f42c1;
-        }
-        
-        .task-marker[data-category="general"], 
-        .legend-marker.category-general {
-            background-color: #198754;
-        }
-        
-        .task-marker[data-category="electronic"], 
-        .legend-marker.category-electronic {
-            background-color: #20c997;
-        }
-        
-        .task-marker[data-category="structural"], 
-        .legend-marker.category-structural {
-            background-color: #6c757d;
-        }
-        
-        /* Legend Styles */
-        .calendar-legend {
-            padding: 8px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            height: fit-content;
-            min-width: 150px;
-            flex: 1;
-            max-width: 30%; /* Limit the width to ensure the calendar gets enough space */
-        }
-        
-        .legend-title {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: #495057;
-            border-bottom: 1px solid #dee2e6;
-            padding-bottom: 3px;
-            font-size: 0.85rem;
-        }
-        
-        .legend-items {
+        /* Container for the entire calendar + legend + tasks layout */
+        .print-calendar-container {
             display: flex;
             flex-direction: column;
-            gap: 3px;
+            gap: 10px;
+            width: 100%;
+            height: auto;
+            margin-bottom: 60px; /* Increased bottom margin */
+            overflow: visible; /* Ensure content isn't clipped */
         }
         
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        /* Complete machine section with content and footer */
+        .machine-content-with-footer {
+            page-break-inside: avoid;
+            min-height: 500px; /* Minimum height to fit calendar and footer */
+            margin-bottom: 60px; /* Added bottom margin */
+            overflow: visible; /* Ensure content isn't clipped */
         }
         
-        .legend-marker {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        
-        .today-marker {
-            background-color: #007bff;
-            border: 1px solid #0056b3;
-        }
-        
-        .legend-text {
-            font-size: 0.8rem;
-            color: #495057;
-        }
-        
-        .legend-schedule {
-            font-size: 0.7rem;
-            color: #6c757d;
-            font-style: italic;
-            display: block;
-            margin-top: 2px;
-        }
-        
-        /* No-data message */
-        .no-data {
-            padding: 10px;
-            text-align: center;
-            color: #6c757d;
-            font-style: italic;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border: 1px dashed #dee2e6;
+        /* Print specific styles to optimize layout */
+        @page {
+            size: letter landscape;
+            margin: 1.5cm; /* Increased margin to ensure content isn't cut off */
+            padding-bottom: 2cm; /* Extra bottom padding */
         }
         
         /* Footer improvements */
@@ -335,28 +200,6 @@
             clear: both;
         }
         
-        /* Complete machine section with content and footer */
-        .machine-content-with-footer {
-            page-break-inside: avoid;
-        }
-        
-        /* Print specific styles to optimize layout */
-        @page {
-            size: letter landscape;
-            margin: 1.5cm; /* Increased margin to ensure content isn't cut off */
-            padding-bottom: 2cm; /* Extra bottom padding */
-        }
-        
-        /* Container for the entire calendar + legend + tasks layout */
-        .print-calendar-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            width: 100%; /* Ensure full width usage */
-            height: auto; /* Allow height to adjust based on content */
-            margin-bottom: 40px; /* Extra space below calendar */
-        }
-
         /* Additional footer spacing fixes for print view */
         body {
             /* Ensure adequate spacing for the footer in the print view */
