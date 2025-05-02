@@ -7,9 +7,10 @@
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 10px; /* Reduced padding to maximize space */
             color: #333;
-            font-size: 9pt; /* Reduced overall font size */
+            font-size: 9pt;
+            max-width: 100%; /* Ensure content uses full width */
         }
         
         /* Header & Print Layout */
@@ -63,10 +64,9 @@
         
         /* Machine Section */
         .machine-section {
-            /* Remove page break */
-            /* page-break-before: always; */
             margin-bottom: 15px;
-            page-break-inside: avoid; /* Keep each machine section together */
+            page-break-inside: avoid;
+            width: 100%; /* Ensure full width usage */
         }
         
         /* Machine Header with Details */
@@ -106,15 +106,19 @@
         /* Calendar Styles */
         .monthly-calendar-with-legend {
             display: flex;
-            flex-wrap: nowrap; /* Prevent wrapping */
+            flex-wrap: nowrap;
             gap: 10px;
+            width: 100%;
+            min-height: 380px; /* Establish a minimum height to fill more of the page */
         }
         
         .monthly-calendar {
-            flex: 2;
+            flex: 4; /* Further increased for even better calendar space usage */
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
             border-radius: 8px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column; /* Stack children vertically */
         }
         
         .month-header {
@@ -129,13 +133,26 @@
             border-top-right-radius: 8px;
             border: 1px solid #c8d1d9;
             border-bottom: none;
+            flex-shrink: 0; /* Prevent header from shrinking */
         }
         
+        /* Calendar Table Scaling */
         .calendar-table {
             width: 100%;
             border-collapse: collapse;
             border: 1px solid #c8d1d9;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            flex-grow: 1; /* Allow the table to grow and fill available space */
+            table-layout: fixed; /* Ensure columns have equal width */
+            height: 100%; /* Make sure table takes full height */
+        }
+        
+        .calendar-table tbody {
+            height: 100%; /* Full height */
+        }
+        
+        .calendar-table tr {
+            height: 16.66%; /* Even distribution for 6 rows (typical calendar month) */
         }
         
         .calendar-header th {
@@ -149,7 +166,8 @@
         }
         
         .calendar-day {
-            height: 40px; /* Reduced height */
+            min-height: 45px; /* Minimum height */
+            height: auto; /* Allow flexible height */
             width: 14.28%;
             vertical-align: top;
             padding: 4px;
@@ -238,6 +256,7 @@
             height: fit-content;
             min-width: 150px;
             flex: 1;
+            max-width: 30%; /* Limit the width to ensure the calendar gets enough space */
         }
         
         .legend-title {
@@ -315,7 +334,7 @@
         /* Print specific styles to optimize layout */
         @page {
             size: letter landscape;
-            margin: 1.5cm; /* Reduced margins for more content space */
+            margin: 1cm; /* Further reduced margins to maximize content space */
         }
         
         /* Container for the entire calendar + legend + tasks layout */
@@ -323,6 +342,8 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            width: 100%; /* Ensure full width usage */
+            height: auto; /* Allow height to adjust based on content */
         }
     </style>
 </head>
