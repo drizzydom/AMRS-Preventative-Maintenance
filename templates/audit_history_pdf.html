@@ -64,9 +64,11 @@
         
         /* Machine Section */
         .machine-section {
-            margin-bottom: 15px;
+            margin-bottom: 60px; /* Increased space between machine sections */
             page-break-inside: avoid;
-            width: 100%; /* Ensure full width usage */
+            width: 100%;
+            position: relative;
+            padding-bottom: 30px; /* Add padding at bottom of each section */
         }
         
         /* Machine Header with Details */
@@ -318,14 +320,19 @@
             border: 1px dashed #dee2e6;
         }
         
-        /* Footer */
+        /* Footer improvements */
         .certification-footer {
-            margin-top: 10px;
+            margin-top: 20px;
             font-size: 8pt;
             color: #666;
             border-top: 1px solid #aaa;
-            padding-top: 5px;
+            padding-top: 15px;
+            padding-bottom: 15px;
             font-style: italic;
+            position: relative;
+            bottom: 0;
+            width: 100%;
+            clear: both;
         }
         
         /* Complete machine section with content and footer */
@@ -336,7 +343,8 @@
         /* Print specific styles to optimize layout */
         @page {
             size: letter landscape;
-            margin: 1cm; /* Further reduced margins to maximize content space */
+            margin: 1.5cm; /* Increased margin to ensure content isn't cut off */
+            padding-bottom: 2cm; /* Extra bottom padding */
         }
         
         /* Container for the entire calendar + legend + tasks layout */
@@ -346,12 +354,16 @@
             gap: 10px;
             width: 100%; /* Ensure full width usage */
             height: auto; /* Allow height to adjust based on content */
+            margin-bottom: 40px; /* Extra space below calendar */
         }
 
         /* Additional footer spacing fixes for print view */
         body {
             /* Ensure adequate spacing for the footer in the print view */
-            margin-bottom: 80px;
+            margin-bottom: 100px; /* Increased bottom margin */
+            padding-bottom: 50px; /* Additional padding at page bottom */
+            min-height: 100vh;
+            position: relative;
         }
 
         .content-container {
@@ -367,6 +379,11 @@
         /* Ensure the content wrapper has adequate padding */
         .page-content {
             padding-bottom: 80px;
+        }
+
+        /* Ensure the last machine doesn't get cut off */
+        .machine-section:last-child {
+            margin-bottom: 100px; /* Extra margin for last section */
         }
     </style>
 </head>
