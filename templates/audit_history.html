@@ -76,7 +76,9 @@
                             <label for="month_year" class="form-label">Month</label>
                             <select class="form-select" id="month_year" name="month_year">
                                 {% for month_option in available_months %}
-                                <option value="{{ month_option.value }}" {% if selected_month == month_option.value %}selected{% endif %}>{{ month_option.display }}</option>
+                                <option value="{{ month_option.value }}" {% if selected_month == month_option.value %}selected{% endif %}>
+                                    {{ month_option.display }}
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -779,6 +781,19 @@
         }
     }
     
+    /* Month dropdown fix */
+    #month_year {
+        z-index: 1000;
+        position: relative; /* Ensure it's properly positioned */
+        opacity: 1 !important; /* Force visibility */
+        display: block !important; /* Ensure it's displayed */
+    }
+    
+    /* Debug outlines to see if elements are properly sized/positioned */
+    .form-select {
+        border: 1px solid #0d6efd !important; /* Make form selects more visible */
+    }
+    
     /* No-data message */
     .no-data {
         padding: 20px;
@@ -819,6 +834,19 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Debug code for month dropdown
+        console.log('DOM fully loaded');
+        const monthDropdown = document.getElementById('month_year');
+        if (monthDropdown) {
+            console.log('Month dropdown found:', monthDropdown);
+            console.log('Options count:', monthDropdown.options.length);
+            for (let i = 0; i < monthDropdown.options.length; i++) {
+                console.log(`Option ${i}:`, monthDropdown.options[i].text, monthDropdown.options[i].value);
+            }
+        } else {
+            console.error('Month dropdown not found!');
+        }
+        
         // Add tooltips to task markers
         const taskMarkers = document.querySelectorAll('.task-marker');
         taskMarkers.forEach(marker => {
