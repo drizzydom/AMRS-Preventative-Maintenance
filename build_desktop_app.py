@@ -130,16 +130,27 @@ def main():
     except Exception as e:
         print(f"[BUILD] Failed to run post-build file copy: {e}")
     
-    # Install WeasyPrint DLLs
+    # Install WeasyPrint executable (new approach)
     try:
-        print("[BUILD] Installing WeasyPrint Windows DLL dependencies...")
+        print("[BUILD] Installing WeasyPrint executable...")
         subprocess.check_call([
             sys.executable,
-            os.path.join(os.path.dirname(__file__), 'install_weasyprint_windows_deps.py')
+            os.path.join(os.path.dirname(__file__), 'install_weasyprint_exe.py')
         ])
-        print("[BUILD] WeasyPrint DLLs installed.")
+        print("[BUILD] WeasyPrint executable installed.")
     except Exception as e:
-        print(f"[BUILD] Failed to install WeasyPrint DLLs: {e}")
+        print(f"[BUILD] Failed to install WeasyPrint executable: {e}")
+        # Fall back to the DLL approach if exe installation fails
+        try:
+            print("[BUILD] Falling back to WeasyPrint DLL installation...")
+            subprocess.check_call([
+                sys.executable,
+                os.path.join(os.path.dirname(__file__), 'install_weasyprint_windows_deps.py')
+            ])
+            print("[BUILD] WeasyPrint DLLs installed.")
+        except Exception as e2:
+            print(f"[BUILD] Failed to install WeasyPrint DLLs: {e2}")
+            print("[BUILD] PDF generation may not work in the packaged app.")
     
     print("\n[BUILD] Build complete! Check the 'electron_app/dist' folder for your Windows installer or .exe file.\n")
 

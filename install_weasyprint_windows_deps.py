@@ -2,17 +2,43 @@ import os
 import zipfile
 import urllib.request
 import shutil
-import base64
 import tempfile
+import sys
 
 print("[WeasyPrint DLL Installer] Starting installation...")
 
 # Path to your packaged venv Scripts directory (adjust if needed)
 VENV_SCRIPTS = os.path.join(os.path.dirname(__file__), 'dist', 'win-unpacked', 'resources', 'venv', 'Scripts')
 
+# Path to local DLLs (if they exist)
+LOCAL_DLLS_DIR = os.path.join(os.path.dirname(__file__), 'dependencies', 'weasyprint-dlls')
+
 # Create the Scripts directory if it doesn't exist
 os.makedirs(VENV_SCRIPTS, exist_ok=True)
 print(f"[WeasyPrint DLL Installer] Ensuring Scripts directory exists: {VENV_SCRIPTS}")
+
+# Check for local DLLs first
+if os.path.exists(LOCAL_DLLS_DIR) and os.listdir(LOCAL_DLLS_DIR):
+    print(f"[WeasyPrint DLL Installer] Found local DLLs in {LOCAL_DLLS_DIR}")
+    # Copy all DLLs from the local directory to the Scripts directory
+    dll_count = 0
+    for file in os.listdir(LOCAL_DLLS_DIR):
+        if file.lower().endswith('.dll'):
+            src = os.path.join(LOCAL_DLLS_DIR, file)
+            dst = os.path.join(VENV_SCRIPTS, file)
+            print(f"[WeasyPrint DLL Installer] Copying {file} to Scripts directory")
+            shutil.copy2(src, dst)
+            dll_count += 1
+    
+    if dll_count > 0:
+        print(f"[WeasyPrint DLL Installer] Successfully copied {dll_count} DLLs from local directory")
+        print("[WeasyPrint DLL Installer] Installation process completed")
+        # Exit successfully - we've copied the local DLLs
+        sys.exit(0)
+    else:
+        print("[WeasyPrint DLL Installer] No DLL files found in local directory, falling back to download")
+else:
+    print("[WeasyPrint DLL Installer] No local DLLs found, will attempt to download")
 
 # Try downloading from multiple sources
 success = False
@@ -40,9 +66,6 @@ for url in urls:
         
         # Extract the zip
         with zipfile.ZipFile(deps_zip, 'r') as zip_ref:
-            # Check the content structure - some archives have a subfolder, others don't
-            file_list = zip_ref.namelist()
-            
             # Extract to the Scripts directory
             print(f"[WeasyPrint DLL Installer] Extracting DLLs to {VENV_SCRIPTS}")
             zip_ref.extractall(VENV_SCRIPTS)
@@ -58,20 +81,19 @@ for url in urls:
 if not success:
     print("[WeasyPrint DLL Installer] All downloads failed. Creating minimal DLL set from embedded data.")
     try:
-        # Provide a minimal set of DLLs as fallback (this is the libcairo DLL only)
-        # This won't provide full functionality but will allow the app to start
+        # Provide a minimal set of DLLs as fallback
         dlls = {
-            "libcairo-2.dll": "base64_encoded_content_here"  # Replace with actual base64 encoded DLL
+            "libcairo-2.dll": "placeholder"
         }
         
-        for dll_name, encoded_content in dlls.items():
+        for dll_name, placeholder in dlls.items():
             dll_path = os.path.join(VENV_SCRIPTS, dll_name)
             # Skip if we already have this DLL
             if os.path.exists(dll_path):
                 continue
                 
             print(f"[WeasyPrint DLL Installer] Creating fallback DLL: {dll_name}")
-            # For now, just create an empty file as a placeholder
+            # Just create an empty file as a placeholder
             with open(dll_path, 'wb') as f:
                 f.write(b'')
     except Exception as e:
@@ -79,8 +101,6 @@ if not success:
     
     print("[WeasyPrint DLL Installer] ⚠️ WeasyPrint DLLs could not be installed. PDF generation will not work.")
     print("[WeasyPrint DLL Installer] ⚠️ You will need to manually install the DLLs later.")
-    # Don't fail the build - this is a non-fatal error
-    # We'll handle missing DLLs gracefully at runtime instead
 
 # Success message or report what DLLs were found
 dll_count = 0
