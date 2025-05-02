@@ -392,8 +392,8 @@ def setup_enhanced_audit_history():
                 
                 # --- Generate available months for dropdown ---
                 logger.debug("Generating available months for dropdown")
-                # Start from January 2024 (to ensure earlier months are available)
-                start_month, start_year = 1, 2024
+                # Start from April 2025 (to ensure we only include months with data)
+                start_month, start_year = 4, 2025
                 available_months = []
 
                 # Get current date for comparison
@@ -547,6 +547,101 @@ def setup_enhanced_audit_history():
         # Register the debug endpoint
         app.route('/debug/audit-history-data')(debug_audit_history_data)
         logger.info("Registered debug endpoint at /debug/audit-history-data")
+        
+        # Add a specific endpoint to debug the month dropdown issue
+        @app.route('/debug/audit-history-months')
+        @login_required
+        def debug_audit_history_months():
+            if not current_user.is_admin:
+                return jsonify({"error": "Admin access required"}), 403
+                
+            try:
+                import calendar
+                from datetime import datetime, date
+                
+                # Debug info about dates
+                curr_date = datetime.now().date()
+                
+                # Use April 2025 as starting point (first month with data)
+                start_month, start_year = 4, 2025
+                available_months = []
+                
+                # Add a few months into the future for planning purposes
+                future_months = 3
+                current_month, current_year = curr_date.month, curr_date.year
+                
+                if current_month + future_months > 12:
+                    future_year = current_year + ((current_month + future_months) // 12)
+                    future_month = (current_month + future_months) % 12
+                    if future_month == 0:
+                        future_month = 12
+                else:
+                    future_year = current_year
+                    future_month = current_month + future_months
+                end_date = date(future_year, future_month, 1)
+                
+                # Generate the dropdown options
+                temp_date = date(start_year, start_month, 1)
+                
+                # Store all generated month information for debugging
+                month_generation = []
+                
+                # Loop through months until we reach end date
+                while temp_date <= end_date:
+                    m = temp_date.month
+                    y = temp_date.year
+                    value = f"{y:04d}-{m:02d}"
+                    display = f"{calendar.month_name[m]} {y}"
+                    
+                    available_months.append({'value': value, 'display': display})
+                    month_generation.append({
+                        'month': m,
+                        'year': y,
+                        'value': value,
+                        'display': display,
+                        'date': str(temp_date)
+                    })
+                    
+                    # Move to next month
+                    if m == 12:
+                        temp_date = date(y + 1, 1, 1)
+                    else:
+                        temp_date = date(y, m + 1, 1)
+                
+                # Sort in reverse chronological order (newest first)
+                available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+                
+                # Check for any recent audit completions to verify data exists
+                recent_months = db.session.query(
+                    func.extract('year', AuditTaskCompletion.date).label('year'),
+                    func.extract('month', AuditTaskCompletion.date).label('month'),
+                    func.count().label('count')
+                ).group_by(
+                    func.extract('year', AuditTaskCompletion.date),
+                    func.extract('month', AuditTaskCompletion.date)
+                ).order_by(
+                    func.extract('year', AuditTaskCompletion.date).desc(),
+                    func.extract('month', AuditTaskCompletion.date).desc()
+                ).limit(5).all()
+                
+                recent_month_data = [{'year': int(r.year), 'month': int(r.month), 'count': r.count} for r in recent_months]
+                
+                return jsonify({
+                    "current_date": str(curr_date),
+                    "start_date": f"{start_year}-{start_month:02d}-01",
+                    "end_date": str(end_date),
+                    "month_generation_steps": month_generation,
+                    "final_available_months": [f"{m['display']} ({m['value']})" for m in available_months],
+                    "recent_audit_completions_by_month": recent_month_data
+                })
+                
+            except Exception as e:
+                logger.error(f"Error in debug months endpoint: {str(e)}")
+                return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+                
+        # Register the months debug endpoint
+        app.route('/debug/audit-history-months')(debug_audit_history_months)
+        logger.info("Registered months debug endpoint at /debug/audit-history-months")
         
         return True
         
