@@ -116,6 +116,30 @@ def bundle_encryption_key():
         print("[BUILD] The desktop app will generate a new key during installation.")
         print("[BUILD] Note: This means users won't be able to read data encrypted by the Render instance.")
 
+def copy_flask_resources():
+    """
+    Ensure app.py, static/, and templates/ are copied to the packaged resources directory.
+    """
+    import shutil
+    base_dir = os.path.dirname(__file__)
+    dist_resources = os.path.join(base_dir, 'electron_app', 'dist', 'win-unpacked', 'resources')
+    os.makedirs(dist_resources, exist_ok=True)
+    # Copy app.py
+    shutil.copy2(os.path.join(base_dir, 'app.py'), os.path.join(dist_resources, 'app.py'))
+    # Copy static/
+    static_src = os.path.join(base_dir, 'static')
+    static_dst = os.path.join(dist_resources, 'static')
+    if os.path.exists(static_dst):
+        shutil.rmtree(static_dst)
+    shutil.copytree(static_src, static_dst)
+    # Copy templates/
+    templates_src = os.path.join(base_dir, 'templates')
+    templates_dst = os.path.join(dist_resources, 'templates')
+    if os.path.exists(templates_dst):
+        shutil.rmtree(templates_dst)
+    shutil.copytree(templates_src, templates_dst)
+    print("[BUILD] Copied app.py, static/, and templates/ to packaged resources.")
+
 def main():
     print("\n===== AMRS Desktop App Build Script =====\n")
     ensure_venv()
@@ -149,6 +173,9 @@ def main():
         print("[BUILD] Post-build file copy completed.")
     except Exception as e:
         print(f"[BUILD] Failed to run post-build file copy: {e}")
+    
+    # Ensure Flask resources are copied
+    copy_flask_resources()
     
     # Install WeasyPrint executable (new approach)
     try:

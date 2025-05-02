@@ -3,15 +3,42 @@ import shutil
 import subprocess
 import sys
 import platform
+import logging
+import urllib.request
+import zipfile
+import tempfile
+from pathlib import Path
 
-print("Running post-build file copy to ensure all required files are present...")
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join(os.path.dirname(__file__), 'post_build_copy.log')),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+logger.info("Running post-build file copy to ensure all required files are present...")
 
 # Get the resources directory in the packaged app
-RESOURCES_DIR = os.path.join(os.path.dirname(__file__), 'dist', 'win-unpacked', 'resources')
+ELECTRON_DIR = os.path.join(os.path.dirname(__file__), 'electron_app')
+RESOURCES_DIR = os.path.join(ELECTRON_DIR, 'dist', 'win-unpacked', 'resources')
+VENV_SCRIPTS_DIR = os.path.join(RESOURCES_DIR, 'venv', 'Scripts')
 
+# Create the resources directory if it doesn't exist
 if not os.path.exists(RESOURCES_DIR):
-    print(f"Resources directory not found at {RESOURCES_DIR}")
-    sys.exit(1)
+    logger.warning(f"Resources directory not found at {RESOURCES_DIR}, creating it")
+    os.makedirs(RESOURCES_DIR, exist_ok=True)
+
+# Create the venv Scripts directory if it doesn't exist
+if not os.path.exists(VENV_SCRIPTS_DIR):
+    logger.warning(f"Venv Scripts directory not found at {VENV_SCRIPTS_DIR}, creating it")
+    os.makedirs(VENV_SCRIPTS_DIR, exist_ok=True)
+
+# Source directory (project root)
+SOURCE_DIR = os.path.dirname(__file__)
 
 # Files that must be copied to the root of the resources directory
 REQUIRED_FILES = [
@@ -32,7 +59,7 @@ REQUIRED_FILES = [
     'install_weasyprint_windows_deps.py'
 ]
 
-# Directories that must be copied
+# Directories that must be copied with all their contents
 REQUIRED_DIRS = [
     'static',
     'templates',
@@ -43,164 +70,150 @@ REQUIRED_DIRS = [
 # Copy required files
 copied_files = []
 for file in REQUIRED_FILES:
-    src = os.path.join(os.path.dirname(__file__), file)
+    src = os.path.join(SOURCE_DIR, file)
     dst = os.path.join(RESOURCES_DIR, file)
     if os.path.exists(src):
-        print(f"Copying {file} to resources directory")
-        shutil.copy2(src, dst)
-        copied_files.append(file)
+        logger.info(f"Copying {file} to resources directory")
+        try:
+            shutil.copy2(src, dst)
+            copied_files.append(file)
+            logger.info(f"Successfully copied {file}")
+        except Exception as e:
+            logger.error(f"Error copying {file}: {e}")
     else:
-        print(f"Warning: {file} not found in source directory")
+        logger.warning(f"Warning: {file} not found in source directory at {src}")
 
 # Copy required directories
 copied_dirs = []
 for dir_name in REQUIRED_DIRS:
-    src = os.path.join(os.path.dirname(__file__), dir_name)
-    dst = os.path.join(RESOURCES_DIR, dir_name)
-    if os.path.exists(src):
-        print(f"Copying directory {dir_name} to resources directory")
-        if os.path.exists(dst):
-            print(f"Removing existing directory: {dst}")
-            shutil.rmtree(dst)
-        shutil.copytree(src, dst)
-        copied_dirs.append(dir_name)
+    src_dir = os.path.join(SOURCE_DIR, dir_name)
+    dst_dir = os.path.join(RESOURCES_DIR, dir_name)
+    
+    if os.path.exists(src_dir):
+        logger.info(f"Copying directory {dir_name} to resources")
+        try:
+            # Remove the destination directory if it exists to ensure clean copy
+            if os.path.exists(dst_dir):
+                shutil.rmtree(dst_dir)
+            
+            # Copy the directory recursively
+            shutil.copytree(src_dir, dst_dir)
+            copied_dirs.append(dir_name)
+            logger.info(f"Successfully copied directory {dir_name}")
+        except Exception as e:
+            logger.error(f"Error copying directory {dir_name}: {e}")
     else:
-        print(f"Warning: Directory {dir_name} not found in source directory")
-        # Create empty directory
-        os.makedirs(dst, exist_ok=True)
+        logger.warning(f"Warning: Directory {dir_name} not found at {src_dir}")
 
-# Create an empty instance directory if it doesn't exist
-instance_dir = os.path.join(RESOURCES_DIR, 'instance')
-os.makedirs(instance_dir, exist_ok=True)
+# Verify static directory exists in source
+static_dir = os.path.join(SOURCE_DIR, 'static')
+if not os.path.exists(static_dir):
+    logger.error(f"CRITICAL: Static directory not found at {static_dir}")
+    # List the contents of the source directory to help diagnose
+    logger.info(f"Contents of source directory {SOURCE_DIR}:")
+    for item in os.listdir(SOURCE_DIR):
+        logger.info(f"- {item}")
 
-# Create a flask-debug.log file for startup debugging
-with open(os.path.join(RESOURCES_DIR, 'flask-debug.log'), 'w') as f:
-    f.write("Flask debug log created by post_build_copy.py\n")
-    f.write(f"Date: {__import__('datetime').datetime.now()}\n")
-    f.write(f"Copied files: {', '.join(copied_files)}\n")
-    f.write(f"Copied directories: {', '.join(copied_dirs)}\n")
+# ENHANCED WEASYPRINT SUPPORT: Ensure GTK DLLs are included
+logger.info("Ensuring WeasyPrint GTK dependencies are included...")
 
-# Ensure the Python venv has all required packages
-print("\n===== Verifying Python packages in the venv =====")
-venv_dir = os.path.join(RESOURCES_DIR, 'venv')
-if not os.path.exists(venv_dir):
-    print("Creating venv directory")
-    os.makedirs(venv_dir, exist_ok=True)
+# Path to local DLLs (if they exist)
+LOCAL_DLLS_DIR = os.path.join(SOURCE_DIR, 'dependencies', 'weasyprint-dlls')
 
-# Determine the Python executable path inside the venv
-if platform.system() == "Windows":
-    venv_python = os.path.join(venv_dir, "Scripts", "python.exe")
-    venv_pip = os.path.join(venv_dir, "Scripts", "pip.exe")
-else:
-    venv_python = os.path.join(venv_dir, "bin", "python")
-    venv_pip = os.path.join(venv_dir, "bin", "pip")
-
-venv_scripts_dir = os.path.join(venv_dir, "Scripts" if platform.system() == "Windows" else "bin")
-os.makedirs(venv_scripts_dir, exist_ok=True)
-
-# Check if the venv exists and has a Python executable
-if not os.path.exists(venv_python):
-    print(f"Creating a new venv at {venv_dir}")
-    try:
-        # Try to copy the existing venv
-        source_venv = os.path.join(os.path.dirname(__file__), 'venv_py39_electron')
-        if os.path.exists(source_venv):
-            print(f"Copying existing venv from {source_venv}")
-            # Only copy new files to avoid overwriting existing ones
-            for root, dirs, files in os.walk(source_venv):
-                for dir_name in dirs:
-                    src_dir = os.path.join(root, dir_name)
-                    rel_path = os.path.relpath(src_dir, source_venv)
-                    dst_dir = os.path.join(venv_dir, rel_path)
-                    os.makedirs(dst_dir, exist_ok=True)
-                
-                for file_name in files:
-                    src_file = os.path.join(root, file_name)
-                    rel_path = os.path.relpath(src_file, source_venv)
-                    dst_file = os.path.join(venv_dir, rel_path)
-                    if not os.path.exists(dst_file):
-                        try:
-                            # Create the directory if needed
-                            os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                            shutil.copy2(src_file, dst_file)
-                        except Exception as e:
-                            print(f"Error copying {src_file}: {e}")
-        else:
-            print("No existing venv to copy, must create a new one")
-            # Create python/pip script files
-            with open(venv_python, 'w') as f:
-                f.write("# Placeholder for Python executable\n")
-            with open(venv_pip, 'w') as f:
-                f.write("# Placeholder for pip executable\n")
-    except Exception as e:
-        print(f"Error creating venv: {e}")
-
-# Install packages if requirements.txt exists
-req_file = os.path.join(RESOURCES_DIR, 'requirements.txt')
-if os.path.exists(req_file):
-    print(f"Installing packages from {req_file}")
+# Check for local DLLs first
+if os.path.exists(LOCAL_DLLS_DIR) and os.listdir(LOCAL_DLLS_DIR):
+    logger.info(f"Found local DLLs in {LOCAL_DLLS_DIR}")
+    # Copy all DLLs from the local directory to the Scripts directory
+    dll_count = 0
+    for file in os.listdir(LOCAL_DLLS_DIR):
+        if file.lower().endswith('.dll'):
+            src = os.path.join(LOCAL_DLLS_DIR, file)
+            dst = os.path.join(VENV_SCRIPTS_DIR, file)
+            logger.info(f"Copying {file} to Scripts directory")
+            shutil.copy2(src, dst)
+            dll_count += 1
     
-    # Create a .env file to ensure packages are installed in the correct location
-    env_file = os.path.join(RESOURCES_DIR, '.env')
-    with open(env_file, 'w') as f:
-        f.write(f"PYTHONPATH={RESOURCES_DIR}\n")
-    
-    # Create a batch file to install the packages
-    install_script = os.path.join(RESOURCES_DIR, 'install_packages.bat')
-    with open(install_script, 'w') as f:
-        f.write(f"""@echo off
-echo Installing packages from requirements.txt
-cd /d "{RESOURCES_DIR}"
-set PYTHONPATH={RESOURCES_DIR}
-
-REM Try to find a system Python to create the venv
-where python > nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    echo Found system Python, using it to create venv
-    python -m venv venv
-) else (
-    echo Python not found in PATH, trying Python 3.9
-    where python3.9 > nul 2>&1
-    if %ERRORLEVEL% EQU 0 (
-        echo Found Python 3.9, using it to create venv
-        python3.9 -m venv venv
-    ) else (
-        echo Python 3.9 not found, trying common locations
-        if exist "C:\\Python39\\python.exe" (
-            echo Found Python 3.9 in C:\\Python39
-            "C:\\Python39\\python.exe" -m venv venv
-        ) else if exist "%LOCALAPPDATA%\\Programs\\Python\\Python39\\python.exe" (
-            echo Found Python 3.9 in %%LOCALAPPDATA%%\\Programs\\Python\\Python39
-            "%LOCALAPPDATA%\\Programs\\Python\\Python39\\python.exe" -m venv venv
-        ) else (
-            echo Python not found, cannot create venv
-            exit /b 1
-        )
-    )
-)
-
-REM Install packages
-echo Installing packages with pip
-venv\\Scripts\\pip install --no-cache-dir -r requirements.txt
-echo Packages installed successfully
-""")
-    
-    try:
-        print("Running package installation script")
-        subprocess.run(install_script, shell=True, check=True)
-        print("Packages installed successfully")
-    except subprocess.CalledProcessError as e:
-        print(f"Error installing packages: {e}")
-        print("Warning: Flask and other required packages may not be available in the packaged app")
-else:
-    print("Warning: requirements.txt not found, skipping package installation")
-
-print("\nList of files in resources directory after copy:")
-for item in os.listdir(RESOURCES_DIR):
-    item_path = os.path.join(RESOURCES_DIR, item)
-    if os.path.isdir(item_path):
-        print(f"- [DIR] {item}")
+    if dll_count > 0:
+        logger.info(f"Successfully copied {dll_count} DLLs from local directory")
     else:
-        print(f"- [FILE] {item}")
+        logger.warning("No DLL files found in local directory, falling back to download")
+else:
+    logger.info("No local DLLs found, attempting to download WeasyPrint dependencies")
+    
+    # Try downloading from multiple sources
+    success = False
+    
+    # List of download URLs to try (most recent first)
+    urls = [
+        "https://github.com/Kozea/WeasyPrint/releases/download/v60.2/weasyprint-64.zip",
+        "https://github.com/Kozea/WeasyPrint/releases/download/v60.1/weasyprint-64.zip", 
+        "https://github.com/Kozea/WeasyPrint/releases/download/v60.0/weasyprint-64.zip",
+        "https://github.com/Kozea/WeasyPrint/releases/download/v59.0/weasyprint-64.zip"
+    ]
+    
+    # Try each URL until one works
+    for url in urls:
+        try:
+            logger.info(f"Trying to download from: {url}")
+            # Create a temporary file for the zip
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_file:
+                deps_zip = temp_file.name
+            
+            # Download the file
+            urllib.request.urlretrieve(url, deps_zip)
+            
+            logger.info(f"Download successful from {url}")
+            
+            # Extract the zip
+            with zipfile.ZipFile(deps_zip, 'r') as zip_ref:
+                # Extract to the Scripts directory
+                logger.info(f"Extracting DLLs to {VENV_SCRIPTS_DIR}")
+                zip_ref.extractall(VENV_SCRIPTS_DIR)
+            
+            # Clean up the zip file
+            os.remove(deps_zip)
+            
+            # Also save these DLLs to the local directory for future builds
+            os.makedirs(LOCAL_DLLS_DIR, exist_ok=True)
+            for file in os.listdir(VENV_SCRIPTS_DIR):
+                if file.lower().endswith('.dll'):
+                    src = os.path.join(VENV_SCRIPTS_DIR, file)
+                    dst = os.path.join(LOCAL_DLLS_DIR, file)
+                    # Only copy if the file doesn't already exist
+                    if not os.path.exists(dst):
+                        shutil.copy2(src, dst)
+            
+            success = True
+            break
+        except Exception as e:
+            logger.error(f"Error with {url}: {e}")
 
-print("\nPost-build file copy completed!")
+# List DLLs in the Scripts directory
+dll_count = 0
+try:
+    logger.info("DLLs in Scripts directory:")
+    for f in os.listdir(VENV_SCRIPTS_DIR):
+        if f.lower().endswith('.dll'):
+            logger.info(f"  - {f}")
+            dll_count += 1
+    
+    if dll_count > 0:
+        logger.info(f"Successfully ensured {dll_count} DLLs in the build")
+    else:
+        logger.error("No DLLs were found or installed! PDF generation will not work.")
+except Exception as e:
+    logger.error(f"Error listing DLLs: {e}")
+
+# Verify the build
+logger.info("\nPost-build verification:")
+logger.info(f"Successfully copied {len(copied_files)} files:")
+for file in copied_files:
+    logger.info(f"  - {file}")
+
+logger.info(f"Successfully copied {len(copied_dirs)} directories:")
+for dir_name in copied_dirs:
+    logger.info(f"  - {dir_name}")
+
+logger.info(f"Successfully included {dll_count} WeasyPrint DLLs")
+
+logger.info("Post-build copy process completed")

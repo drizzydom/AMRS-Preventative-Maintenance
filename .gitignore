@@ -6,6 +6,7 @@ __pycache__/
 # Distribution / packaging
 dist/
 build/
+dependencies/
 *.egg-info/
 # Keep electron_app directory in git
 electron_app/
