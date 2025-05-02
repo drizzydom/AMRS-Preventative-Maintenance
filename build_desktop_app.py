@@ -118,7 +118,19 @@ def main():
     # Build with electron-builder (now part of this script)
     builder_cmd = "npx electron-builder --win --x64"
     run(builder_cmd, cwd=ELECTRON_DIR)
-    # After building the app, automatically install WeasyPrint DLLs
+    
+    # After building the app, run the post-build script to ensure all files are copied
+    try:
+        print("[BUILD] Running post-build file copy to ensure all files are present...")
+        subprocess.check_call([
+            sys.executable,
+            os.path.join(os.path.dirname(__file__), 'post_build_copy.py')
+        ])
+        print("[BUILD] Post-build file copy completed.")
+    except Exception as e:
+        print(f"[BUILD] Failed to run post-build file copy: {e}")
+    
+    # Install WeasyPrint DLLs
     try:
         print("[BUILD] Installing WeasyPrint Windows DLL dependencies...")
         subprocess.check_call([
@@ -128,6 +140,7 @@ def main():
         print("[BUILD] WeasyPrint DLLs installed.")
     except Exception as e:
         print(f"[BUILD] Failed to install WeasyPrint DLLs: {e}")
+    
     print("\n[BUILD] Build complete! Check the 'electron_app/dist' folder for your Windows installer or .exe file.\n")
 
 if __name__ == "__main__":
