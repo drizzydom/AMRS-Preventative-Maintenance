@@ -109,6 +109,30 @@ def setup_enhanced_audit_history():
         
         logger.info("Added month_name template filter")
         
+        # Add context processor function for calendar weeks
+        @app.context_processor
+        def inject_calendar_functions():
+            def get_calendar_weeks(year, month):
+                """Generate calendar weeks for a given month/year"""
+                try:
+                    # Create a Calendar with Sunday as the first day of the week (6)
+                    cal = calendar.Calendar(firstweekday=6)
+                    # Get the month calendar as a list of weeks
+                    month_cal = cal.monthdayscalendar(int(year), int(month))
+                    logger.debug(f"Generated calendar for {year}-{month} with {len(month_cal)} weeks")
+                    return month_cal
+                except Exception as e:
+                    logger.error(f"Error generating calendar weeks: {e}")
+                    # Return a default empty calendar (4 weeks with empty days)
+                    return [[0, 0, 0, 0, 0, 0, 0] for _ in range(4)]
+            
+            # Return dict of functions to add to the template context
+            return {
+                'get_calendar_weeks': get_calendar_weeks
+            }
+        
+        logger.info("Added calendar template functions")
+        
         # First, fix any audit completions with missing machine IDs
         with app.app_context():
             try:
