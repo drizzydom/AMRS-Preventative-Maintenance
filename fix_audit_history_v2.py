@@ -215,10 +215,13 @@ def setup_enhanced_audit_history():
                 # Handle machine_id conversion safely
                 try:
                     machine_id = int(machine_id_param) if machine_id_param.strip() else None
+                    # Convert to string for template comparison
+                    selected_machine = str(machine_id) if machine_id is not None else ""
                 except (ValueError, AttributeError):
                     machine_id = None
+                    selected_machine = ""
                     
-                logger.info(f"Filters: site_id={site_id}, machine_id={machine_id}")
+                logger.info(f"Filters: site_id={site_id}, machine_id={machine_id}, selected_machine={selected_machine}")
                 
                 # --- Site access restrictions ---
                 if current_user.is_admin:
@@ -559,7 +562,7 @@ def setup_enhanced_audit_history():
                     users=users,
                     sites=sites,
                     selected_site=site_id,
-                    selected_machine=machine_id,
+                    selected_machine=selected_machine,
                     current_month=month,
                     current_year=year,
                     display_month=display_month,
