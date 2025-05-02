@@ -32,3 +32,6 @@ Flask-WTF>=1.0.0
 pytest
 pytest-cov
 cryptography
+# PDF generation
+reportlab>=3.6.13
+weasyprint>=59.0

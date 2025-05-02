@@ -1,0 +1,902 @@
+{% extends "base.html" %}
+
+{% block title %}Audit History - Maintenance Tracker{% endblock %}
+
+{% block header_title %}Audit History{% endblock %}
+
+{% block content %}
+<!-- Flashed messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container-fluid">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show mt-2" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% if not (current_user.is_admin or (current_user.is_authenticated and current_user.role and (
+    (hasattr(current_user.role, 'name') and 'audits.access' in (current_user.role.permissions or '')) or
+    (not hasattr(current_user.role, 'name') and Role.query.filter_by(name=current_user.role).first() and 'audits.access' in (Role.query.filter_by(name=current_user.role).first().permissions or ''))
+))) %}
+  <div class="alert alert-warning text-center my-4" role="alert">
+      <h4 class="alert-heading">Audits Feature Not Enabled</h4>
+      <p>This feature is not available in your current plan. If you would like access to the Audits module, please contact <a href="mailto:sales@accuratemachinerepair.com">sales@accuratemachinerepair.com</a> for more information.</p>
+  </div>
+{% else %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4">Audit History</h2>
+                <div class="d-print-none">
+                    <button class="btn btn-primary me-2" id="downloadPdfButton">
+                        <i class="fas fa-file-pdf me-1"></i> Download PDF
+                    </button>
+                    <button class="btn btn-primary" id="printButton">
+                        <i class="fas fa-print me-1"></i> Print Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simplified Filter Form with Month/Year selector -->
+            <div class="card mb-4 d-print-none">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        {% if show_site_dropdown %}
+                        <div class="col-md-3">
+                            <label for="site_id" class="form-label">Site</label>
+                            <select class="form-select" id="site_id" name="site_id" onchange="updateMachines(this.value)">
+                                <option value="">All Sites</option>
+                                {% for site in sites %}
+                                <option value="{{ site.id }}" {% if selected_site == site.id %}selected{% endif %}>{{ site.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% else %}
+                        <!-- Hidden site_id field when only one site is available -->
+                        <input type="hidden" id="site_id" name="site_id" value="{{ sites[0].id if sites else '' }}">
+                        {% endif %}
+                        
+                        <div class="col-md-3">
+                            <label for="machine_id" class="form-label">Machine</label>
+                            <select class="form-select" id="machine_id" name="machine_id">
+                                <option value="" {% if not selected_machine or selected_machine == '' or selected_machine == '0' %}selected{% endif %}>All Machines</option>
+                                {% for machine in available_machines %}
+                                <option value="{{ machine.id }}" {% if selected_machine == machine.id|string %}selected{% endif %}>{{ machine.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label for="month_year" class="form-label">Month</label>
+                            <select class="form-select" id="month_year" name="month_year">
+                                {% for month_option in available_months %}
+                                <option value="{{ month_option.value }}" {% if selected_month == month_option.value %}selected{% endif %}>{{ month_option.display }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success w-100">Apply Filters</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Month/Year Selection from URL parameters -->
+            {% set month_year = request.args.get('month_year', '') %}
+            {% if month_year %}
+                {% set parts = month_year.split('-') %}
+                {% set current_year = parts[0]|int %}
+                {% set current_month = parts[1]|int %}
+            {% else %}
+                {% set current_year = today.year %}
+                {% set current_month = today.month %}
+            {% endif %}
+            
+            <!-- Using the month_name filter we've added in fix_audit_history.py -->
+            {% set display_month = '%s %s'|format(current_month|month_name, current_year) %}
+            
+            <!-- Generate full month calendar -->
+            {% set month_weeks = get_calendar_weeks(current_year, current_month) %}
+
+            <!-- Print-only view -->
+            <div class="d-none d-print-block" id="printView">
+                <div class="print-header">
+                    <div class="company-info">
+                        <h1>AMRS Preventative Maintenance</h1>
+                        <p>Machine Audit History Report</p>
+                    </div>
+                    <div class="report-title">
+                        <h2>Audit History Report</h2>
+                        <span class="report-id">Generated on {{ today.strftime('%Y-%m-%d') }}</span>
+                    </div>
+                    <div class="report-meta">
+                        <div class="report-section">
+                            <table class="meta-table">
+                                <tr>
+                                    <th>Month:</th>
+                                    <td>{{ display_month }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Generated By:</th>
+                                    <td>{{ current_user.full_name }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="report-section">
+                            <table class="meta-table">
+                                <tr>
+                                    <th>Total Machines:</th>
+                                    <td>{{ display_machines|length }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Total Records:</th>
+                                    <td>{{ completions|length }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                {% for machine in display_machines %}
+                <div class="machine-section">
+                    <div class="machine-title">
+                        {{ machine.name }} {% if machine.machine_id %}({{ machine.machine_id }}){% endif %}
+                    </div>
+                    {% if machine.id in machine_data %}
+                        <!-- Monthly Calendar with Legend Layout -->
+                        <div class="print-calendar-container">
+                            <div class="monthly-calendar-with-legend">
+                                <div class="monthly-calendar">
+                                    <div class="month-header">{{ display_month }}</div>
+                                    <table class="calendar-table">
+                                        <tr class="calendar-header">
+                                            <th>Sun</th>
+                                            <th>Mon</th>
+                                            <th>Tue</th>
+                                            <th>Wed</th>
+                                            <th>Thu</th>
+                                            <th>Fri</th>
+                                            <th>Sat</th>
+                                        </tr>
+                                        {% for week in month_weeks %}
+                                        <tr>
+                                            {% for day in week %}
+                                            <td class="calendar-day {% if day == 0 %}empty-day{% endif %} {% if day == today.day and current_month == today.month and current_year == today.year %}today{% endif %}">
+                                                {% if day != 0 %}
+                                                <div class="date-number">{{ day }}</div>
+                                                {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day) %}
+                                                <div class="task-markers">
+                                                    {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
+                                                        {% set day_audit_tasks = {} %}
+                                                        {% for completion in machine_data[machine.id][day_date] %}
+                                                            {% if completion.audit_task_id in audit_tasks %}
+                                                                {% set task = audit_tasks[completion.audit_task_id] %}
+                                                                {% if task.id not in day_audit_tasks %}
+                                                                    {% if day_audit_tasks.update({task.id: task}) %}{% endif %}
+                                                                {% endif %}
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                        
+                                                        {% for task_id, task in day_audit_tasks.items() %}
+                                                            <div class="task-marker" data-task-id="{{ task.id }}" 
+                                                                 data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
+                                                                 {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
+                                                                 title="{{ task.name }}"></div>
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                    {% for task in all_tasks_per_machine[machine.id] %}
+                                                      {% if interval_bars[machine.id][task.id] %}
+                                                        {% for bar in interval_bars[machine.id][task.id] %}
+                                                          {% set bar_start = bar[0] %}
+                                                          {% set bar_end = bar[1] %}
+                                                          {% set day_date_obj = datetime(current_year, current_month, day).date() %}
+                                                          {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
+                                                            <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
+                                                          {% endif %}
+                                                        {% endfor %}
+                                                      {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </td>
+                                            {% endfor %}
+                                        </tr>
+                                        {% endfor %}
+                                    </table>
+                                </div>
+                                
+                                <div class="calendar-legend">
+                                    <h6 class="legend-title">Legend & Task Schedule</h6>
+                                    <div class="legend-items">
+                                        {% for task in all_tasks_per_machine[machine.id] %}
+                                            <div class="legend-item">
+                                                <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
+                                                <span class="legend-text">
+                                                    {{ task.name }}
+                                                    <span class="legend-schedule">
+                                                        ({% if task.interval == 'daily' %}
+                                                            Daily
+                                                        {% elif task.interval == 'weekly' %}
+                                                            Weekly{% if task.weekday %} - {{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}{% endif %}
+                                                        {% elif task.interval == 'monthly' %}
+                                                            Monthly{% if task.month_day %} - Day {{ task.month_day }}{% endif %}
+                                                        {% elif task.interval == 'custom' and task.custom_interval_days %}
+                                                            Every {{ task.custom_interval_days }} days
+                                                        {% else %}
+                                                            Schedule not specified
+                                                        {% endif %})
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        {% endfor %}
+                                        
+                                        <div class="legend-item mt-3">
+                                            <span class="legend-marker today-marker"></span>
+                                            <span class="legend-text">Today</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="no-data">
+                            No audit records found for this machine in the selected month.
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Certification Footer -->
+                    <div class="certification-footer">
+                        This document certifies that all recorded maintenance tasks have been performed according to 
+                        AMRS Preventative Maintenance standards and protocols. Report ID: {{ '%Y%m%d%H%M%S'|format_datetime }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Screen-only regular view -->
+            <div class="d-print-none">
+                {% if display_machines|length == 0 %}
+                <div class="alert alert-info">
+                    No machine audit data found for the selected month and filters.
+                </div>
+                {% endif %}
+                
+                {% for machine in display_machines %}
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{{ machine.name }} {% if machine.machine_id %}({{ machine.machine_id }}){% endif %}</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if machine.id in machine_data %}
+                            <!-- Enhanced Monthly Calendar with Legend Layout -->
+                            <div class="row">
+                                <div class="col-lg-8">
+                                    <div class="monthly-calendar">
+                                        <div class="month-header">{{ display_month }}</div>
+                                        <table class="calendar-table">
+                                            <tr class="calendar-header">
+                                                <th>Sun</th>
+                                                <th>Mon</th>
+                                                <th>Tue</th>
+                                                <th>Wed</th>
+                                                <th>Thu</th>
+                                                <th>Fri</th>
+                                                <th>Sat</th>
+                                            </tr>
+                                            {% for week in month_weeks %}
+                                            <tr>
+                                                {% for day in week %}
+                                                <td class="calendar-day {% if day == 0 %}empty-day{% endif %} {% if day == today.day and current_month == today.month and current_year == today.year %}today{% endif %}">
+                                                    {% if day != 0 %}
+                                                    <div class="date-number">{{ day }}</div>
+                                                    {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day) %}
+                                                    <div class="task-markers">
+                                                        {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
+                                                            {% set day_audit_tasks = {} %}
+                                                            {% for completion in machine_data[machine.id][day_date] %}
+                                                                {% if completion.audit_task_id in audit_tasks %}
+                                                                    {% set task = audit_tasks[completion.audit_task_id] %}
+                                                                    {% if task.id not in day_audit_tasks %}
+                                                                        {% if day_audit_tasks.update({task.id: task}) %}{% endif %}
+                                                                    {% endif %}
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                            
+                                                            {% for task_id, task in day_audit_tasks.items() %}
+                                                                <div class="task-marker" data-task-id="{{ task.id }}" 
+                                                                     data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
+                                                                     {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
+                                                                     title="{{ task.name }}"></div>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                        {% for task in all_tasks_per_machine[machine.id] %}
+                                                          {% if interval_bars[machine.id][task.id] %}
+                                                            {% for bar in interval_bars[machine.id][task.id] %}
+                                                              {% set bar_start = bar[0] %}
+                                                              {% set bar_end = bar[1] %}
+                                                              {% set day_date_obj = datetime(current_year, current_month, day).date() %}
+                                                              {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
+                                                                <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
+                                                              {% endif %}
+                                                            {% endfor %}
+                                                          {% endif %}
+                                                        {% endfor %}
+                                                    </div>
+                                                    {% endif %}
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-lg-4">
+                                    <div class="calendar-legend">
+                                        <h6 class="legend-title">Legend & Task Schedule</h6>
+                                        <div class="legend-items">
+                                            {% for task in all_tasks_per_machine[machine.id] %}
+                                                <div class="legend-item">
+                                                    <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
+                                                    <span class="legend-text">
+                                                        {{ task.name }}
+                                                        <span class="legend-schedule">
+                                                            ({% if task.interval == 'daily' %}
+                                                                Daily
+                                                            {% elif task.interval == 'weekly' %}
+                                                                Weekly{% if task.weekday %} - {{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}{% endif %}
+                                                            {% elif task.interval == 'monthly' %}
+                                                                Monthly{% if task.month_day %} - Day {{ task.month_day }}{% endif %}
+                                                            {% elif task.interval == 'custom' and task.custom_interval_days %}
+                                                                Every {{ task.custom_interval_days }} days
+                                                            {% else %}
+                                                                Schedule not specified
+                                                            {% endif %})
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            {% endfor %}
+                                            
+                                            <div class="legend-item mt-3">
+                                                <span class="legend-marker today-marker"></span>
+                                                <span class="legend-text">Today</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="no-data">
+                                No audit records found for this machine in the selected month.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- Custom CSS for Calendar Layout -->
+<style>
+    /* Calendar Styles */
+    .monthly-calendar-with-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+    
+    .monthly-calendar {
+        flex: 1;
+        min-width: 60%;
+        box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .month-header {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 0;
+        color: #334155;
+        text-align: center;
+        padding: 15px;
+        background-color: #f1f5f9;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+        border: 2px solid #c8d1d9;
+        border-bottom: none;
+    }
+    
+    .calendar-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 2px solid #c8d1d9;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .calendar-header th {
+        background-color: #f1f5f9;
+        padding: 10px;
+        text-align: center;
+        font-weight: 600;
+        border: 1px solid #c8d1d9;
+        color: #334155;
+    }
+    
+    .calendar-day {
+        height: 90px;
+        width: 14.28%;
+        vertical-align: top;
+        padding: 8px;
+        border: 1px solid #c8d1d9;
+        position: relative;
+        background-color: #fff;
+        transition: background-color 0.2s;
+    }
+    
+    .calendar-day:hover {
+        background-color: #f8fafc;
+    }
+    
+    .empty-day {
+        background-color: #f1f5f9;
+        border: 1px solid #c8d1d9;
+    }
+    
+    .today {
+        background-color: #e8f4ff;
+        border: 2px solid #007bff !important;
+    }
+    
+    .date-number {
+        font-weight: bold;
+        margin-bottom: 5px;
+        text-align: right;
+        font-size: 0.85rem;
+        color: #495057;
+    }
+    
+    .today .date-number {
+        color: #007bff;
+    }
+    
+    .task-markers {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        min-height: 30px;
+    }
+    
+    .task-marker {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #ccc;
+        cursor: pointer;
+    }
+    
+    .interval-bar {
+        height: 8px;
+        border-radius: 4px;
+        margin: 2px 0;
+        width: 100%;
+        opacity: 0.4;
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        z-index: 1;
+    }
+    
+    /* Style for custom task colors */
+    .task-marker[style],
+    .legend-marker[style] {
+        /* These styles will apply to markers with custom colors */
+        background-color: attr(data-color);
+    }
+    
+    /* Category-specific colors (fallback) */
+    .task-marker:not([style])[data-category="electrical"], 
+    .legend-marker:not([style]).category-electrical,
+    .interval-bar.category-electrical {
+        background-color: #dc3545;
+    }
+    
+    .task-marker:not([style])[data-category="mechanical"], 
+    .legend-marker:not([style]).category-mechanical,
+    .interval-bar.category-mechanical {
+        background-color: #0d6efd;
+    }
+    
+    .task-marker:not([style])[data-category="hydraulic"], 
+    .legend-marker:not([style]).category-hydraulic,
+    .interval-bar.category-hydraulic {
+        background-color: #fd7e14;
+    }
+    
+    .task-marker:not([style])[data-category="pneumatic"], 
+    .legend-marker:not([style]).category-pneumatic,
+    .interval-bar.category-pneumatic {
+        background-color: #6f42c1;
+    }
+    
+    .task-marker:not([style])[data-category="general"], 
+    .legend-marker:not([style]).category-general,
+    .interval-bar.category-general {
+        background-color: #198754;
+    }
+    
+    .task-marker:not([style])[data-category="electronic"], 
+    .legend-marker:not([style]).category-electronic,
+    .interval-bar.category-electronic {
+        background-color: #20c997;
+    }
+    
+    .task-marker:not([style])[data-category="structural"], 
+    .legend-marker:not([style]).category-structural,
+    .interval-bar.category-structural {
+        background-color: #6c757d;
+    }
+    
+    /* Legend Styles */
+    .calendar-legend {
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        height: fit-content;
+        min-width: 200px;
+    }
+    
+    .legend-title {
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: #495057;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 8px;
+    }
+    
+    .legend-items {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .legend-marker {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .today-marker {
+        background-color: #007bff;
+        border: 1px solid #0056b3;
+    }
+    
+    .legend-text {
+        font-size: 0.9rem;
+        color: #495057;
+    }
+    
+    .legend-schedule {
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-style: italic;
+        display: block;
+        margin-top: 2px;
+    }
+    
+    /* Print Specific Styles */
+    @media print {
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            color: #333;
+            font-size: 9pt;
+            max-width: 100%;
+        }
+        
+        /* Page Layout */
+        @page {
+            size: letter landscape;
+            margin: 1cm;
+        }
+        
+        /* Machine Sections */
+        .print-calendar-container {
+            page-break-inside: avoid;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            height: auto;
+        }
+        
+        .machine-section {
+            page-break-before: always;
+            margin-bottom: 30px;
+            width: 100%;
+        }
+        
+        .machine-section:first-child {
+            page-break-before: auto;
+        }
+        
+        /* Headers and Metadata */
+        .machine-title {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 3px;
+        }
+        
+        .print-header {
+            margin-bottom: 15px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        
+        .company-info {
+            margin-bottom: 5px;
+        }
+        
+        .company-info h1 {
+            font-size: 18pt;
+            margin: 0;
+        }
+        
+        .company-info p {
+            font-size: 12pt;
+            margin: 5px 0 0;
+        }
+        
+        /* Calendar and Legend Layout */
+        .monthly-calendar-with-legend {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 10px;
+            width: 100%;
+            min-height: 380px;
+        }
+        
+        .monthly-calendar {
+            flex: 4;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .month-header {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 0;
+            color: #334155;
+            text-align: center;
+            padding: 8px;
+            background-color: #f1f5f9;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            border: 1px solid #c8d1d9;
+            border-bottom: none;
+            flex-shrink: 0;
+        }
+        
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #c8d1d9;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            flex-grow: 1;
+            table-layout: fixed;
+            height: 100%;
+        }
+        
+        .calendar-table tbody {
+            height: 100%;
+        }
+        
+        .calendar-table tr {
+            height: 16.66%;
+        }
+        
+        .calendar-day {
+            min-height: 45px;
+            height: auto;
+            width: 14.28%;
+            vertical-align: top;
+            padding: 4px;
+            border: 1px solid #c8d1d9;
+            position: relative;
+            background-color: #fff;
+        }
+        
+        .calendar-legend {
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            height: fit-content;
+            min-width: 150px;
+            flex: 1;
+            max-width: 30%;
+        }
+        
+        /* Task Markers and Legend */
+        .task-marker {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+        
+        .task-markers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            min-height: 15px;
+        }
+        
+        .legend-marker {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .legend-schedule {
+            font-size: 0.7rem;
+            color: #6c757d;
+            font-style: italic;
+            display: block;
+            margin-top: 2px;
+        }
+        
+        .certification-footer {
+            margin-top: 10px;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #aaa;
+            padding-top: 5px;
+            font-style: italic;
+        }
+    }
+    
+    /* No-data message */
+    .no-data {
+        padding: 20px;
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border: 1px dashed #dee2e6;
+    }
+
+    /* Additional fixes for calendar containers to avoid footer overlap */
+    .card-body .monthly-calendar {
+        margin-bottom: 40px; /* Extra margin at the bottom of calendars */
+    }
+    
+    /* Ensure space at the bottom of the page */
+    .card:last-child {
+        margin-bottom: 60px; /* Extra space for the last card before footer */
+    }
+    
+    /* Ensure calendar-view card has appropriate spacing */
+    .calendar-view-container {
+        margin-bottom: 70px; /* Larger margin to avoid footer overlap */
+    }
+    
+    /* Adjust calendar height and overflow for better display */
+    .calendar-day {
+        height: 80px; /* Fixed height for calendar cells */
+        overflow: auto; /* Add scroll if content exceeds space */
+    }
+    
+    /* For pages with audit_history content */
+    body:has(.audit-history-container) .content-container {
+        padding-bottom: 80px !important; /* Extra padding for pages with calendars */
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add tooltips to task markers
+        const taskMarkers = document.querySelectorAll('.task-marker');
+        taskMarkers.forEach(marker => {
+            const taskId = marker.getAttribute('data-task-id');
+            const category = marker.getAttribute('data-category');
+            
+            if (marker.title) {
+                const tooltip = new bootstrap.Tooltip(marker);
+            }
+        });
+        
+        // Print functionality
+        document.getElementById('printButton').addEventListener('click', function() {
+            // Get the current URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            let printUrl = '/audit-history/print-view?';
+            
+            // Forward any filtering parameters to the print view
+            if (urlParams.has('site_id')) {
+                printUrl += 'site_id=' + urlParams.get('site_id') + '&';
+            }
+            
+            if (urlParams.has('machine_id')) {
+                printUrl += 'machine_id=' + urlParams.get('machine_id') + '&';
+            }
+            
+            if (urlParams.has('month_year')) {
+                printUrl += 'month_year=' + urlParams.get('month_year');
+            }
+            
+            // Open the printable view in a new window and trigger print
+            const printWindow = window.open(printUrl, '_blank');
+            printWindow.addEventListener('load', function() {
+                printWindow.print();
+                // Optional: close the window after printing (uncomment if desired)
+                // printWindow.onafterprint = function() { printWindow.close(); };
+            });
+        });
+        
+        // PDF Download
+        document.getElementById('downloadPdfButton').addEventListener('click', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            let pdfUrl = '/audit-history/pdf?';
+            
+            if (urlParams.has('site_id')) {
+                pdfUrl += 'site_id=' + urlParams.get('site_id') + '&';
+            }
+            
+            if (urlParams.has('machine_id')) {
+                pdfUrl += 'machine_id=' + urlParams.get('machine_id') + '&';
+            }
+            
+            if (urlParams.has('month_year')) {
+                pdfUrl += 'month_year=' + urlParams.get('month_year');
+            }
+            
+            window.open(pdfUrl, '_blank');
+        });
+    });
+    
+    function updateMachines(siteId) {
+        // Get current URL and parameters
+        const url = new URL(window.location.href);
+        const params = new URLSearchParams(url.search);
+        
+        // Update site_id parameter
+        if (siteId) {
+            params.set('site_id', siteId);
+        } else {
+            params.delete('site_id');
+        }
+        
+        // Remove machine_id parameter when site changes
+        params.delete('machine_id');
+        
+        // Redirect to updated URL
+        window.location.href = `${url.pathname}?${params.toString()}`;
+    }
+</script>
+{% endif %}
+{% endblock %}

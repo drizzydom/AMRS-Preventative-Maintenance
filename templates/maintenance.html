@@ -5,6 +5,17 @@
 {% block header_title %}Maintenance Records{% endblock %}
 
 {% block content %}
+<!-- Information banner for users redirected from dashboard -->
+<div class="alert alert-info mb-4">
+    <div class="d-flex align-items-center">
+        <i class="fas fa-info-circle fa-lg me-3"></i>
+        <div>
+            <strong>Welcome to the Maintenance Page!</strong>
+            <p class="mb-0">All maintenance should be recorded here using the form below. You can also view overdue, due soon, and upcoming maintenance tasks.</p>
+        </div>
+    </div>
+</div>
+
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
@@ -17,40 +28,43 @@
                 <form method="post" action="{{ url_for('maintenance_page') }}">
                     <div class="row">
                         <div class="col-md-3 mb-3">
-                            <label for="site_id" class="form-label">Site</label>
+                            <label for="site_id" class="form-label">Site <span class="text-danger">*</span></label>
                             <select class="form-select" id="site_id" name="site_id" required>
                                 <option value="">Select Site</option>
                                 {% for site in sites %}
                                 <option value="{{ site.id }}">{{ site.name }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="site-help" class="form-text">Select a site first</div>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label for="machine_id" class="form-label">Machine</label>
-                            <select class="form-select" id="machine_id" name="machine_id" required>
+                            <label for="machine_id" class="form-label">Machine <span class="text-danger">*</span></label>
+                            <select class="form-select" id="machine_id" name="machine_id" required disabled>
                                 <option value="">Select Machine</option>
                                 {% for machine in machines %}
                                 <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="machine-help" class="form-text text-muted">Please select a site first</div>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label for="part_id" class="form-label">Part</label>
-                            <select class="form-select" id="part_id" name="part_id" required>
+                            <label for="part_id" class="form-label">Part <span class="text-danger">*</span></label>
+                            <select class="form-select" id="part_id" name="part_id" required disabled>
                                 <option value="">Select Part</option>
                                 {% for part in parts %}
                                 <option value="{{ part.id }}" data-machine="{{ part.machine_id }}">{{ part.name }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="part-help" class="form-text text-muted">Please select a machine first</div>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label for="date" class="form-label">Date</label>
+                            <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="date" name="date" value="{{ now.strftime('%Y-%m-%d') }}" required>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-3 mb-3">
-                            <label for="maintenance_type" class="form-label">Maintenance Type</label>
+                            <label for="maintenance_type" class="form-label">Maintenance Type <span class="text-danger">*</span></label>
                             <select class="form-select" id="maintenance_type" name="maintenance_type" required>
                                 <option value="">Select Type</option>
                                 <option value="Routine">Routine</option>
@@ -62,7 +76,7 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label for="description" class="form-label">Description</label>
+                        <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="description" name="description" rows="2" placeholder="Describe the maintenance performed" required></textarea>
                     </div>
                     <div class="mb-3">
@@ -311,39 +325,120 @@
                 const button = event.relatedTarget;
                 const partId = button.getAttribute('data-part-id');
                 const partName = button.getAttribute('data-part-name');
-                
                 document.getElementById('maintenance-part-id').value = partId;
                 document.getElementById('maintenance-part-name').value = partName;
             });
         }
-    });
-
-    // Filter machines by site
-    const siteSelect = document.getElementById('site_id');
-    const machineSelect = document.getElementById('machine_id');
-    const partSelect = document.getElementById('part_id');
-    if(siteSelect && machineSelect && partSelect) {
+        
+        // Simple and clean dropdown filtering solution
+        const siteSelect = document.getElementById('site_id');
+        const machineSelect = document.getElementById('machine_id');
+        const partSelect = document.getElementById('part_id');
+        const machineHelp = document.getElementById('machine-help');
+        const partHelp = document.getElementById('part-help');
+        
+        if (!siteSelect || !machineSelect || !partSelect) return;
+        
+        // Set initial state
+        machineSelect.disabled = true;
+        partSelect.disabled = true;
+        
+        // Cache original machine options for quick reference
+        const machineOptions = [];
+        for (let i = 0; i < machineSelect.options.length; i++) {
+            machineOptions.push({
+                value: machineSelect.options[i].value,
+                text: machineSelect.options[i].text,
+                siteId: machineSelect.options[i].getAttribute('data-site')
+            });
+        }
+        
+        // Cache original part options for quick reference
+        const partOptions = [];
+        for (let i = 0; i < partSelect.options.length; i++) {
+            partOptions.push({
+                value: partSelect.options[i].value,
+                text: partSelect.options[i].text,
+                machineId: partSelect.options[i].getAttribute('data-machine')
+            });
+        }
+        
+        // Site selection change handler
         siteSelect.addEventListener('change', function() {
             const siteId = this.value;
-            for(const option of machineSelect.options) {
-                if(option.value === "") continue;
-                option.style.display = option.getAttribute('data-site') === siteId ? '' : 'none';
+            
+            // Reset machine dropdown
+            machineSelect.innerHTML = '<option value="">Select Machine</option>';
+            machineSelect.disabled = !siteId;
+            
+            // Reset part dropdown
+            partSelect.innerHTML = '<option value="">Select Part</option>';
+            partSelect.disabled = true;
+            
+            if (!siteId) {
+                machineHelp.textContent = "Please select a site first";
+                partHelp.textContent = "Please select a machine first";
+                return;
             }
-            machineSelect.value = "";
-            for(const option of partSelect.options) {
-                if(option.value === "") continue;
-                option.style.display = 'none';
+            
+            // Add filtered machine options
+            let machineCount = 0;
+            for (const option of machineOptions) {
+                if (option.value && option.siteId === siteId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-site', option.siteId);
+                    machineSelect.add(newOption);
+                    machineCount++;
+                }
             }
-            partSelect.value = "";
+            
+            // Update help text
+            if (machineCount > 0) {
+                machineHelp.textContent = `${machineCount} machines available`;
+            } else {
+                machineHelp.textContent = "No machines available for this site";
+                machineSelect.disabled = true;
+            }
+            
+            partHelp.textContent = "Please select a machine first";
         });
+        
+        // Machine selection change handler
         machineSelect.addEventListener('change', function() {
             const machineId = this.value;
-            for(const option of partSelect.options) {
-                if(option.value === "") continue;
-                option.style.display = option.getAttribute('data-machine') === machineId ? '' : 'none';
+            
+            // Reset part dropdown
+            partSelect.innerHTML = '<option value="">Select Part</option>';
+            partSelect.disabled = !machineId;
+            
+            if (!machineId) {
+                partHelp.textContent = "Please select a machine first";
+                return;
             }
-            partSelect.value = "";
+            
+            // Add filtered part options
+            let partCount = 0;
+            for (const option of partOptions) {
+                if (option.value && option.machineId === machineId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-machine', option.machineId);
+                    partSelect.add(newOption);
+                    partCount++;
+                }
+            }
+            
+            // Update help text
+            if (partCount > 0) {
+                partHelp.textContent = `${partCount} parts available`;
+            } else {
+                partHelp.textContent = "No parts available for this machine";
+                partSelect.disabled = true;
+            }
         });
-    }
+    });
 </script>
 {% endblock %}
