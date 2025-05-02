@@ -116,9 +116,7 @@ def main():
         except Exception:
             pass
     # Build with electron-builder (now part of this script)
-    builder_cmd = f"npx electron-builder --win --x64 --compression={COMPRESSION_LEVEL}"
-    if os.path.exists(ICON_PATH):
-        builder_cmd += f" --icon {ICON_PATH}"
+    builder_cmd = "npx electron-builder --win --x64"
     run(builder_cmd, cwd=ELECTRON_DIR)
     # After building the app, automatically install WeasyPrint DLLs
     try:
