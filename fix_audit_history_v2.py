@@ -93,8 +93,21 @@ def setup_enhanced_audit_history():
         from flask import render_template, flash, redirect, url_for, request, jsonify, abort, current_app
         from flask_login import current_user, login_required
         from sqlalchemy import func, or_
-    
+        import calendar  # Make sure we import calendar module
+
         logger.info("Applying enhanced audit history fixes")
+        
+        # Add Jinja filter for month names
+        @app.template_filter('month_name')
+        def month_name_filter(month_number):
+            """Convert month number to month name"""
+            try:
+                return calendar.month_name[int(month_number)]
+            except (ValueError, IndexError):
+                logger.error(f"Invalid month number for month_name filter: {month_number}")
+                return f"Month {month_number}"
+        
+        logger.info("Added month_name template filter")
         
         # First, fix any audit completions with missing machine IDs
         with app.app_context():
