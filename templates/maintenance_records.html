@@ -5,6 +5,7 @@
 <div class="container-fluid">
   <h2 class="mb-4">Maintenance Records</h2>
   <form method="get" class="row g-3 mb-4">
+    {% if sites|length > 1 %}
     <div class="col-md-4">
       <label for="site_id" class="form-label">Site</label>
       <select class="form-select" id="site_id" name="site_id" onchange="this.form.submit()">
@@ -14,7 +15,11 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-4">
+    {% else %}
+    <!-- For single site users, add a hidden field to ensure filtering works -->
+    <input type="hidden" id="site_id" name="site_id" value="{{ sites[0].id if sites else '' }}">
+    {% endif %}
+    <div class="col-md-{% if sites|length > 1 %}4{% else %}6{% endif %}">
       <label for="machine_id" class="form-label">Machine</label>
       <select class="form-select" id="machine_id" name="machine_id" onchange="this.form.submit()">
         <option value="">All Machines</option>
@@ -23,7 +28,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-{% if sites|length > 1 %}4{% else %}6{% endif %}">
       <label for="part_id" class="form-label">Part</label>
       <select class="form-select" id="part_id" name="part_id" onchange="this.form.submit()">
         <option value="">All Parts</option>
