@@ -100,11 +100,31 @@ def ensure_node_and_electron():
         print("[BUILD] Installing electron-builder...")
         run("npm install --save-dev electron-builder", cwd=ELECTRON_DIR)
 
+def bundle_encryption_key():
+    """
+    Run the script to bundle the encryption key from environment variables
+    """
+    try:
+        print("[BUILD] Bundling encryption key for desktop app...")
+        subprocess.check_call([
+            sys.executable,
+            os.path.join(os.path.dirname(__file__), 'bundle_encryption_key.py')
+        ])
+        print("[BUILD] Encryption key bundled successfully.")
+    except Exception as e:
+        print(f"[BUILD] Warning: Failed to bundle encryption key: {e}")
+        print("[BUILD] The desktop app will generate a new key during installation.")
+        print("[BUILD] Note: This means users won't be able to read data encrypted by the Render instance.")
+
 def main():
     print("\n===== AMRS Desktop App Build Script =====\n")
     ensure_venv()
     install_python_requirements()
     ensure_node_and_electron()
+    
+    # Bundle encryption key from environment
+    bundle_encryption_key()
+    
     # Build Electron app and package everything
     print("[BUILD] Building Electron app and packaging...")
     # If you have a build step (e.g. React/Vue), run it here:
@@ -151,6 +171,17 @@ def main():
         except Exception as e2:
             print(f"[BUILD] Failed to install WeasyPrint DLLs: {e2}")
             print("[BUILD] PDF generation may not work in the packaged app.")
+    
+    # Also copy the encryption key to the final build location
+    try:
+        src_key_path = os.path.join(ELECTRON_DIR, "resources", ".env.key")
+        if os.path.exists(src_key_path):
+            dist_resources_path = os.path.join(ELECTRON_DIR, "dist", "win-unpacked", "resources")
+            os.makedirs(dist_resources_path, exist_ok=True)
+            shutil.copy2(src_key_path, os.path.join(dist_resources_path, ".env.key"))
+            print("[BUILD] Copied encryption key to final build location.")
+    except Exception as e:
+        print(f"[BUILD] Warning: Failed to copy encryption key to build output: {e}")
     
     print("\n[BUILD] Build complete! Check the 'electron_app/dist' folder for your Windows installer or .exe file.\n")
 
