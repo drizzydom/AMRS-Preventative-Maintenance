@@ -119,6 +119,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column; /* Stack children vertically */
+            margin-bottom: 40px;
         }
         
         .month-header {
@@ -167,13 +168,14 @@
         
         .calendar-day {
             min-height: 45px; /* Minimum height */
-            height: auto; /* Allow flexible height */
+            height: 80px; /* Fixed height with scrolling for overflow */
             width: 14.28%;
             vertical-align: top;
             padding: 4px;
             border: 1px solid #c8d1d9;
             position: relative;
             background-color: #fff;
+            overflow: auto;
         }
         
         .empty-day {
@@ -344,6 +346,27 @@
             gap: 10px;
             width: 100%; /* Ensure full width usage */
             height: auto; /* Allow height to adjust based on content */
+        }
+
+        /* Additional footer spacing fixes for print view */
+        body {
+            /* Ensure adequate spacing for the footer in the print view */
+            margin-bottom: 80px;
+        }
+
+        .content-container {
+            /* Extra padding at bottom to avoid footer overlap */
+            padding-bottom: 80px !important;
+        }
+
+        .card:last-child {
+            /* Extra margin for the last card */
+            margin-bottom: 70px !important;
+        }
+
+        /* Ensure the content wrapper has adequate padding */
+        .page-content {
+            padding-bottom: 80px;
         }
     </style>
 </head>
