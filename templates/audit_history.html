@@ -806,7 +806,30 @@
         
         // Print functionality
         document.getElementById('printButton').addEventListener('click', function() {
-            window.print();
+            // Get the current URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            let printUrl = '/audit-history/print-view?';
+            
+            // Forward any filtering parameters to the print view
+            if (urlParams.has('site_id')) {
+                printUrl += 'site_id=' + urlParams.get('site_id') + '&';
+            }
+            
+            if (urlParams.has('machine_id')) {
+                printUrl += 'machine_id=' + urlParams.get('machine_id') + '&';
+            }
+            
+            if (urlParams.has('month_year')) {
+                printUrl += 'month_year=' + urlParams.get('month_year');
+            }
+            
+            // Open the printable view in a new window and trigger print
+            const printWindow = window.open(printUrl, '_blank');
+            printWindow.addEventListener('load', function() {
+                printWindow.print();
+                // Optional: close the window after printing (uncomment if desired)
+                // printWindow.onafterprint = function() { printWindow.close(); };
+            });
         });
         
         // PDF Download
