@@ -115,8 +115,15 @@ def check_persistent_storage():
 # Call this function before your database setup
 storage_ok = check_persistent_storage()
 
-# Initialize Flask app
-app = Flask(__name__, instance_relative_config=True)
+# Get the directory of this file
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+# Set static and template folder paths explicitly
+STATIC_FOLDER = os.path.join(BASE_DIR, 'static')
+TEMPLATE_FOLDER = os.path.join(BASE_DIR, 'templates')
+
+# Initialize Flask app with absolute static and template folder paths
+app = Flask(__name__, instance_relative_config=True, static_folder=STATIC_FOLDER, template_folder=TEMPLATE_FOLDER)
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
@@ -184,9 +191,6 @@ logging.basicConfig(
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
-
-# Get the directory of this file
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Define dotenv_path before using it
 dotenv_path = os.path.join(BASE_DIR, '.env')

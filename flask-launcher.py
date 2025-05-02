@@ -7,6 +7,9 @@ import os
 import importlib.util
 import traceback
 
+# Ensure working directory is the script's directory
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 # Create a more detailed debug log with clear filename
 debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flask-debug.log')
 with open(debug_log_path, 'a') as f:
