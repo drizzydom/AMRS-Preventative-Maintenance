@@ -26,7 +26,30 @@ from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
 import smtplib
-from weasyprint import HTML, CSS
+
+# Use WeasyPrint wrapper (which handles executable vs. module)
+try:
+    # First try the wrapper (which tries executable first, then falls back to module)
+    from weasyprint_wrapper import HTML, CSS
+    print("Using WeasyPrint wrapper for PDF generation")
+except ImportError:
+    # Fall back to direct import only if wrapper is unavailable
+    try:
+        from weasyprint import HTML, CSS
+        print("Using WeasyPrint module directly for PDF generation")
+    except ImportError:
+        print("WARNING: WeasyPrint not available. PDF generation will not work.")
+        # Create dummy classes to prevent errors
+        class HTML:
+            def __init__(self, string=None, filename=None):
+                self.string = string
+                self.filename = filename
+            def write_pdf(self, target=None):
+                raise RuntimeError("WeasyPrint not available")
+        class CSS:
+            def __init__(self, string=None, filename=None):
+                pass
+
 from jinja2 import Environment, FileSystemLoader
 
 # Local imports
@@ -1713,6 +1736,7 @@ def audit_history_print_view():
     users = {user.id: user for user in User.query.all()}
     
     # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
+
     from collections import defaultdict
     interval_bars = defaultdict(lambda: defaultdict(list))
     for machine in machines:
