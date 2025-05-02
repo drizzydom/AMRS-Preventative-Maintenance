@@ -123,6 +123,16 @@ def main():
     install_python_requirements()
     ensure_node_and_electron()
     build_electron()
+    # After building the app, automatically install WeasyPrint DLLs
+    try:
+        print("[BUILD] Installing WeasyPrint Windows DLL dependencies...")
+        subprocess.check_call([
+            sys.executable,
+            os.path.join(os.path.dirname(__file__), 'install_weasyprint_windows_deps.py')
+        ])
+        print("[BUILD] WeasyPrint DLLs installed.")
+    except Exception as e:
+        print(f"[BUILD] Failed to install WeasyPrint DLLs: {e}")
     print("\n[BUILD] Build complete! Check the 'electron_app/dist' folder for your Windows installer or .exe file.\n")
 
 if __name__ == "__main__":
