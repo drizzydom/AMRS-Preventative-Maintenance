@@ -299,7 +299,9 @@ def setup_enhanced_audit_history():
                             selected_month=f"{year:04d}-{month:02d}",
                             today=today,
                             display_machines=[],
-                            show_site_dropdown=show_site_dropdown
+                            show_site_dropdown=show_site_dropdown,
+                            all_tasks_per_machine={},
+                            interval_bars={}
                         )
                 # For non-admin users, restrict to their assigned sites
                 elif not current_user.is_admin and sites:
@@ -334,7 +336,9 @@ def setup_enhanced_audit_history():
                             selected_month=f"{year:04d}-{month:02d}",
                             today=today,
                             display_machines=[],
-                            show_site_dropdown=show_site_dropdown
+                            show_site_dropdown=show_site_dropdown,
+                            all_tasks_per_machine={},
+                            interval_bars={}
                         )
                 
                 # Apply machine filter if machine_id provided
@@ -390,6 +394,38 @@ def setup_enhanced_audit_history():
                     if completion.audit_task_id in audit_tasks:
                         unique_task_ids.add(completion.audit_task_id)
                 unique_tasks = [audit_tasks[task_id] for task_id in unique_task_ids]
+                
+                # Create all_tasks_per_machine structure
+                logger.debug("Creating all_tasks_per_machine structure")
+                all_tasks_per_machine = {}
+                interval_bars = {}
+                
+                # Get all task assignments (machine-task relationships)
+                machine_task_assignments = {}
+                for task in AuditTask.query.all():
+                    if hasattr(task, 'machines') and task.machines:
+                        for machine in task.machines:
+                            if machine.id not in machine_task_assignments:
+                                machine_task_assignments[machine.id] = []
+                            machine_task_assignments[machine.id].append(task)
+                
+                # Generate the data structures for each machine
+                for machine_id, tasks in machine_task_assignments.items():
+                    all_tasks_per_machine[machine_id] = tasks
+                    interval_bars[machine_id] = {}
+                    
+                    # Initialize empty interval bars for each task
+                    for task in tasks:
+                        interval_bars[machine_id][task.id] = []
+                
+                # Make sure all machines in display_machines have entries
+                for machine in available_machines:
+                    if machine.id not in all_tasks_per_machine:
+                        all_tasks_per_machine[machine.id] = []
+                    if machine.id not in interval_bars:
+                        interval_bars[machine.id] = {}
+                
+                logger.debug(f"Created tasks for {len(all_tasks_per_machine)} machines")
                 
                 # Get machine data for display
                 try:
@@ -532,7 +568,9 @@ def setup_enhanced_audit_history():
                     selected_month=selected_month,
                     today=today,
                     display_machines=display_machines,
-                    show_site_dropdown=show_site_dropdown
+                    show_site_dropdown=show_site_dropdown,
+                    all_tasks_per_machine=all_tasks_per_machine,
+                    interval_bars=interval_bars
                 )
                 
             except Exception as e:
