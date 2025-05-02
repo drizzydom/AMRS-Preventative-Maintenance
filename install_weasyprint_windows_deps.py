@@ -13,6 +13,31 @@ VENV_SCRIPTS = os.path.join(os.path.dirname(__file__), 'dist', 'win-unpacked', '
 # Path to local DLLs (if they exist)
 LOCAL_DLLS_DIR = os.path.join(os.path.dirname(__file__), 'dependencies', 'weasyprint-dlls')
 
+# List of required DLLs for WeasyPrint/GTK (expand as needed)
+REQUIRED_DLLS = [
+    "libgobject-2.0-0.dll",
+    "libglib-2.0-0.dll",
+    "libcairo-2.dll",
+    "libgdk_pixbuf-2.0-0.dll",
+    "libpango-1.0-0.dll",
+    "libpangocairo-1.0-0.dll",
+    "libgdk-3-0.dll",
+    "libgtk-3-0.dll",
+    "libffi-7.dll",
+    "libgthread-2.0-0.dll",
+    "libharfbuzz-0.dll",
+    "libfontconfig-1.dll",
+    "libfreetype-6.dll",
+    "libpng16-16.dll",
+    "libexpat-1.dll",
+    "libintl-8.dll",
+    "libpcre-1.dll",
+    "libpixman-1-0.dll",
+    "libepoxy-0.dll",
+    "libfribidi-0.dll",
+    # Add more as needed for your WeasyPrint/GTK version
+]
+
 # Create the Scripts directory if it doesn't exist
 os.makedirs(VENV_SCRIPTS, exist_ok=True)
 print(f"[WeasyPrint DLL Installer] Ensuring Scripts directory exists: {VENV_SCRIPTS}")
@@ -20,23 +45,26 @@ print(f"[WeasyPrint DLL Installer] Ensuring Scripts directory exists: {VENV_SCRI
 # Check for local DLLs first
 if os.path.exists(LOCAL_DLLS_DIR) and os.listdir(LOCAL_DLLS_DIR):
     print(f"[WeasyPrint DLL Installer] Found local DLLs in {LOCAL_DLLS_DIR}")
-    # Copy all DLLs from the local directory to the Scripts directory
-    dll_count = 0
-    for file in os.listdir(LOCAL_DLLS_DIR):
-        if file.lower().endswith('.dll'):
-            src = os.path.join(LOCAL_DLLS_DIR, file)
-            dst = os.path.join(VENV_SCRIPTS, file)
-            print(f"[WeasyPrint DLL Installer] Copying {file} to Scripts directory")
-            shutil.copy2(src, dst)
-            dll_count += 1
     
-    if dll_count > 0:
-        print(f"[WeasyPrint DLL Installer] Successfully copied {dll_count} DLLs from local directory")
-        print("[WeasyPrint DLL Installer] Installation process completed")
-        # Exit successfully - we've copied the local DLLs
-        sys.exit(0)
-    else:
-        print("[WeasyPrint DLL Installer] No DLL files found in local directory, falling back to download")
+    # Check for missing required DLLs
+    missing = [dll for dll in REQUIRED_DLLS if not os.path.exists(os.path.join(LOCAL_DLLS_DIR, dll))]
+    if missing:
+        print("\n[WeasyPrint DLL Installer] ERROR: The following required DLLs are missing from dependencies/weasyprint-dlls:")
+        for dll in missing:
+            print(f"  - {dll}")
+        print("\nPlease download the full set of GTK DLLs for WeasyPrint and place them in dependencies/weasyprint-dlls before building.")
+        sys.exit(1)
+    
+    # Copy all required DLLs from the local directory to the Scripts directory
+    for dll in REQUIRED_DLLS:
+        src = os.path.join(LOCAL_DLLS_DIR, dll)
+        dst = os.path.join(VENV_SCRIPTS, dll)
+        print(f"[WeasyPrint DLL Installer] Copying {dll} to Scripts directory")
+        shutil.copy2(src, dst)
+    
+    print(f"[WeasyPrint DLL Installer] Successfully copied {len(REQUIRED_DLLS)} DLLs from local directory")
+    print("[WeasyPrint DLL Installer] Installation process completed")
+    sys.exit(0)
 else:
     print("[WeasyPrint DLL Installer] No local DLLs found, will attempt to download")
 
