@@ -213,16 +213,31 @@
                                 </div>
                                 
                                 <div class="calendar-legend">
-                                    <h6 class="legend-title">Legend</h6>
+                                    <h6 class="legend-title">Legend & Task Schedule</h6>
                                     <div class="legend-items">
                                         {% for task in all_tasks_per_machine[machine.id] %}
                                             <div class="legend-item">
                                                 <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
-                                                <span class="legend-text">{{ task.name }}</span>
+                                                <span class="legend-text">
+                                                    {{ task.name }}
+                                                    <span class="legend-schedule">
+                                                        ({% if task.interval == 'daily' %}
+                                                            Daily
+                                                        {% elif task.interval == 'weekly' %}
+                                                            Weekly{% if task.weekday %} - {{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}{% endif %}
+                                                        {% elif task.interval == 'monthly' %}
+                                                            Monthly{% if task.month_day %} - Day {{ task.month_day }}{% endif %}
+                                                        {% elif task.interval == 'custom' and task.custom_interval_days %}
+                                                            Every {{ task.custom_interval_days }} days
+                                                        {% else %}
+                                                            Schedule not specified
+                                                        {% endif %})
+                                                    </span>
+                                                </span>
                                             </div>
                                         {% endfor %}
                                         
-                                        <div class="legend-item">
+                                        <div class="legend-item mt-3">
                                             <span class="legend-marker today-marker"></span>
                                             <span class="legend-text">Today</span>
                                         </div>
@@ -325,12 +340,27 @@
                                 
                                 <div class="col-lg-4">
                                     <div class="calendar-legend">
-                                        <h6 class="legend-title">Task Legend</h6>
+                                        <h6 class="legend-title">Legend & Task Schedule</h6>
                                         <div class="legend-items">
                                             {% for task in all_tasks_per_machine[machine.id] %}
                                                 <div class="legend-item">
                                                     <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
-                                                    <span class="legend-text">{{ task.name }}</span>
+                                                    <span class="legend-text">
+                                                        {{ task.name }}
+                                                        <span class="legend-schedule">
+                                                            ({% if task.interval == 'daily' %}
+                                                                Daily
+                                                            {% elif task.interval == 'weekly' %}
+                                                                Weekly{% if task.weekday %} - {{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}{% endif %}
+                                                            {% elif task.interval == 'monthly' %}
+                                                                Monthly{% if task.month_day %} - Day {{ task.month_day }}{% endif %}
+                                                            {% elif task.interval == 'custom' and task.custom_interval_days %}
+                                                                Every {{ task.custom_interval_days }} days
+                                                            {% else %}
+                                                                Schedule not specified
+                                                            {% endif %})
+                                                        </span>
+                                                    </span>
                                                 </div>
                                             {% endfor %}
                                             
@@ -563,94 +593,189 @@
         color: #495057;
     }
     
+    .legend-schedule {
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-style: italic;
+        display: block;
+        margin-top: 2px;
+    }
+    
     /* Print Specific Styles */
     @media print {
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            color: #333;
+            font-size: 9pt;
+            max-width: 100%;
+        }
+        
+        /* Page Layout */
+        @page {
+            size: letter landscape;
+            margin: 1cm;
+        }
+        
+        /* Machine Sections */
         .print-calendar-container {
             page-break-inside: avoid;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            height: auto;
         }
         
         .machine-section {
             page-break-before: always;
             margin-bottom: 30px;
+            width: 100%;
         }
         
         .machine-section:first-child {
             page-break-before: auto;
         }
         
+        /* Headers and Metadata */
         .machine-title {
-            font-size: 18pt;
+            font-size: 14pt;
             font-weight: bold;
-            margin-bottom: 15px;
+            margin-bottom: 5px;
             border-bottom: 1px solid #000;
-            padding-bottom: 5px;
+            padding-bottom: 3px;
         }
         
         .print-header {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border-bottom: 2px solid #000;
-            padding-bottom: 15px;
+            padding-bottom: 10px;
         }
         
         .company-info {
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
         
         .company-info h1 {
-            font-size: 22pt;
+            font-size: 18pt;
             margin: 0;
         }
         
         .company-info p {
-            font-size: 14pt;
+            font-size: 12pt;
             margin: 5px 0 0;
         }
         
-        .report-title {
-            margin-bottom: 15px;
-        }
-        
-        .report-title h2 {
-            font-size: 18pt;
-            margin: 0;
-        }
-        
-        .report-id {
-            font-size: 10pt;
-            color: #666;
-        }
-        
-        .report-meta {
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .meta-table {
-            border-collapse: collapse;
-        }
-        
-        .meta-table th {
-            text-align: left;
-            padding-right: 15px;
-        }
-        
-        .certification-footer {
-            margin-top: 30px;
-            font-size: 9pt;
-            color: #666;
-            border-top: 1px solid #aaa;
-            padding-top: 10px;
-            font-style: italic;
-        }
-        
+        /* Calendar and Legend Layout */
         .monthly-calendar-with-legend {
             display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
+            flex-wrap: nowrap;
+            gap: 10px;
+            width: 100%;
+            min-height: 380px;
+        }
+        
+        .monthly-calendar {
+            flex: 4;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .month-header {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 0;
+            color: #334155;
+            text-align: center;
+            padding: 8px;
+            background-color: #f1f5f9;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            border: 1px solid #c8d1d9;
+            border-bottom: none;
+            flex-shrink: 0;
+        }
+        
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #c8d1d9;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            flex-grow: 1;
+            table-layout: fixed;
+            height: 100%;
+        }
+        
+        .calendar-table tbody {
+            height: 100%;
+        }
+        
+        .calendar-table tr {
+            height: 16.66%;
         }
         
         .calendar-day {
-            height: 60px;
+            min-height: 45px;
+            height: auto;
+            width: 14.28%;
+            vertical-align: top;
+            padding: 4px;
+            border: 1px solid #c8d1d9;
+            position: relative;
+            background-color: #fff;
+        }
+        
+        .calendar-legend {
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            height: fit-content;
+            min-width: 150px;
+            flex: 1;
+            max-width: 30%;
+        }
+        
+        /* Task Markers and Legend */
+        .task-marker {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+        
+        .task-markers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            min-height: 15px;
+        }
+        
+        .legend-marker {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .legend-schedule {
+            font-size: 0.7rem;
+            color: #6c757d;
+            font-style: italic;
+            display: block;
+            margin-top: 2px;
+        }
+        
+        .certification-footer {
+            margin-top: 10px;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #aaa;
+            padding-top: 5px;
+            font-style: italic;
         }
     }
     
