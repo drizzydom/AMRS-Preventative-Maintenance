@@ -194,104 +194,39 @@
             background-color: #ccc;
         }
         
-        /* Interval Tasks Section */
-        .interval-tasks-section {
-            margin-top: 10px;
-            padding: 8px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
-        }
-        
-        .interval-section-title {
-            font-weight: 600;
-            font-size: 0.85rem;
-            margin-bottom: 5px;
-            color: #495057;
-            border-bottom: 1px solid #dee2e6;
-            padding-bottom: 3px;
-        }
-        
-        .interval-tasks-list {
-            display: flex;
-            flex-wrap: wrap; /* Allow tasks to wrap for better space usage */
-            gap: 5px;
-        }
-        
-        .interval-task-item {
-            display: flex;
-            gap: 5px;
-            font-size: 0.75rem;
-            align-items: center;
-            width: 48%; /* Set width to create two columns */
-        }
-        
-        .interval-task-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-        
-        .interval-task-details {
-            flex: 1;
-        }
-        
-        .interval-task-name {
-            font-weight: 500;
-        }
-        
-        .interval-task-schedule {
-            font-style: italic;
-            font-size: 0.7rem;
-            color: #6c757d;
-        }
-        
-        /* Removing interval bar styling */
-        .interval-bar {
-            display: none;
-        }
-        
         /* Category-specific colors */
         .task-marker[data-category="electrical"], 
-        .legend-marker.category-electrical,
-        .interval-bar.category-electrical {
+        .legend-marker.category-electrical {
             background-color: #dc3545;
         }
         
         .task-marker[data-category="mechanical"], 
-        .legend-marker.category-mechanical,
-        .interval-bar.category-mechanical {
+        .legend-marker.category-mechanical {
             background-color: #0d6efd;
         }
         
         .task-marker[data-category="hydraulic"], 
-        .legend-marker.category-hydraulic,
-        .interval-bar.category-hydraulic {
+        .legend-marker.category-hydraulic {
             background-color: #fd7e14;
         }
         
         .task-marker[data-category="pneumatic"], 
-        .legend-marker.category-pneumatic,
-        .interval-bar.category-pneumatic {
+        .legend-marker.category-pneumatic {
             background-color: #6f42c1;
         }
         
         .task-marker[data-category="general"], 
-        .legend-marker.category-general,
-        .interval-bar.category-general {
+        .legend-marker.category-general {
             background-color: #198754;
         }
         
         .task-marker[data-category="electronic"], 
-        .legend-marker.category-electronic,
-        .interval-bar.category-electronic {
+        .legend-marker.category-electronic {
             background-color: #20c997;
         }
         
         .task-marker[data-category="structural"], 
-        .legend-marker.category-structural,
-        .interval-bar.category-structural {
+        .legend-marker.category-structural {
             background-color: #6c757d;
         }
         
@@ -341,6 +276,14 @@
         .legend-text {
             font-size: 0.8rem;
             color: #495057;
+        }
+        
+        .legend-schedule {
+            font-size: 0.7rem;
+            color: #6c757d;
+            font-style: italic;
+            display: block;
+            margin-top: 2px;
         }
         
         /* No-data message */
@@ -513,13 +456,28 @@
                         </div>
                         
                         <div class="calendar-legend">
-                            <h6 class="legend-title">Legend</h6>
+                            <h6 class="legend-title">Legend & Task Schedule</h6>
                             <div class="legend-items">
                                 {% if machine.id in all_tasks_per_machine %}
                                     {% for task in all_tasks_per_machine[machine.id] %}
                                         <div class="legend-item">
                                             <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
-                                            <span class="legend-text">{{ task.name }}</span>
+                                            <span class="legend-text">
+                                                {{ task.name }}
+                                                <span class="legend-schedule">
+                                                    ({% if task.interval == 'daily' %}
+                                                        Daily
+                                                    {% elif task.interval == 'weekly' %}
+                                                        Weekly{% if task.weekday %} - {{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}{% endif %}
+                                                    {% elif task.interval == 'monthly' %}
+                                                        Monthly{% if task.month_day %} - Day {{ task.month_day }}{% endif %}
+                                                    {% elif task.interval == 'custom' and task.custom_interval_days %}
+                                                        Every {{ task.custom_interval_days }} days
+                                                    {% else %}
+                                                        Schedule not specified
+                                                    {% endif %})
+                                                </span>
+                                            </span>
                                         </div>
                                     {% endfor %}
                                 {% endif %}
@@ -530,36 +488,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- Interval Tasks Section -->
-                <div class="interval-tasks-section">
-                    <h6 class="interval-section-title">Interval Tasks</h6>
-                    <div class="interval-tasks-list">
-                        {% if machine.id in all_tasks_per_machine %}
-                            {% for task in all_tasks_per_machine[machine.id] %}
-                                <div class="interval-task-item">
-                                    <span class="interval-task-indicator category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
-                                    <div class="interval-task-details">
-                                        <span class="interval-task-name">{{ task.name }}</span>
-                                        <span class="interval-task-schedule">
-                                            {% if task.interval == 'daily' %}
-                                                Daily
-                                            {% elif task.interval == 'weekly' %}
-                                                Weekly{% if task.weekday %} ({{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}){% endif %}
-                                            {% elif task.interval == 'monthly' %}
-                                                Monthly{% if task.month_day %} (Day {{ task.month_day }}){% endif %}
-                                            {% elif task.interval == 'custom' and task.custom_interval_days %}
-                                                Every {{ task.custom_interval_days }} days
-                                            {% else %}
-                                                Schedule not specified
-                                            {% endif %}
-                                        </span>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
                     </div>
                 </div>
             {% else %}
