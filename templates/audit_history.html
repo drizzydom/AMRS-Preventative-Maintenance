@@ -789,6 +789,32 @@
         border-radius: 8px;
         border: 1px dashed #dee2e6;
     }
+
+    /* Additional fixes for calendar containers to avoid footer overlap */
+    .card-body .monthly-calendar {
+        margin-bottom: 40px; /* Extra margin at the bottom of calendars */
+    }
+    
+    /* Ensure space at the bottom of the page */
+    .card:last-child {
+        margin-bottom: 60px; /* Extra space for the last card before footer */
+    }
+    
+    /* Ensure calendar-view card has appropriate spacing */
+    .calendar-view-container {
+        margin-bottom: 70px; /* Larger margin to avoid footer overlap */
+    }
+    
+    /* Adjust calendar height and overflow for better display */
+    .calendar-day {
+        height: 80px; /* Fixed height for calendar cells */
+        overflow: auto; /* Add scroll if content exceeds space */
+    }
+    
+    /* For pages with audit_history content */
+    body:has(.audit-history-container) .content-container {
+        padding-bottom: 80px !important; /* Extra padding for pages with calendars */
+    }
 </style>
 
 <script>
