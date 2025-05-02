@@ -57,14 +57,32 @@ def main():
     except Exception as e:
         print(f"Error listing directory contents: {e}")
     
-    # Check for required files
+    # Check for required files and log absolute paths
     required_files = ['app.py', 'models.py', 'config.py']
-    missing_files = [f for f in required_files if not os.path.exists(os.path.join(current_dir, f))]
-    
-    # Check for required directories
+    missing_files = []
+    with open(debug_log_path, 'a') as f:
+        f.write('\nChecking required files (with absolute paths):\n')
+        print('\nChecking required files (with absolute paths):')
+        for fname in required_files:
+            abs_path = os.path.join(current_dir, fname)
+            f.write(f"- {fname}: {abs_path} - {'FOUND' if os.path.exists(abs_path) else 'MISSING'}\n")
+            print(f"- {fname}: {abs_path} - {'FOUND' if os.path.exists(abs_path) else 'MISSING'}")
+            if not os.path.exists(abs_path):
+                missing_files.append(fname)
+
+    # Check for required directories and log absolute paths
     required_dirs = ['static', 'templates']
-    missing_dirs = [d for d in required_dirs if not os.path.isdir(os.path.join(current_dir, d))]
-    
+    missing_dirs = []
+    with open(debug_log_path, 'a') as f:
+        f.write('\nChecking required directories (with absolute paths):\n')
+        print('\nChecking required directories (with absolute paths):')
+        for dname in required_dirs:
+            abs_path = os.path.join(current_dir, dname)
+            f.write(f"- {dname}: {abs_path} - {'FOUND' if os.path.isdir(abs_path) else 'MISSING'}\n")
+            print(f"- {dname}: {abs_path} - {'FOUND' if os.path.isdir(abs_path) else 'MISSING'}")
+            if not os.path.isdir(abs_path):
+                missing_dirs.append(dname)
+
     # If any files or directories are missing, log and exit
     if missing_files or missing_dirs:
         error_msg = f"Missing required files/directories: {', '.join(missing_files + missing_dirs)}"
