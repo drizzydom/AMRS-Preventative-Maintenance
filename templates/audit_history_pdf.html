@@ -300,11 +300,6 @@
             display: inline-block;
         }
         
-        .today-marker {
-            background-color: #007bff;
-            border: 1px solid #0056b3;
-        }
-        
         .legend-text {
             font-size: 0.8rem;
             color: #495057;
@@ -551,11 +546,6 @@
                                         </div>
                                     {% endfor %}
                                 {% endif %}
-                                
-                                <div class="legend-item mt-3">
-                                    <span class="legend-marker today-marker"></span>
-                                    <span class="legend-text">Today</span>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -569,7 +559,7 @@
             <!-- Certification Footer - now inside the machine-content-with-footer div to keep it with the content -->
             <div class="certification-footer">
                 This document certifies that all recorded maintenance tasks have been performed according to 
-                AMRS Preventative Maintenance standards and protocols. Report ID: {{ today.strftime('%Y%m%d%H%M%S') }}
+                Accurate Machine Repair Preventative Maintenance standards and protocols. Report ID: {{ today.strftime('%Y%m%d%H%M%S') }}
             </div>
         </div>
     </div>
