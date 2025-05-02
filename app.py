@@ -3597,10 +3597,18 @@ if __name__ == '__main__':
 
 # Import and patch audit history at the very end to avoid circular import
 try:
-    import fix_audit_history
-    print("[APP] Audit history fix imported successfully (imported at end of app.py)")
+    import fix_audit_history_v2
+    print("[APP] Running enhanced audit history fix...")
+    success = fix_audit_history_v2.setup_enhanced_audit_history()
+    print(f"[APP] Enhanced audit history fix applied: {'Successfully' if success else 'Failed'}")
 except Exception as e:
-    print(f"[APP] Warning: Could not import audit history fix at end of app.py: {str(e)}")
+    print(f"[APP] Warning: Could not apply enhanced audit history fix: {str(e)}")
+    # Try the older fix as fallback
+    try:
+        import fix_audit_history
+        print("[APP] Falling back to basic audit history fix")
+    except Exception as e2:
+        print(f"[APP] Warning: Could not import audit history fix at end of app.py: {str(e2)}")
 
 
 
