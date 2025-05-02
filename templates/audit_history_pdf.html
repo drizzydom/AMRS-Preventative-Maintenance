@@ -118,10 +118,10 @@
             flex: 4; /* Further increased for even better calendar space usage */
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible; /* Changed from hidden to visible to prevent content clipping */
             display: flex;
             flex-direction: column; /* Stack children vertically */
-            margin-bottom: 40px;
+            margin-bottom: 60px; /* Increased from 40px to create more space for the last row */
         }
         
         .month-header {
@@ -148,6 +148,7 @@
             flex-grow: 1; /* Allow the table to grow and fill available space */
             table-layout: fixed; /* Ensure columns have equal width */
             height: 100%; /* Make sure table takes full height */
+            margin-bottom: 20px; /* Add space after the table */
         }
         
         .calendar-table tbody {
@@ -330,7 +331,7 @@
         
         /* Footer improvements */
         .certification-footer {
-            margin-top: 20px;
+            margin-top: 40px; /* Increased margin to avoid overlapping last calendar row */
             font-size: 8pt;
             color: #666;
             border-top: 1px solid #aaa;
