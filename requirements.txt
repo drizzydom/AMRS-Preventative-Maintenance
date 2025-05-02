@@ -35,3 +35,4 @@ cryptography
 # PDF generation
 reportlab>=3.6.13
 weasyprint>=59.0
+weasyprint
