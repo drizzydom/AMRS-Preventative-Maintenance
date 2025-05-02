@@ -38,7 +38,17 @@ def main():
             
         # Run the Flask application
         print(f"Starting Flask server on port {port}...")
-        app.app.run(host='127.0.0.1', port=port)
+        try:
+            app.app.run(host='127.0.0.1', port=port)
+        except Exception as e:
+            with open("flask-error.log", "a") as f:
+                f.write("Flask server failed to start\n")
+                f.write(f"Date: {__import__('datetime').datetime.now()}\n")
+                f.write(f"Python path: {sys.executable}\n")
+                f.write(f"Flask script: {__file__}\n")
+                f.write(f"Working directory: {os.getcwd()}\n")
+                f.write(traceback.format_exc())
+            raise
     except ImportError as e:
         print(f"IMPORT ERROR: {e}")
         traceback.print_exc()
