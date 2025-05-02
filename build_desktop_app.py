@@ -100,29 +100,26 @@ def ensure_node_and_electron():
         print("[BUILD] Installing electron-builder...")
         run("npm install --save-dev electron-builder", cwd=ELECTRON_DIR)
 
-def build_electron():
-    print("[BUILD] Building Electron app...")
+def main():
+    print("\n===== AMRS Desktop App Build Script =====\n")
+    ensure_venv()
+    install_python_requirements()
+    ensure_node_and_electron()
+    # Build Electron app and package everything
+    print("[BUILD] Building Electron app and packaging...")
     # If you have a build step (e.g. React/Vue), run it here:
     if os.path.exists(os.path.join(ELECTRON_DIR, "package.json")):
-        # Optionally: run npm run build if you have a build script
         try:
             with open(os.path.join(ELECTRON_DIR, "package.json")) as f:
                 if '"build"' in f.read():
                     run("npm run build", cwd=ELECTRON_DIR, check=False)
         except Exception:
             pass
-    # Build with electron-builder
+    # Build with electron-builder (now part of this script)
     builder_cmd = f"npx electron-builder --win --x64 --compression={COMPRESSION_LEVEL}"
     if os.path.exists(ICON_PATH):
         builder_cmd += f" --icon {ICON_PATH}"
     run(builder_cmd, cwd=ELECTRON_DIR)
-
-def main():
-    print("\n===== AMRS Desktop App Build Script =====\n")
-    ensure_venv()
-    install_python_requirements()
-    ensure_node_and_electron()
-    build_electron()
     # After building the app, automatically install WeasyPrint DLLs
     try:
         print("[BUILD] Installing WeasyPrint Windows DLL dependencies...")
