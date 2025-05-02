@@ -50,6 +50,13 @@ def main():
                 f.write(traceback.format_exc())
             raise
     except ImportError as e:
+        with open("flask-error.log", "a") as f:
+            f.write("Flask server failed to start\n")
+            f.write(f"Date: {__import__('datetime').datetime.now()}\n")
+            f.write(f"Python path: {sys.executable}\n")
+            f.write(f"Flask script: {__file__}\n")
+            f.write(f"Working directory: {os.getcwd()}\n")
+            f.write(traceback.format_exc())
         print(f"IMPORT ERROR: {e}")
         traceback.print_exc()
         
@@ -91,6 +98,13 @@ def main():
         # Exit with error code
         sys.exit(2)
     except Exception as e:
+        with open("flask-error.log", "a") as f:
+            f.write("Flask server failed to start\n")
+            f.write(f"Date: {__import__('datetime').datetime.now()}\n")
+            f.write(f"Python path: {sys.executable}\n")
+            f.write(f"Flask script: {__file__}\n")
+            f.write(f"Working directory: {os.getcwd()}\n")
+            f.write(traceback.format_exc())
         print(f"ERROR: {e}")
         traceback.print_exc()
         sys.exit(1)
