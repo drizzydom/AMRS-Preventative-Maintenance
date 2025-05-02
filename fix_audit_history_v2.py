@@ -93,8 +93,45 @@ def setup_enhanced_audit_history():
         from flask import render_template, flash, redirect, url_for, request, jsonify, abort, current_app
         from flask_login import current_user, login_required
         from sqlalchemy import func, or_
-    
+        import calendar  # Make sure we import calendar module
+
         logger.info("Applying enhanced audit history fixes")
+        
+        # Add Jinja filter for month names
+        @app.template_filter('month_name')
+        def month_name_filter(month_number):
+            """Convert month number to month name"""
+            try:
+                return calendar.month_name[int(month_number)]
+            except (ValueError, IndexError):
+                logger.error(f"Invalid month number for month_name filter: {month_number}")
+                return f"Month {month_number}"
+        
+        logger.info("Added month_name template filter")
+        
+        # Add context processor function for calendar weeks
+        @app.context_processor
+        def inject_calendar_functions():
+            def get_calendar_weeks(year, month):
+                """Generate calendar weeks for a given month/year"""
+                try:
+                    # Create a Calendar with Sunday as the first day of the week (6)
+                    cal = calendar.Calendar(firstweekday=6)
+                    # Get the month calendar as a list of weeks
+                    month_cal = cal.monthdayscalendar(int(year), int(month))
+                    logger.debug(f"Generated calendar for {year}-{month} with {len(month_cal)} weeks")
+                    return month_cal
+                except Exception as e:
+                    logger.error(f"Error generating calendar weeks: {e}")
+                    # Return a default empty calendar (4 weeks with empty days)
+                    return [[0, 0, 0, 0, 0, 0, 0] for _ in range(4)]
+            
+            # Return dict of functions to add to the template context
+            return {
+                'get_calendar_weeks': get_calendar_weeks
+            }
+        
+        logger.info("Added calendar template functions")
         
         # First, fix any audit completions with missing machine IDs
         with app.app_context():
@@ -178,10 +215,13 @@ def setup_enhanced_audit_history():
                 # Handle machine_id conversion safely
                 try:
                     machine_id = int(machine_id_param) if machine_id_param.strip() else None
+                    # Convert to string for template comparison
+                    selected_machine = str(machine_id) if machine_id is not None else ""
                 except (ValueError, AttributeError):
                     machine_id = None
+                    selected_machine = ""
                     
-                logger.info(f"Filters: site_id={site_id}, machine_id={machine_id}")
+                logger.info(f"Filters: site_id={site_id}, machine_id={machine_id}, selected_machine={selected_machine}")
                 
                 # --- Site access restrictions ---
                 if current_user.is_admin:
@@ -262,7 +302,9 @@ def setup_enhanced_audit_history():
                             selected_month=f"{year:04d}-{month:02d}",
                             today=today,
                             display_machines=[],
-                            show_site_dropdown=show_site_dropdown
+                            show_site_dropdown=show_site_dropdown,
+                            all_tasks_per_machine={},
+                            interval_bars={}
                         )
                 # For non-admin users, restrict to their assigned sites
                 elif not current_user.is_admin and sites:
@@ -297,7 +339,9 @@ def setup_enhanced_audit_history():
                             selected_month=f"{year:04d}-{month:02d}",
                             today=today,
                             display_machines=[],
-                            show_site_dropdown=show_site_dropdown
+                            show_site_dropdown=show_site_dropdown,
+                            all_tasks_per_machine={},
+                            interval_bars={}
                         )
                 
                 # Apply machine filter if machine_id provided
@@ -354,6 +398,38 @@ def setup_enhanced_audit_history():
                         unique_task_ids.add(completion.audit_task_id)
                 unique_tasks = [audit_tasks[task_id] for task_id in unique_task_ids]
                 
+                # Create all_tasks_per_machine structure
+                logger.debug("Creating all_tasks_per_machine structure")
+                all_tasks_per_machine = {}
+                interval_bars = {}
+                
+                # Get all task assignments (machine-task relationships)
+                machine_task_assignments = {}
+                for task in AuditTask.query.all():
+                    if hasattr(task, 'machines') and task.machines:
+                        for machine in task.machines:
+                            if machine.id not in machine_task_assignments:
+                                machine_task_assignments[machine.id] = []
+                            machine_task_assignments[machine.id].append(task)
+                
+                # Generate the data structures for each machine
+                for machine_id, tasks in machine_task_assignments.items():
+                    all_tasks_per_machine[machine_id] = tasks
+                    interval_bars[machine_id] = {}
+                    
+                    # Initialize empty interval bars for each task
+                    for task in tasks:
+                        interval_bars[machine_id][task.id] = []
+                
+                # Make sure all machines in display_machines have entries
+                for machine in available_machines:
+                    if machine.id not in all_tasks_per_machine:
+                        all_tasks_per_machine[machine.id] = []
+                    if machine.id not in interval_bars:
+                        interval_bars[machine.id] = {}
+                
+                logger.debug(f"Created tasks for {len(all_tasks_per_machine)} machines")
+                
                 # Get machine data for display
                 try:
                     machines_dict = {machine.id: machine for machine in Machine.query.all()}
@@ -392,19 +468,20 @@ def setup_enhanced_audit_history():
                 
                 # --- Generate available months for dropdown ---
                 logger.debug("Generating available months for dropdown")
-                # Start from January 2024 (to ensure earlier months are available)
-                start_month, start_year = 1, 2024
+                # Start from April 2025 as specified (first month with data)
+                start_month, start_year = 4, 2025
                 available_months = []
 
                 # Get current date for comparison
                 curr_date = datetime.now().date()
 
-                # Generate months from start date through current month/year plus a few future months
+                # Current month/year
                 current_year, current_month = curr_date.year, curr_date.month
 
                 # Add a few months into the future for planning purposes
                 future_months = 3
-                end_date = curr_date.replace(day=1)
+                
+                # Calculate end date (current month plus future months)
                 if current_month + future_months > 12:
                     future_year = current_year + ((current_month + future_months) // 12)
                     future_month = (current_month + future_months) % 12
@@ -417,6 +494,9 @@ def setup_enhanced_audit_history():
 
                 # Generate the dropdown options
                 temp_date = date(start_year, start_month, 1)
+                
+                # Extra debug logging
+                logger.info(f"Generating months from {temp_date} to {end_date}")
 
                 # Loop through months until we reach end date
                 while temp_date <= end_date:
@@ -425,17 +505,13 @@ def setup_enhanced_audit_history():
                     value = f"{y:04d}-{m:02d}"
                     display = f"{calendar.month_name[m]} {y}"
                     available_months.append({'value': value, 'display': display})
+                    logger.info(f"Added month to dropdown: {display} ({value})")
                     
                     # Move to next month
                     if m == 12:
                         temp_date = date(y + 1, 1, 1)
                     else:
                         temp_date = date(y, m + 1, 1)
-
-                # Debug output
-                logger.info(f"Generated {len(available_months)} months for dropdown")
-                for month in available_months:
-                    logger.debug(f"Available month: {month['display']} ({month['value']})")
 
                 # Sort in reverse chronological order (newest first)
                 available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
@@ -447,7 +523,7 @@ def setup_enhanced_audit_history():
                         'value': f"{current_year:04d}-{current_month:02d}",
                         'display': f"{calendar.month_name[current_month]} {current_year}"
                     })
-
+                
                 # Ensure the selected month exists in available months
                 selected_month = f"{year:04d}-{month:02d}"
                 month_exists = any(m['value'] == selected_month for m in available_months)
@@ -461,6 +537,11 @@ def setup_enhanced_audit_history():
                     })
                     # Re-sort after adding
                     available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+                
+                # Extra debugging to confirm final month list
+                logger.info(f"Final month dropdown list has {len(available_months)} items:")
+                for m in available_months:
+                    logger.info(f"  - {m['display']} ({m['value']})")
                 
                 selected_month = f"{year:04d}-{month:02d}"
                 
@@ -481,7 +562,7 @@ def setup_enhanced_audit_history():
                     users=users,
                     sites=sites,
                     selected_site=site_id,
-                    selected_machine=machine_id,
+                    selected_machine=selected_machine,
                     current_month=month,
                     current_year=year,
                     display_month=display_month,
@@ -490,7 +571,9 @@ def setup_enhanced_audit_history():
                     selected_month=selected_month,
                     today=today,
                     display_machines=display_machines,
-                    show_site_dropdown=show_site_dropdown
+                    show_site_dropdown=show_site_dropdown,
+                    all_tasks_per_machine=all_tasks_per_machine,
+                    interval_bars=interval_bars
                 )
                 
             except Exception as e:
@@ -547,6 +630,101 @@ def setup_enhanced_audit_history():
         # Register the debug endpoint
         app.route('/debug/audit-history-data')(debug_audit_history_data)
         logger.info("Registered debug endpoint at /debug/audit-history-data")
+        
+        # Add a specific endpoint to debug the month dropdown issue
+        @app.route('/debug/audit-history-months')
+        @login_required
+        def debug_audit_history_months():
+            if not current_user.is_admin:
+                return jsonify({"error": "Admin access required"}), 403
+                
+            try:
+                import calendar
+                from datetime import datetime, date
+                
+                # Debug info about dates
+                curr_date = datetime.now().date()
+                
+                # Use April 2025 as starting point (first month with data)
+                start_month, start_year = 4, 2025
+                available_months = []
+                
+                # Add a few months into the future for planning purposes
+                future_months = 3
+                current_month, current_year = curr_date.month, curr_date.year
+                
+                if current_month + future_months > 12:
+                    future_year = current_year + ((current_month + future_months) // 12)
+                    future_month = (current_month + future_months) % 12
+                    if future_month == 0:
+                        future_month = 12
+                else:
+                    future_year = current_year
+                    future_month = current_month + future_months
+                end_date = date(future_year, future_month, 1)
+                
+                # Generate the dropdown options
+                temp_date = date(start_year, start_month, 1)
+                
+                # Store all generated month information for debugging
+                month_generation = []
+                
+                # Loop through months until we reach end date
+                while temp_date <= end_date:
+                    m = temp_date.month
+                    y = temp_date.year
+                    value = f"{y:04d}-{m:02d}"
+                    display = f"{calendar.month_name[m]} {y}"
+                    
+                    available_months.append({'value': value, 'display': display})
+                    month_generation.append({
+                        'month': m,
+                        'year': y,
+                        'value': value,
+                        'display': display,
+                        'date': str(temp_date)
+                    })
+                    
+                    # Move to next month
+                    if m == 12:
+                        temp_date = date(y + 1, 1, 1)
+                    else:
+                        temp_date = date(y, m + 1, 1)
+                
+                # Sort in reverse chronological order (newest first)
+                available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+                
+                # Check for any recent audit completions to verify data exists
+                recent_months = db.session.query(
+                    func.extract('year', AuditTaskCompletion.date).label('year'),
+                    func.extract('month', AuditTaskCompletion.date).label('month'),
+                    func.count().label('count')
+                ).group_by(
+                    func.extract('year', AuditTaskCompletion.date),
+                    func.extract('month', AuditTaskCompletion.date)
+                ).order_by(
+                    func.extract('year', AuditTaskCompletion.date).desc(),
+                    func.extract('month', AuditTaskCompletion.date).desc()
+                ).limit(5).all()
+                
+                recent_month_data = [{'year': int(r.year), 'month': int(r.month), 'count': r.count} for r in recent_months]
+                
+                return jsonify({
+                    "current_date": str(curr_date),
+                    "start_date": f"{start_year}-{start_month:02d}-01",
+                    "end_date": str(end_date),
+                    "month_generation_steps": month_generation,
+                    "final_available_months": [f"{m['display']} ({m['value']})" for m in available_months],
+                    "recent_audit_completions_by_month": recent_month_data
+                })
+                
+            except Exception as e:
+                logger.error(f"Error in debug months endpoint: {str(e)}")
+                return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+                
+        # Register the months debug endpoint
+        app.route('/debug/audit-history-months')(debug_audit_history_months)
+        logger.info("Registered months debug endpoint at /debug/audit-history-months")
         
         return True
         

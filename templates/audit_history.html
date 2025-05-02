@@ -65,7 +65,7 @@
                         <div class="col-md-3">
                             <label for="machine_id" class="form-label">Machine</label>
                             <select class="form-select" id="machine_id" name="machine_id">
-                                <option value="" {% if not selected_machine or selected_machine == '' or selected_machine == '0' %}selected{% endif %}>All Machines</option>
+                                <option value="" {% if not selected_machine or selected_machine == '' %}selected{% endif %}>All Machines</option>
                                 {% for machine in available_machines %}
                                 <option value="{{ machine.id }}" {% if selected_machine == machine.id|string %}selected{% endif %}>{{ machine.name }}</option>
                                 {% endfor %}
@@ -76,7 +76,9 @@
                             <label for="month_year" class="form-label">Month</label>
                             <select class="form-select" id="month_year" name="month_year">
                                 {% for month_option in available_months %}
-                                <option value="{{ month_option.value }}" {% if selected_month == month_option.value %}selected{% endif %}>{{ month_option.display }}</option>
+                                <option value="{{ month_option.value }}" {% if selected_month == month_option.value %}selected{% endif %}>
+                                    {{ month_option.display }}
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -236,11 +238,6 @@
                                                 </span>
                                             </div>
                                         {% endfor %}
-                                        
-                                        <div class="legend-item mt-3">
-                                            <span class="legend-marker today-marker"></span>
-                                            <span class="legend-text">Today</span>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -254,7 +251,7 @@
                     <!-- Certification Footer -->
                     <div class="certification-footer">
                         This document certifies that all recorded maintenance tasks have been performed according to 
-                        AMRS Preventative Maintenance standards and protocols. Report ID: {{ '%Y%m%d%H%M%S'|format_datetime }}
+                        Accurate Machine Repair Preventative Maintenance standards and protocols. Report ID: {{ '%Y%m%d%H%M%S'|format_datetime }}
                     </div>
                 </div>
                 {% endfor %}
@@ -363,11 +360,6 @@
                                                     </span>
                                                 </div>
                                             {% endfor %}
-                                            
-                                            <div class="legend-item mt-3">
-                                                <span class="legend-marker today-marker"></span>
-                                                <span class="legend-text">Today</span>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -610,6 +602,8 @@
             color: #333;
             font-size: 9pt;
             max-width: 100%;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         
         /* Page Layout */
@@ -618,35 +612,37 @@
             margin: 1cm;
         }
         
-        /* Machine Sections */
-        .print-calendar-container {
-            page-break-inside: avoid;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            width: 100%;
-            height: auto;
-        }
-        
+        /* Prevent blank pages */
         .machine-section {
             page-break-before: always;
-            margin-bottom: 30px;
+            margin-bottom: 20px; /* Reduced from 30px */
             width: 100%;
+            page-break-after: avoid; /* Prevent break after machine section */
         }
         
         .machine-section:first-child {
             page-break-before: auto;
         }
         
-        /* Headers and Metadata */
-        .machine-title {
-            font-size: 14pt;
-            font-weight: bold;
-            margin-bottom: 5px;
-            border-bottom: 1px solid #000;
-            padding-bottom: 3px;
+        /* Prevent the last machine section from causing an extra page */
+        .machine-section:last-child {
+            margin-bottom: 0;
+            page-break-after: avoid;
         }
         
+        /* Ensure the certification footer doesn't force a new page */
+        .certification-footer {
+            margin-top: 10px;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #aaa;
+            padding-top: 5px;
+            font-style: italic;
+            page-break-inside: avoid;
+            page-break-after: avoid;
+        }
+        
+        /* Headers and Metadata */
         .print-header {
             margin-bottom: 15px;
             border-bottom: 2px solid #000;
@@ -674,6 +670,7 @@
             gap: 10px;
             width: 100%;
             min-height: 380px;
+            page-break-inside: avoid; /* Keep calendar together */
         }
         
         .monthly-calendar {
@@ -779,6 +776,19 @@
         }
     }
     
+    /* Month dropdown fix */
+    #month_year {
+        z-index: 1000;
+        position: relative; /* Ensure it's properly positioned */
+        opacity: 1 !important; /* Force visibility */
+        display: block !important; /* Ensure it's displayed */
+    }
+    
+    /* Debug outlines to see if elements are properly sized/positioned */
+    .form-select {
+        border: 1px solid #0d6efd !important; /* Make form selects more visible */
+    }
+    
     /* No-data message */
     .no-data {
         padding: 20px;
@@ -819,6 +829,19 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Debug code for month dropdown
+        console.log('DOM fully loaded');
+        const monthDropdown = document.getElementById('month_year');
+        if (monthDropdown) {
+            console.log('Month dropdown found:', monthDropdown);
+            console.log('Options count:', monthDropdown.options.length);
+            for (let i = 0; i < monthDropdown.options.length; i++) {
+                console.log(`Option ${i}:`, monthDropdown.options[i].text, monthDropdown.options[i].value);
+            }
+        } else {
+            console.error('Month dropdown not found!');
+        }
+        
         // Add tooltips to task markers
         const taskMarkers = document.querySelectorAll('.task-marker');
         taskMarkers.forEach(marker => {
