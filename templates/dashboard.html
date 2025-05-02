@@ -6,7 +6,21 @@
 
 {% block content %}
 <div class="dashboard">
-    <!-- Site Filter Dropdown -->
+    {% if no_sites %}
+    <!-- Display message for users with no site assignments -->
+    <div class="alert alert-warning">
+        <h4><i class="fas fa-exclamation-triangle me-2"></i>No Sites Assigned</h4>
+        <p>You don't have any sites assigned to your account. Please contact your administrator to get access to sites.</p>
+    </div>
+    {% elif error %}
+    <!-- Display error message when dashboard fails to load -->
+    <div class="alert alert-danger">
+        <h4><i class="fas fa-exclamation-circle me-2"></i>Error Loading Dashboard</h4>
+        <p>There was a problem loading your dashboard data. Please try refreshing the page or contact support if the issue persists.</p>
+    </div>
+    {% else %}
+    <!-- Site Filter Dropdown - Only show if user has access to multiple sites -->
+    {% if sites|length > 1 %}
     <div class="card mb-3">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
@@ -23,6 +37,10 @@
             </div>
         </div>
     </div>
+    {% else %}
+    <!-- Single site users don't need a filter dropdown -->
+    <div class="d-none" id="single-site-identifier" data-site-id="{{ sites[0].id if sites }}"></div>
+    {% endif %}
 
     <!-- Status counters -->
     <div class="row g-2 mb-4">
@@ -127,11 +145,12 @@
                                                     <td><span class="text-danger fw-bold">{{ -days_until }} days</span></td>
                                                     <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                                     <td>
-                                                        <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="POST" class="d-inline">
-                                                            <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                                                <i class="fas fa-check-circle"></i> Record
-                                                            </button>
-                                                        </form>
+                                                        <!-- Maintenance button in the overdue parts panel -->
+                                                        {% if has_permission('maintenance.record') %}
+                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                                            <i class="fas fa-tools"></i> Maintenance
+                                                        </a>
+                                                        {% endif %}
                                                     </td>
                                                 </tr>
                                             {% endif %}
@@ -155,11 +174,12 @@
                                         <div><span class="text-danger fw-bold">Overdue: {{ -days_until }} days</span></div>
                                         <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                                         <div class="mt-2">
-                                            <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="POST" class="d-inline">
-                                                <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                                    <i class="fas fa-check-circle"></i> Record
-                                                </button>
-                                            </form>
+                                            <!-- Mobile card-list version - maintenance button -->
+                                            {% if has_permission('maintenance.record') %}
+                                            <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                                <i class="fas fa-tools"></i> Maintenance
+                                            </a>
+                                            {% endif %}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -209,11 +229,11 @@
                                                     <td><span class="text-warning fw-bold">{{ days_until }} days</span></td>
                                                     <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                                     <td>
-                                                        <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="POST" class="d-inline">
-                                                            <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                                                <i class="fas fa-check-circle"></i> Record
-                                                            </button>
-                                                        </form>
+                                                        {% if has_permission('maintenance.record') %}
+                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                                            <i class="fas fa-tools"></i> Maintenance
+                                                        </a>
+                                                        {% endif %}
                                                     </td>
                                                 </tr>
                                             {% endif %}
@@ -237,11 +257,12 @@
                                         <div><span class="text-warning fw-bold">Due In: {{ days_until }} days</span></div>
                                         <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                                         <div class="mt-2">
-                                            <form action="{{ url_for('update_maintenance', part_id=part.id) }}" method="POST" class="d-inline">
-                                                <button type="submit" class="btn btn-sm btn-success" title="Record Maintenance">
-                                                    <i class="fas fa-check-circle"></i> Record
-                                                </button>
-                                            </form>
+                                            <!-- Mobile card-list version - maintenance button -->
+                                            {% if has_permission('maintenance.record') %}
+                                            <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                                <i class="fas fa-tools"></i> Maintenance
+                                            </a>
+                                            {% endif %}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -407,9 +428,11 @@
                                                         {% endif %}
                                                       </td>
                                                       <td>
-                                                        <a href="{{ url_for('update_maintenance', part_id=part.id) }}" class="btn btn-sm btn-secondary">
-                                                          <i class="fas fa-tools"></i>
+                                                        {% if has_permission('maintenance.record') %}
+                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-secondary">
+                                                          <i class="fas fa-tools"></i> Maintenance
                                                         </a>
+                                                        {% endif %}
                                                       </td>
                                                     </tr>
                                                     {% endfor %}
@@ -434,6 +457,7 @@
     <div class="alert alert-info">
         <i class="fas fa-info-circle me-2"></i> No sites available. {% if is_admin %}<a href="{{ url_for('manage_sites') }}">Add a site</a>{% endif %}
     </div>
+    {% endif %}
     {% endif %}
 </div>
 

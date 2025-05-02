@@ -304,6 +304,7 @@ class AuditTask(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     interval = db.Column(db.String(20), default='daily')  # Options: daily, weekly, monthly, custom
     custom_interval_days = db.Column(db.Integer, nullable=True)  # Only used if interval == 'custom'
+    color = db.Column(db.String(32), nullable=True)  # HSL or HEX color for per-site color wheel
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     machines = db.relationship('Machine', secondary=machine_audit_task, backref='audit_tasks')

@@ -44,6 +44,7 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">Maintenance History</h5>
+                {% if has_permission('maintenance.record') %}
                 <button class="btn btn-sm btn-success" 
                         data-bs-toggle="modal" 
                         data-bs-target="#recordMaintenanceModal" 
@@ -51,6 +52,7 @@
                         data-part-name="{{ part.name }}">
                     <i class="fas fa-plus-circle me-1"></i> Record Maintenance
                 </button>
+                {% endif %}
             </div>
             <div class="card-body">
                 {% if maintenance_records %}
@@ -86,6 +88,7 @@
 </div>
 
 <!-- Record Maintenance Modal -->
+{% if has_permission('maintenance.record') %}
 <div class="modal fade" id="recordMaintenanceModal" tabindex="-1" aria-labelledby="recordMaintenanceModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -123,6 +126,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

@@ -9,21 +9,25 @@ import argparse
 from datetime import datetime, timedelta, date
 from functools import wraps
 import traceback
+from io import BytesIO
 
 # --- TEST DB PATCH: Force in-memory SQLite for pytest runs ---
 if any('pytest' in arg for arg in sys.argv):
     os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
 # Third-party imports
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app, send_file
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
 from sqlalchemy import or_, text
+from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
 import smtplib
+from weasyprint import HTML, CSS
+from jinja2 import Environment, FileSystemLoader
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
@@ -93,6 +97,19 @@ app = Flask(__name__, instance_relative_config=True)
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
+
+# Add custom Jinja2 filters
+@app.template_filter('format_datetime')
+def format_datetime(value, fmt='%Y%m%d%H%M%S'):
+    """Format a date or datetime object as string using the specified format."""
+    if isinstance(value, str):
+        # If value is a string format, treat it as a format pattern
+        return datetime.now().strftime(value)
+    elif isinstance(value, (datetime, date)):
+        # If value is a date or datetime, format it directly
+        return value.strftime(fmt)
+    else:
+        return ""
 
 # Email configuration (all secrets from environment)
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
@@ -246,6 +263,32 @@ def is_admin_user(user):
     # Fallback: username
     if getattr(user, 'username', None) == 'admin':
         return True
+    return False
+
+def user_can_see_all_sites(user):
+    """Check if a user can see all sites or just their assigned sites.
+    
+    This function is used to implement site-based access restrictions.
+    It returns True if the user is an admin or has maintenance.record permission,
+    which means they can see all sites in the system.
+    It returns False if the user can only see their assigned sites.
+    
+    Args:
+        user: The user to check permissions for
+        
+    Returns:
+        bool: True if the user can see all sites, False if restricted to assigned sites
+    """
+    # Admin always sees all sites
+    if is_admin_user(user):
+        return True
+    
+    # Check for maintenance.record permission
+    if hasattr(user, 'role') and user.role and user.role.permissions:
+        if 'maintenance.record' in user.role.permissions.split(','):
+            return True
+            
+    # Otherwise, restrict to assigned sites
     return False
 
 # Database connection checker
@@ -438,13 +481,26 @@ def add_default_admin_if_needed():
             (User._username == encrypt_value(admin_username)) |
             (User._email == encrypt_value(admin_email))
         ).first()
+
+        # Ensure the admin role exists and has admin.full permission
+        admin_role = Role.query.filter_by(name='admin').first()
+        if not admin_role:
+            # Create admin role if it doesn't exist
+            admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+            db.session.add(admin_role)
+            db.session.commit()
+            print("[APP] Created admin role with full permissions")
+        elif 'admin.full' not in admin_role.permissions:
+            # Update existing admin role to include admin.full permission
+            current_permissions = admin_role.permissions.split(',') if admin_role.permissions else []
+            if 'admin.full' not in current_permissions:
+                current_permissions.append('admin.full')
+                admin_role.permissions = ','.join(current_permissions)
+                db.session.commit()
+                print("[APP] Updated admin role to include full permissions")
+        
         if not admin_user:
             print("[APP] No admin user found, creating default admin user")
-            admin_role = Role.query.filter_by(name='admin').first()
-            if not admin_role:
-                admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                db.session.add(admin_role)
-                db.session.commit()
             admin = User(
                 username=admin_username,
                 email=admin_email,
@@ -456,17 +512,106 @@ def add_default_admin_if_needed():
             print(f"[APP] Default admin user created: {admin_username}")
         else:
             # Ensure admin user has admin role
-            admin_role = Role.query.filter_by(name='admin').first()
             if admin_user and (not admin_user.role or admin_user.role != admin_role):
                 print(f"[APP] Fixing admin role for user {admin_user.username}")
-                if not admin_role:
-                    admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
-                    db.session.add(admin_role)
-                    db.session.commit()
                 admin_user.role = admin_role
                 db.session.commit()
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
+
+# --- Function to assign colors to audit tasks that don't have them ---
+def assign_colors_to_audit_tasks():
+    """
+    Assign unique colors to audit tasks using site-specific color wheels.
+    
+    This function:
+    1. Finds tasks without colors and assigns them new ones
+    2. Detects and fixes tasks with duplicate colors within the same site
+    3. Ensures each site has its own independent color wheel (sites can reuse colors)
+    4. Handles all task types that are visualized in the UI
+    """
+    try:
+        # Get all audit tasks
+        all_tasks = AuditTask.query.all()
+        if not all_tasks:
+            print("[APP] No audit tasks found.")
+            return
+            
+        print(f"[APP] Found {len(all_tasks)} total audit tasks, checking colors...")
+        
+        # Group all tasks by site_id
+        tasks_by_site = {}
+        for task in all_tasks:
+            if task.site_id not in tasks_by_site:
+                tasks_by_site[task.site_id] = []
+            tasks_by_site[task.site_id].append(task)
+        
+        # Track total number of updates needed
+        tasks_updated = 0
+        
+        # For each site, ensure all tasks have unique colors
+        for site_id, site_tasks in tasks_by_site.items():
+            # Track colors already assigned at this site
+            used_colors = set()
+            tasks_to_update = []
+            
+            # First pass: Identify tasks with no color or duplicate colors
+            for task in site_tasks:
+                if task.color is None:
+                    # No color assigned yet
+                    tasks_to_update.append(task)
+                elif task.color in used_colors:
+                    # Duplicate color detected
+                    tasks_to_update.append(task)
+                else:
+                    # Valid unique color
+                    used_colors.add(task.color)
+            
+            # Second pass: Assign new colors to tasks needing updates
+            if tasks_to_update:
+                # Calculate evenly distributed colors based on total number of tasks at this site
+                total_tasks = len(site_tasks)
+                
+                for task in tasks_to_update:
+                    # Find an unused position in the color wheel
+                    for i in range(total_tasks * 2):  # Double the range to ensure we find an available color
+                        # Calculate a potential hue value with even distribution
+                        hue = int((i * 360) / total_tasks) % 360
+                        # Create a color with good contrast and brightness
+                        potential_color = f"hsl({hue}, 70%, 50%)"
+                        
+                        # Use this color if it's not already in use
+                        if potential_color not in used_colors:
+                            task.color = potential_color
+                            used_colors.add(potential_color)
+                            tasks_updated += 1
+                            break
+            
+            # Verify we don't have any duplicate colors after updates
+            check_colors = {}
+            duplicates_found = False
+            
+            for task in site_tasks:
+                if task.color in check_colors:
+                    print(f"[APP] Warning: Duplicate color {task.color} found for tasks: {check_colors[task.color].id} and {task.id}")
+                    duplicates_found = True
+                else:
+                    check_colors[task.color] = task
+            
+            if duplicates_found:
+                print(f"[APP] Warning: Site {site_id} still has duplicate colors after assignment")
+        
+        # Commit all changes if any tasks were updated
+        if tasks_updated > 0:
+            db.session.commit()
+            print(f"[APP] Successfully assigned unique colors to {tasks_updated} audit tasks.")
+        else:
+            print("[APP] All audit tasks already have unique colors within their respective sites.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[APP] Error assigning colors to audit tasks: {e}")
+        import traceback
+        print(traceback.format_exc())
 
 # --- Move all startup DB logic inside a single app context ---
 with app.app_context():
@@ -475,10 +620,85 @@ with app.app_context():
     except Exception as e:
         print(f'[AUTO_MIGRATE ERROR] {e}')
     try:
+        # --- Ensure audit_tasks.color column exists ---
+        from sqlalchemy import text
+        engine = db.engine
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='audit_tasks' AND column_name='color'
+            """))
+            if not result.fetchone():
+                print("[APP] Adding 'color' column to 'audit_tasks' table...")
+                conn.execute(text("ALTER TABLE audit_tasks ADD COLUMN color VARCHAR(32)"))
+                print("[APP] Column 'color' added to 'audit_tasks'.")
+            else:
+                print("[APP] 'color' column already exists in 'audit_tasks'.")
+        # ...existing code...
         import expand_user_fields
     except Exception as e:
         print(f"[STARTUP] User field length expansion migration failed: {e}")
+    
+    # Fix admin role first to ensure it exists with proper permissions
+    try:
+        # Ensure admin role exists with admin.full permission
+        admin_role = Role.query.filter_by(name='admin').first()
+        if not admin_role:
+            print("[APP] Creating missing admin role with full permissions")
+            admin_role = Role(name='admin', description='Administrator', permissions='admin.full')
+            db.session.add(admin_role)
+            db.session.commit()
+        elif 'admin.full' not in admin_role.permissions:
+            # Update existing admin role to include admin.full permission
+            current_permissions = admin_role.permissions.split(',') if admin_role.permissions else []
+            if 'admin.full' not in current_permissions:
+                current_permissions.append('admin.full')
+                admin_role.permissions = ','.join(current_permissions)
+                db.session.commit()
+                print("[APP] Updated admin role to include admin.full permission")
+    except Exception as e:
+        print(f"[APP] Error fixing admin role: {e}")
+    
+    # Now fix all admin users to have the admin role
+    try:
+        # Find the admin role
+        admin_role = Role.query.filter_by(name='admin').first()
+        if admin_role:
+            # Find all users who should be admins (username=admin or is_admin flag)
+            admin_users = User.query.filter(
+                (User.username == 'admin') | 
+                (User._username == encrypt_value('admin'))
+            ).all()
+            
+            # Also get users with is_admin=True as a fallback
+            admin_flag_users = []
+            try:
+                # Try to query is_admin column if it exists
+                admin_flag_users = User.query.filter_by(is_admin=True).all()
+            except:
+                print("[APP] is_admin column not available, skipping that filter")
+            
+            # Combine the lists without duplicates
+            all_admin_users = list({user.id: user for user in admin_users + admin_flag_users}.values())
+            
+            updated_count = 0
+            for user in all_admin_users:
+                if not user.role or user.role.id != admin_role.id:
+                    user.role = admin_role
+                    updated_count += 1
+                    print(f"[APP] Fixed admin role for user {user.username}")
+            
+            if updated_count > 0:
+                db.session.commit()
+                print(f"[APP] Updated {updated_count} admin user(s) to have the correct role")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[APP] Error fixing admin users: {e}")
+    
+    # Then run the default admin creation logic
     add_default_admin_if_needed()
+    
+    # Standard integrity checks
     try:
         print("[APP] Performing database integrity checks...")
         admin_users = User.query.join(Role).filter(
@@ -496,6 +716,7 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f"[APP] Error performing database integrity checks: {e}")
+    
     # Healthcheck log (now inside app context)
     try:
         from simple_healthcheck import check_database
@@ -509,6 +730,7 @@ with app.app_context():
     initialize_db_connection()
     ensure_db_schema()
     ensure_maintenance_records_schema()
+    assign_colors_to_audit_tasks()  # Add colors to any audit tasks that don't have them yet
     db.create_all()
 
 # Add database connection check before requests
@@ -526,9 +748,15 @@ def ensure_db_connection():
 # Helper: Always allow admins to access any page
 @app.before_request
 def allow_admin_everywhere():
+    """
+    Special handling for admin users: bypass permission checks
+    Non-admin users proceed normally through the request cycle
+    """
+    # Only return early for admin users, for everyone else just continue the request
     if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and getattr(current_user, 'is_admin', False):
         # Bypass permission checks for admins
         return None
+    # For non-admin users, don't return anything and let the request continue normally
 
 # Replace the enhance_models function with a template context processor
 @app.context_processor
@@ -579,11 +807,25 @@ def inject_common_variables():
         is_auth = getattr(current_user, 'is_authenticated', False)
     except Exception:
         is_auth = False
+    
+    def has_permission(permission_name):
+        """Check if current user has a specific permission"""
+        if not current_user.is_authenticated:
+            return False
+        if current_user.is_admin:
+            return True
+        if hasattr(current_user, 'role') and current_user.role and current_user.role.permissions:
+            return permission_name in current_user.role.permissions.split(',')
+        return False
+    
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
         'datetime': datetime,
-        'now': datetime.now()
+        'now': datetime.now(),
+        'hasattr': hasattr,  # Add hasattr function to be available in templates
+        'has_permission': has_permission,  # Add permission checking helper
+        'Role': Role  # Add Role class to template context so it can be used in templates
     }
 
 def url_for_safe(endpoint, **values):
@@ -602,11 +844,13 @@ def url_for_safe(endpoint, **values):
             return '/parts'
         elif endpoint == 'manage_users':
             return '/admin/users'
-        elif endpoint == 'manage_roles':  # Add this case
+        elif endpoint == 'manage_roles':  # Add fallback for 'manage_roles'
+            return '/admin/roles'
+        elif endpoint == 'admin_roles':  # Add fallback for 'admin_roles' as well
             return '/admin/roles'
         elif endpoint == 'update_maintenance' and 'part_id' in values:
             return f'/update-maintenance/{values["part_id"]}'
-        elif endpoint == 'machine_history' and 'machine_id' in values:  # Add this case
+        elif endpoint == 'machine_history' and 'machine_id' in values:
             return f'/machine-history/{values["machine_id"]}'
         elif endpoint == 'admin_dashboard':
             return '/admin'
@@ -618,6 +862,7 @@ def url_for_safe(endpoint, **values):
 def get_all_permissions():
     """Return a dictionary of all available permissions."""
     permissions = {
+        'admin.full': 'Full Administrator Access',
         'admin.view': 'View Admin Panel',
         'admin.users': 'Manage Users',
         'admin.roles': 'Manage Roles',
@@ -659,26 +904,43 @@ def index():
 def dashboard():
     try:
         # Get upcoming and overdue maintenance across all sites the user has access to
-        if current_user.is_admin:
-            # Admins can see all sites
-            sites = Site.query.all()
+        if user_can_see_all_sites(current_user):
+            # User can see all sites, eager load machines and parts
+            sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
         else:
-            # Non-admins can only see sites they're assigned to
-            sites = current_user.sites
+            # Check if user has any site assignments first
+            if not hasattr(current_user, 'sites') or not current_user.sites:
+                # Handle case where user has no site assignments
+                app.logger.warning(f"User {current_user.username} (ID: {current_user.id}) has no site assignments")
+                return render_template('dashboard.html', 
+                                      sites=[], 
+                                      overdue_count=0, 
+                                      due_soon_count=0, 
+                                      ok_count=0, 
+                                      total_parts=0,
+                                      no_sites=True,  # Flag to show special message in template
+                                      now=datetime.now())
             
+            # User can only see their assigned sites, eager load as well
+            sites = (
+                Site.query.options(joinedload(Site.machines).joinedload(Machine.parts))
+                .filter(Site.id.in_([site.id for site in current_user.sites]))
+                .all()
+            )
+        
         # Get all machines across accessible sites
         machines = []
         site_ids = [site.id for site in sites]
         if site_ids:
             machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
-            
+        
         # Get all parts that need maintenance soon or are overdue
         parts = []
         machine_ids = [machine.id for machine in machines]
         if machine_ids:
             # Get all parts for these machines
             parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
-            
+        
         # Get statistics
         stats = {
             'sites_count': len(sites),
@@ -702,10 +964,26 @@ def dashboard():
             else:
                 ok_count += 1
         total_parts = len(parts)
-        return render_template('dashboard.html', sites=sites, overdue_count=overdue_count, due_soon_count=due_soon_count, ok_count=ok_count, total_parts=total_parts, now=now)
+        
+        return render_template('dashboard.html', 
+                              sites=sites, 
+                              overdue_count=overdue_count, 
+                              due_soon_count=due_soon_count, 
+                              ok_count=ok_count, 
+                              total_parts=total_parts, 
+                              now=now)
     except Exception as e:
-        flash(f'Error loading dashboard: {str(e)}', 'error')
-        return redirect(url_for('index'))
+        app.logger.error(f"Dashboard error: {str(e)}")
+        # Instead of redirecting, show a minimal dashboard with an error message
+        flash(f'Error loading dashboard data: {str(e)}', 'error')
+        return render_template('dashboard.html', 
+                              sites=[], 
+                              overdue_count=0, 
+                              due_soon_count=0, 
+                              ok_count=0, 
+                              total_parts=0,
+                              error=True,  # Flag to show error message in template
+                              now=datetime.now())
 
 @app.route('/admin')
 @login_required
@@ -813,10 +1091,19 @@ def audits_page():
         can_delete_audits = True
         can_complete_audits = True
     else:
-        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
-        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-        can_delete_audits = 'audits.delete' in permissions
-        can_complete_audits = 'audits.complete' in permissions
+        # Handle both cases where role is a Role object or a string
+        if hasattr(current_user, 'role') and current_user.role:
+            if hasattr(current_user.role, 'name'):
+                # Role is an object, use its permissions directly
+                permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
+                can_delete_audits = 'audits.delete' in permissions
+                can_complete_audits = 'audits.complete' in permissions
+            else:
+                # Role is a string, query for the role
+                user_role = Role.query.filter_by(name=current_user.role).first()
+                permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+                can_delete_audits = 'audits.delete' in permissions
+                can_complete_audits = 'audits.complete' in permissions
 
     # Restrict sites for non-admins
     if current_user.is_admin:
@@ -873,19 +1160,26 @@ def audits_page():
                 custom_interval_days = value * 30
             else:
                 custom_interval_days = value
-        # Ensure machine_ids is always a list
         machine_ids = request.form.getlist('machine_ids')
         if not (request.form.get('name') and request.form.get('site_id') and machine_ids):
             flash('Task name, site, and at least one machine are required.', 'danger')
             return redirect(url_for('audits_page'))
         try:
+            site_id = int(request.form.get('site_id'))
+            # Get all existing tasks for this site (before adding the new one)
+            existing_tasks = AuditTask.query.filter_by(site_id=site_id).order_by(AuditTask.id).all()
+            color_index = len(existing_tasks)
+            num_colors = color_index + 1  # include the new one
+            hue = int((color_index * 360) / num_colors) % 360
+            color = f"hsl({hue}, 70%, 50%)"
             audit_task = AuditTask(
                 name=request.form.get('name'),
                 description=request.form.get('description'),
-                site_id=request.form.get('site_id'),
+                site_id=site_id,
                 created_by=current_user.id,
                 interval=interval,
-                custom_interval_days=custom_interval_days
+                custom_interval_days=custom_interval_days,
+                color=color
             )
             for machine_id in machine_ids:
                 machine = Machine.query.get(int(machine_id))
@@ -933,31 +1227,548 @@ def audits_page():
     
     return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility)
 
-@app.route('/audit_tasks/delete/<int:audit_task_id>', methods=['POST'])
+@app.route('/audit-history', methods=['GET'])
 @login_required
-def delete_audit_task(audit_task_id):
-    can_delete_audits = False
+def audit_history_page():
+    # Same permission checks as audits_page
     if current_user.is_admin:
-        can_delete_audits = True
+        can_access = True
     else:
-        user_role = Role.query.filter_by(name=current_user.role).first() if hasattr(current_user, 'role') and current_user.role else None
-        permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
-        can_delete_audits = 'audits.delete' in permissions
-    if not can_delete_audits:
-        flash('You do not have permission to delete audit tasks.', 'danger')
-        return redirect(url_for('audits_page'))
-    try:
-        # Replace get_or_404 for AuditTask
-        task = db.session.get(AuditTask, audit_task_id)
-        if not task:
-            abort(404)
-        db.session.delete(task)
-        db.session.commit()
-        flash('Audit task deleted successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting audit task: {str(e)}', 'danger')
-    return redirect(url_for('audits_page'))
+        if hasattr(current_user, 'role') and current_user.role:
+            if hasattr(current_user.role, 'name'):
+                permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
+                can_access = 'audits.access' in permissions
+            else:
+                user_role = Role.query.filter_by(name=current_user.role).first()
+                permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+                can_access = 'audits.access' in permissions
+        else:
+            can_access = False
+    if not can_access:
+        flash('You do not have permission to access audit history.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    from calendar import monthrange
+    today = datetime.now().date()
+    # --- Parse month/year from month_year param ---
+    month_year = request.args.get('month_year')
+    if month_year:
+        try:
+            year, month = map(int, month_year.split('-'))
+        except Exception:
+            month = today.month
+            year = today.year
+    else:
+        month = today.month
+        year = today.year
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    # --- Generate available months for dropdown (from April 2025 to current month) ---
+    import calendar
+    from collections import OrderedDict
+    start_month = 4
+    start_year = 2025
+    available_months = []
+    y, m = start_year, start_month
+    end_year, end_month = today.year, today.month
+    while (y < end_year) or (y == end_year and m <= end_month):
+        value = f"{y:04d}-{m:02d}"
+        display = f"{calendar.month_name[m]} {y}"
+        available_months.append({'value': value, 'display': display})
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    
+    # Explicitly check if we need to add the current month (for first of month)
+    current_month_value = f"{today.year:04d}-{today.month:02d}"
+    if not any(month['value'] == current_month_value for month in available_months):
+        available_months.append({
+            'value': current_month_value,
+            'display': f"{calendar.month_name[today.month]} {today.year}"
+        })
+        app.logger.info(f"Added current month {current_month_value} to dropdown (first day of month detection)")
+    
+    # Ensure start month is always included
+    if not any(month['value'] == f'{start_year:04d}-{start_month:02d}' for month in available_months):
+        available_months.append({'value': f'{start_year:04d}-{start_month:02d}', 'display': f'{calendar.month_name[start_month]} {start_year}'})
+    available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+    selected_month = f"{year:04d}-{month:02d}"
+
+    # Get site and machine filters
+    site_id = request.args.get('site_id', type=int)
+    machine_id = request.args.get('machine_id')
+    selected_machine = machine_id if machine_id else ''
+    if machine_id:
+        try:
+            machine_id = int(machine_id)
+        except Exception:
+            machine_id = None
+
+    # Restrict sites for non-admins
+    if current_user.is_admin:
+        sites = Site.query.all()
+    else:
+        user_site_ids = [site.id for site in current_user.sites]
+        sites = current_user.sites
+        if site_id and site_id not in user_site_ids:
+            site_id = sites[0].id if sites else None
+    if len(sites) == 1 and not site_id:
+        site_id = sites[0].id
+
+    # Get available machines based on selected site
+    if site_id:
+        available_machines = Machine.query.filter_by(site_id=site_id).all()
+    else:
+        if not current_user.is_admin and sites:
+            site_ids = [site.id for site in sites]
+            available_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+        else:
+            available_machines = Machine.query.all()
+
+    # Query completions for the selected month
+    query = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.date >= first_day,
+        AuditTaskCompletion.date <= last_day
+    )
+    if site_id:
+        site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
+        task_ids = [task.id for task in site_audit_tasks]
+        if task_ids:
+            query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+        else:
+            completions = []
+            machine_data = {}
+            return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
+    else:
+        if not current_user.is_admin and sites:
+            site_ids = [site.id for site in sites]
+            site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
+            task_ids = [task.id for task in site_audit_tasks]
+            if task_ids:
+                query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+            else:
+                completions = []
+                machine_data = {}
+                return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
+    completions = query.all()
+
+    # --- Build calendar weeks for the month ---
+    import calendar
+    cal = calendar.Calendar(firstweekday=6)  # Sunday start
+    month_weeks = list(cal.monthdayscalendar(year, month))
+
+    # --- Build machine_data: {machine_id: {date: [completions]}} ---
+    machine_data = {}
+    for completion in completions:
+        m_id = completion.machine_id
+        d = completion.date
+        if m_id not in machine_data:
+            machine_data[m_id] = {}
+        if d not in machine_data[m_id]:
+            machine_data[m_id][d] = []
+        machine_data[m_id][d].append(completion)
+
+    # --- Build audit_tasks and unique_tasks for legend ---
+    audit_tasks = {task.id: task for task in AuditTask.query.all()}
+    unique_tasks = [audit_tasks[tid] for tid in {completion.audit_task_id for completion in completions if completion.audit_task_id in audit_tasks}]
+
+    # --- Build all_tasks_per_machine: {machine_id: [AuditTask, ...]} ---
+    all_tasks_per_machine = {}
+    for machine in available_machines:
+        all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
+
+    # --- Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}} ---
+    from collections import defaultdict
+    interval_bars = defaultdict(lambda: defaultdict(list))
+    for machine in available_machines:
+        for task in all_tasks_per_machine[machine.id]:
+            # Only for interval-based tasks (not daily)
+            if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
+                # Determine interval length
+                if task.interval == 'weekly':
+                    interval_days = 7
+                elif task.interval == 'monthly':
+                    interval_days = 30
+                elif task.interval == 'custom' and task.custom_interval_days:
+                    interval_days = task.custom_interval_days
+                else:
+                    continue
+                # Find the first interval start <= last_day
+                # For simplicity, assume the interval starts from the first day of the month
+                current = first_day
+                while current <= last_day:
+                    start = current
+                    end = min(current + timedelta(days=interval_days - 1), last_day)
+                    interval_bars[machine.id][task.id].append((start, end))
+                    current = end + timedelta(days=1)
+
+    machines_dict = {machine.id: machine for machine in available_machines}
+    users = {user.id: user for user in User.query.all()}
+
+    return render_template('audit_history.html',
+        completions=completions,
+        month=month,
+        year=year,
+        month_weeks=month_weeks,
+        machine_data=machine_data,
+        audit_tasks=audit_tasks,
+        unique_tasks=unique_tasks,
+        machines=machines_dict,
+        users=users,
+        sites=sites,
+        selected_site=site_id,
+        selected_machine=selected_machine,
+        available_months=available_months,
+        available_machines=available_machines,
+        selected_month=selected_month,
+        all_tasks_per_machine=all_tasks_per_machine,
+        interval_bars=interval_bars
+    )
+
+@app.route('/audit-history/pdf')
+@login_required
+def audit_history_pdf():
+    """Generate PDF of the audit history report."""
+    # Get the same filter parameters as in the audit_history route
+    site_id = request.args.get('site_id', None, type=int)
+    machine_id = request.args.get('machine_id', None, type=int)
+    
+    # Date range defaults to last 30 days if not provided
+    today = datetime.now().date()
+    start_date_str = request.args.get('start_date', None)
+    end_date_str = request.args.get('end_date', None)
+    
+    if start_date_str:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    else:
+        start_date = today - timedelta(days=30)
+        
+    if end_date_str:
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    else:
+        end_date = today
+    
+    # Check permission to access the audit feature
+    user_has_audit_access = current_user.is_admin or (
+        current_user.is_authenticated and current_user.role and 
+        'audits.access' in (current_user.role.permissions or '')
+    )
+    
+    if not user_has_audit_access:
+        flash("You don't have permission to access this feature.", "warning")
+        return redirect(url_for('dashboard'))
+    
+    # Get sites based on user permissions
+    if current_user.is_admin or user_can_see_all_sites(current_user):
+        available_sites = Site.query.order_by(Site.name).all()
+    else:
+        # Users only see their assigned sites
+        available_sites = current_user.sites
+    
+    # Get machines based on site filter
+    if site_id:
+        site = Site.query.get_or_404(site_id)
+        # Check if user has access to this site
+        if not current_user.is_admin and site not in available_sites:
+            flash("You don't have permission to access this site.", "warning")
+            return redirect(url_for('dashboard'))
+        
+        # Filter machines by the selected site
+        machines_query = Machine.query.filter_by(site_id=site_id)
+    else:
+        # Get machines from all available sites
+        site_ids = [s.id for s in available_sites]
+        machines_query = Machine.query.filter(Machine.site_id.in_(site_ids))
+    
+    # Apply machine filter if provided
+    if machine_id:
+        machines_query = machines_query.filter_by(id=machine_id)
+    
+    # Get the machines
+    machines = machines_query.order_by(Machine.name).all()
+    
+    # Get audit task completions for the time period
+    start_datetime = datetime.combine(start_date, datetime.min.time())
+    end_datetime = datetime.combine(end_date, datetime.max.time())
+    
+    # Get machine IDs
+    machine_ids = [m.id for m in machines]
+    
+    # Get audit task completions
+    completions_query = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.machine_id.in_(machine_ids),
+        AuditTaskCompletion.created_at.between(start_datetime, end_datetime)
+    ).order_by(AuditTaskCompletion.created_at)
+    
+    completions = completions_query.all()
+    
+    # Organize data by machine and date
+    machine_data = {}
+    for completion in completions:
+        # Get the date string from the completion date
+        date_str = completion.created_at.date().strftime('%Y-%m-%d')
+        
+        # Initialize machine entry if not exists
+        if completion.machine_id not in machine_data:
+            machine_data[completion.machine_id] = {}
+        
+        # Initialize date entry if not exists
+        if date_str not in machine_data[completion.machine_id]:
+            machine_data[completion.machine_id][date_str] = []
+        
+        # Add completion to the appropriate machine/date
+        machine_data[completion.machine_id][date_str].append(completion)
+    
+    # Get all audit tasks for reference
+    audit_tasks = {task.id: task for task in AuditTask.query.all()}
+    
+    # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
+    all_tasks_per_machine = {}
+    for machine in machines:
+        all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
+    
+    # Get all users for reference
+    users = {user.id: user for user in User.query.all()}
+    
+    # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
+    from collections import defaultdict
+    interval_bars = defaultdict(lambda: defaultdict(list))
+    for machine in machines:
+        for task in all_tasks_per_machine[machine.id]:
+            # Only for interval-based tasks (not daily)
+            if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
+                # We'll keep this empty for now, just making sure the structure exists
+                pass
+    
+    # Helper functions for the template
+    def get_date_range(start, end):
+        """Get a list of dates between start and end, inclusive."""
+        delta = end - start
+        return [start + timedelta(days=i) for i in range(delta.days + 1)]
+    
+    def get_calendar_weeks(start, end):
+        """Get calendar weeks for the date range."""
+        # Find the first Sunday before or on the start date
+        first_day = start - timedelta(days=start.weekday() + 1)
+        if first_day.weekday() != 6:  # If not Sunday
+            first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+        
+        # Find the last Saturday after or on the end date
+        last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+        
+        # Generate weeks
+        weeks = []
+        current = first_day
+        while current <= last_day:
+            week = []
+            for _ in range(7):
+                week.append(current)
+                current = current + timedelta(days=1)
+            weeks.append(week)
+        
+        return weeks
+    
+    # Render the template to HTML
+    html = render_template(
+        'audit_history_pdf.html',
+        machines=machines,
+        machine_data=machine_data,
+        audit_tasks=audit_tasks,
+        users=users,
+        today=today,
+        start_date=start_date,
+        end_date=end_date,
+        completions=completions,
+        get_date_range=get_date_range,
+        get_calendar_weeks=get_calendar_weeks,
+        all_tasks_per_machine=all_tasks_per_machine,
+        interval_bars=interval_bars,
+        current_user=current_user,
+        datetime=datetime,
+        timedelta=timedelta
+    )
+    
+    # Generate PDF from the HTML
+    pdf_file = BytesIO()
+    HTML(string=html).write_pdf(pdf_file)
+    pdf_file.seek(0)
+    
+    # Create a unique filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    filename = f"audit_history_{timestamp}.pdf"
+    
+    # Return the PDF as a downloadable file
+    return send_file(
+        pdf_file,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
+
+@app.route('/audit-history/print-view')
+@login_required
+def audit_history_print_view():
+    """Generate a printable HTML view using the same template as the PDF."""
+    # Get the same filter parameters as in the audit_history route
+    site_id = request.args.get('site_id', None, type=int)
+    machine_id = request.args.get('machine_id', None, type=int)
+    
+    # Date range defaults to last 30 days if not provided
+    today = datetime.now().date()
+    start_date_str = request.args.get('start_date', None)
+    end_date_str = request.args.get('end_date', None)
+    
+    if start_date_str:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    else:
+        start_date = today - timedelta(days=30)
+        
+    if end_date_str:
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    else:
+        end_date = today
+    
+    # Check permission to access the audit feature
+    user_has_audit_access = current_user.is_admin or (
+        current_user.is_authenticated and current_user.role and 
+        'audits.access' in (current_user.role.permissions or '')
+    )
+    
+    if not user_has_audit_access:
+        flash("You don't have permission to access this feature.", "warning")
+        return redirect(url_for('dashboard'))
+    
+    # Get sites based on user permissions
+    if current_user.is_admin or user_can_see_all_sites(current_user):
+        available_sites = Site.query.order_by(Site.name).all()
+    else:
+        # Users only see their assigned sites
+        available_sites = current_user.sites
+    
+    # Get machines based on site filter
+    if site_id:
+        site = Site.query.get_or_404(site_id)
+        # Check if user has access to this site
+        if not current_user.is_admin and site not in available_sites:
+            flash("You don't have permission to access this site.", "warning")
+            return redirect(url_for('dashboard'))
+        
+        # Filter machines by the selected site
+        machines_query = Machine.query.filter_by(site_id=site_id)
+    else:
+        # Get machines from all available sites
+        site_ids = [s.id for s in available_sites]
+        machines_query = Machine.query.filter(Machine.site_id.in_(site_ids))
+    
+    # Apply machine filter if provided
+    if machine_id:
+        machines_query = machines_query.filter_by(id=machine_id)
+    
+    # Get the machines
+    machines = machines_query.order_by(Machine.name).all()
+    
+    # Get audit task completions for the time period
+    start_datetime = datetime.combine(start_date, datetime.min.time())
+    end_datetime = datetime.combine(end_date, datetime.max.time())
+    
+    # Get machine IDs
+    machine_ids = [m.id for m in machines]
+    
+    # Get audit task completions
+    completions_query = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.machine_id.in_(machine_ids),
+        AuditTaskCompletion.created_at.between(start_datetime, end_datetime)
+    ).order_by(AuditTaskCompletion.created_at)
+    
+    completions = completions_query.all()
+    
+    # Organize data by machine and date
+    machine_data = {}
+    for completion in completions:
+        # Get the date string from the completion date
+        date_str = completion.created_at.date().strftime('%Y-%m-%d')
+        
+        # Initialize machine entry if not exists
+        if completion.machine_id not in machine_data:
+            machine_data[completion.machine_id] = {}
+        
+        # Initialize date entry if not exists
+        if date_str not in machine_data[completion.machine_id]:
+            machine_data[completion.machine_id][date_str] = []
+        
+        # Add completion to the appropriate machine/date
+        machine_data[completion.machine_id][date_str].append(completion)
+    
+    # Get all audit tasks for reference
+    audit_tasks = {task.id: task for task in AuditTask.query.all()}
+    
+    # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
+    all_tasks_per_machine = {}
+    for machine in machines:
+        all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
+    
+    # Get all users for reference
+    users = {user.id: user for user in User.query.all()}
+    
+    # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
+    from collections import defaultdict
+    interval_bars = defaultdict(lambda: defaultdict(list))
+    for machine in machines:
+        for task in all_tasks_per_machine[machine.id]:
+            # Only for interval-based tasks (not daily)
+            if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
+                # We'll keep this empty for now, just making sure the structure exists
+                pass
+    
+    # Helper functions for the template
+    def get_date_range(start, end):
+        """Get a list of dates between start and end, inclusive."""
+        delta = end - start
+        return [start + timedelta(days=i) for i in range(delta.days + 1)]
+    
+    def get_calendar_weeks(start, end):
+        """Get calendar weeks for the date range."""
+        # Find the first Sunday before or on the start date
+        first_day = start - timedelta(days=start.weekday() + 1)
+        if first_day.weekday() != 6:  # If not Sunday
+            first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+        
+        # Find the last Saturday after or on the end date
+        last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+        
+        # Generate weeks
+        weeks = []
+        current = first_day
+        while current <= last_day:
+            week = []
+            for _ in range(7):
+                week.append(current)
+                current = current + timedelta(days=1)
+            weeks.append(week)
+        
+        return weeks
+    
+    # Render the template directly for printing
+    return render_template(
+        'audit_history_pdf.html',
+        machines=machines,
+        machine_data=machine_data,
+        audit_tasks=audit_tasks,
+        users=users,
+        today=today,
+        start_date=start_date,
+        end_date=end_date,
+        completions=completions,
+        get_date_range=get_date_range,
+        get_calendar_weeks=get_calendar_weeks,
+        all_tasks_per_machine=all_tasks_per_machine,
+        interval_bars=interval_bars,
+        current_user=current_user,
+        datetime=datetime,
+        timedelta=timedelta
+    )
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
@@ -1017,6 +1828,9 @@ def admin_users():
     
     # For GET requests or after POST processing
     try:
+        # Ensure database session is refreshed to get the latest data
+        db.session.expire_all()
+        
         # Get all users and roles for the template
         users = User.query.all()
         roles = Role.query.all()
@@ -1075,7 +1889,6 @@ def edit_user(user_id):
             email = request.form.get('email')
             full_name = request.form.get('full_name', '')
             role_id = request.form.get('role_id')
-            role = db.session.get(Role, int(role_id)) if role_id else None
             
             # Check if username already exists for another user
             existing_user = User.query.filter(User.username == username, User.id != user_id).first()
@@ -1093,7 +1906,28 @@ def edit_user(user_id):
             user.username = username
             user.email = email
             user.full_name = full_name
-            user.role = role  # Assign Role object
+            
+            # More direct approach to role assignment
+            old_role_name = user.role.name if user.role else "None"
+            
+            if role_id:
+                # Find the role and assign it directly
+                role = db.session.get(Role, int(role_id))
+                if role:
+                    # Force detach from previous role
+                    user.role_id = None
+                    db.session.flush()
+                    # Assign new role
+                    user.role = role
+                    user.role_id = role.id
+                    new_role_name = role.name
+                else:
+                    new_role_name = "None (role not found)"
+            else:
+                # Clear role if none selected
+                user.role = None
+                user.role_id = None
+                new_role_name = "None"
             
             # Update site assignments if provided
             if 'site_ids' in request.form:
@@ -1107,8 +1941,14 @@ def edit_user(user_id):
                     if site:
                         user.sites.append(site)
             
+            # Force immediate commit to database
             db.session.commit()
-            flash(f'User "{username}" updated successfully.', 'success')
+            # Log role change for debugging
+            app.logger.info(f"User {user.username} role changed: {old_role_name} -> {new_role_name}")
+            flash(f'User "{username}" updated successfully. Role changed from "{old_role_name}" to "{new_role_name}".', 'success')
+            
+            # Force session clear before redirect to ensure fresh data on next page load
+            db.session.expire_all()
             return redirect(url_for('admin_users'))
             
         except Exception as e:
@@ -1289,7 +2129,9 @@ def site_history(site_id):
     if not site:
         abort(404)
     machines = Machine.query.filter_by(site_id=site_id).all()
-    parts = Part.query.filter(Part.machine_id.in_([m.id for m in machines])).all()
+    parts = []
+    for machine in machines:
+        parts.extend(Part.query.filter_by(machine_id=machine.id).all())
     # Gather all maintenance records for all parts in this site
     maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).order_by(MaintenanceRecord.date.desc()).all()
     return render_template('site_history.html', site=site, machines=machines, parts=parts, maintenance_records=maintenance_records, now=datetime.now())
@@ -1384,7 +2226,7 @@ def maintenance_page():
             machine_id = request.form.get('machine_id')
             part_id = request.form.get('part_id')
             user_id = current_user.id
-            maintenance_type = request.form.get('maintenance_type')
+            maintenance_type =request.form.get('maintenance_type')
             description = request.form.get('description')
             date_str = request.form.get('date')
             performed_by = request.form.get('performed_by', '')
@@ -1422,6 +2264,22 @@ def maintenance_page():
                         client_id=client_id if client_id else None
                     )
                     db.session.add(new_record)
+                    # Update part's last_maintenance and next_maintenance
+                    part = Part.query.get(part_id)
+                    if part:
+                        part.last_maintenance = maintenance_date
+                        freq = part.maintenance_frequency or 1
+                        unit = part.maintenance_unit or 'day'
+                        if unit == 'week':
+                            delta = timedelta(weeks=freq)
+                        elif unit == 'month':
+                            delta = timedelta(days=freq * 30)
+                        elif unit == 'year':
+                            delta = timedelta(days=freq * 365)
+                        else:
+                            delta = timedelta(days=freq)
+                        part.next_maintenance = maintenance_date + delta
+                        db.session.add(part)
                     db.session.commit()
                     flash('Maintenance record added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
@@ -1453,8 +2311,18 @@ def update_maintenance_alt():
         now = datetime.now()
         # Update the last maintenance date
         part.last_maintenance = now
-        # Calculate next maintenance date based on frequency
-        part.next_maintenance = now + timedelta(days=part.maintenance_days)
+        # Calculate next maintenance date based on frequency and unit
+        freq = part.maintenance_frequency or 1
+        unit = part.maintenance_unit or 'day'
+        if unit == 'week':
+            delta = timedelta(weeks=freq)
+        elif unit == 'month':
+            delta = timedelta(days=freq * 30)
+        elif unit == 'year':
+            delta = timedelta(days=freq * 365)
+        else:
+            delta = timedelta(days=freq)
+        part.next_maintenance = now + delta
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
@@ -1484,6 +2352,7 @@ def update_maintenance(part_id):
             return redirect(url_for('maintenance_page'))
         now = datetime.now()
         part.last_maintenance = now
+        
         # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
         freq = part.maintenance_frequency or 1
         unit = part.maintenance_unit or 'day'
@@ -1495,14 +2364,18 @@ def update_maintenance(part_id):
             delta = timedelta(days=freq * 365)
         else:
             delta = timedelta(days=freq)
+            
+        # Set the next maintenance date
         part.next_maintenance = now + delta
+        
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
             user_id=current_user.id,
             date=now,
             comments=request.form.get('comments', ''),
-            description=request.form.get('description', None)
+            description=request.form.get('description', None),
+            machine_id=part.machine_id
         )
         db.session.add(maintenance_record)
         db.session.commit()
@@ -1522,7 +2395,9 @@ def update_maintenance(part_id):
 def machine_history(machine_id):
     """Endpoint for viewing machine maintenance history."""
     try:
-        machine = Machine.query.get_or_404(machine_id)
+        machine = db.session.get(Machine, machine_id)
+        if not machine:
+            abort(404)
         return redirect(f'/maintenance?machine_id={machine_id}')
     except Exception as e:
         app.logger.error(f"Error in machine_history: {e}")
@@ -1568,13 +2443,6 @@ def user_profile():
                 current_password = request.form.get('current_password')
                 new_password = request.form.get('new_password')
                 confirm_password = request.form.get('confirm_password')
-
-                # Validate password fields
-                if not current_password or not new_password or not confirm_password:
-                    flash('All password fields are required.', 'danger')
-                    return redirect(url_for('user_profile'))
-                
-                # Verify current password is correct
                 if not user.password_hash or not check_password_hash(user.password_hash, current_password):
                     flash('Current password is incorrect.', 'danger')
                     return redirect(url_for('user_profile'))
@@ -1654,32 +2522,50 @@ def user_profile():
 @login_required
 def update_notification_preferences():
     user = current_user
-    prefs = user.get_notification_preferences()
+    prefs = user.get_notification_preferences() if hasattr(user, 'get_notification_preferences') else {}
+    
+    # Process general notification settings
     enable_email = request.form.get('enable_email') == 'on'
     notification_frequency = request.form.get('notification_frequency', 'weekly')
     email_format = request.form.get('email_format', 'html')
     audit_reminders = request.form.get('audit_reminders') == 'on'
-    # 'none' disables email
+    
+    # Validate notification frequency option
+    valid_frequencies = ['immediate', 'daily', 'weekly', 'monthly', 'none']
+    if notification_frequency not in valid_frequencies:
+        notification_frequency = 'weekly'  # Default to weekly if invalid
+    
+    # 'none' disables email notifications
     if notification_frequency == 'none':
         enable_email = False
+    
+    # Update preferences
     prefs['enable_email'] = enable_email
     prefs['notification_frequency'] = notification_frequency
     prefs['email_format'] = email_format
     prefs['audit_reminders'] = audit_reminders
-    # Per-site notification preferences
+    
+    # Process site-specific notification preferences
     site_notifications = {}
     for site in current_user.sites:
         key = f'site_notify_{site.id}'
         site_notifications[str(site.id)] = key in request.form
+    
     prefs['site_notifications'] = site_notifications
-    user.set_notification_preferences(prefs)
-    db.session.commit()  # Ensure changes are saved
-    flash('Notification preferences updated.', 'success')
+    
+    # Save preferences to user
+    if hasattr(user, 'set_notification_preferences'):
+        user.set_notification_preferences(prefs)
+        db.session.commit()  # Ensure changes are saved
+        flash('Notification preferences updated successfully.', 'success')
+    else:
+        flash('Unable to save notification preferences.', 'danger')
+    
     return redirect(url_for('user_profile'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle user login."""
+    """Handle userlogin."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
         
@@ -1715,6 +2601,7 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
+
 def forgot_password():
     """Handle password reset request."""
     if current_user.is_authenticated:
@@ -1789,9 +2676,8 @@ def reset_password(token):
     if request.method == 'POST':
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
-        
         if not password or len(password) < 8:
-            flash('Password must be at least 8 characters long.', 'danger')
+            flash('Password must be at least 8 characterslong.', 'danger')
             return redirect(url_for('reset_password', token=token))
         elif password != confirm_password:
             flash('Passwords do not match.', 'danger')
@@ -1802,7 +2688,6 @@ def reset_password(token):
             user.reset_token = None
             user.reset_token_expiration = None
             db.session.commit()
-            
             flash('Your password has been updated. Please log in.', 'success')
             return redirect(url_for('login'))
     return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
@@ -1813,37 +2698,29 @@ def reset_password(token):
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     </head>
     <body>
-        <div class="container mt-5">
-            <div class="row justify-content-center">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">Reset Password</div>
-                        <div class="card-body">
-                            <form method="post">
-                                <div class="mb-3">
-                                    <label for="password" class="form-label">New Password</label>
-                                    <input type="password" class="form-control" id="password" name="password" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="confirm_password" class="form-label">Confirm Password</label>
-                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
-                                </div>
-                                <button type="submit" class="btn btn-primary">Reset Password</button>
-                            </form>
-                        </div>
-                    </div>
+    <body style="font-family:Arial; text-align:center; padding:50px;">
+            <h1 style="color:#FE7900;">Reset Password</h1>
+            <form method="post">
+                <div class="mb-3">
+                    <label for="password" class="form-label">New Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
                 </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
+                <div class="mb-3">
+                    <label for="confirm_password" class="form-label">Confirm Password</label>
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Reset Password</button>
+            </form>
+        </body>
+        </html>
+        '''
 
 @app.route('/debug-info')
 def debug_info():
     """Display debug information including all available routes."""
-    if not app.debug:
-        return "Debug mode is disabled", 403
+    if not app:
+        if not app.debug:
+            return "Debug mode is disabled", 403
         
     routes = []
     for rule in app.url_map.iter_rules():
@@ -1914,7 +2791,7 @@ def health_check():
 @app.errorhandler(404)
 def page_not_found(e):
     try:
-             return render_template('errors/404.html'), 404
+        return render_template('errors/404.html'), 404
     except:
         return '''
         <!DOCTYPE html>
@@ -1925,7 +2802,6 @@ def page_not_found(e):
         </head>
         <body style="font-family:Arial; text-align:center; padding:50px;">
             <h1 style="color:#FE7900;">Page Not Found</h1>
-            <p>The requested page was not found. Please check the URL or go```html
             <p>The requested page was not found. Please check the URL or go back to the <a href="/" style="color:#FE7900;">home page</a>.</p>
         </body>
         </html>
@@ -1987,10 +2863,19 @@ def admin_section(section):
 @login_required
 def manage_sites():
     """Handle site management page and site creation"""
-    sites = current_user.sites if not current_user.is_admin else Site.query.all()
+    # Filter sites based on user permissions
+    if user_can_see_all_sites(current_user):
+        sites = Site.query.all()
+    else:
+        sites = current_user.sites
     
     # Handle form submission for adding a new site
     if request.method == 'POST':
+        # Only admins can create sites
+        if not is_admin_user(current_user):
+            flash('You do not have permission to create sites.', 'danger')
+            return redirect(url_for('manage_sites'))
+            
         try:
             name = request.form['name']
             location = request.form.get('location', '')
@@ -2030,14 +2915,19 @@ def manage_sites():
     # For GET request or if POST processing fails
     users = User.query.all() if current_user.is_admin else None
     
+    # Define permissions for UI controls
+    can_create = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.create' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))
+    can_edit = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.edit' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) 
+    can_delete = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.delete' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))
+    
     return render_template('sites.html', 
                           sites=sites,
                           users=users,
                           is_admin=current_user.is_admin,
                           now=datetime.now(),
-                          can_create=True,
-                          can_edit=True,
-                          can_delete=True)
+                          can_create=can_create,
+                          can_edit=can_edit,
+                          can_delete=can_delete)
 
 @app.route('/site/edit/<int:site_id>', methods=['GET', 'POST'])
 @login_required
@@ -2064,11 +2954,10 @@ def edit_site(site_id):
                 
                 # Then add selected users
                 user_ids = request.form.getlist('user_ids')
-                if user_ids:
-                    for user_id in user_ids:
-                        user = User.query.get(int(user_id))
-                        if user:
-                            site.users.append(user)
+                for user_id in user_ids:
+                    user = User.query.get(int(user_id))
+                    if user:
+                        site.users.append(user)
             
             db.session.commit()
             flash(f'Site "{site.name}" has been updated successfully.', 'success')
@@ -2092,16 +2981,33 @@ def manage_machines():
     try:
         site_id = request.args.get('site_id', type=int)
         
+        # Get accessible sites based on user permissions
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+            # Initialize site_ids for all sites
+            site_ids = [site.id for site in sites]
+            accessible_machines = Machine.query.all()
+        else:
+            sites = current_user.sites
+            site_ids = [site.id for site in sites]
+            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        machine_ids = [machine.id for machine in accessible_machines]
+        
         # Filter machines by site if site_id is provided
         if site_id:
+            # Verify user can access this site
+            if not user_can_see_all_sites(current_user) and site_id not in site_ids:
+                flash('You do not have access to this site.', 'danger')
+                return redirect(url_for('manage_machines'))
+                
+            # Filter machines by selected site
             machines = Machine.query.filter_by(site_id=site_id).all()
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
-            site_ids = [site.id for site in current_user.sites] if not current_user.is_admin else None
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else Machine.query.all()
+            # Show machines from all sites user has access to
+            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
             title = "Machines"
-        
-        sites = current_user.sites if not current_user.is_admin else Site.query.all()
         
         # Pre-generate URLs for admin navigation - provide ALL possible links needed by template
         safe_urls = {
@@ -2128,6 +3034,11 @@ def manage_machines():
                 machine_number = request.form.get('machine_number', '')
                 serial_number = request.form.get('serial_number', '')
                 site_id = request.form['site_id']
+                
+                # Verify user has access to the selected site
+                if not user_can_see_all_sites(current_user) and int(site_id) not in site_ids:
+                    flash('You do not have permission to add machines to this site.', 'danger')
+                    return redirect(url_for('manage_machines'))
                 
                 # Create new machine with minimal required fields only
                 new_machine = Machine(
@@ -2200,18 +3111,37 @@ def manage_parts():
     try:
         machine_id = request.args.get('machine_id', type=int)
         
+        # Get accessible sites based on user permissions
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+            accessible_machines = Machine.query.all()
+        else:
+            sites = current_user.sites
+            site_ids = [site.id for site in sites]
+            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            
+        machine_ids = [machine.id for machine in accessible_machines]
+        
         # Filter parts by machine if machine_id is provided
         if machine_id:
+            # Verify user can access this machine
+            machine = Machine.query.get(machine_id)
+            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]):
+                flash('You do not have access to this machine.', 'danger')
+                return redirect(url_for('manage_parts'))
+            
+            # Filter parts by selected machine
             parts = Part.query.filter_by(machine_id=machine_id).all()
-            title = f"Parts for {Machine.query.get_or_404(machine_id).name}"
+            title = f"Parts for {machine.name}"
         else:
-            machine_ids = [machine.id for machine in Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all()] if not current_user.is_admin else None
-            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else Part.query.all()
+            # Show parts from all machines user has access to
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
             title = "Parts"
         
-        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in current_user.sites])).all() if not current_user.is_admin else Machine.query.all()
+        # Get machines user has access to for the form
+        machines = accessible_machines
         
-        # Pre-generate URLs for template use
+        # Pre-generate URLs for admin navigation - provide ALL possible links needed by template
         safe_urls = {
             'add_part': '/parts',
             'back_to_machines': '/machines',
@@ -2224,23 +3154,37 @@ def manage_parts():
             try:
                 name = request.form['name']
                 description = request.form.get('description', '')
-                # Collect form values but don't use invalid ones in constructor
                 part_number = request.form.get('part_number', '')  
                 machine_id = request.form['machine_id']
                 quantity = request.form.get('quantity', 0)  
                 notes = request.form.get('notes', '')
                 
-                # Create new part with only what appear to be valid fields
+                # Check if user has access to the machine
+                machine = Machine.query.get(machine_id)
+                if not machine:
+                    flash('Invalid machine selected.', 'danger')
+                    return redirect(url_for('manage_parts'))
+                    
+                if not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]:
+                    flash('You do not have permission to add parts to this machine.', 'danger')
+                    return redirect(url_for('manage_parts'))
+                
+                # Get maintenance frequency and unit from form
+                maintenance_frequency = request.form.get('maintenance_frequency', 30)
+                maintenance_unit = request.form.get('maintenance_unit', 'day')
+                
+                # Create new part with all fields
                 new_part = Part(
                     name=name,
                     description=description,
-                    machine_id=machine_id if machine_id else None
+                    machine_id=machine_id if machine_id else None,
+                    maintenance_frequency=maintenance_frequency,
+                    maintenance_unit=maintenance_unit
                 )
                 
                 # Add part to database
                 db.session.add(new_part)
                 db.session.commit()
-                
                 flash(f'Part "{name}" has been added successfully.', 'success')
                 return redirect('/parts')  # Using direct URL to avoid potential errors
             except Exception as e:
@@ -2345,44 +3289,139 @@ def edit_part(part_id):
         part.name = request.form.get('name', part.name)
         part.description = request.form.get('description', part.description)
         part.machine_id = request.form.get('machine_id', part.machine_id)
+        # Update maintenance_frequency and maintenance_unit from form
+        part.maintenance_frequency = request.form.get('maintenance_frequency', part.maintenance_frequency)
+        part.maintenance_unit = request.form.get('maintenance_unit', part.maintenance_unit)
         db.session.commit()
         flash('Part updated successfully.', 'success')
         return redirect(url_for('manage_parts'))
+    
+    # Return template for GET request
     return render_template('edit_part.html', part=part, machines=machines)
 
-@app.route('/manage/roles')
+@app.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @login_required
-def manage_roles():
-    """Redirect or render the roles management page."""
+def edit_role(role_id):
+    """Edit an existing role - admin only."""
     if not is_admin_user(current_user):
-        flash('You do not have permission to access this page.', 'danger')
+        flash('You do not have permission to edit roles.', 'danger')
         return redirect(url_for('dashboard'))
-    roles = Role.query.all()
-    all_permissions = get_all_permissions()
-    return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
+    
+    try:
+        # Get role by ID
+        role = db.session.get(Role, role_id)
+        if not role:
+            abort(404)
+        
+        # Process form submission
+        if request.method == 'POST':
+            name = request.form.get('name')
+            description = request.form.get('description', '')
+            permissions = request.form.getlist('permissions')
+            
+            # Validate required fields
+            if not name:
+                flash('Role name is required.', 'danger')
+                return redirect(url_for('edit_role', role_id=role_id))
+            
+            # Check if role name already exists for another role
+            existing_role = Role.query.filter(Role.name == name, Role.id != role_id).first()
+            if existing_role:
+                flash(f'A role with the name "{name}" already exists.', 'danger')
+                return redirect(url_for('edit_role', role_id=role_id))
+            
+            # Update role details
+            role.name = name
+            role.description = description
+            role.permissions = ','.join(permissions) if permissions else ''
+            
+            db.session.commit()
+            flash(f'Role "{name}" has been updated successfully.', 'success')
+            return redirect(url_for('admin_roles'))
+        else:
+            # For GET requests, render the edit form with the all_permissions dictionary
+            all_permissions = get_all_permissions()
+            role_permissions = role.permissions.split(',') if role.permissions else []
+            return render_template('edit_role.html', role=role, all_permissions=all_permissions, role_permissions=role_permissions)
+    except Exception as e:
+        app.logger.error(f"Error editing role: {e}")
+        flash(f'Error editing role: {str(e)}', 'danger')
+        return redirect(url_for('admin_roles'))
 
 @app.route('/api/maintenance/records', methods=['GET'])
 @login_required
 def maintenance_records_page():
     # Get all sites user can access
-    if current_user.is_admin:
+    if user_can_see_all_sites(current_user):
         sites = Site.query.all()
     else:
         sites = current_user.sites
+        
     site_id = request.args.get('site_id', type=int)
     machine_id = request.args.get('machine_id', type=int)
     part_id = request.args.get('part_id', type=int)
 
+    # Get site IDs the user has access to
+    site_ids = [site.id for site in sites]
+    
     machines = []
     parts = []
     records = []
 
     if site_id:
+        # Verify user can access this site
+        if not user_can_see_all_sites(current_user) and site_id not in site_ids:
+            flash('You do not have access to this site.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+            
+        # Filter machines by selected site
         machines = Machine.query.filter_by(site_id=site_id).all()
+    else:
+        # Show machines from all available sites
+        site_ids = [s.id for s in sites]
+        machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
+    
+    machine_ids = [machine.id for machine in machines]
+    
     if machine_id:
+        # Verify user can access this machine
+        machine = Machine.query.get(machine_id)
+        if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
+            flash('You do not have access to this machine.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+            
+        # Filter parts by selected machine
         parts = Part.query.filter_by(machine_id=machine_id).all()
+    else:
+        # Get all parts for machines the user has access to
+        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
+    
+    part_ids = [part.id for part in parts]
+    
     if part_id:
+        # Verify user can access this part
+        part = Part.query.get(part_id)
+        if not part or not part.machine or (not user_can_see_all_sites(current_user) and part.machine.site_id not in site_ids):
+            flash('You do not have access to this part.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+            
+        # Filter records by selected part
         records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+    elif machine_id:
+        # If a machine is selected but no part, show records for all parts of that machine
+        parts_for_machine = Part.query.filter_by(machine_id=machine_id).all()
+        part_ids_for_machine = [part.id for part in parts_for_machine]
+        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_machine)).order_by(MaintenanceRecord.date.desc()).all()
+    elif site_id:
+        # If a site is selected but no machine/part, show records for all parts of all machines at that site
+        machines_for_site = Machine.query.filter_by(site_id=site_id).all()
+        machine_ids_for_site = [machine.id for machine in machines_for_site]
+        parts_for_site = Part.query.filter(Part.machine_id.in_(machine_ids_for_site)).all()
+        part_ids_for_site = [part.id for part in parts_for_site]
+        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_site)).order_by(MaintenanceRecord.date.desc()).all()
+    else:
+        # No filters selected - show all records for parts the user has access to
+        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids)).order_by(MaintenanceRecord.date.desc()).all() if part_ids else []
 
     return render_template(
         'maintenance_records.html',
@@ -2502,6 +3541,49 @@ def emergency_maintenance_request():
         flash(f'Error processing emergency request: {str(e)}', 'danger')
         return redirect(url_for('manage_machines'))
 
+@app.route('/audit-task/delete/<int:audit_task_id>', methods=['POST'])
+@login_required
+def delete_audit_task(audit_task_id):
+    """Delete an audit task."""
+    # Check permissions
+    if not current_user.is_admin:
+        # If not admin, check if user has specific permission
+        if not hasattr(current_user, 'role') or not current_user.role or not current_user.role.permissions or 'audits.delete' not in current_user.role.permissions.split(','):
+            flash('You do not have permission to delete audit tasks.', 'danger')
+            return redirect(url_for('audits_page'))
+    
+    try:
+        # Get the audit task
+        audit_task = AuditTask.query.get_or_404(audit_task_id)
+        
+        # Check if the user has access to this site
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites]
+            if audit_task.site_id not in user_site_ids:
+                flash('You do not have permission to delete audit tasks for this site.', 'danger')
+                return redirect(url_for('audits_page'))
+        
+        task_name = audit_task.name
+        
+        # Delete all completions first (to avoid foreign key constraint violations)
+        # The cascade should handle this but we'll do it explicitly to be safe
+        AuditTaskCompletion.query.filter_by(audit_task_id=audit_task_id).delete()
+        
+        # Delete the audit task
+        db.session.delete(audit_task)
+        db.session.commit()
+        
+        flash(f'Audit task "{task_name}" deleted successfully.', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting audit task: {e}")
+        flash(f'An error occurred while deleting the audit task: {str(e)}', 'danger')
+    
+    return redirect(url_for('audits_page'))
+
+import app_debug_helper  # Register debug routes
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
     parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
@@ -2512,6 +3594,24 @@ if __name__ == '__main__':
     
     print(f"[APP] Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+
+# Import and patch audit history at the very end to avoid circular import
+try:
+    import fix_audit_history
+    print("[APP] Audit history fix imported successfully (imported at end of app.py)")
+except Exception as e:
+    print(f"[APP] Warning: Could not import audit history fix at end of app.py: {str(e)}")
+
+
+
+
+
+
+
+
+
+
+
 
 
 
