@@ -155,7 +155,15 @@
         }
         
         .calendar-table tr {
-            height: 16.66%; /* Even distribution for 6 rows (typical calendar month) */
+            /* Change from percentage to fixed minimum height */
+            min-height: 50px; 
+            height: auto; /* Allow height to adjust based on content */
+        }
+        
+        /* Override to ensure the header row doesn't take extra space */
+        .calendar-table tr.calendar-header {
+            height: auto;
+            min-height: auto;
         }
         
         .calendar-header th {
