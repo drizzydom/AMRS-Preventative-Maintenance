@@ -392,19 +392,20 @@ def setup_enhanced_audit_history():
                 
                 # --- Generate available months for dropdown ---
                 logger.debug("Generating available months for dropdown")
-                # Start from April 2025 (to ensure we only include months with data)
+                # Start from April 2025 as specified (first month with data)
                 start_month, start_year = 4, 2025
                 available_months = []
 
                 # Get current date for comparison
                 curr_date = datetime.now().date()
 
-                # Generate months from start date through current month/year plus a few future months
+                # Current month/year
                 current_year, current_month = curr_date.year, curr_date.month
 
                 # Add a few months into the future for planning purposes
                 future_months = 3
-                end_date = curr_date.replace(day=1)
+                
+                # Calculate end date (current month plus future months)
                 if current_month + future_months > 12:
                     future_year = current_year + ((current_month + future_months) // 12)
                     future_month = (current_month + future_months) % 12
@@ -417,6 +418,9 @@ def setup_enhanced_audit_history():
 
                 # Generate the dropdown options
                 temp_date = date(start_year, start_month, 1)
+                
+                # Extra debug logging
+                logger.info(f"Generating months from {temp_date} to {end_date}")
 
                 # Loop through months until we reach end date
                 while temp_date <= end_date:
@@ -425,17 +429,13 @@ def setup_enhanced_audit_history():
                     value = f"{y:04d}-{m:02d}"
                     display = f"{calendar.month_name[m]} {y}"
                     available_months.append({'value': value, 'display': display})
+                    logger.info(f"Added month to dropdown: {display} ({value})")
                     
                     # Move to next month
                     if m == 12:
                         temp_date = date(y + 1, 1, 1)
                     else:
                         temp_date = date(y, m + 1, 1)
-
-                # Debug output
-                logger.info(f"Generated {len(available_months)} months for dropdown")
-                for month in available_months:
-                    logger.debug(f"Available month: {month['display']} ({month['value']})")
 
                 # Sort in reverse chronological order (newest first)
                 available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
@@ -447,7 +447,7 @@ def setup_enhanced_audit_history():
                         'value': f"{current_year:04d}-{current_month:02d}",
                         'display': f"{calendar.month_name[current_month]} {current_year}"
                     })
-
+                
                 # Ensure the selected month exists in available months
                 selected_month = f"{year:04d}-{month:02d}"
                 month_exists = any(m['value'] == selected_month for m in available_months)
@@ -461,6 +461,11 @@ def setup_enhanced_audit_history():
                     })
                     # Re-sort after adding
                     available_months = sorted(available_months, key=lambda x: x['value'], reverse=True)
+                
+                # Extra debugging to confirm final month list
+                logger.info(f"Final month dropdown list has {len(available_months)} items:")
+                for m in available_months:
+                    logger.info(f"  - {m['display']} ({m['value']})")
                 
                 selected_month = f"{year:04d}-{month:02d}"
                 
