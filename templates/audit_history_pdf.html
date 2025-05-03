@@ -75,20 +75,10 @@
         
         /* Machine Section */
         .machine-section {
-            margin-bottom: 60px; /* Increased space between machine sections */
-            page-break-inside: avoid;
+            margin-bottom: 60px;
             width: 100%;
             position: relative;
-            padding-bottom: 30px; /* Add padding at bottom of each section */
-        }
-        
-        @media print {
-            .machine-section {
-                page-break-before: always;
-            }
-            .machine-section:first-of-type {
-                page-break-before: auto;
-            }
+            padding-bottom: 30px;
         }
         
         /* Machine Header with Details */
@@ -378,18 +368,20 @@
         .machine-fit-page {
             width: 100%;
             box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: stretch;
+            display: block; /* Changed from flex to block to avoid print flexbox bugs */
             /* Prevent content from being split across pages */
             page-break-inside: avoid;
             break-inside: avoid;
         }
         @media print {
             .machine-fit-page {
-                /* Removed max-height, max-width, and overflow: hidden to allow content to flow and print fully */
-                margin: 0 auto;
+                /* Only apply page-break-before here, not inline or on .machine-section */
+                page-break-before: always;
+                break-before: page;
+            }
+            .machine-fit-page:first-of-type {
+                page-break-before: auto;
+                break-before: auto;
             }
         }
 
