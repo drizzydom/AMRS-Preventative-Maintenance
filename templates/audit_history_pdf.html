@@ -75,10 +75,10 @@
         
         /* Machine Section */
         .machine-section {
-            margin-bottom: 60px;
+            margin-bottom: 30px; /* Reduced from 60px */
             width: 100%;
             position: relative;
-            padding-bottom: 30px;
+            padding-bottom: 10px; /* Reduced from 30px */
         }
         
         /* Machine Header with Details */
@@ -131,7 +131,7 @@
             overflow: visible; /* Changed from hidden to visible to prevent content clipping */
             display: flex;
             flex-direction: column; /* Stack children vertically */
-            margin-bottom: 30px; /* Reduced from 60px */
+            margin-bottom: 10px; /* Reduced from 30px */
         }
         
         .month-header {
@@ -336,7 +336,7 @@
         
         /* Footer improvements */
         .certification-footer {
-            margin-top: 20px; /* Reduced from 40px */
+            margin-top: 8px; /* Reduced from 20px */
             font-size: 8pt;
             color: #666;
             border-top: 1px solid #aaa;
@@ -373,15 +373,22 @@
             page-break-inside: avoid;
             break-inside: avoid;
         }
+        .machine-fit-page:last-of-type {
+            page-break-after: auto !important;
+            break-after: auto !important;
+        }
         @media print {
             .machine-fit-page {
-                /* Only apply page-break-before here, not inline or on .machine-section */
                 page-break-before: always;
                 break-before: page;
             }
             .machine-fit-page:first-of-type {
                 page-break-before: auto;
                 break-before: auto;
+            }
+            .machine-fit-page:last-of-type {
+                page-break-after: auto;
+                break-after: auto;
             }
         }
 
@@ -392,7 +399,7 @@
             gap: 10px;
             width: 100%; /* Ensure full width usage */
             height: auto; /* Allow height to adjust based on content */
-            margin-bottom: 40px; /* Extra space below calendar */
+            margin-bottom: 10px; /* Reduced from 40px */
         }
 
         /* Additional footer spacing fixes for print view */
