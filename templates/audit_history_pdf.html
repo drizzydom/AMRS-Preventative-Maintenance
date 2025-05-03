@@ -130,7 +130,7 @@
             flex-wrap: nowrap;
             gap: 10px;
             width: 100%;
-            min-height: 380px; /* Establish a minimum height to fill more of the page */
+            min-height: 300px; /* Reduced from 380px */
         }
         
         .monthly-calendar {
@@ -140,7 +140,7 @@
             overflow: visible; /* Changed from hidden to visible to prevent content clipping */
             display: flex;
             flex-direction: column; /* Stack children vertically */
-            margin-bottom: 60px; /* Increased from 40px to create more space for the last row */
+            margin-bottom: 30px; /* Reduced from 60px */
         }
         
         .month-header {
@@ -149,7 +149,7 @@
             margin-bottom: 0;
             color: #334155;
             text-align: center;
-            padding: 8px;
+            padding: 4px; /* Reduced from 8px */
             background-color: #f1f5f9;
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
@@ -176,7 +176,7 @@
         
         .calendar-table tr {
             /* Change from percentage to fixed minimum height */
-            min-height: 50px; 
+            min-height: 30px; /* Reduced from 50px */
             height: auto; /* Allow height to adjust based on content */
         }
         
@@ -197,11 +197,11 @@
         }
         
         .calendar-day {
-            min-height: 45px; /* Minimum height */
-            height: 80px; /* Fixed height with scrolling for overflow */
+            min-height: 28px; /* Reduced from 45px */
+            height: 48px; /* Reduced from 80px */
             width: 14.28%;
             vertical-align: top;
-            padding: 4px;
+            padding: 2px; /* Reduced from 4px */
             border: 1px solid #c8d1d9;
             position: relative;
             background-color: #fff;
