@@ -371,36 +371,17 @@
         
         .machine-fit-page {
             width: 100%;
-            height: 100vh;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
             align-items: stretch;
-            /* Prevent content from overflowing the page */
-            overflow: hidden;
+            /* Removed height, max-height, and overflow: hidden to prevent content from being cut off */
         }
-        
         @media print {
-            html, body {
-                width: 100%;
-                height: 100%;
-                margin: 0;
-                padding: 0;
-            }
             .machine-fit-page {
-                /* Scale down content if it overflows the page */
-                max-height: 9in;
-                max-width: 6.5in;
+                /* Removed max-height, max-width, and overflow: hidden to allow content to flow and print fully */
                 margin: 0 auto;
-                overflow: hidden;
-                /* Use transform scale if needed (JS can be used for dynamic scaling if required) */
-            }
-            .machine-section {
-                page-break-before: always;
-            }
-            .machine-section:first-of-type {
-                page-break-before: auto;
             }
         }
 
