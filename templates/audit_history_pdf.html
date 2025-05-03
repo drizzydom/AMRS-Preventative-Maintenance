@@ -19,7 +19,8 @@
             border-bottom: 2px solid #000;
             padding-bottom: 10px;
             text-align: center;
-            /* Removed position: fixed to avoid cut-off and allow repetition */
+            margin-top: 0;
+            padding-top: 0;
         }
         
         .print-header .letterhead-logo {
@@ -366,7 +367,10 @@
         /* Print specific styles to optimize layout */
         @page {
             size: Letter portrait;
-            margin: 1in;
+            margin-top: 0.5in; /* Reduced from 1in */
+            margin-right: 1in;
+            margin-bottom: 1in;
+            margin-left: 1in;
         }
         
         .machine-fit-page {
@@ -397,7 +401,8 @@
 
         /* Additional footer spacing fixes for print view */
         body {
-            /* Ensure adequate spacing for the footer in the print view */
+            margin-top: 0 !important;
+            padding-top: 0 !important;
             margin-bottom: 100px; /* Increased bottom margin */
             padding-bottom: 50px; /* Additional padding at page bottom */
             min-height: 100vh;
