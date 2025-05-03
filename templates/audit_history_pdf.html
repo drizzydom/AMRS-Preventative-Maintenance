@@ -380,7 +380,9 @@
             flex-direction: column;
             justify-content: flex-start;
             align-items: stretch;
-            /* Removed height, max-height, and overflow: hidden to prevent content from being cut off */
+            /* Prevent content from being split across pages */
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
         @media print {
             .machine-fit-page {
