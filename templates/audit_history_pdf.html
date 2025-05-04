@@ -377,6 +377,10 @@
             page-break-after: auto !important;
             break-after: auto !important;
         }
+        .certification-footer:last-of-type {
+            page-break-after: auto !important;
+            break-after: auto !important;
+        }
         @media print {
             .machine-fit-page {
                 page-break-before: always;
@@ -387,8 +391,12 @@
                 break-before: auto;
             }
             .machine-fit-page:last-of-type {
-                page-break-after: auto;
-                break-after: auto;
+                page-break-after: auto !important;
+                break-after: auto !important;
+            }
+            .certification-footer:last-of-type {
+                page-break-after: auto !important;
+                break-after: auto !important;
             }
         }
 
