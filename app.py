@@ -1614,19 +1614,20 @@ def audit_history_print_view():
     site_id = request.args.get('site_id', None, type=int)
     machine_id = request.args.get('machine_id', None, type=int)
     
-    # Date range defaults to last 30 days if not provided
+    # Date range: use month_year if provided, else fallback to last 30 days
+    month_year = request.args.get('month_year')
+    from calendar import monthrange
     today = datetime.now().date()
-    start_date_str = request.args.get('start_date', None)
-    end_date_str = request.args.get('end_date', None)
-    
-    if start_date_str:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    if month_year:
+        try:
+            year, month = map(int, month_year.split('-'))
+            start_date = date(year, month, 1)
+            end_date = date(year, month, monthrange(year, month)[1])
+        except Exception:
+            start_date = today - timedelta(days=30)
+            end_date = today
     else:
         start_date = today - timedelta(days=30)
-        
-    if end_date_str:
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-    else:
         end_date = today
     
     # Check permission to access the audit feature
