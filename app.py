@@ -26,7 +26,6 @@ from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
 import smtplib
-from weasyprint import HTML, CSS
 from jinja2 import Environment, FileSystemLoader
 
 # Local imports
