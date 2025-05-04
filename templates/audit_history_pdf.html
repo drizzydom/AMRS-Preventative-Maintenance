@@ -370,30 +370,10 @@
             box-sizing: border-box;
             display: block; /* Changed from flex to block to avoid print flexbox bugs */
         }
-        .machine-fit-page:last-of-type {
-            page-break-after: auto !important;
-            break-after: auto !important;
-        }
-        .certification-footer:last-of-type {
-            page-break-after: auto !important;
-            break-after: auto !important;
-        }
         @media print {
-            .machine-fit-page {
-                page-break-before: always;
-                break-before: page;
-            }
             .machine-fit-page:first-of-type {
                 page-break-before: auto;
                 break-before: auto;
-            }
-            .machine-fit-page:last-of-type {
-                page-break-after: auto !important;
-                break-after: auto !important;
-            }
-            .certification-footer:last-of-type {
-                page-break-after: auto !important;
-                break-after: auto !important;
             }
         }
 
@@ -441,7 +421,7 @@
 <body>
     {% if machines|length > 0 %}
         {% for machine in machines %}
-            <div class="machine-fit-page" {% if not loop.first %}style="page-break-before: always;"{% endif %}>
+            <div class="machine-fit-page"{% if not loop.first %} style="page-break-before: always;"{% endif %}>
                 <div class="print-header">
                     <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Company Logo" class="letterhead-logo">
                     <div class="company-info">
