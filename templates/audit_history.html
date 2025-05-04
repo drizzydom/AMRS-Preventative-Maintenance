@@ -34,9 +34,6 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h4">Audit History</h2>
                 <div class="d-print-none">
-                    <button class="btn btn-primary me-2" id="downloadPdfButton">
-                        <i class="fas fa-file-pdf me-1"></i> Download PDF
-                    </button>
                     <button class="btn btn-primary" id="printButton">
                         <i class="fas fa-print me-1"></i> Print Report
                     </button>
@@ -879,26 +876,6 @@
                 // Optional: close the window after printing (uncomment if desired)
                 // printWindow.onafterprint = function() { printWindow.close(); };
             });
-        });
-        
-        // PDF Download
-        document.getElementById('downloadPdfButton').addEventListener('click', function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            let pdfUrl = '/audit-history/pdf?';
-            
-            if (urlParams.has('site_id')) {
-                pdfUrl += 'site_id=' + urlParams.get('site_id') + '&';
-            }
-            
-            if (urlParams.has('machine_id')) {
-                pdfUrl += 'machine_id=' + urlParams.get('machine_id') + '&';
-            }
-            
-            if (urlParams.has('month_year')) {
-                pdfUrl += 'month_year=' + urlParams.get('month_year');
-            }
-            
-            window.open(pdfUrl, '_blank');
         });
     });
     
