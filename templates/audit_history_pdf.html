@@ -369,9 +369,6 @@
             width: 100%;
             box-sizing: border-box;
             display: block; /* Changed from flex to block to avoid print flexbox bugs */
-            /* Prevent content from being split across pages */
-            page-break-inside: avoid;
-            break-inside: avoid;
         }
         .machine-fit-page:last-of-type {
             page-break-after: auto !important;
@@ -444,7 +441,7 @@
 <body>
     {% if machines|length > 0 %}
         {% for machine in machines %}
-            <div class="machine-fit-page" {% if not loop.first %}style="page-break-before: always;"{% endif %} {% if loop.last %}style="page-break-after: avoid;"{% endif %}>
+            <div class="machine-fit-page" {% if not loop.first %}style="page-break-before: always;"{% endif %}>
                 <div class="print-header">
                     <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Company Logo" class="letterhead-logo">
                     <div class="company-info">
