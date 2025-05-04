@@ -68,7 +68,7 @@ A full-featured, cross-platform Preventative Maintenance Tracker for Accurate Ma
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/accuratemachinerepair/AMRS-Preventative-Maintenance.git
+git clone https://github.com/drizzydom/AMRS-Preventative-Maintenance.git
 cd AMRS-Preventative-Maintenance
 ```
 
@@ -155,7 +155,7 @@ You can run AMRS Preventative Maintenance on your own infrastructure or workstat
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/accuratemachinerepair/AMRS-Preventative-Maintenance.git
+   git clone https://github.com/drizzydom/AMRS-Preventative-Maintenance.git
    cd AMRS-Preventative-Maintenance
    ```
 2. **Set up a Python virtual environment:**
@@ -221,8 +221,6 @@ You can run AMRS Preventative Maintenance on your own infrastructure or workstat
 - For SQLite: Back up the `instance/` directory.
 - For PostgreSQL: Use your cloud provider’s backup tools (Render does this automatically).
 
-### Support
-For help, contact [sales@accuratemachinerepair.com](mailto:sales@accuratemachinerepair.com).
 
 ---
 
