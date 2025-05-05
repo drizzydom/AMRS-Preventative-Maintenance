@@ -85,7 +85,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "electron_app/icons/app.png",
+      "icon": "electron_app/icons/app.ico",
       "compression": "store"
     },
     "nsis": {
