@@ -112,9 +112,8 @@ def build_electron():
         except Exception:
             pass
     # Build with electron-builder
-    builder_cmd = f"npx electron-builder --win --x64 --compression={COMPRESSION_LEVEL}"
-    if os.path.exists(ICON_PATH):
-        builder_cmd += f" --icon {ICON_PATH}"
+    # Note: --compression and --icon are not valid CLI args; set them in electron-builder config/package.json
+    builder_cmd = f"npx electron-builder --win --x64"
     run(builder_cmd, cwd=ELECTRON_DIR)
 
 def main():
