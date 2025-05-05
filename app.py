@@ -1434,7 +1434,7 @@ def audit_history_print_view():
     site_id = request.args.get('site_id', None, type=int)
     machine_id = request.args.get('machine_id', None, type=int)
     
-    # Date range: use month_year if provided, else fallback to last 30 days
+    # Date range: use month_year if provided, else fallback to the current month
     month_year = request.args.get('month_year')
     from calendar import monthrange
     today = datetime.now().date()
@@ -1444,11 +1444,11 @@ def audit_history_print_view():
             start_date = date(year, month, 1)
             end_date = date(year, month, monthrange(year, month)[1])
         except Exception:
-            start_date = today - timedelta(days=30)
-            end_date = today
+            start_date = today.replace(day=1)
+            end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     else:
-        start_date = today - timedelta(days=30)
-        end_date = today
+        start_date = today.replace(day=1)
+        end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     
     # Check permission to access the audit feature
     user_has_audit_access = current_user.is_admin or (
