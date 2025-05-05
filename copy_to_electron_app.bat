@@ -7,7 +7,7 @@ if not exist "electron_app" (
 )
 
 REM List of files to copy
-set FILES=app.py app-launcher.py flask-launcher.py models.py config.py auto_migrate.py requirements.txt requirements-windows.txt requirements-render.txt wsgi.py cache_config.py db_config.py simple_healthcheck.py excel_importer.py notification_scheduler.py api_endpoints.py expand_user_fields.py
+set FILES=app.py models.py config.py auto_migrate.py requirements.txt requirements-windows.txt wsgi.py cache_config.py db_config.py simple_healthcheck.py excel_importer.py notification_scheduler.py api_endpoints.py expand_user_fields.py
 
 REM Copy each file if it exists
 for %%F in (%FILES%) do (
