@@ -26,7 +26,6 @@ from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
 import smtplib
-from weasyprint import HTML, CSS
 from jinja2 import Environment, FileSystemLoader
 
 # Local imports
@@ -1427,186 +1426,6 @@ def audit_history_page():
         interval_bars=interval_bars
     )
 
-@app.route('/audit-history/pdf')
-@login_required
-def audit_history_pdf():
-    """Generate PDF of the audit history report."""
-    # Get the same filter parameters as in the audit_history route
-    site_id = request.args.get('site_id', None, type=int)
-    machine_id = request.args.get('machine_id', None, type=int)
-    
-    # Date range defaults to last 30 days if not provided
-    today = datetime.now().date()
-    start_date_str = request.args.get('start_date', None)
-    end_date_str = request.args.get('end_date', None)
-    
-    if start_date_str:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-    else:
-        start_date = today - timedelta(days=30)
-        
-    if end_date_str:
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-    else:
-        end_date = today
-    
-    # Check permission to access the audit feature
-    user_has_audit_access = current_user.is_admin or (
-        current_user.is_authenticated and current_user.role and 
-        'audits.access' in (current_user.role.permissions or '')
-    )
-    
-    if not user_has_audit_access:
-        flash("You don't have permission to access this feature.", "warning")
-        return redirect(url_for('dashboard'))
-    
-    # Get sites based on user permissions
-    if current_user.is_admin or user_can_see_all_sites(current_user):
-        available_sites = Site.query.order_by(Site.name).all()
-    else:
-        # Users only see their assigned sites
-        available_sites = current_user.sites
-    
-    # Get machines based on site filter
-    if site_id:
-        site = Site.query.get_or_404(site_id)
-        # Check if user has access to this site
-        if not current_user.is_admin and site not in available_sites:
-            flash("You don't have permission to access this site.", "warning")
-            return redirect(url_for('dashboard'))
-        
-        # Filter machines by the selected site
-        machines_query = Machine.query.filter_by(site_id=site_id)
-    else:
-        # Get machines from all available sites
-        site_ids = [s.id for s in available_sites]
-        machines_query = Machine.query.filter(Machine.site_id.in_(site_ids))
-    
-    # Apply machine filter if provided
-    if machine_id:
-        machines_query = machines_query.filter_by(id=machine_id)
-    
-    # Get the machines
-    machines = machines_query.order_by(Machine.name).all()
-    
-    # Get audit task completions for the time period
-    start_datetime = datetime.combine(start_date, datetime.min.time())
-    end_datetime = datetime.combine(end_date, datetime.max.time())
-    
-    # Get machine IDs
-    machine_ids = [m.id for m in machines]
-    
-    # Get audit task completions
-    completions_query = AuditTaskCompletion.query.filter(
-        AuditTaskCompletion.machine_id.in_(machine_ids),
-        AuditTaskCompletion.created_at.between(start_datetime, end_datetime)
-    ).order_by(AuditTaskCompletion.created_at)
-    
-    completions = completions_query.all()
-    
-    # Organize data by machine and date
-    machine_data = {}
-    for completion in completions:
-        # Get the date string from the completion date
-        date_str = completion.created_at.date().strftime('%Y-%m-%d')
-        
-        # Initialize machine entry if not exists
-        if completion.machine_id not in machine_data:
-            machine_data[completion.machine_id] = {}
-        
-        # Initialize date entry if not exists
-        if date_str not in machine_data[completion.machine_id]:
-            machine_data[completion.machine_id][date_str] = []
-        
-        # Add completion to the appropriate machine/date
-        machine_data[completion.machine_id][date_str].append(completion)
-    
-    # Get all audit tasks for reference
-    audit_tasks = {task.id: task for task in AuditTask.query.all()}
-    
-    # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
-    all_tasks_per_machine = {}
-    for machine in machines:
-        all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
-    
-    # Get all users for reference
-    users = {user.id: user for user in User.query.all()}
-    
-    # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
-    from collections import defaultdict
-    interval_bars = defaultdict(lambda: defaultdict(list))
-    for machine in machines:
-        for task in all_tasks_per_machine[machine.id]:
-            # Only for interval-based tasks (not daily)
-            if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
-                # We'll keep this empty for now, just making sure the structure exists
-                pass
-    
-    # Helper functions for the template
-    def get_date_range(start, end):
-        """Get a list of dates between start and end, inclusive."""
-        delta = end - start
-        return [start + timedelta(days=i) for i in range(delta.days + 1)]
-    
-    def get_calendar_weeks(start, end):
-        """Get calendar weeks for the date range."""
-        # Find the first Sunday before or on the start date
-        first_day = start - timedelta(days=start.weekday() + 1)
-        if first_day.weekday() != 6:  # If not Sunday
-            first_day = start - timedelta(days=(start.weekday() + 1) % 7)
-        
-        # Find the last Saturday after or on the end date
-        last_day = end + timedelta(days=(5 - end.weekday()) % 7)
-        
-        # Generate weeks
-        weeks = []
-        current = first_day
-        while current <= last_day:
-            week = []
-            for _ in range(7):
-                week.append(current)
-                current = current + timedelta(days=1)
-            weeks.append(week)
-        
-        return weeks
-    
-    # Render the template to HTML
-    html = render_template(
-        'audit_history_pdf.html',
-        machines=machines,
-        machine_data=machine_data,
-        audit_tasks=audit_tasks,
-        users=users,
-        today=today,
-        start_date=start_date,
-        end_date=end_date,
-        completions=completions,
-        get_date_range=get_date_range,
-        get_calendar_weeks=get_calendar_weeks,
-        all_tasks_per_machine=all_tasks_per_machine,
-        interval_bars=interval_bars,
-        current_user=current_user,
-        datetime=datetime,
-        timedelta=timedelta
-    )
-    
-    # Generate PDF from the HTML
-    pdf_file = BytesIO()
-    HTML(string=html).write_pdf(pdf_file)
-    pdf_file.seek(0)
-    
-    # Create a unique filename with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    filename = f"audit_history_{timestamp}.pdf"
-    
-    # Return the PDF as a downloadable file
-    return send_file(
-        pdf_file,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=filename
-    )
-
 @app.route('/audit-history/print-view')
 @login_required
 def audit_history_print_view():
@@ -1615,20 +1434,21 @@ def audit_history_print_view():
     site_id = request.args.get('site_id', None, type=int)
     machine_id = request.args.get('machine_id', None, type=int)
     
-    # Date range defaults to last 30 days if not provided
+    # Date range: use month_year if provided, else fallback to the current month
+    month_year = request.args.get('month_year')
+    from calendar import monthrange
     today = datetime.now().date()
-    start_date_str = request.args.get('start_date', None)
-    end_date_str = request.args.get('end_date', None)
-    
-    if start_date_str:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    if month_year:
+        try:
+            year, month = map(int, month_year.split('-'))
+            start_date = date(year, month, 1)
+            end_date = date(year, month, monthrange(year, month)[1])
+        except Exception:
+            start_date = today.replace(day=1)
+            end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     else:
-        start_date = today - timedelta(days=30)
-        
-    if end_date_str:
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-    else:
-        end_date = today
+        start_date = today.replace(day=1)
+        end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     
     # Check permission to access the audit feature
     user_has_audit_access = current_user.is_admin or (

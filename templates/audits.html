@@ -92,7 +92,7 @@
                                         <div class="col-md-4 col-sm-6">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" name="machine_ids" id="machine_{{ machine.id }}" value="{{ machine.id }}">
-                                                <label class="form-check-label" for="machine_{{ machine.id }}">{{ machine.name }}</label>
+                                                <label class="form-check-label" for="machine_{{ machine.id }}">{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</label>
                                             </div>
                                         </div>
                                         {% endfor %}
@@ -199,7 +199,7 @@
                           {% for site in sites %}
                             {% for machine in site.machines %}
                               <div class="audit-machine-section">
-                                <div class="audit-machine-title">{{ machine.name }}</div>
+                                <div class="audit-machine-title">{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</div>
                                 <div class="row g-2">
                                   {% for task in audit_tasks if task.site_id == site.id and machine in task.machines %}
                                     <div class="col-md-6 col-lg-4 mb-2">
