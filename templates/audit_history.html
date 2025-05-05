@@ -64,7 +64,7 @@
                             <select class="form-select" id="machine_id" name="machine_id">
                                 <option value="" {% if not selected_machine or selected_machine == '' %}selected{% endif %}>All Machines</option>
                                 {% for machine in available_machines %}
-                                <option value="{{ machine.id }}" {% if selected_machine == machine.id|string %}selected{% endif %}>{{ machine.name }}</option>
+                                <option value="{{ machine.id }}" {% if selected_machine == machine.id|string %}selected{% endif %}>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</option>
                                 {% endfor %}
                             </select>
                         </div>
