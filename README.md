@@ -1,329 +1,274 @@
 # AMRS Preventative Maintenance System
 
-A comprehensive desktop and web application for tracking and managing preventative maintenance for AMRS equipment. The system provides both online and offline functionality through a Python-based desktop application with a Flask backend.
-
-<p align="center">
-  <img src="static/img/logo.png" alt="AMRS Maintenance Tracker Logo" width="200"/>
-</p>
-
-## Table of Contents
-- [Overview](#overview)
-- [Repository Structure](#repository-structure)
-- [System Requirements](#system-requirements)
-- [Installation](#installation)
-  - [Server](#server)
-  - [Desktop Client](#desktop-client)
-- [Features](#features)
-- [Advanced Features](#advanced-features)
-- [Architecture](#architecture)
-- [Usage](#usage)
-- [Troubleshooting](#troubleshooting)
-- [Recent Updates](#recent-updates)
-- [Contributing](#contributing)
-- [Audit Reminder System](#audit-reminder-system)
-- [License and Legal](#license-and-legal)
-
-## Overview
-
-AMRS Preventative Maintenance System combines a Flask web application with a Python-based desktop client to provide:
-
-- Tracking of equipment maintenance schedules
-- Recording of maintenance activities
-- Visual indicators for overdue maintenance
-- Offline functionality with automatic syncing
-- Analytics and reporting for maintenance trends
-- Scheduled maintenance reminders
-- Automated notifications for overdue and upcoming maintenance
-- Full offline/online synchronization
-- Standalone desktop experience (no web browser required)
-
-## Repository Structure
-
-```
-AMRS-Preventative-Maintenance/
-├── app.py                     # Main Flask application entry point
-├── models.py                  # Database models using SQLAlchemy
-├── static/                    # Static web assets (CSS, JS, images)
-│   ├── css/                   # Stylesheets  
-│   ├── js/                    # JavaScript files
-│   │   ├── dashboard.js       # Dashboard functionality
-│   │   ├── ajax-loader.js     # Data synchronization
-│   │   └── ...                # Other client-side scripts
-│   └── img/                   # Images and icons
-├── templates/                 # HTML templates for Flask
-│   ├── admin/                 # Admin dashboard templates
-│   ├── dashboard.html         # Main dashboard
-│   ├── machines.html          # Machine management
-│   └── ...                    # Other template files
-├── server/                    # Server-specific components
-├── notification_scheduler.py  # Automated maintenance reminders
-├── config.py                  # Configuration settings
-├── requirements.txt           # Python dependencies
-└── instance/                  # Instance-specific data (DB)
-```
-
-## System Requirements
-
-### Prerequisites
-
-- **Python 3.10+** - Backend server runtime and desktop client
-- **SQLite/PostgreSQL** - Database support
-- **Modern Web Browser** - For web interface
-- **Windows 10/11, macOS, or Linux** - Supported desktop platforms
-
-## Installation
-
-### Server
-
-#### Docker Installation (Recommended)
-
-```bash
-docker-compose up -d
-```
-
-This will start the server on port 5000 by default.
-
-#### Manual Installation
-
-1. Ensure Python 3.10+ is installed
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Configure the database:
-   ```bash
-   python init_database.py
-   ```
-5. Create an admin user (follow the prompts):
-   ```bash
-   python app.py --create-admin
-   ```
-6. Start the server:
-   ```bash
-   python app.py
-   ```
-
-### Desktop Client
-
-#### Standard Installation
-
-1. Download the installer from the releases page
-2. Run the installer and follow the on-screen instructions
-3. The application will be installed in your Programs directory and shortcuts will be created
-
-#### Building from Source
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/AMRS-Preventative-Maintenance.git
-   cd AMRS-Preventative-Maintenance
-   ```
-2. Install requirements:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Build the application:
-   ```bash
-   python build_desktop_app.py
-   ```
-4. The executable will be available in the `dist` folder.
+A full-featured, cross-platform Preventative Maintenance Tracker for Accurate Machine Repair Services (AMRS). This application helps organizations manage, schedule, and track maintenance tasks for machines and sites, with robust notification, reporting, and user management features.
 
 ## Features
 
-- **Dashboard View**: At-a-glance overview of maintenance status
-- **Site Management**: Organize machines by physical location
-- **Machine Tracking**: Manage machine inventory with detailed information
-- **Part Management**: Track individual parts requiring maintenance
-- **Maintenance Recording**: Log maintenance activities with timestamps and notes
-- **Status Indicators**: Clearly see overdue, due soon, and OK maintenance statuses
-- **Filtering**: Filter by site, machine, and maintenance status
-- **Site Overview**: Accordion view displaying machines per site
-- **Notification System**: Email alerts for overdue maintenance
-- **User Management**: Role-based permissions and access control
-- **Offline Support**: Work without internet connectivity
-- **Data Synchronization**: Automatic syncing when online
-
-## Advanced Features
-
-### Maintenance Status Tracking
-- Color-coded visual indicators for maintenance status
-- Automatic calculation of due dates based on maintenance frequency
-- Sorting and filtering by status, date, and other criteria
-- Detailed maintenance history for each part and machine
-
-### Dashboard Analytics
-- Summary statistics for overdue, due soon, and on-schedule maintenance
-- Site-specific views and filters
-- Expandable/collapsible machine parts for detailed inspection
-- Mobile-responsive design for field technicians
-
-### Notifications & Reminders
-- Automated email notifications for overdue maintenance
-- Configurable reminder thresholds per site
-- Audit task reminder system
-- User-configurable notification preferences
-
-### Multi-Site Management
-- Organize equipment by physical location
-- Site-specific maintenance schedules and notification settings
-- Role-based access control by site
+- **Multi-site, multi-user support** with role-based access control (admin, manager, technician, etc.)
+- **Machine and site management**: Add, edit, and track machines, sites, and maintenance tasks.
+- **Automated email notifications** for overdue, due soon, and completed maintenance tasks.
+- **Customizable notification preferences** per user and per site.
+- **Audit history tracking** and reporting.
+- **Import/export** via Excel templates.
+- **Emergency maintenance request system**.
+- **Secure authentication** and encrypted sensitive fields.
+- **Responsive web UI** and standalone desktop app (Electron + Flask).
+- **Cloud hosting** (Render.com) and local deployment support.
+- **Comprehensive test suite**.
 
 ## Architecture
 
-### Key Components
+- **Backend**: Python (Flask), SQLAlchemy ORM, PostgreSQL (Render) or SQLite (local/desktop).
+- **Frontend**: Jinja2 templates, Bootstrap, custom JS.
+- **Email**: Flask-Mail, SMTP (configurable).
+- **Desktop App**: Electron (Node.js) + Flask backend.
+- **Hosting**: [Render.com](https://render.com/) for production web deployment.
+- **CI/CD**: GitHub Actions for automated builds and releases.
 
-- **Flask Application**: Handles database operations and business logic
-- **SQLAlchemy ORM**: Database abstraction and model definitions
-- **Bootstrap UI**: Responsive and mobile-friendly interface
-- **JavaScript Modules**: Client-side interactivity and dynamic updates
-- **Notification Scheduler**: Background process for sending automated reminders
+## Directory Structure
 
-## Usage
+```
+.
+├── app.py                  # Main Flask application
+├── config.py               # Configuration (uses environment variables)
+├── db_config.py            # Database configuration logic
+├── notification_scheduler.py # Automated notification logic
+├── templates/              # Jinja2 HTML templates
+├── static/                 # Static files (JS, CSS, images)
+├── requirements.txt        # Python dependencies
+├── requirements-windows.txt# Windows-specific dependencies
+├── requirements-render.txt # Render.com-specific dependencies
+├── setup_env.py            # Environment setup script
+├── setup_electron_env.py   # Electron/desktop setup script
+├── Dockerfile              # For containerized deployment
+├── server/                 # Render.com deployment files
+├── tests/                  # Test suite (pytest)
+└── ... (see workspace for full list)
+```
 
-### Dashboard
+## Hosting & Deployment
 
-The dashboard provides an at-a-glance view of your maintenance status:
+### Render.com (Production)
 
-1. **Summary Statistics**: Total counts of overdue, due soon, OK, and total parts.
-2. **Overdue & Due Soon Panels**: Quick access to parts requiring attention.
-3. **Site Overview**: Expandable view of sites, machines, and their parts.
-4. **Filtering**: Filter by site using the dropdown at the top.
-5. **Part Details**: Expand machine rows to see individual parts and their status.
+- **Database**: PostgreSQL (managed by Render)
+- **App**: Flask app served via Gunicorn, auto-deployed from GitHub
+- **Environment variables**: All secrets and config (see below)
+- **Backups**: Automated by Render for PostgreSQL
 
-### Recording Maintenance
+### Local/Standalone
 
-1. Navigate to a part that needs maintenance
-2. Click the "Record" button next to the part
-3. Enter maintenance details and notes
-4. Submit to update the maintenance record and reset the due date
+- **Database**: SQLite (default) or PostgreSQL (if configured)
+- **App**: Flask development server or Electron desktop app
+- **Environment variables**: Loaded from `.env` file
 
-### Managing Sites, Machines, and Parts
+---
 
-Admin users can:
-1. Add, edit, and delete sites
-2. Add machines to sites
-3. Add parts to machines with specific maintenance schedules
-4. Configure notification thresholds and preferences
+## Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/drizzydom/AMRS-Preventative-Maintenance.git
+cd AMRS-Preventative-Maintenance
+```
+
+### 2. Set Up Environment Variables
+
+Copy `.env.example` to `.env` and fill in your secrets and configuration:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your preferred editor. At minimum, set:
+
+- `SECRET_KEY`
+- `DATABASE_URL` (for PostgreSQL, e.g. on Render)
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`
+- `EMERGENCY_CONTACT_EMAIL` (optional)
+
+**Never commit your `.env` file to version control!**
+
+### 3. Install Python Dependencies
+
+#### Local/Development
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### Windows
+
+```cmd
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements-windows.txt
+```
+
+#### Render.com
+
+Dependencies are installed automatically from `requirements.txt` or `requirements-render.txt`.
+
+### 4. Initialize the Database
+
+#### Local/Development
+
+```bash
+python init_database.py
+```
+
+#### Render.com
+
+Database tables are created automatically on first run if not present.
+
+### 5. Run the Application
+
+#### Local/Development
+
+```bash
+python app.py
+```
+
+Visit [http://localhost:10000](http://localhost:10000) (or the port you set).
+
+#### Desktop App
+
+```bash
+python setup_electron_env.py
+npm install
+npm run electron
+```
+
+#### Render.com
+
+- App is auto-deployed and served at your Render-provided URL.
+
+---
+
+## Self-Hosting and Running Locally
+
+You can run AMRS Preventative Maintenance on your own infrastructure or workstation. Here’s how:
+
+### Local Development (macOS/Linux/Windows)
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/drizzydom/AMRS-Preventative-Maintenance.git
+   cd AMRS-Preventative-Maintenance
+   ```
+2. **Set up a Python virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. **Copy and configure your environment variables:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your preferred editor and set your secrets/configuration
+   ```
+5. **Initialize the database:**
+   ```bash
+   python init_database.py
+   ```
+6. **Run the application:**
+   ```bash
+   python app.py
+   ```
+   The app will be available at http://localhost:10000 by default.
+
+### Customizing for Your Organization
+- **Branding:** Replace the logo in `static/img/logo.png` and update company info in templates as needed.
+- **Email:** Set up your SMTP credentials in `.env` for notifications.
+- **Database:** Use SQLite for simple setups or set `DATABASE_URL` for PostgreSQL.
+- **User Roles:** Use the admin UI to manage users and permissions.
+- **Notification Preferences:** Each user can set their own in their profile.
+
+### Deploying to a Server (Linux/Cloud VPS)
+1. Follow the local steps above.
+2. Use a production WSGI server (e.g., Gunicorn) and a reverse proxy (e.g., Nginx) for deployment.
+3. Set up a process manager (e.g., systemd or supervisor) to keep the app running.
+4. Secure your server (firewall, HTTPS, etc.).
+
+### Deploying on Render.com
+- Push your repository to GitHub.
+- Create a new Web Service on Render, connect your repo, and set the build/start commands:
+  - **Build Command:** `pip install -r requirements.txt`
+  - **Start Command:** `gunicorn app:app`
+- Add your environment variables in the Render dashboard.
+- Attach a PostgreSQL database (Render provides this as a managed service).
+- The app will auto-deploy and be available at your Render URL.
+
+### Desktop App (Electron)
+- Run `python setup_electron_env.py` to prepare the backend.
+- Run `npm install` and `npm run electron` to launch the desktop app.
+- The desktop app bundles the Flask backend and runs locally.
+
+### Updating
+- Pull the latest changes from GitHub:
+  ```bash
+  git pull origin main
+  pip install -r requirements.txt
+  # Restart your app as needed
+  ```
+
+### Backups
+- For SQLite: Back up the `instance/` directory.
+- For PostgreSQL: Use your cloud provider’s backup tools (Render does this automatically).
+
+
+---
+
+## Customization
+
+- **Configuration**: All settings are controlled via environment variables or `.env`.
+- **Email**: Use your SMTP provider (Gmail, IONOS, etc.) and set credentials in `.env`.
+- **Database**: Use SQLite for local/dev, PostgreSQL for production (set `DATABASE_URL`).
+- **User Roles**: Manage via the admin UI.
+- **Notification Preferences**: Each user can set their own in their profile.
+
+---
+
+## Running Tests
+
+```bash
+pytest
+```
+
+---
 
 ## Troubleshooting
 
-### Common Issues
+- **Email not sending**: Check SMTP settings in `.env` and use `python test_email_cli.py recipient@example.com` to test.
+- **Database issues**: Ensure `DATABASE_URL` is set and accessible.
+- **Render.com**: Check Render dashboard logs for errors.
+- **Desktop app**: Ensure both Python and Node.js dependencies are installed.
 
-#### Database Issues
-- Run database migrations if schema changes are required:
-  ```bash
-  python auto_migrate.py
-  ```
+---
 
-#### Dashboard Display Problems
-- If machine statuses are not displaying correctly, refresh the page
-- Check browser console for JavaScript errors
-- Clear browser cache if styles or scripts appear outdated
+## Security
 
-#### Email Notifications Not Sending
-- Verify email configuration in config.py
-- Check notification_scheduler.py logs
-- Ensure user email addresses and notification preferences are set correctly
+- **Never commit secrets**: `.env` is in `.gitignore`.
+- **Production**: Always set a strong `SECRET_KEY` and `USER_FIELD_ENCRYPTION_KEY`.
+- **Backups**: Render.com provides daily PostgreSQL backups.
 
-### Log Files
-- Application logs: `instance/app.log`
-- Database issues: Check SQLite errors in the application log
-- Email errors: Check SMTP settings in config.py
+---
 
-## Recent Updates
+## License
 
-### Dashboard Enhancements (April 2025)
-- **Fixed machine status display**: Corrected an issue where machines would incorrectly display "All OK" status when they had overdue or due soon parts
-- **Improved site filtering**: Now properly updates machine statuses when filtering by site
-- **Enhanced status indicators**: Better visual distinction between overdue, due soon, and OK status
+See [LICENSE](LICENSE).
 
-### Audit Reminder System (March 2025)
-- Added automated email reminders for incomplete audit tasks
-- Configurable notification preferences per user
-- Daily scheduled reminders
+---
 
-## Contributing
+## Support
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes
-4. Run tests to ensure functionality
-5. Submit a pull request
+For questions or support, file an Issue on the repository.
 
-## Audit Reminder System
+---
 
-The AMRS Preventative Maintenance System supports automated audit reminder emails for incomplete audit tasks. This helps ensure compliance and timely completion of required audits.
-
-### How It Works
-- At the end of each day, the system checks for audit tasks that have not been completed for each machine.
-- Users assigned to the relevant site and with audit reminders enabled in their notification preferences will receive an email reminder for each incomplete audit task.
-- The reminder email includes the site, machine, audit task name, and interval.
-
-### Enabling Audit Reminders
-- Each user can enable or disable audit reminders in their notification preferences (see your profile page in the web app).
-- Site administrators can ensure that site notification settings are enabled for audit reminders to be sent.
-
-### Running the Notification Scheduler
-
-To send audit reminders automatically, schedule the following command to run daily (e.g., at 5:00 PM):
-
-```bash
-python notification_scheduler.py audit
-```
-
-#### Example: macOS launchd (Cron Alternative)
-
-1. Create a file at `~/Library/LaunchAgents/com.amrs.auditreminder.plist` with the following contents:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.amrs.auditreminder</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/python3</string>
-        <string>/path/to/AMRS-Preventative-Maintenance/notification_scheduler.py</string>
-        <string>audit</string>
-    </array>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>17</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>/tmp/amrs_auditreminder.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/amrs_auditreminder.err</string>
-</dict>
-</plist>
-```
-
-2. Load the job:
-
-```bash
-launchctl load ~/Library/LaunchAgents/com.amrs.auditreminder.plist
-```
-
-### Manual Run
-You can also run reminders manually at any time:
-
-```bash
-python notification_scheduler.py audit
-```
-
-### Template
-The reminder email uses `templates/email/audit_reminder.html`.
-
-## License and Legal
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+**This README is up to date as of May 2025.**
