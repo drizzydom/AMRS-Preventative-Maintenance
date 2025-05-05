@@ -15,12 +15,11 @@
         
         /* Header & Print Layout */
         .print-header {
-            margin-bottom: 15px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
+            margin-bottom: 30px;
+            padding-top: 40px; /* Increased top padding for more vertical centering */
+            padding-bottom: 30px; /* Add bottom padding for more space below header */
             text-align: center;
             margin-top: 0 !important;
-            padding-top: 0 !important;
         }
         
         .print-header .letterhead-logo {
@@ -121,7 +120,7 @@
             flex-wrap: nowrap;
             gap: 10px;
             width: 100%;
-            min-height: 300px; /* Reduced from 380px */
+            min-height: 600px; /* Increase min height for more vertical space */
         }
         
         .monthly-calendar {
@@ -132,6 +131,9 @@
             display: flex;
             flex-direction: column; /* Stack children vertically */
             margin-bottom: 10px; /* Reduced from 30px */
+            min-height: 520px; /* Make the calendar itself taller */
+            height: 520px;
+            max-height: 700px;
         }
         
         .month-header {
@@ -158,6 +160,7 @@
             flex-grow: 1; /* Allow the table to grow and fill available space */
             table-layout: fixed; /* Ensure columns have equal width */
             height: 100%; /* Make sure table takes full height */
+            min-height: 400px;
             margin-bottom: 20px; /* Add space after the table */
         }
         
@@ -167,8 +170,7 @@
         
         .calendar-table tr {
             /* Change from percentage to fixed minimum height */
-            min-height: 30px; /* Reduced from 50px */
-            height: auto; /* Allow height to adjust based on content */
+            height: 70px; /* Increase row height for more vertical space */
         }
         
         /* Override to ensure the header row doesn't take extra space */
@@ -188,8 +190,8 @@
         }
         
         .calendar-day {
-            min-height: 28px; /* Reduced from 45px */
-            height: 48px; /* Reduced from 80px */
+            height: 65px; /* Increase day cell height */
+            min-height: 65px;
             width: 14.28%;
             vertical-align: top;
             padding: 2px; /* Reduced from 4px */
@@ -374,6 +376,9 @@
             .machine-fit-page:first-of-type {
                 page-break-before: auto;
                 break-before: auto;
+            }
+            body {
+                padding-bottom: 80px !important;
             }
         }
 
