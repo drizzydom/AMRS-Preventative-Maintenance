@@ -39,11 +39,7 @@
       },
       {
         "from": "app.py",
-        "to": "app.py"
-      },
-      {
-        "from": "app-launcher.py",
-        "to": "app-launcher.py"
+        "to": ""
       },
       {
         "from": "static",
@@ -52,6 +48,10 @@
       {
         "from": "templates",
         "to": "templates"
+      },
+      {
+        "from": "app-launcher.py",
+        "to": "app-launcher.py"
       },
       {
         "from": "modules",
