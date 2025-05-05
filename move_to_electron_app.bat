@@ -7,7 +7,7 @@ if not exist "electron_app" (
 )
 
 REM List of files to move
-set FILES=app.py app-launcher.py flask-launcher.py models.py config.py auto_migrate.py requirements.txt requirements-windows.txt requirements-render.txt wsgi.py cache_config.py db_config.py simple_healthcheck.py excel_importer.py notification_scheduler.py api_endpoints.py expand_user_fields.py
+set FILES=app.py models.py config.py auto_migrate.py requirements.txt requirements-windows.txt wsgi.py cache_config.py db_config.py simple_healthcheck.py excel_importer.py notification_scheduler.py api_endpoints.py expand_user_fields.py
 
 REM Move each file if it exists
 for %%F in (%FILES%) do (
@@ -22,7 +22,7 @@ set FOLDERS=static templates modules instance venv_py39_electron
 REM Move each folder if it exists
 for %%D in (%FOLDERS%) do (
     if exist "%%D" (
-        move /Y "%%D" "electron_app\"
+        move /Y "%%D" "electron_app\%%D"
     )
 )
 
