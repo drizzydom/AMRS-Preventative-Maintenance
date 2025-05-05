@@ -18,6 +18,17 @@
             margin-bottom: 15px;
             border-bottom: 2px solid #000;
             padding-bottom: 10px;
+            text-align: center;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+        
+        .print-header .letterhead-logo {
+            display: block;
+            margin: 0 auto 8px auto;
+            height: 72px;
+            max-width: 260px;
+            object-fit: contain;
         }
         
         .company-info {
@@ -64,11 +75,10 @@
         
         /* Machine Section */
         .machine-section {
-            margin-bottom: 60px; /* Increased space between machine sections */
-            page-break-inside: avoid;
+            margin-bottom: 30px; /* Reduced from 60px */
             width: 100%;
             position: relative;
-            padding-bottom: 30px; /* Add padding at bottom of each section */
+            padding-bottom: 10px; /* Reduced from 30px */
         }
         
         /* Machine Header with Details */
@@ -111,7 +121,7 @@
             flex-wrap: nowrap;
             gap: 10px;
             width: 100%;
-            min-height: 380px; /* Establish a minimum height to fill more of the page */
+            min-height: 300px; /* Reduced from 380px */
         }
         
         .monthly-calendar {
@@ -121,7 +131,7 @@
             overflow: visible; /* Changed from hidden to visible to prevent content clipping */
             display: flex;
             flex-direction: column; /* Stack children vertically */
-            margin-bottom: 60px; /* Increased from 40px to create more space for the last row */
+            margin-bottom: 10px; /* Reduced from 30px */
         }
         
         .month-header {
@@ -130,7 +140,7 @@
             margin-bottom: 0;
             color: #334155;
             text-align: center;
-            padding: 8px;
+            padding: 4px; /* Reduced from 8px */
             background-color: #f1f5f9;
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
@@ -157,7 +167,7 @@
         
         .calendar-table tr {
             /* Change from percentage to fixed minimum height */
-            min-height: 50px; 
+            min-height: 30px; /* Reduced from 50px */
             height: auto; /* Allow height to adjust based on content */
         }
         
@@ -178,11 +188,11 @@
         }
         
         .calendar-day {
-            min-height: 45px; /* Minimum height */
-            height: 80px; /* Fixed height with scrolling for overflow */
+            min-height: 28px; /* Reduced from 45px */
+            height: 48px; /* Reduced from 80px */
             width: 14.28%;
             vertical-align: top;
-            padding: 4px;
+            padding: 2px; /* Reduced from 4px */
             border: 1px solid #c8d1d9;
             position: relative;
             background-color: #fff;
@@ -326,7 +336,7 @@
         
         /* Footer improvements */
         .certification-footer {
-            margin-top: 40px; /* Increased margin to avoid overlapping last calendar row */
+            margin-top: 8px; /* Reduced from 20px */
             font-size: 8pt;
             color: #666;
             border-top: 1px solid #aaa;
@@ -337,6 +347,8 @@
             bottom: 0;
             width: 100%;
             clear: both;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
         
         /* Complete machine section with content and footer */
@@ -346,11 +358,25 @@
         
         /* Print specific styles to optimize layout */
         @page {
-            size: letter landscape;
-            margin: 1.5cm; /* Increased margin to ensure content isn't cut off */
-            padding-bottom: 2cm; /* Extra bottom padding */
+            size: Letter portrait;
+            margin-top: 0.25in; /* Further reduced top margin */
+            margin-right: 1in;
+            margin-bottom: 1in;
+            margin-left: 1in;
         }
         
+        .machine-fit-page {
+            width: 100%;
+            box-sizing: border-box;
+            display: block; /* Changed from flex to block to avoid print flexbox bugs */
+        }
+        @media print {
+            .machine-fit-page:first-of-type {
+                page-break-before: auto;
+                break-before: auto;
+            }
+        }
+
         /* Container for the entire calendar + legend + tasks layout */
         .print-calendar-container {
             display: flex;
@@ -358,12 +384,13 @@
             gap: 10px;
             width: 100%; /* Ensure full width usage */
             height: auto; /* Allow height to adjust based on content */
-            margin-bottom: 40px; /* Extra space below calendar */
+            margin-bottom: 10px; /* Reduced from 40px */
         }
 
         /* Additional footer spacing fixes for print view */
         body {
-            /* Ensure adequate spacing for the footer in the print view */
+            margin-top: 0 !important;
+            padding-top: 0 !important;
             margin-bottom: 100px; /* Increased bottom margin */
             padding-bottom: 50px; /* Additional padding at page bottom */
             min-height: 100vh;
@@ -392,177 +419,177 @@
     </style>
 </head>
 <body>
-    <div class="print-header">
-        <div class="company-info">
-            <h1>AMRS Preventative Maintenance</h1>
-            <p>Machine Audit History Report</p>
-        </div>
-        <div class="report-title">
-            <h2>Audit History Report</h2>
-            <span class="report-id">Generated on {{ today.strftime('%Y-%m-%d') }}</span>
-        </div>
-        <div class="report-meta">
-            <div class="report-section">
-                <table class="meta-table">
-                    <tr>
-                        <th>Date Range:</th>
-                        <td>{{ start_date.strftime('%B %d, %Y') }} to {{ end_date.strftime('%B %d, %Y') }}</td>
-                    </tr>
-                    <tr>
-                        <th>Generated By:</th>
-                        <td>{{ current_user.full_name if hasattr(current_user, 'full_name') else current_user.first_name + ' ' + current_user.last_name }}</td>
-                    </tr>
-                </table>
-            </div>
-            <div class="report-section">
-                <table class="meta-table">
-                    <tr>
-                        <th>Total Machines:</th>
-                        <td>{{ machines|length }}</td>
-                    </tr>
-                    <tr>
-                        <th>Total Records:</th>
-                        <td>{{ completions|length }}</td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    {% for machine in machines %}
-    <div class="machine-section">
-        <!-- Enhanced Machine Header with Details -->
-        <div class="machine-header">
-            <div class="machine-title">
-                {{ machine.name }}
-            </div>
-            <div class="machine-details">
-                {% if machine.model %}
-                <div class="machine-detail-item">
-                    <span class="machine-detail-label">Model:</span>
-                    <span class="machine-detail-value">{{ machine.model }}</span>
-                </div>
-                {% endif %}
-                
-                {% if machine.serial_number %}
-                <div class="machine-detail-item">
-                    <span class="machine-detail-label">Serial Number:</span>
-                    <span class="machine-detail-value">{{ machine.serial_number }}</span>
-                </div>
-                {% endif %}
-                
-                {% if machine.machine_number %}
-                <div class="machine-detail-item">
-                    <span class="machine-detail-label">Machine ID:</span>
-                    <span class="machine-detail-value">{{ machine.machine_number }}</span>
-                </div>
-                {% endif %}
-                
-                <div class="machine-detail-item">
-                    <span class="machine-detail-label">Site:</span>
-                    <span class="machine-detail-value">{{ machine.site.name }}</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="machine-content-with-footer">
-            {% if machine.id in machine_data %}
-                <!-- Monthly Calendar with Legend Layout -->
-                <div class="print-calendar-container">
-                    <div class="monthly-calendar-with-legend">
-                        <div class="monthly-calendar">
-                            {% set start_month = start_date.month %}
-                            {% set start_year = start_date.year %}
-                            {% set month_display = start_date.strftime('%B %Y') %}
-                            
-                            <div class="month-header">{{ month_display }}</div>
-                            <table class="calendar-table">
-                                <tr class="calendar-header">
-                                    <th>Sun</th>
-                                    <th>Mon</th>
-                                    <th>Tue</th>
-                                    <th>Wed</th>
-                                    <th>Thu</th>
-                                    <th>Fri</th>
-                                    <th>Sat</th>
-                                </tr>
-                                {% set month_weeks = get_calendar_weeks(start_date, end_date) %}
-                                {% for week in month_weeks %}
+    {% if machines|length > 0 %}
+        {% for machine in machines %}
+            <div class="machine-fit-page"{% if not loop.first %} style="page-break-before: always;"{% endif %}>
+                <div class="print-header">
+                    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Company Logo" class="letterhead-logo">
+                    <div class="company-info">
+                        <h1>AMRS Preventative Maintenance</h1>
+                        <p>Machine Audit History Report</p>
+                    </div>
+                    <div class="report-title">
+                        <h2>Audit History Report</h2>
+                        <span class="report-id">Generated on {{ today.strftime('%Y-%m-%d') }}</span>
+                    </div>
+                    <div class="report-meta">
+                        <div class="report-section">
+                            <table class="meta-table">
                                 <tr>
-                                    {% for day in week %}
-                                    <td class="calendar-day {% if day.month != start_month %}empty-day{% endif %} {% if day.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
-                                        <div class="date-number">{{ day.day }}</div>
-                                        {% set day_date = day.strftime('%Y-%m-%d') %}
-                                        <div class="task-markers">
-                                            {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
-                                                {% set day_audit_tasks = {} %}
-                                                {% for completion in machine_data[machine.id][day_date] %}
-                                                    {% if completion.audit_task_id in audit_tasks %}
-                                                        {% set task = audit_tasks[completion.audit_task_id] %}
-                                                        {% if task.id not in day_audit_tasks %}
-                                                            {% if day_audit_tasks.update({task.id: task}) %}{% endif %}
-                                                        {% endif %}
-                                                    {% endif %}
-                                                {% endfor %}
-                                                
-                                                {% for task_id, task in day_audit_tasks.items() %}
-                                                    <div class="task-marker" data-task-id="{{ task.id }}" 
-                                                         data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
-                                                         {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
-                                                         title="{{ task.name }}"></div>
-                                                {% endfor %}
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                    {% endfor %}
+                                    <th>Date Range:</th>
+                                    <td>{{ start_date.strftime('%B %d, %Y') }} to {{ end_date.strftime('%B %d, %Y') }}</td>
                                 </tr>
-                                {% endfor %}
+                                <tr>
+                                    <th>Generated By:</th>
+                                    <td>{{ current_user.full_name }}</td>
+                                </tr>
                             </table>
                         </div>
-                        
-                        <div class="calendar-legend">
-                            <h6 class="legend-title">Legend & Task Schedule</h6>
-                            <div class="legend-items">
-                                {% if machine.id in all_tasks_per_machine %}
-                                    {% for task in all_tasks_per_machine[machine.id] %}
-                                        <div class="legend-item">
-                                            <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
-                                            <span class="legend-text">
-                                                {{ task.name }}
-                                                <span class="legend-schedule">
-                                                    ({% if task.interval == 'daily' %}
-                                                        Daily
-                                                    {% elif task.interval == 'weekly' %}
-                                                        Weekly{% if task.weekday %} - {{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}{% endif %}
-                                                    {% elif task.interval == 'monthly' %}
-                                                        Monthly{% if task.month_day %} - Day {{ task.month_day }}{% endif %}
-                                                    {% elif task.interval == 'custom' and task.custom_interval_days %}
-                                                        Every {{ task.custom_interval_days }} days
-                                                    {% else %}
-                                                        Schedule not specified
-                                                    {% endif %})
-                                                </span>
-                                            </span>
-                                        </div>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
+                        <div class="report-section">
+                            <table class="meta-table">
+                                <tr>
+                                    <th>Total Machines:</th>
+                                    <td>{{ machines|length }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Total Records:</th>
+                                    <td>{{ completions|length }}</td>
+                                </tr>
+                            </table>
                         </div>
                     </div>
                 </div>
-            {% else %}
-                <div class="no-data">
-                    No audit records found for this machine in the selected date range.
+                <div class="machine-section">
+                    <div class="machine-header">
+                        <div class="machine-title">
+                            {{ machine.name }}
+                        </div>
+                        <div class="machine-details">
+                            {% if machine.model %}
+                            <div class="machine-detail-item">
+                                <span class="machine-detail-label">Model:</span>
+                                <span class="machine-detail-value">{{ machine.model }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if machine.serial_number %}
+                            <div class="machine-detail-item">
+                                <span class="machine-detail-label">Serial Number:</span>
+                                <span class="machine-detail-value">{{ machine.serial_number }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if machine.machine_number %}
+                            <div class="machine-detail-item">
+                                <span class="machine-detail-label">Machine ID:</span>
+                                <span class="machine-detail-value">{{ machine.machine_number }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="machine-detail-item">
+                                <span class="machine-detail-label">Site:</span>
+                                <span class="machine-detail-value">{{ machine.site.name }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="machine-content-with-footer">
+                        {% if machine.id in machine_data %}
+                            <div class="print-calendar-container">
+                                <div class="monthly-calendar-with-legend">
+                                    <div class="monthly-calendar">
+                                        {% set start_month = start_date.month %}
+                                        {% set start_year = start_date.year %}
+                                        {% set month_display = start_date.strftime('%B %Y') %}
+                                        
+                                        <div class="month-header">{{ month_display }}</div>
+                                        <table class="calendar-table">
+                                            <tr class="calendar-header">
+                                                <th>Sun</th>
+                                                <th>Mon</th>
+                                                <th>Tue</th>
+                                                <th>Wed</th>
+                                                <th>Thu</th>
+                                                <th>Fri</th>
+                                                <th>Sat</th>
+                                            </tr>
+                                            {% set month_weeks = get_calendar_weeks(start_date, end_date) %}
+                                            {% for week in month_weeks %}
+                                            <tr>
+                                                {% for day in week %}
+                                                <td class="calendar-day {% if day.month != start_month %}empty-day{% endif %} {% if day.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d') %}today{% endif %}">
+                                                    <div class="date-number">{{ day.day }}</div>
+                                                    {% set day_date = day.strftime('%Y-%m-%d') %}
+                                                    <div class="task-markers">
+                                                        {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
+                                                            {% set day_audit_tasks = {} %}
+                                                            {% for completion in machine_data[machine.id][day_date] %}
+                                                                {% if completion.audit_task_id in audit_tasks %}
+                                                                    {% set task = audit_tasks[completion.audit_task_id] %}
+                                                                    {% if task.id not in day_audit_tasks %}
+                                                                        {% if day_audit_tasks.update({task.id: task}) %}{% endif %}
+                                                                    {% endif %}
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                            
+                                                            {% for task_id, task in day_audit_tasks.items() %}
+                                                                <div class="task-marker" data-task-id="{{ task.id }}" 
+                                                                     data-category="{{ task.category|default('general')|lower|replace(' ', '-') }}"
+                                                                     {% if task.color %}style="background-color: {{ task.color }};"{% endif %}
+                                                                     title="{{ task.name }}"></div>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </div>
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="calendar-legend">
+                                        <h6 class="legend-title">Legend & Task Schedule</h6>
+                                        <div class="legend-items">
+                                            {% if machine.id in all_tasks_per_machine %}
+                                                {% for task in all_tasks_per_machine[machine.id] %}
+                                                    <div class="legend-item">
+                                                        <span class="legend-marker category-{{ task.category|default('general')|lower|replace(' ', '-') }}" {% if task.color %}style="background-color: {{ task.color }};"{% endif %}></span>
+                                                        <span class="legend-text">
+                                                            {{ task.name }}
+                                                            <span class="legend-schedule">
+                                                                ({% if task.interval == 'daily' %}
+                                                                    Daily
+                                                                {% elif task.interval == 'weekly' %}
+                                                                    Weekly{% if task.weekday %} - {{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][task.weekday] }}{% endif %}
+                                                                {% elif task.interval == 'monthly' %}
+                                                                    Monthly{% if task.month_day %} - Day {{ task.month_day }}{% endif %}
+                                                                {% elif task.interval == 'custom' and task.custom_interval_days %}
+                                                                    Every {{ task.custom_interval_days }} days
+                                                                {% else %}
+                                                                    Schedule not specified
+                                                                {% endif %})
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="no-data">
+                                No audit records found for this machine in the selected date range.
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
-            {% endif %}
-            
-            <!-- Certification Footer - now inside the machine-content-with-footer div to keep it with the content -->
-            <div class="certification-footer">
-                This document certifies that all recorded maintenance tasks have been performed according to 
-                Accurate Machine Repair Preventative Maintenance standards and protocols. Report ID: {{ today.strftime('%Y%m%d%H%M%S') }}
+                <div class="certification-footer">
+                    This document certifies that all recorded maintenance tasks have been performed according to 
+                    Accurate Machine Repair Preventative Maintenance standards and protocols. Report ID: {{ today.strftime('%Y%m%d%H%M%S') }}
+                </div>
             </div>
-        </div>
-    </div>
-    {% endfor %}
+        {% endfor %}
+    {% endif %}
 </body>
 </html>
