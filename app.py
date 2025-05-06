@@ -10,6 +10,10 @@ from datetime import datetime, timedelta, date
 from functools import wraps
 import traceback
 from io import BytesIO
+import tempfile
+import zipfile
+from werkzeug.utils import secure_filename
+from flask import after_this_request
 
 # --- TEST DB PATCH: Force in-memory SQLite for pytest runs ---
 if any('pytest' in arg for arg in sys.argv):
@@ -93,6 +97,17 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Check for custom template/static folders from environment (set by bootstrap)
+if os.environ.get('TEMPLATES_FOLDER'):
+    template_folder = os.environ.get('TEMPLATES_FOLDER')
+    print(f"[APP] Using custom templates folder: {template_folder}")
+    app.template_folder = template_folder
+
+if os.environ.get('STATIC_FOLDER'):
+    static_folder = os.environ.get('STATIC_FOLDER')
+    print(f"[APP] Using custom static folder: {static_folder}")
+    app.static_folder = static_folder
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
@@ -3401,6 +3416,98 @@ def delete_audit_task(audit_task_id):
         flash(f'An error occurred while deleting the audit task: {str(e)}', 'danger')
     
     return redirect(url_for('audits_page'))
+
+# --- Asset download API endpoints ---
+
+@app.route('/api/assets/info')
+def assets_info():
+    """Provide information about available assets and their versions."""
+    return jsonify({
+        'templates_version': '1.0.0',  # Increment this when templates change
+        'static_version': '1.0.0',     # Increment this when static files change
+    })
+
+@app.route('/api/assets/templates.zip')
+def templates_zip():
+    """Serve a ZIP file containing all templates."""
+    # Create a temporary file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    temp_file.close()
+    
+    try:
+        # Create a ZIP file with all templates
+        templates_dir = app.template_folder
+        with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(templates_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    zipf.write(
+                        file_path, 
+                        os.path.relpath(file_path, templates_dir)
+                    )
+            
+            # Add version file
+            zipf.writestr('version.txt', '1.0.0')  # Match version from assets_info
+        
+        # Send the file
+        return send_file(
+            temp_file.name,
+            as_attachment=True,
+            download_name='templates.zip'
+        )
+    except Exception as e:
+        app.logger.error(f"Error creating templates zip: {e}")
+        return jsonify({'error': 'Failed to create templates archive'}), 500
+    finally:
+        # Schedule the temp file for deletion
+        @after_this_request
+        def remove_file(response):
+            try:
+                os.unlink(temp_file.name)
+            except Exception as e:
+                app.logger.error(f"Error removing temp file: {e}")
+            return response
+
+@app.route('/api/assets/static.zip')
+def static_zip():
+    """Serve a ZIP file containing all static assets."""
+    # Create a temporary file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    temp_file.close()
+    
+    try:
+        # Create a ZIP file with all static files
+        static_dir = app.static_folder
+        with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(static_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    zipf.write(
+                        file_path, 
+                        os.path.relpath(file_path, static_dir)
+                    )
+            
+            # Add version file
+            zipf.writestr('version.txt', '1.0.0')  # Match version from assets_info
+        
+        # Send the file
+        return send_file(
+            temp_file.name,
+            as_attachment=True,
+            download_name='static.zip'
+        )
+    except Exception as e:
+        app.logger.error(f"Error creating static zip: {e}")
+        return jsonify({'error': 'Failed to create static archive'}), 500
+    finally:
+        # Schedule the temp file for deletion
+        @after_this_request
+        def remove_file(response):
+            try:
+                os.unlink(temp_file.name)
+            except Exception as e:
+                app.logger.error(f"Error removing temp file: {e}")
+            return response
 
 import app_debug_helper  # Register debug routes
 
