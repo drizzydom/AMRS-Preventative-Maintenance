@@ -24,7 +24,7 @@
       <select class="form-select" id="machine_id" name="machine_id" onchange="this.form.submit()">
         <option value="">All Machines</option>
         {% for machine in machines %}
-        <option value="{{ machine.id }}" {% if selected_machine == machine.id %}selected{% endif %}>{{ machine.name }}</option>
+        <option value="{{ machine.id }}" {% if selected_machine == machine.id %}selected{% endif %}>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</option>
         {% endfor %}
       </select>
     </div>
@@ -56,7 +56,7 @@
         {% for record in records %}
         <tr>
           <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
-          <td>{{ record.machine.name if record.machine else '' }}</td>
+          <td>{{ record.machine.name if record.machine else '' }}{% if record.machine and record.machine.machine_number %} ({{ record.machine.machine_number }}){% elif record.machine and record.machine.serial_number %} (SN: {{ record.machine.serial_number }}){% endif %}</td>
           <td>{{ record.part.name if record.part else '' }}</td>
           <td>{{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else '')) }}</td>
           <td class="hide-sm">{{ record.description or '' }}</td>
