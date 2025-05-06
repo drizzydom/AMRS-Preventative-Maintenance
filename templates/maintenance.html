@@ -42,7 +42,7 @@
                             <select class="form-select" id="machine_id" name="machine_id" required disabled>
                                 <option value="">Select Machine</option>
                                 {% for machine in machines %}
-                                <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}</option>
+                                <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</option>
                                 {% endfor %}
                             </select>
                             <div id="machine-help" class="form-text text-muted">Please select a site first</div>
