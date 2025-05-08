@@ -10,24 +10,37 @@ from cryptography.fernet import Fernet, InvalidToken
 import base64
 import os
 import hashlib
+import logging
+
+# Set up logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Application-level encryption utilities ---
-# The encryption key MUST be set as an environment variable in production
+# The encryption key should be set as an environment variable
 FERNET_KEY = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
 if not FERNET_KEY:
-    # Instead of generating a key, show an error message recommending proper setup
-    print("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
-    print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
-    print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
-    print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
-    # If application is starting up, we'll use a temporary key for testing only
-    # This is not secure and should not be used in production!
-    if os.environ.get('FLASK_ENV') == 'development' or os.environ.get('FLASK_DEBUG') == '1':
-        print("[SECURITY WARNING] Development mode detected. Using a temporary key for encryption.")
-        FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
-    else:
-        # For production, we don't want to silently continue with an insecure setup
-        raise ValueError("USER_FIELD_ENCRYPTION_KEY environment variable must be set in production.")
+    # Instead of generating a random key in development mode, show a clear error message
+    logger.error("USER_FIELD_ENCRYPTION_KEY environment variable not set.")
+    logger.error("Please set this variable to a valid Fernet key before starting the application.")
+    logger.error("Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
+    logger.error("Use the key_manager.py module to securely store and retrieve this key")
+    
+    # Attempt to use key_manager if available
+    try:
+        from key_manager import get_or_create_encryption_key
+        logger.info("Attempting to get encryption key from key_manager...")
+        FERNET_KEY = get_or_create_encryption_key()
+        if FERNET_KEY:
+            logger.info("Successfully retrieved encryption key from key_manager")
+        else:
+            logger.error("Failed to get encryption key from key_manager")
+    except ImportError:
+        logger.error("key_manager module not available")
+    
+    # If still no key, raise an error
+    if not FERNET_KEY:
+        raise ValueError("USER_FIELD_ENCRYPTION_KEY must be set. Please run the application through app_bootstrap.py")
 
 # Initialize Fernet cipher with the key
 fernet = Fernet(FERNET_KEY)

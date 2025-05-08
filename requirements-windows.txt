@@ -28,3 +28,6 @@ requests==2.31.0
 
 # Database drivers
 psycopg2-binary==2.9.1
+
+# Encryption - needed by models.py
+cryptography==41.0.1
