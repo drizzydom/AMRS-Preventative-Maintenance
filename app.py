@@ -95,19 +95,23 @@ def check_persistent_storage():
 # Call this function before your database setup
 storage_ok = check_persistent_storage()
 
-# Initialize Flask app
-app = Flask(__name__, instance_relative_config=True)
+# Helper to get resource path (for PyInstaller compatibility)
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller bundle """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
 
-# Check for custom template/static folders from environment (set by bootstrap)
-if os.environ.get('TEMPLATES_FOLDER'):
-    template_folder = os.environ.get('TEMPLATES_FOLDER')
-    print(f"[APP] Using custom templates folder: {template_folder}")
-    app.template_folder = template_folder
-
-if os.environ.get('STATIC_FOLDER'):
-    static_folder = os.environ.get('STATIC_FOLDER')
-    print(f"[APP] Using custom static folder: {static_folder}")
-    app.static_folder = static_folder
+# Initialize Flask app with correct template/static folders for bundled app
+app = Flask(
+    __name__,
+    instance_relative_config=True,
+    template_folder=resource_path('templates'),
+    static_folder=resource_path('static')
+)
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
