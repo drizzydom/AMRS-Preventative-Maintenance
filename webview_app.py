@@ -123,6 +123,11 @@ def on_shown():
     """Handle window shown event"""
     logger.info("WebView window shown")
 
+def on_new_window(url):
+    """Handle new window requests (e.g., print view) by opening inside the app"""
+    logger.info(f"Opening new window for URL: {url}")
+    webview.create_window('Print View', url)
+
 def main():
     """Main entry point for the application"""
     parser = argparse.ArgumentParser(description=f"{APP_TITLE} Windows Application")
@@ -157,7 +162,7 @@ def main():
         window.events.closed += on_closed
         window.events.shown += on_shown
         
-        # Start the WebView2 main loop
+        # Start the WebView2 main loop without unsupported arguments
         webview.start(debug=True)
         
     except Exception as e:
