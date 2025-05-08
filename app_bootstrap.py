@@ -17,7 +17,9 @@ if getattr(sys, 'frozen', False):
 else:
     exe_dir = os.path.dirname(os.path.abspath(__file__))
 
-dotenv_path = os.path.join(exe_dir, '.env')
+# Always look for .env in the _internal folder next to the executable
+internal_dir = os.path.join(exe_dir, '_internal')
+dotenv_path = os.path.join(internal_dir, '.env')
 print(f"[BOOTSTRAP] Looking for .env at: {dotenv_path}")
 load_dotenv(dotenv_path)
 if not os.path.exists(dotenv_path):
