@@ -1,87 +1,37 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import os
-import sys
-from pathlib import Path
-
-block_cipher = None
-
-# Explicitly copy app.py to the root of the distribution
-added_files = [
-    ('templates', 'templates'),
-    ('static', 'static'),
-    ('app.py', '.'),
-]
-
-# Include models.py if it exists
-if os.path.exists('models.py'):
-    added_files.append(('models.py', '.'))
-
-# Copy any database files if they exist
-for db_file in Path('.').glob('*.db'):
-    added_files.append((str(db_file), '.'))
 
 a = Analysis(
-    ['desktop_app.py'],
-    pathex=[r'C:\Users\Dominic\Documents\GitHub\AMRS-Preventative-Maintenance'],
+    ['C:\\Users\\Dominic\\Documents\\GitHub\\AMRS-Preventative-Maintenance\\webview_app.py'],
+    pathex=[],
     binaries=[],
-    datas=added_files,
-    hiddenimports=[
-        'flask',
-        'flask_sqlalchemy',
-        'flask_login',
-        'werkzeug',
-        'jinja2',
-        'sqlalchemy',
-        'sqlite3',
-        'email.mime.text',  # Required for flask-mail
-        'cefpython3',
-        'importlib',
-        'importlib.util',
-    ],
+    datas=[('C:\\Users\\Dominic\\Documents\\GitHub\\AMRS-Preventative-Maintenance\\templates', 'templates'), ('C:\\Users\\Dominic\\Documents\\GitHub\\AMRS-Preventative-Maintenance\\static', 'static'), ('C:\\Users\\Dominic\\Documents\\GitHub\\AMRS-Preventative-Maintenance\\app', 'app'), ('C:\\Users\\Dominic\\Documents\\GitHub\\AMRS-Preventative-Maintenance\\app_bootstrap.py', '.'), ('C:\\Users\\Dominic\\Documents\\GitHub\\AMRS-Preventative-Maintenance\\secret_config.py', '.')],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'numpy', 'pandas', 'PIL'],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
+    excludes=[],
     noarchive=False,
 )
-
-# Print debug info about what's being included
-print("\nIncluded data files:")
-# Safe way to print data info without assuming structure
-for item in a.datas:
-    print(f"  {item}")
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='AMRSMaintenanceTracker',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,  # Set to True for debugging, change to False for production
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='AMRSMaintenanceTracker',
 )
