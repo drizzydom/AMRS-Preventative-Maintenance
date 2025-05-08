@@ -106,8 +106,18 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 # --- Determine template and static folder paths ---
+def ensure_folder_exists(folder_path, fallback_relative):
+    if not os.path.exists(folder_path):
+        print(f"[APP] Warning: Folder not found: {folder_path}. Falling back to bundled resource path.")
+        return resource_path(fallback_relative)
+    return folder_path
+
 template_folder = os.environ.get('TEMPLATES_FOLDER') or resource_path('templates')
+template_folder = ensure_folder_exists(template_folder, 'templates')
+
 static_folder = os.environ.get('STATIC_FOLDER') or resource_path('static')
+static_folder = ensure_folder_exists(static_folder, 'static')
+
 print(f"[APP] Using template folder: {template_folder}")
 print(f"[APP] Using static folder: {static_folder}")
 
@@ -2598,29 +2608,69 @@ def sync_data():
     try:
         data = request.json
         sync_type = data.get('type')
+        entity_type = data.get('entity_type')
+        last_sync = data.get('last_sync')
+        # Supported entities for sync
+        entity_map = {
+            'maintenance_records': MaintenanceRecord,
+            'audit_task_completions': AuditTaskCompletion,
+            # Add more entities as needed
+        }
         if sync_type == 'push':
             # Handle data being pushed from client to server
-            # Process items from the client
-            return jsonify({'status': 'success', 'message': 'Data received successfully'})
-            
+            items = data.get('items', [])
+            results = []
+            for item in items:
+                entity = entity_map.get(entity_type)
+                if not entity:
+                    continue
+                # Find by client_id if present
+                obj = None
+                if 'client_id' in item:
+                    obj = entity.query.filter_by(client_id=item['client_id']).first()
+                # Last-write-wins: compare updated_at
+                if obj:
+                    # Only update if incoming is newer
+                    incoming_updated = item.get('updated_at')
+                    if incoming_updated and (not obj.updated_at or incoming_updated > obj.updated_at.isoformat()):
+                        for k, v in item.items():
+                            if hasattr(obj, k):
+                                setattr(obj, k, v)
+                        db.session.add(obj)
+                        results.append({'client_id': obj.client_id, 'status': 'updated'})
+                else:
+                    # Create new record
+                    new_obj = entity(**item)
+                    db.session.add(new_obj)
+                    results.append({'client_id': item.get('client_id'), 'status': 'created'})
+            db.session.commit()
+            return jsonify({'status': 'success', 'results': results})
         elif sync_type == 'pull':
             # Handle client requesting data from server
-            # Return requested data based on parameters
-            entity_type = data.get('entity_type')
-            timestamp = data.get('last_sync')
-            
-            # This is simplified - in a real implementation you would fetch actual data
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'type': entity_type,
-                    'items': []  # Actual data would go here
-                }
-            })
+            entity = entity_map.get(entity_type)
+            if not entity:
+                return jsonify({'status': 'error', 'message': 'Invalid entity type'}), 400
+            query = entity.query
+            if last_sync:
+                # Only return items updated since last_sync
+                query = query.filter(entity.updated_at > last_sync)
+            items = [obj_to_dict(obj) for obj in query.all()]
+            return jsonify({'status': 'success', 'data': {'type': entity_type, 'items': items}})
         else:
             return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
     except Exception as e:
+        db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+def obj_to_dict(obj):
+    # Convert SQLAlchemy model to dict for sync
+    result = {}
+    for column in obj.__table__.columns:
+        value = getattr(obj, column.name)
+        if isinstance(value, datetime):
+            value = value.isoformat()
+        result[column.name] = value
+    return result
 
 @app.route('/health-check')
 def health_check():

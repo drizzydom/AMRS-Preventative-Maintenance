@@ -314,11 +314,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function syncPendingChanges() {
         // Check if we have any pending changes to sync
         const pendingChanges = localStorage.getItem('pending-changes');
-        
         if (pendingChanges) {
             try {
                 const changes = JSON.parse(pendingChanges);
-                
                 // For each pending change, send it to the server
                 Promise.all(changes.map(change => {
                     return fetch(change.url, {
@@ -338,9 +336,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     // All changes synced successfully
                     localStorage.removeItem('pending-changes');
                     console.log('All pending changes synced successfully');
-                    
                     // Show notification that changes were synced
                     showSyncNotification();
+                    // After push, pull new/changed data from server
+                    pullLatestData();
                 })
                 .catch(error => {
                     console.error('Error syncing changes:', error);
@@ -348,23 +347,58 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (e) {
                 console.error('Error parsing pending changes:', e);
             }
+        } else {
+            // No pending changes, but still pull latest data
+            pullLatestData();
         }
     }
-    
-    // Function to show a notification that changes were synced
-    function showSyncNotification() {
-        if (offlineBanner) {
-            // Temporarily show online notification
+
+    // Function to pull new/changed data from the server after sync
+    function pullLatestData() {
+        const entities = ['maintenance_records', 'audit_task_completions']; // Add more as needed
+        const lastSyncKey = 'last-sync-timestamps';
+        let lastSyncTimestamps = JSON.parse(localStorage.getItem(lastSyncKey) || '{}');
+        let pullPromises = entities.map(entityType => {
+            const lastSync = lastSyncTimestamps[entityType] || null;
+            return fetch('/api/sync/data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'pull',
+                    entity_type: entityType,
+                    last_sync: lastSync
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.status === 'success' && result.data && result.data.items && result.data.items.length > 0) {
+                    // Store or process the pulled data as needed (e.g., update UI, cache locally)
+                    // For demo: just log and update last sync timestamp
+                    console.log('Pulled new data for', entityType, result.data.items);
+                    // Update last sync timestamp
+                    lastSyncTimestamps[entityType] = new Date().toISOString();
+                    // Optionally, notify user
+                    showDataPulledNotification(entityType, result.data.items.length);
+                }
+            })
+            .catch(err => {
+                console.error('Error pulling data for', entityType, err);
+            });
+        });
+        Promise.all(pullPromises).then(() => {
+            localStorage.setItem(lastSyncKey, JSON.stringify(lastSyncTimestamps));
+        });
+    }
+
+    // Notify user when new data is pulled
+    function showDataPulledNotification(entityType, count) {
+        if (offlineBanner && count > 0) {
             offlineBanner.classList.add('online-notification');
-            offlineBanner.querySelector('i').className = 'fas fa-wifi';
-            offlineBanner.querySelector('span').textContent = 'You are back online. Your changes have been synchronized.';
+            offlineBanner.querySelector('i').className = 'fas fa-sync';
+            offlineBanner.querySelector('span').textContent = `Pulled ${count} new/updated ${entityType.replace('_', ' ')}.`;
             offlineBanner.style.display = 'block';
-            
-            // Hide the notification after 3 seconds
             setTimeout(() => {
                 offlineBanner.style.display = 'none';
-                
-                // Reset to offline style after hiding
                 setTimeout(() => {
                     offlineBanner.classList.remove('online-notification');
                     offlineBanner.querySelector('i').className = 'fas fa-wifi-slash';
