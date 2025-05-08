@@ -2614,6 +2614,7 @@ def sync_data():
         entity_map = {
             'maintenance_records': MaintenanceRecord,
             'audit_task_completions': AuditTaskCompletion,
+            'users': User,  # PATCH: allow user sync
             # Add more entities as needed
         }
         if sync_type == 'push':
@@ -2630,17 +2631,28 @@ def sync_data():
                     obj = entity.query.filter_by(client_id=item['client_id']).first()
                 # Last-write-wins: compare updated_at
                 if obj:
-                    # Only update if incoming is newer
                     incoming_updated = item.get('updated_at')
                     if incoming_updated and (not obj.updated_at or incoming_updated > obj.updated_at.isoformat()):
                         for k, v in item.items():
                             if hasattr(obj, k):
-                                setattr(obj, k, v)
+                                # PATCH: For users, always use property setter for username/email
+                                if entity_type == 'users' and k in ('username', 'email'):
+                                    setattr(obj, k, v)
+                                else:
+                                    setattr(obj, k, v)
                         db.session.add(obj)
                         results.append({'client_id': obj.client_id, 'status': 'updated'})
                 else:
-                    # Create new record
-                    new_obj = entity(**item)
+                    # PATCH: For users, always use property setter for username/email
+                    if entity_type == 'users':
+                        user_kwargs = {k: v for k, v in item.items() if k not in ('username', 'email')}
+                        new_obj = User(**user_kwargs)
+                        if 'username' in item:
+                            new_obj.username = item['username']
+                        if 'email' in item:
+                            new_obj.email = item['email']
+                    else:
+                        new_obj = entity(**item)
                     db.session.add(new_obj)
                     results.append({'client_id': item.get('client_id'), 'status': 'created'})
             db.session.commit()
