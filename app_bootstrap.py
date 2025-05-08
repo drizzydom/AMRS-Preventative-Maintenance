@@ -6,6 +6,14 @@ starting the Flask application
 """
 
 import os
+# Load .env file as early as possible
+from dotenv import load_dotenv
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+dotenv_path = os.path.join(BASE_DIR, '.env')
+load_dotenv(dotenv_path)
+if not os.path.exists(dotenv_path):
+    print(f"[BOOTSTRAP] .env file not found at {dotenv_path}. Using environment variables.")
+
 import sys
 import argparse
 import logging
