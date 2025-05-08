@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['app_bootstrap.py'],
+    ['[app_bootstrap.spec](http:\\_vscodecontentref_\\0)'],
     pathex=[],
     binaries=[],
-    datas=[('.env', '.'), ('templates', 'templates'), ('static', 'static')],  # Include .env, templates, and static folders
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -20,7 +20,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='app_bootstrap',
+    name='0)',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -39,5 +39,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='app_bootstrap',
+    name='0)',
 )
