@@ -1,7 +1,30 @@
-# Include the base requirements
--r requirements.txt
+# Windows-specific requirements for AMRS Maintenance Tracker
+# WebView2-based Windows Application
 
-# Additional Windows-specific packages
-pywin32
-electron-builder>=24.0.0
-cryptography
+# Core Flask requirements (from requirements.txt)
+Flask==2.0.1
+Flask-SQLAlchemy==2.5.1
+Flask-Login==0.5.0
+Flask-Mail==0.9.1
+SQLAlchemy==1.4.23
+Werkzeug==2.0.1
+Jinja2==3.0.1
+MarkupSafe==2.0.1
+itsdangerous==2.0.1
+click==8.0.1
+colorama==0.4.4
+python-dotenv==0.19.0
+
+# WebView2 requirements
+pywebview==4.3.3
+pythonnet==3.0.3
+
+# For packaging Windows application
+pyinstaller==6.3.0
+pywin32==306
+
+# For network requests in bootstrap
+requests==2.31.0
+
+# Database drivers
+psycopg2-binary==2.9.1

@@ -32,3 +32,8 @@ Flask-WTF>=1.0.0
 pytest
 pytest-cov
 cryptography
+
+# WebView2 app dependencies
+pywebview>=4.0.2
+pyinstaller>=5.13.0
+requests>=2.31.0
