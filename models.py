@@ -11,6 +11,7 @@ import base64
 import os
 import hashlib
 import logging
+from secret_config import FERNET_KEY as SECRET_CONFIG_FERNET_KEY
 
 # Set up logger
 logging.basicConfig(level=logging.INFO)
@@ -20,13 +21,7 @@ logger = logging.getLogger(__name__)
 # The encryption key should be set as an environment variable
 FERNET_KEY = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
 if not FERNET_KEY:
-    # Instead of generating a random key in development mode, show a clear error message
-    logger.error("USER_FIELD_ENCRYPTION_KEY environment variable not set.")
-    logger.error("Please set this variable to a valid Fernet key before starting the application.")
-    logger.error("Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
-    logger.error("Use the key_manager.py module to securely store and retrieve this key")
-    
-    # Attempt to use key_manager if available
+    # Try key_manager fallback
     try:
         from key_manager import get_or_create_encryption_key
         logger.info("Attempting to get encryption key from key_manager...")
@@ -37,11 +32,20 @@ if not FERNET_KEY:
             logger.error("Failed to get encryption key from key_manager")
     except ImportError:
         logger.error("key_manager module not available")
-    
-    # If still no key, raise an error
-    if not FERNET_KEY:
-        raise ValueError("USER_FIELD_ENCRYPTION_KEY must be set. Please run the application through app_bootstrap.py")
 
+# Final fallback: use secret_config.py
+if not FERNET_KEY:
+    logger.warning("Falling back to FERNET_KEY from secret_config.py")
+    FERNET_KEY = SECRET_CONFIG_FERNET_KEY
+
+# Always strip whitespace
+FERNET_KEY = (FERNET_KEY or '').strip()
+
+if not FERNET_KEY:
+    raise ValueError("USER_FIELD_ENCRYPTION_KEY must be set. Please run the application through app_bootstrap.py or set a valid key in secret_config.py.")
+
+print(f"FERNET_KEY (repr): {repr(FERNET_KEY)}")
+print(f"FERNET_KEY length: {len(FERNET_KEY)}")
 # Initialize Fernet cipher with the key
 fernet = Fernet(FERNET_KEY)
 

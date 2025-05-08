@@ -15,6 +15,7 @@ import webview
 import requests
 import subprocess
 from pathlib import Path
+import shutil
 
 # Configure logging
 logging.basicConfig(
@@ -53,9 +54,19 @@ def start_flask():
         logger.info(f"Port {FLASK_PORT} is already in use, assuming Flask is running")
         return True
     
-    # Start the Flask app using app_bootstrap.py
+    # Start the Flask app using app_bootstrap.py or app_bootstrap.exe
     try:
-        cmd = [sys.executable, BOOTSTRAP_SCRIPT, '--port', str(FLASK_PORT)]
+        if getattr(sys, 'frozen', False):
+            # Running as a PyInstaller bundle
+            # Launch the bundled app_bootstrap.exe from the same directory
+            bootstrap_exe = os.path.join(os.path.dirname(sys.executable), 'app_bootstrap.exe')
+            if not os.path.exists(bootstrap_exe):
+                raise RuntimeError(f"app_bootstrap.exe not found at {bootstrap_exe}")
+            cmd = [bootstrap_exe, '--port', str(FLASK_PORT)]
+        else:
+            python_exe = sys.executable
+            bootstrap_script = BOOTSTRAP_SCRIPT
+            cmd = [python_exe, bootstrap_script, '--port', str(FLASK_PORT)]
         logger.info(f"Running command: {' '.join(cmd)}")
         
         # Start process with output redirected to PIPE
