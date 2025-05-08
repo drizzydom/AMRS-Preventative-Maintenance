@@ -182,6 +182,8 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 # Define dotenv_path before using it
 dotenv_path = os.path.join(BASE_DIR, '.env')
 load_dotenv(dotenv_path)
+if not os.path.exists(dotenv_path):
+    print(f"[APP] .env file not found at {dotenv_path}. Using environment variables.")
 
 # Ensure .env file exists
 def ensure_env_file():
