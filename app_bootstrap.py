@@ -8,13 +8,37 @@ starting the Flask application
 import os
 # Load .env file as early as possible
 from dotenv import load_dotenv
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-dotenv_path = os.path.join(BASE_DIR, '.env')
+import sys
+
+# Determine the directory to look for .env
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Running as a PyInstaller bundle
+    exe_dir = os.path.dirname(sys.executable)
+else:
+    exe_dir = os.path.dirname(os.path.abspath(__file__))
+
+dotenv_path = os.path.join(exe_dir, '.env')
 load_dotenv(dotenv_path)
 if not os.path.exists(dotenv_path):
     print(f"[BOOTSTRAP] .env file not found at {dotenv_path}. Using environment variables.")
+else:
+    # Secure the .env file on Windows so only the current user can read/write
+    if os.name == 'nt':
+        try:
+            import win32security
+            import ntsecuritycon as con
+            import win32api
+            import win32con
+            user, domain, type = win32security.LookupAccountName('', win32api.GetUserName())
+            sd = win32security.GetFileSecurity(dotenv_path, win32security.DACL_SECURITY_INFORMATION)
+            dacl = win32security.ACL()
+            dacl.AddAccessAllowedAce(win32security.ACL_REVISION, con.FILE_GENERIC_READ | con.FILE_GENERIC_WRITE, user)
+            sd.SetSecurityDescriptorDacl(1, dacl, 0)
+            win32security.SetFileSecurity(dotenv_path, win32security.DACL_SECURITY_INFORMATION, sd)
+            print(f"[BOOTSTRAP] Secured .env file permissions for user: {win32api.GetUserName()}")
+        except Exception as e:
+            print(f"[BOOTSTRAP] Warning: Could not set .env file permissions: {e}")
 
-import sys
 import argparse
 import logging
 import tempfile
@@ -27,6 +51,20 @@ import requests
 import secrets
 import base64
 from pathlib import Path
+
+try:
+    from secret_config import ENCRYPTED_SECRET, FERNET_KEY
+except ImportError:
+    ENCRYPTED_SECRET = None
+    FERNET_KEY = None
+
+from cryptography.fernet import Fernet
+
+def get_decrypted_secret():
+    if ENCRYPTED_SECRET is None or FERNET_KEY is None:
+        raise RuntimeError("Encrypted secret or key not found. Please provide secret_config.py.")
+    f = Fernet(FERNET_KEY)
+    return f.decrypt(ENCRYPTED_SECRET).decode()
 
 # Configure logging
 logging.basicConfig(
@@ -56,24 +94,24 @@ def setup_environment_variables():
     if 'APP_MODE' not in os.environ:
         os.environ['APP_MODE'] = 'development'
     
-    # Handle encryption key using secure key manager
+    # Handle encryption key using secure key manager or bundled secret
     if 'USER_FIELD_ENCRYPTION_KEY' not in os.environ:
         try:
-            # Import our key manager
+            # Try to get from key manager first
             sys.path.insert(0, SCRIPT_DIR)
             from key_manager import get_or_create_encryption_key
-            
-            # Get the encryption key from the key manager
             encryption_key = get_or_create_encryption_key()
             if encryption_key:
                 os.environ['USER_FIELD_ENCRYPTION_KEY'] = encryption_key
                 logger.info("Retrieved encryption key from secure storage")
             else:
-                logger.error("Failed to get encryption key - sync with server may not work")
-                # Allow app to continue but with warnings - the models.py will show appropriate errors
-        except ImportError:
-            logger.error("Could not import key_manager module. Make sure it's in the application directory")
-            # Continue without setting the key - the models.py file will handle the error situation
+                # Fallback: use bundled encrypted secret
+                os.environ['USER_FIELD_ENCRYPTION_KEY'] = get_decrypted_secret()
+                logger.info("Set encryption key from bundled encrypted secret")
+        except Exception:
+            # Fallback: use bundled encrypted secret
+            os.environ['USER_FIELD_ENCRYPTION_KEY'] = get_decrypted_secret()
+            logger.info("Set encryption key from bundled encrypted secret (fallback)")
 
     # For packaged app, make sure we use SQLite if no DB URL is set
     if is_packaged_app() and 'DATABASE_URL' not in os.environ:

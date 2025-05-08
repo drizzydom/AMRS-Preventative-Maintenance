@@ -53,6 +53,7 @@ log.txt
 .env
 secrets.py
 credentials.py
+secret_config.py
 *.pem
 *.key
 
