@@ -105,12 +105,18 @@ def resource_path(relative_path):
         base_path = os.path.abspath(os.path.dirname(__file__))
     return os.path.join(base_path, relative_path)
 
+# --- Determine template and static folder paths ---
+template_folder = os.environ.get('TEMPLATES_FOLDER') or resource_path('templates')
+static_folder = os.environ.get('STATIC_FOLDER') or resource_path('static')
+print(f"[APP] Using template folder: {template_folder}")
+print(f"[APP] Using static folder: {static_folder}")
+
 # Initialize Flask app with correct template/static folders for bundled app
 app = Flask(
     __name__,
     instance_relative_config=True,
-    template_folder=resource_path('templates'),
-    static_folder=resource_path('static')
+    template_folder=template_folder,
+    static_folder=static_folder
 )
 
 # Load configuration from config.py for secure local database
