@@ -11,17 +11,19 @@ from dotenv import load_dotenv
 import sys
 
 # Determine the directory to look for .env
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+if getattr(sys, 'frozen', False):
     # Running as a PyInstaller bundle
     exe_dir = os.path.dirname(sys.executable)
 else:
     exe_dir = os.path.dirname(os.path.abspath(__file__))
 
 dotenv_path = os.path.join(exe_dir, '.env')
+print(f"[BOOTSTRAP] Looking for .env at: {dotenv_path}")
 load_dotenv(dotenv_path)
 if not os.path.exists(dotenv_path):
     print(f"[BOOTSTRAP] .env file not found at {dotenv_path}. Using environment variables.")
 else:
+    print(f"[BOOTSTRAP] .env file loaded from {dotenv_path}")
     # Secure the .env file on Windows so only the current user can read/write
     if os.name == 'nt':
         try:
@@ -38,6 +40,9 @@ else:
             print(f"[BOOTSTRAP] Secured .env file permissions for user: {win32api.GetUserName()}")
         except Exception as e:
             print(f"[BOOTSTRAP] Warning: Could not set .env file permissions: {e}")
+
+# After loading dotenv, print the value for debugging
+print("[BOOTSTRAP] USER_FIELD_ENCRYPTION_KEY from env:", os.environ.get("USER_FIELD_ENCRYPTION_KEY"))
 
 import argparse
 import logging
@@ -94,27 +99,13 @@ def setup_environment_variables():
     if 'APP_MODE' not in os.environ:
         os.environ['APP_MODE'] = 'development'
     
-    # Handle encryption key using secure key manager or bundled secret
+    # Only use environment variable for encryption key
     if 'USER_FIELD_ENCRYPTION_KEY' not in os.environ:
-        try:
-            # Try to get from key manager first
-            sys.path.insert(0, SCRIPT_DIR)
-            from key_manager import get_or_create_encryption_key
-            encryption_key = get_or_create_encryption_key()
-            if encryption_key:
-                os.environ['USER_FIELD_ENCRYPTION_KEY'] = encryption_key
-                logger.info("Retrieved encryption key from secure storage")
-            else:
-                # Fallback: use bundled encrypted secret
-                os.environ['USER_FIELD_ENCRYPTION_KEY'] = get_decrypted_secret()
-                logger.info("Set encryption key from bundled encrypted secret")
-        except Exception:
-            # Fallback: use bundled encrypted secret
-            os.environ['USER_FIELD_ENCRYPTION_KEY'] = get_decrypted_secret()
-            logger.info("Set encryption key from bundled encrypted secret (fallback)")
+        logger.error("USER_FIELD_ENCRYPTION_KEY environment variable not set. Set this variable before starting the application.")
+        sys.exit(1)
 
     # For packaged app, make sure we use SQLite if no DB URL is set
-    if is_packaged_app() and 'DATABASE_URL' not in os.environ:
+    if 'DATABASE_URL' not in os.environ:
         # Create a data directory inside the user's home directory
         data_dir = os.path.join(os.path.expanduser('~'), '.amrs-maintenance-tracker')
         os.makedirs(data_dir, exist_ok=True)
@@ -123,6 +114,10 @@ def setup_environment_variables():
         db_path = os.path.join(data_dir, 'maintenance_tracker.db')
         os.environ['DATABASE_URL'] = f'sqlite:///{db_path}'
         logger.info(f"Using SQLite database at: {db_path}")
+        
+        # Set offline mode flag
+        os.environ['OFFLINE_MODE'] = 'true'
+        logger.info("Running in offline mode")
 
 def is_packaged_app():
     """Check if running as a packaged application"""
@@ -198,6 +193,20 @@ def extract_resources():
     
     return templates_dir, static_dir
 
+def extract_resource_dir(resource_name, dest_dir):
+    """Extract a resource directory from the PyInstaller bundle"""
+    bundle_dir = getattr(sys, '_MEIPASS', None)
+    if not bundle_dir:
+        return None
+    src = os.path.join(bundle_dir, resource_name)
+    if os.path.exists(src):
+        dest = os.path.join(dest_dir, resource_name)
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
+        return dest
+    return None
+
 def start_flask_server(port, templates_dir=None, static_dir=None):
     """Start the Flask server with the specified port and resource directories"""
     global FLASK_URL
@@ -229,8 +238,21 @@ def main():
     # Set up environment variables
     setup_environment_variables()
     
-    # Extract resources if running as a packaged app
-    templates_dir, static_dir = extract_resources()
+    # If running as a PyInstaller bundle, extract templates/static to temp dir
+    if getattr(sys, 'frozen', False):
+        temp_dir = tempfile.mkdtemp(prefix='amrs_resources_')
+        templates_dir = extract_resource_dir('templates', temp_dir)
+        static_dir = extract_resource_dir('static', temp_dir)
+        if templates_dir:
+            os.environ['TEMPLATES_FOLDER'] = templates_dir
+        if static_dir:
+            os.environ['STATIC_FOLDER'] = static_dir
+        # Optionally, clean up temp_dir on exit
+        import atexit
+        atexit.register(lambda: shutil.rmtree(temp_dir, ignore_errors=True))
+    else:
+        # Extract resources if running as a packaged app
+        templates_dir, static_dir = extract_resources()
     
     # Start the Flask server
     start_flask_server(port, templates_dir, static_dir)
