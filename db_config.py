@@ -32,12 +32,17 @@ def configure_database(app):
                 print(f"[DB_CONFIG] Fallback to local maintenance.db")
         else:
             # Get database URI from environment or use default
+            instance_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+            if not os.path.exists(instance_dir):
+                print(f"[DB_CONFIG] Creating instance directory: {instance_dir}")
+                os.makedirs(instance_dir, exist_ok=True)
             app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/maintenance.db'
             print(f"[DB_CONFIG] Using local SQLite database at instance/maintenance.db")
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    # Only set engine options for non-in-memory SQLite and non-SQLite databases
+
+    # Only set engine options for non-SQLite databases
     uri = app.config['SQLALCHEMY_DATABASE_URI']
-    if not (uri.startswith('sqlite:///:memory:') or uri.startswith('sqlite://') and ':memory:' in uri):
+    if not uri.startswith('sqlite://'):
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
             'pool_size': 10,
             'pool_recycle': 1800,
