@@ -31,6 +31,59 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/offline.css') }}">
     
+    <!-- Offline Mode CSS -->
+    <style>
+        .connection-status {
+            display: flex;
+            align-items: center;
+            margin-left: auto;
+            margin-right: 15px;
+            color: #6c757d;
+            font-size: 0.8rem;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-online {
+            background-color: #28a745;
+        }
+        .status-offline {
+            background-color: #dc3545;
+        }
+        .offline-banner {
+            position: fixed;
+            top: 48px; /* Below navbar */
+            left: 0;
+            right: 0;
+            background-color: #f8d7da;
+            color: #842029;
+            padding: 5px;
+            text-align: center;
+            z-index: 1000;
+            font-size: 0.9rem;
+            border-bottom: 1px solid #f5c2c7;
+        }
+        body.has-offline-banner .content-container {
+            margin-top: 30px; /* Adjust content when banner is shown */
+        }
+        
+        .sync-status {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background-color: rgba(0,0,0,0.05);
+        }
+        .sync-status:hover {
+            background-color: rgba(0,0,0,0.1);
+        }
+    </style>
+    
     {% block extra_css %}{% endblock %}
     
     <!-- Core layout styles - using higher specificity instead of !important -->
@@ -384,12 +437,40 @@
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">
                     <i class="fas fa-tools me-2"></i> AMRS Maintenance
                 </a>
+                
+                {% if offline_mode %}
+                <div class="connection-status d-none d-sm-flex">
+                    <span class="status-indicator status-offline"></span>
+                    <span id="connection-status" class="status-offline">Offline Mode</span>
+                </div>
+                {% endif %}
+                
                 <div class="ms-auto">
                     <a href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer" class="nav-link">Visit Main Site</a>
                 </div>
             </div>
         </nav>
     </header>
+
+    {% if offline_mode %}
+    <div class="offline-banner">
+        <div class="d-flex justify-content-between align-items-center px-3">
+            <div>
+                <i class="fas fa-server me-1"></i> 
+                <strong>Offline Mode Active</strong> - Working with local database
+            </div>
+            <div class="sync-status" id="sync-status-container">
+                <span id="sync-status" class="me-2">Sync Status</span>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" id="manual-sync-button">
+                    <i class="fas fa-sync-alt me-1"></i> Sync
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.body.classList.add('has-offline-banner');
+    </script>
+    {% endif %}
 
     <div class="container-fluid centered-layout">
         <div class="row">

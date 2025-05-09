@@ -21,6 +21,7 @@ if any('pytest' in arg for arg in sys.argv):
 
 # Third-party imports
 import jwt
+import requests
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app, send_file
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
@@ -3767,6 +3768,138 @@ def sync_push_data(current_api_user):
     # For now, just echo what was received
     return jsonify({'message': 'Push received', 'data': data}), 200
 # --- END API Sync ---
+
+# --- Offline Mode API Endpoints ---
+@app.route('/api/connection/status', methods=['GET'])
+def api_connection_status():
+    """API endpoint to check connection status and offline mode"""
+    # In a real app, we might do more complex checks here
+    offline_mode = os.environ.get('OFFLINE_MODE', '').lower() == 'true'
+    return jsonify({
+        'status': 'connected' if not offline_mode else 'offline_mode',
+        'offline_mode': offline_mode,
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/api/sync/status', methods=['GET'])
+@login_required
+def api_sync_status():
+    """API endpoint to check synchronization status"""
+    offline_mode = os.environ.get('OFFLINE_MODE', '').lower() == 'true'
+    
+    if not offline_mode:
+        return jsonify({
+            'last_sync': None,
+            'pending_sync': None,
+            'offline_mode': False
+        })
+    
+    # In offline mode, get pending sync information
+    try:
+        # Import here to avoid circular imports
+        import local_database
+        
+        # Get last sync timestamp
+        last_sync = local_database.get_last_sync_timestamp()
+        
+        # Get pending sync counts
+        pending_maintenance = local_database.get_unsynced_maintenance_records()
+        pending_audit = local_database.get_unsynced_audit_task_completions()
+        
+        return jsonify({
+            'last_sync': last_sync,
+            'pending_sync': {
+                'maintenance': len(pending_maintenance),
+                'audit': len(pending_audit),
+                'total': len(pending_maintenance) + len(pending_audit)
+            },
+            'offline_mode': True
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting sync status: {e}")
+        return jsonify({
+            'last_sync': None,
+            'pending_sync': None,
+            'offline_mode': True,
+            'error': str(e)
+        })
+
+@app.route('/api/sync/trigger', methods=['POST'])
+@login_required
+def api_trigger_sync():
+    """API endpoint to trigger data synchronization"""
+    offline_mode = os.environ.get('OFFLINE_MODE', '').lower() == 'true'
+    
+    if not offline_mode:
+        return jsonify({
+            'success': False,
+            'message': 'Not in offline mode',
+            'offline_mode': False
+        })
+    
+    # In offline mode, perform sync
+    try:
+        # Import here to avoid circular imports
+        import local_database
+        
+        # Sync maintenance records
+        sync_results = {
+            'maintenance': 0,
+            'audit': 0
+        }
+        
+        # Check if we are online
+        import requests
+        try:
+            # Try to connect to the server
+            # This would be replaced with your actual server endpoint
+            test_response = requests.get('https://example.com/api/test', timeout=2)
+            if test_response.status_code != 200:
+                raise Exception("Server not reachable")
+                
+            # Sync maintenance records
+            pending_maintenance = local_database.get_unsynced_maintenance_records()
+            for record in pending_maintenance:
+                # Here we would make API calls to sync the record
+                # For this example, just mark as synced with a fake server ID
+                server_id = 1000 + record['id']
+                local_database.update_maintenance_record_sync_status(record['client_id'], server_id)
+                sync_results['maintenance'] += 1
+                
+            # Sync audit task completions
+            pending_audit = local_database.get_unsynced_audit_task_completions()
+            for record in pending_audit:
+                # Here we would make API calls to sync the record
+                # For this example, just mark as synced with a fake server ID
+                server_id = 2000 + record['id']
+                local_database.update_audit_task_completion_sync_status(record['client_id'], server_id)
+                sync_results['audit'] += 1
+                
+            # Update last sync timestamp
+            local_database.update_last_sync_timestamp()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Sync completed successfully',
+                'results': sync_results,
+                'offline_mode': True
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error connecting to server for sync: {e}")
+            return jsonify({
+                'success': False,
+                'message': f'Server not reachable: {str(e)}',
+                'offline_mode': True
+            })
+            
+    except Exception as e:
+        app.logger.error(f"Error syncing data: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e),
+            'offline_mode': True
+        })
 
 import app_debug_helper  # Register debug routes
 

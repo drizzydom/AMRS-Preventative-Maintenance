@@ -14,6 +14,29 @@
     <!-- App Theme CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
+    <!-- Offline Mode CSS -->
+    <style>
+        .status-online {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-offline {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .offline-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #f8d7da;
+            color: #842029;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            border: 1px solid #f5c2c7;
+        }
+    </style>
+    
     <style>
         body {
             height: 100vh;
@@ -56,6 +79,11 @@
 </head>
 <body class="text-center">
     <div class="login-form">
+        {% if offline_mode %}
+        <div class="offline-badge">
+            <i class="fas fa-server"></i> Offline Mode
+        </div>
+        {% endif %}
         <div class="card">
             <div class="card-header">
                 <h1 class="h3 mb-3 fw-normal">AMRS Maintenance</h1>
