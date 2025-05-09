@@ -72,7 +72,7 @@
                     {% endif %}
                 {% endwith %}
                 
-                <form action="{{ url_for('login') }}" method="post">
+                <form id="loginForm" action="{{ url_for('login') }}" method="post">
                     <div class="form-floating mb-3">
                         <input type="text" class="form-control" id="username" name="username" placeholder="Username" required>
                         <label for="username">Username</label>
@@ -100,5 +100,88 @@
     
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Attempt to clear the stored token when the login page loads.
+        // This handles logout scenarios where the user is redirected here.
+        (async () => {
+            if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.clear_token === 'function') {
+                try {
+                    console.log('Attempting to clear token on login page load...');
+                    const result = await window.pywebview.api.clear_token();
+                    console.log('Token clear attempt result:', result);
+                } catch (e) {
+                    console.error('Error calling clear_token:', e);
+                }
+            } else {
+                console.log('pywebview API for clear_token not found. Skipping token clear.');
+            }
+        })();
+
+        document.getElementById('loginForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); // Prevent default form submission
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            // Clear previous flash messages
+            const existingAlerts = document.querySelectorAll('.alert');
+            existingAlerts.forEach(alert => alert.remove());
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest' // Often helpful for server-side differentiation
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.store_token === 'function') {
+                        await window.pywebview.api.store_token(result.token);
+                        // Token stored, now redirect
+                        window.location.href = result.redirectTo;
+                    } else {
+                        console.error('pywebview API for token storage not found. Redirecting without storing token.');
+                        // Fallback or error handling if pywebview API is not available
+                        // For now, just redirecting. Consider displaying an error to the user.
+                        window.location.href = result.redirectTo;
+                    }
+                } else {
+                    // Display error message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger';
+                    alertDiv.setAttribute('role', 'alert');
+                    alertDiv.textContent = result.message || 'Login failed. Please try again.';
+                    
+                    // Insert alert before the form
+                    const cardBody = form.closest('.card-body');
+                    if (cardBody) {
+                        cardBody.insertBefore(alertDiv, form);
+                    } else {
+                        // Fallback if card-body isn't found (should not happen with current HTML structure)
+                        form.parentNode.insertBefore(alertDiv, form);
+                    }
+                }
+            } catch (error) {
+                console.error('Login request failed:', error);
+                // Display a generic error message
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.setAttribute('role', 'alert');
+                alertDiv.textContent = 'An unexpected error occurred. Please try again.';
+                const cardBody = form.closest('.card-body');
+                if (cardBody) {
+                    cardBody.insertBefore(alertDiv, form);
+                } else {
+                    form.parentNode.insertBefore(alertDiv, form);
+                }
+            }
+        });
+    </script>
 </body>
 </html>
