@@ -283,6 +283,51 @@ def create_local_maintenance_record(db_path: Path, encryption_key: str, data: di
         conn.rollback()
         return None
 
+def update_local_maintenance_record(db_path: Path, encryption_key: str, client_id: str, update_data: dict) -> bool:
+    """Updates an existing local maintenance record identified by its client_id.
+    Sets is_synced to 0 and updates last_modified.
+    Returns True on success, False on failure.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    cursor = conn.cursor()
+    current_ts = _get_current_timestamp_iso()
+
+    allowed_fields = ['part_id', 'user_id', 'machine_id', 'date', 'comments', 
+                      'maintenance_type', 'description', 'performed_by', 'status', 'notes']
+    
+    set_clauses = []
+    params = []
+
+    for field in allowed_fields:
+        if field in update_data:
+            set_clauses.append(f"{field} = ?")
+            params.append(update_data[field])
+    
+    if not set_clauses:
+        logger.warning(f"No valid fields provided for updating maintenance record with client_id: {client_id}")
+        return False
+
+    set_clauses.append("is_synced = 0")
+    set_clauses.append("last_modified = ?")
+    params.append(current_ts)
+    params.append(client_id)
+
+    update_query = f"UPDATE maintenance_records SET {', '.join(set_clauses)} WHERE client_id = ?"
+
+    try:
+        cursor.execute(update_query, tuple(params))
+        conn.commit()
+        if cursor.rowcount > 0:
+            logger.info(f"Updated local maintenance record with client_id: {client_id}")
+            return True
+        else:
+            logger.warning(f"No maintenance record found with client_id: {client_id} to update.")
+            return False
+    except Exception as e:
+        logger.error(f"Error updating local maintenance record (client_id: {client_id}): {e}")
+        conn.rollback()
+        return False
+
 def create_local_audit_task_completion(db_path: Path, encryption_key: str, data: dict) -> str | None:
     """Creates a new audit task completion locally, originating from the client.
     Expects FKs (audit_task_id, machine_id, completed_by) to be local IDs already.
@@ -312,6 +357,51 @@ def create_local_audit_task_completion(db_path: Path, encryption_key: str, data:
         logger.error(f"Error creating local audit task completion: {e}")
         conn.rollback()
         return None
+
+def update_local_audit_task_completion(db_path: Path, encryption_key: str, client_id: str, update_data: dict) -> bool:
+    """Updates an existing local audit task completion identified by its client_id.
+    Sets is_synced to 0 and updates last_modified.
+    Returns True on success, False on failure.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    cursor = conn.cursor()
+    current_ts = _get_current_timestamp_iso()
+
+    allowed_fields = ['audit_task_id', 'machine_id', 'date', 'completed', 
+                      'completed_by', 'completed_at'] # 'notes' is not in local schema yet
+
+    set_clauses = []
+    params = []
+
+    for field in allowed_fields:
+        if field in update_data:
+            set_clauses.append(f"{field} = ?")
+            params.append(update_data[field])
+
+    if not set_clauses:
+        logger.warning(f"No valid fields provided for updating audit task completion with client_id: {client_id}")
+        return False
+
+    set_clauses.append("is_synced = 0")
+    set_clauses.append("last_modified = ?")
+    params.append(current_ts)
+    params.append(client_id)
+
+    update_query = f"UPDATE audit_task_completions SET {', '.join(set_clauses)} WHERE client_id = ?"
+
+    try:
+        cursor.execute(update_query, tuple(params))
+        conn.commit()
+        if cursor.rowcount > 0:
+            logger.info(f"Updated local audit task completion with client_id: {client_id}")
+            return True
+        else:
+            logger.warning(f"No audit task completion found with client_id: {client_id} to update.")
+            return False
+    except Exception as e:
+        logger.error(f"Error updating local audit task completion (client_id: {client_id}): {e}")
+        conn.rollback()
+        return False
 
 # --- Functions for reading local data for UI --- 
 
@@ -895,6 +985,225 @@ def update_sync_status(db_path: Path, encryption_key: str, table_name: str, clie
     except Exception as e:
         logger.error(f"Error updating sync status for {table_name} client_id {client_id}: {e}")
         conn.rollback()
+
+def soft_delete_local_maintenance_record(db_path: Path, encryption_key: str, client_id: str) -> bool:
+    """Marks a maintenance record as deleted locally by setting a 'deleted' flag.
+    This allows the deletion to be synchronized with the server.
+    Returns True on success, False on failure.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    cursor = conn.cursor()
+    current_ts = _get_current_timestamp_iso()
+
+    # First, check if the table has the 'deleted' column, add it if it doesn't
+    try:
+        cursor.execute("PRAGMA table_info(maintenance_records)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'deleted' not in columns:
+            logger.info("Adding 'deleted' column to maintenance_records table")
+            cursor.execute("ALTER TABLE maintenance_records ADD COLUMN deleted INTEGER DEFAULT 0")
+        
+        # Mark the record as deleted and set is_synced to 0 to push the deletion to server
+        update_query = """
+        UPDATE maintenance_records
+        SET deleted = 1, is_synced = 0, last_modified = ?
+        WHERE client_id = ?
+        """
+        
+        cursor.execute(update_query, (current_ts, client_id))
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            logger.info(f"Soft deleted maintenance record with client_id: {client_id}")
+            return True
+        else:
+            logger.warning(f"No maintenance record found with client_id: {client_id} to delete.")
+            return False
+    except Exception as e:
+        logger.error(f"Error soft deleting maintenance record (client_id: {client_id}): {e}")
+        conn.rollback()
+        return False
+
+
+def hard_delete_local_maintenance_record(db_path: Path, encryption_key: str, client_id: str) -> bool:
+    """Permanently deletes a maintenance record from the local database.
+    This should only be used when the record doesn't need to be synced with the server
+    (e.g., it was never synced, or the deletion has been confirmed by the server).
+    Returns True on success, False on failure.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    cursor = conn.cursor()
+
+    try:
+        delete_query = "DELETE FROM maintenance_records WHERE client_id = ?"
+        cursor.execute(delete_query, (client_id,))
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            logger.info(f"Hard deleted maintenance record with client_id: {client_id}")
+            return True
+        else:
+            logger.warning(f"No maintenance record found with client_id: {client_id} to hard delete.")
+            return False
+    except Exception as e:
+        logger.error(f"Error hard deleting maintenance record (client_id: {client_id}): {e}")
+        conn.rollback()
+        return False
+
+
+def soft_delete_local_audit_task_completion(db_path: Path, encryption_key: str, client_id: str) -> bool:
+    """Marks an audit task completion as deleted locally by setting a 'deleted' flag.
+    This allows the deletion to be synchronized with the server.
+    Returns True on success, False on failure.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    cursor = conn.cursor()
+    current_ts = _get_current_timestamp_iso()
+
+    # First, check if the table has the 'deleted' column, add it if it doesn't
+    try:
+        cursor.execute("PRAGMA table_info(audit_task_completions)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'deleted' not in columns:
+            logger.info("Adding 'deleted' column to audit_task_completions table")
+            cursor.execute("ALTER TABLE audit_task_completions ADD COLUMN deleted INTEGER DEFAULT 0")
+        
+        # Mark the record as deleted and set is_synced to 0 to push the deletion to server
+        update_query = """
+        UPDATE audit_task_completions
+        SET deleted = 1, is_synced = 0, last_modified = ?
+        WHERE client_id = ?
+        """
+        
+        cursor.execute(update_query, (current_ts, client_id))
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            logger.info(f"Soft deleted audit task completion with client_id: {client_id}")
+            return True
+        else:
+            logger.warning(f"No audit task completion found with client_id: {client_id} to delete.")
+            return False
+    except Exception as e:
+        logger.error(f"Error soft deleting audit task completion (client_id: {client_id}): {e}")
+        conn.rollback()
+        return False
+
+
+def hard_delete_local_audit_task_completion(db_path: Path, encryption_key: str, client_id: str) -> bool:
+    """Permanently deletes an audit task completion from the local database.
+    This should only be used when the record doesn't need to be synced with the server
+    (e.g., it was never synced, or the deletion has been confirmed by the server).
+    Returns True on success, False on failure.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    cursor = conn.cursor()
+
+    try:
+        delete_query = "DELETE FROM audit_task_completions WHERE client_id = ?"
+        cursor.execute(delete_query, (client_id,))
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            logger.info(f"Hard deleted audit task completion with client_id: {client_id}")
+            return True
+        else:
+            logger.warning(f"No audit task completion found with client_id: {client_id} to hard delete.")
+            return False
+    except Exception as e:
+        logger.error(f"Error hard deleting audit task completion (client_id: {client_id}): {e}")
+        conn.rollback()
+        return False
+
+def get_deleted_maintenance_records(db_path: Path, encryption_key: str) -> list:
+    """Retrieves maintenance records that have been marked as deleted but not yet synced.
+    This is used during syncing to inform the server about deletions.
+    Returns a list of dictionaries with client_id and server_id for deletion synchronization.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    if not conn:
+        logger.error("Cannot get deleted maintenance records, database connection failed.")
+        return []
+
+    query = """
+    SELECT client_id, server_id FROM maintenance_records
+    WHERE deleted = 1 AND is_synced = 0 AND server_id IS NOT NULL
+    """
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        results = [dict(row) for row in cursor.fetchall()]
+        logger.info(f"Retrieved {len(results)} deleted maintenance records for syncing.")
+        return results
+    except Exception as e:
+        logger.error(f"Error retrieving deleted maintenance records: {e}")
+        return []
+
+
+def get_deleted_audit_task_completions(db_path: Path, encryption_key: str) -> list:
+    """Retrieves audit task completions that have been marked as deleted but not yet synced.
+    This is used during syncing to inform the server about deletions.
+    Returns a list of dictionaries with client_id and server_id for deletion synchronization.
+    """
+    conn = get_db_connection(db_path, encryption_key)
+    if not conn:
+        logger.error("Cannot get deleted audit task completions, database connection failed.")
+        return []
+
+    query = """
+    SELECT client_id, server_id FROM audit_task_completions
+    WHERE deleted = 1 AND is_synced = 0 AND server_id IS NOT NULL
+    """
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        results = [dict(row) for row in cursor.fetchall()]
+        logger.info(f"Retrieved {len(results)} deleted audit task completions for syncing.")
+        return results
+    except Exception as e:
+        logger.error(f"Error retrieving deleted audit task completions: {e}")
+        return []
+
+
+def clean_up_synced_deletions(db_path: Path, encryption_key: str, table_name: str, client_ids: list) -> int:
+    """Permanently removes records that have been marked as deleted and
+    successfully synced with the server.
+    
+    Args:
+        db_path: Path to the database file
+        encryption_key: Encryption key for the database
+        table_name: Name of the table to clean up (maintenance_records or audit_task_completions)
+        client_ids: List of client_ids whose deletion has been confirmed by the server
+        
+    Returns:
+        Number of records permanently removed
+    """
+    if not client_ids:
+        return 0
+        
+    conn = get_db_connection(db_path, encryption_key)
+    if not conn:
+        logger.error(f"Cannot clean up synced deletions, database connection failed.")
+        return 0
+        
+    placeholders = ','.join(['?'] * len(client_ids))
+    delete_query = f"DELETE FROM {table_name} WHERE client_id IN ({placeholders})"
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute(delete_query, tuple(client_ids))
+        conn.commit()
+        deleted_count = cursor.rowcount
+        logger.info(f"Permanently removed {deleted_count} synced deletions from {table_name}.")
+        return deleted_count
+    except Exception as e:
+        logger.error(f"Error cleaning up synced deletions from {table_name}: {e}")
+        conn.rollback()
+        return 0
 
 if __name__ == '__main__':
     example_db_path = Path.home() / ".amrs_test_data/instance/test_local_app.db"

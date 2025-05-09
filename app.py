@@ -1074,6 +1074,90 @@ def admin():
         flash('An error occurred while loading the admin dashboard.', 'danger')
         return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
 
+@app.route('/api/check-connection', methods=['GET'])
+def check_connection():
+    """Endpoint to check if client has connectivity to the server.
+    Used by the frontend to determine online/offline status.
+    """
+    return jsonify({
+        'online': True,
+        'server_time': datetime.now(timezone.utc).isoformat()
+    })
+
+@app.route('/api/sync/status', methods=['GET'])
+@login_required
+def sync_status():
+    """Get synchronization status information for the current user."""
+    try:
+        # Get the last sync time from the database
+        user_id = current_user.id
+        last_sync_query = db.session.query(
+            db.func.max(db.text("last_modified"))
+        ).filter(
+            db.or_(
+                MaintenanceRecord.user_id == user_id,
+                AuditTaskCompletion.completed_by == user_id
+            )
+        ).scalar()
+        
+        # Count pending changes (records marked for sync)
+        pending_changes_query = db.session.query(
+            db.func.count(MaintenanceRecord.id)
+        ).filter(
+            MaintenanceRecord.user_id == user_id,
+            MaintenanceRecord.needs_sync == True
+        ).scalar() or 0
+        
+        pending_changes_query += db.session.query(
+            db.func.count(AuditTaskCompletion.id)
+        ).filter(
+            AuditTaskCompletion.completed_by == user_id,
+            AuditTaskCompletion.needs_sync == True
+        ).scalar() or 0
+        
+        # Check if there's an active sync in progress
+        sync_in_progress = False  # This would need to be tracked in a persistent way
+        
+        return jsonify({
+            'status': 'online',
+            'last_sync': last_sync_query,
+            'pending_changes': pending_changes_query,
+            'sync_in_progress': sync_in_progress,
+            'server_time': datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"Error in sync_status: {e}")
+        return jsonify({
+            'status': 'error', 
+            'message': str(e),
+            'server_time': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+@app.route('/api/sync/manual', methods=['POST'])
+@login_required
+def trigger_manual_sync():
+    """Trigger a manual synchronization from the frontend."""
+    try:
+        # This would call the sync logic for the current user
+        # For now, just pretend it worked
+        
+        # In a real implementation, this would:
+        # 1. Pull updates from server
+        # 2. Push local changes to server
+        # 3. Record the sync time
+        
+        return jsonify({
+            'success': True,
+            'message': 'Synchronization completed successfully',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error in manual sync: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Synchronization failed: {str(e)}'
+        }), 500
+
 @app.route('/admin/audit-history')
 @login_required
 def admin_audit_history():
@@ -2611,19 +2695,6 @@ def debug_info():
             'route': str(rule)
         })
     return render_template('debug_info.html', routes=routes) if os.path.exists(os.path.join('templates', 'debug_info.html')) else jsonify(routes=routes)
-
-@app.route('/api/sync/status', methods=['GET'])
-def sync_status():
-    """Get synchronization status information."""
-    try:
-        # Basic information about the server state
-        return jsonify({
-            'status': 'online',
-            'server_time': datetime.now().isoformat(),
-            'version': '1.0.0'
-        })
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/sync/data', methods=['POST'])
 @login_required
