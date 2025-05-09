@@ -336,6 +336,148 @@ class Api:
         logger.info(f"Synchronization attempt finished. Overall success: {final_success}. Message: {final_message}")
         return {"success": final_success, "message": final_message, "details": sync_results}
 
+    # --- Offline-capable data access methods for UI ---
+    def get_sites(self): # Renamed from get_local_sites
+        logger.info("Api.get_sites called")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured.", "data": []}
+        try:
+            sites = local_database.get_all_local_records(self.local_db_file, self.db_encryption_key, 'sites')
+            logger.info(f"Retrieved {len(sites)} sites from local DB.")
+            return {"success": True, "message": "Sites retrieved locally.", "data": sites}
+        except Exception as e:
+            logger.error(f"Error getting sites: {e}", exc_info=True)
+            return {"success": False, "message": f"Error getting sites: {e}", "data": []}
+
+    def get_machines_for_site(self, site_id): # Renamed from get_local_machines_for_site
+        logger.info(f"Api.get_machines_for_site called for site_id: {site_id}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured.", "data": []}
+        try:
+            machines = local_database.get_local_records_by_fk(self.local_db_file, self.db_encryption_key, 'machines', 'site_id', site_id)
+            logger.info(f"Retrieved {len(machines)} machines for site_id {site_id} from local DB.")
+            return {"success": True, "message": "Machines retrieved locally.", "data": machines}
+        except Exception as e:
+            logger.error(f"Error getting machines for site {site_id}: {e}", exc_info=True)
+            return {"success": False, "message": f"Error getting machines: {e}", "data": []}
+
+    def get_parts_for_machine(self, machine_id): # Renamed from get_local_parts_for_machine
+        logger.info(f"Api.get_parts_for_machine called for machine_id: {machine_id}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured.", "data": []}
+        try:
+            parts = local_database.get_local_records_by_fk(self.local_db_file, self.db_encryption_key, 'parts', 'machine_id', machine_id)
+            logger.info(f"Retrieved {len(parts)} parts for machine_id {machine_id} from local DB.")
+            return {"success": True, "message": "Parts retrieved locally.", "data": parts}
+        except Exception as e:
+            logger.error(f"Error getting parts for machine {machine_id}: {e}", exc_info=True)
+            return {"success": False, "message": f"Error getting parts: {e}", "data": []}
+
+    def get_audit_tasks_for_machine(self, machine_id): # Renamed from get_local_audit_tasks_for_machine
+        logger.info(f"Api.get_audit_tasks_for_machine called for machine_id: {machine_id}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured.", "data": []}
+        try:
+            audit_tasks = local_database.get_local_records_by_fk(self.local_db_file, self.db_encryption_key, 'audit_tasks', 'machine_id', machine_id)
+            logger.info(f"Retrieved {len(audit_tasks)} audit tasks for machine_id {machine_id} from local DB.")
+            return {"success": True, "message": "Audit tasks retrieved locally.", "data": audit_tasks}
+        except Exception as e:
+            logger.error(f"Error getting audit tasks for machine {machine_id}: {e}", exc_info=True)
+            return {"success": False, "message": f"Error getting audit tasks: {e}", "data": []}
+            
+    def get_maintenance_records_for_machine(self, machine_id): # Renamed from get_local_maintenance_records_for_machine
+        logger.info(f"Api.get_maintenance_records_for_machine called for machine_id: {machine_id}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured.", "data": []}
+        try:
+            records = local_database.get_local_records_by_fk(self.local_db_file, self.db_encryption_key, 'maintenance_records', 'machine_id', machine_id)
+            logger.info(f"Retrieved {len(records)} maintenance records for machine_id {machine_id} from local DB.")
+            return {"success": True, "message": "Maintenance records retrieved locally.", "data": records}
+        except Exception as e:
+            logger.error(f"Error getting maintenance records for machine {machine_id}: {e}", exc_info=True)
+            return {"success": False, "message": f"Error getting maintenance records: {e}", "data": []}
+
+    def get_audit_task_completions_for_task(self, audit_task_id): # Renamed from get_local_audit_task_completions_for_task
+        logger.info(f"Api.get_audit_task_completions_for_task called for audit_task_id: {audit_task_id}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured.", "data": []}
+        try:
+            completions = local_database.get_local_records_by_fk(self.local_db_file, self.db_encryption_key, 'audit_task_completions', 'audit_task_id', audit_task_id)
+            logger.info(f"Retrieved {len(completions)} audit task completions for audit_task_id {audit_task_id} from local DB.")
+            return {"success": True, "message": "Audit task completions retrieved locally.", "data": completions}
+        except Exception as e:
+            logger.error(f"Error getting audit task completions for task {audit_task_id}: {e}", exc_info=True)
+            return {"success": False, "message": f"Error getting audit task completions: {e}", "data": []}
+
+    def create_maintenance_record(self, record_data): # Renamed from create_local_maintenance_record
+        logger.info(f"Api.create_maintenance_record called with data: {record_data}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured."}
+        try:
+            required_fields = ['machine_id', 'part_id', 'description', 'user_id', 'maintenance_type']
+            for field in required_fields:
+                if field not in record_data:
+                    logger.error(f"Missing required field: {field}")
+                    return {"success": False, "message": f"Missing required field: {field}"}
+            
+            client_id = local_database.create_local_maintenance_record(
+                self.local_db_file, self.db_encryption_key,
+                record_data['machine_id'], 
+                record_data['part_id'], 
+                record_data['description'],
+                record_data['user_id'], 
+                record_data['maintenance_type'],
+                record_data.get('cost'),
+                record_data.get('timestamp')
+            )
+            if client_id:
+                logger.info(f"Maintenance record created locally with client_id: {client_id}")
+                return {"success": True, "message": "Maintenance record created locally.", "client_id": client_id}
+            else:
+                logger.error("Failed to create maintenance record locally (DB error).")
+                return {"success": False, "message": "Failed to create maintenance record locally."}
+        except Exception as e:
+            logger.error(f"Error creating maintenance record: {e}", exc_info=True)
+            return {"success": False, "message": f"Error creating maintenance record: {e}"}
+
+    def create_audit_task_completion(self, completion_data): # Renamed from create_local_audit_task_completion
+        logger.info(f"Api.create_audit_task_completion called with data: {completion_data}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available.")
+            return {"success": False, "message": "Local database not configured."}
+        try:
+            required_fields = ['audit_task_id', 'user_id', 'completed_date', 'status']
+            for field in required_fields:
+                if field not in completion_data:
+                    logger.error(f"Missing required field: {field}")
+                    return {"success": False, "message": f"Missing required field: {field}"}
+
+            client_id = local_database.create_local_audit_task_completion(
+                self.local_db_file, self.db_encryption_key,
+                completion_data['audit_task_id'],
+                completion_data['user_id'], 
+                completion_data['completed_date'],
+                completion_data['status'],
+                completion_data.get('notes'),
+                completion_data.get('completion_image_path')
+            )
+            if client_id:
+                logger.info(f"Audit task completion created locally with client_id: {client_id}")
+                return {"success": True, "message": "Audit task completion created locally.", "client_id": client_id}
+            else:
+                logger.error("Failed to create audit task completion locally (DB error).")
+                return {"success": False, "message": "Failed to create audit task completion locally."}
+        except Exception as e:
+            logger.error(f"Error creating audit task completion: {e}", exc_info=True)
+            return {"success": False, "message": f"Error creating audit task completion: {e}"}
+
 # --- END NEW API CLASS ---
 
 # Application configuration
