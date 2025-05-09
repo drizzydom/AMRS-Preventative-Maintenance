@@ -176,6 +176,19 @@ class User(UserMixin, db.Model):
         self.notification_preferences = prefs
         db.session.commit()
     
+    def to_dict_for_sync(self):
+        return {
+            'id': self.id,
+            'username': self.username,  # Uses the property to get decrypted value
+            'email': self.email,  # Uses the property to get decrypted value
+            'full_name': self.full_name,
+            'is_admin': self.is_admin,
+            'role_id': self.role_id,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+    
     def __repr__(self):
         return f'<User {self.username}>'
 
@@ -209,6 +222,16 @@ class Role(db.Model):
             
         return self.permissions.split(',')
     
+    def to_dict_for_sync(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'permissions': self.permissions,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+    
     def __repr__(self):
         return f'<Role {self.name}>'
 
@@ -228,6 +251,18 @@ class Site(db.Model):
     # Define the one-to-many relationship with Machine
     machines = db.relationship('Machine', backref='site', lazy=True, cascade="all, delete-orphan")
     
+    def to_dict_for_sync(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'location': self.location,
+            'contact_email': self.contact_email,
+            'enable_notifications': self.enable_notifications,
+            'notification_threshold': self.notification_threshold,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+    
     def __repr__(self):
         return f'<Site {self.name}>'
 
@@ -246,6 +281,18 @@ class Machine(db.Model):
     
     # Define the one-to-many relationship with Part
     parts = db.relationship('Part', backref='machine', lazy=True, cascade="all, delete-orphan")
+    
+    def to_dict_for_sync(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'model': self.model,
+            'machine_number': self.machine_number,
+            'serial_number': self.serial_number,
+            'site_id': self.site_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
     
     def __repr__(self):
         return f'<Machine {self.name}>'
@@ -282,6 +329,21 @@ class Part(db.Model):
             return f"Every {freq} year{'s' if freq != 1 else ''}"
         return f"Every {freq} {unit}(s)"
     
+    def to_dict_for_sync(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'machine_id': self.machine_id,
+            'maintenance_frequency': self.maintenance_frequency,
+            'maintenance_unit': self.maintenance_unit,
+            'maintenance_days': self.maintenance_days,
+            'last_maintenance': self.last_maintenance.isoformat() if self.last_maintenance else None,
+            'next_maintenance': self.next_maintenance.isoformat() if self.next_maintenance else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+    
     def __repr__(self):
         return f'<Part {self.name}>'
 
@@ -309,6 +371,24 @@ class MaintenanceRecord(db.Model):
     # Add relationship to Machine
     machine = db.relationship('Machine', backref=db.backref('maintenance_records', lazy=True))
     
+    def to_dict_for_sync(self):
+        return {
+            'server_id': self.id, # Map to server_id for client
+            'part_id': self.part_id,
+            'user_id': self.user_id,
+            'machine_id': self.machine_id,
+            'date': self.date.isoformat() if self.date else None,
+            'comments': self.comments,
+            'maintenance_type': self.maintenance_type,
+            'description': self.description,
+            'performed_by': self.performed_by,
+            'status': self.status,
+            'notes': self.notes,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'client_id': self.client_id
+        }
+    
     def __repr__(self):
         return f'<MaintenanceRecord {self.id} for Part {self.part_id}>'
 
@@ -326,6 +406,21 @@ class AuditTask(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     machines = db.relationship('Machine', secondary=machine_audit_task, backref='audit_tasks')
     completions = db.relationship('AuditTaskCompletion', backref='audit_task', lazy=True, cascade="all, delete-orphan")
+    
+    def to_dict_for_sync(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'site_id': self.site_id,
+            'created_by': self.created_by,
+            'interval': self.interval,
+            'custom_interval_days': self.custom_interval_days,
+            'color': self.color,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'machine_ids': [machine.id for machine in self.machines]
+        }
 
 class AuditTaskCompletion(db.Model):
     __tablename__ = 'audit_task_completions'
@@ -338,3 +433,21 @@ class AuditTaskCompletion(db.Model):
     completed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Add client_id for synchronization if it doesn't exist (for older records)
+    # This should ideally be handled by a migration, but adding for robustness
+    client_id = db.Column(db.String(36), nullable=True, default=lambda: str(uuid.uuid4()))
+    
+    def to_dict_for_sync(self):
+        return {
+            'server_id': self.id, # Map to server_id for client
+            'audit_task_id': self.audit_task_id,
+            'machine_id': self.machine_id,
+            'date': self.date.isoformat() if self.date else None,
+            'completed': self.completed,
+            'completed_by': self.completed_by,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'client_id': getattr(self, 'client_id', None) # Safely access client_id
+        }

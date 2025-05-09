@@ -6,7 +6,7 @@ import string
 import logging
 import signal
 import argparse
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from functools import wraps
 import traceback
 from io import BytesIO
@@ -20,6 +20,7 @@ if any('pytest' in arg for arg in sys.argv):
     os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
 # Third-party imports
+import jwt
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app, send_file
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask_mail import Mail, Message
@@ -2422,31 +2423,54 @@ def update_notification_preferences():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle userlogin."""
+    """Login page for users."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
+    
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        remember = True if request.form.get('remember') else False
         
-        # Add debug for login attempts
-        app.logger.debug(f"Login attempt: username={username}")
-        
-        user = User.query.filter_by(username_hash=hash_value(username)).first()
-        
-        if user and check_password_hash(user.password_hash, password):
-            login_user(user)
-            app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
+        # Validate username and password
+        if not username or not password:
+            flash('Username and password are required.', 'danger')
+            return render_template('login.html')
+
+        # Find user by username (encrypted)
+        user = User.query.filter_by(_username=encrypt_value(username)).first()
+
+        if user and user.check_password(password):
+            login_user(user, remember=remember)
+            user.last_login = datetime.now(timezone.utc)  # Use timezone-aware datetime
+            db.session.commit()
+            
+            # Prepare JWT token
+            token_payload = {
+                'user_id': user.id,
+                'role_id': user.role_id if user.role_id else None,
+                'exp': datetime.now(timezone.utc) + timedelta(hours=app.config.get('JWT_EXPIRATION_HOURS', 24)) # Make expiration configurable
+            }
+            try:
+                token = jwt.encode(token_payload, app.config['SECRET_KEY'], algorithm='HS256')
+                
+                # For pywebview, we'll return JSON so the client Python can get the token
+                # The client-side JS in pywebview can then decide to redirect
+                return jsonify({
+                    'success': True,
+                    'message': 'Login successful.',
+                    'token': token,
+                    'redirectTo': url_for('dashboard') # Provide redirect URL for client
+                }), 200
+            except Exception as e:
+                app.logger.error(f"Error generating JWT: {e}")
+                flash('Login succeeded but could not generate session token. Please try again.', 'danger')
+                return render_template('login.html', error="Token generation error")
+
         else:
-            if user:
-                app.logger.debug(f"Login failed: Invalid password for username={username}")
-            else:
-                app.logger.debug(f"Login failed: No user found with username={username}")
-            flash('Invalid username or password', 'danger')
-    
+            flash('Invalid username or password. Please try again.', 'danger')
+            return render_template('login.html', error="Invalid credentials")
+            
     return render_template('login.html')
 
 @app.route('/logout')
@@ -3582,6 +3606,96 @@ def static_zip():
             except Exception as e:
                 app.logger.error(f"Error removing temp file: {e}")
             return response
+
+# --- JWT Required Decorator for API Sync ---
+def jwt_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(' ')[1]
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+        try:
+            secret_key = current_app.config.get('JWT_SECRET_KEY', current_app.config.get('SECRET_KEY'))
+            data = jwt.decode(token, secret_key, algorithms=['HS256'])
+            user = User.query.get(data['user_id'])
+            if not user:
+                return jsonify({'message': 'User not found!'}), 401
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token has expired!'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'message': 'Token is invalid!'}), 401
+        except Exception as e:
+            current_app.logger.error(f"Token processing error: {e}")
+            return jsonify({'message': 'Error processing token.'}), 401
+        return f(user, *args, **kwargs)
+    return decorated_function
+
+# --- Minimal to_dict_for_sync helpers (expand as needed) ---
+def user_to_dict_for_sync(self):
+    return {
+        'id': self.id,
+        'username': self.username,
+        'email': self.email,
+        'full_name': self.full_name,
+        'role_id': self.role_id,
+        'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+    }
+User.to_dict_for_sync = user_to_dict_for_sync
+
+def site_to_dict_for_sync(self):
+    return {
+        'id': self.id,
+        'name': self.name,
+        'location': self.location,
+        'contact_email': self.contact_email,
+        'enable_notifications': self.enable_notifications,
+        'notification_threshold': self.notification_threshold,
+        'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+    }
+Site.to_dict_for_sync = site_to_dict_for_sync
+
+# Add similar for other models as needed...
+
+# --- API Sync Endpoints ---
+from datetime import timezone
+@app.route('/api/sync/pull', methods=['GET'])
+@jwt_required
+def sync_pull_data(current_api_user):
+    last_sync = request.args.get('last_sync_timestamp')
+    last_sync_dt = None
+    if last_sync:
+        try:
+            last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+        except Exception:
+            return jsonify({'message': 'Invalid last_sync_timestamp'}), 400
+    # Example: Only send current user and their sites for now
+    users = [current_api_user.to_dict_for_sync()]
+    if user_can_see_all_sites(current_api_user):
+        sites = Site.query.all()
+    else:
+        sites = current_api_user.sites
+    sites = [s.to_dict_for_sync() for s in sites]
+    # Expand to include other models as needed
+    return jsonify({
+        'users': users,
+        'sites': sites,
+        'server_timestamp': datetime.now(timezone.utc).isoformat()
+    })
+
+@app.route('/api/sync/push', methods=['POST'])
+@jwt_required
+def sync_push_data(current_api_user):
+    data = request.get_json()
+    # Example: Accepts { 'users': [...], 'sites': [...] } etc.
+    # Implement your push logic here (validate, insert/update, etc.)
+    # For now, just echo what was received
+    return jsonify({'message': 'Push received', 'data': data}), 200
+# --- END API Sync ---
 
 import app_debug_helper  # Register debug routes
 

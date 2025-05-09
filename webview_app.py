@@ -17,6 +17,9 @@ import subprocess
 from pathlib import Path
 import shutil
 import pathlib
+import secrets # Added for key generation
+import local_database # Added for local DB operations
+import json # For handling JSON payloads for sync
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +28,315 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger("webview_app")
+
+# --- BEGIN NEW API CLASS ---
+class Api:
+    def __init__(self):
+        app_name_slug = "".join(c if c.isalnum() else "_" for c in APP_TITLE.lower())
+        # Use a user-specific directory for application data
+        self.data_path = Path.home() / f".{app_name_slug}_data"
+        self.instance_path = self.data_path / 'instance'
+        self.instance_path.mkdir(parents=True, exist_ok=True)
+        
+        self.token_file = self.instance_path / 'auth.token'
+        self.db_key_file = self.instance_path / 'local_db.key' # For storing the DB encryption key
+        self.local_db_file = self.instance_path / 'local_app.db' # Path to the SQLite DB file
+        
+        self.current_token = None
+        self.db_encryption_key = None # Will hold the loaded/generated DB key
+
+        logger.info(f"Token file location: {self.token_file}")
+        logger.info(f"DB key file location: {self.db_key_file}")
+        logger.info(f"Local DB file location: {self.local_db_file}")
+
+        self.load_token()
+        self.load_or_generate_db_key()
+
+        # Initialize local database schema if key is available
+        if self.db_encryption_key:
+            try:
+                local_database.create_tables(self.local_db_file, self.db_encryption_key)
+                logger.info("Local database tables ensured.")
+            except Exception as e:
+                logger.error(f"Failed to initialize local database tables: {e}")
+        else:
+            logger.error("Cannot initialize local database: DB encryption key is not available.")
+
+    def _generate_encryption_key(self):
+        # Generate a 64-character hex key (32 bytes)
+        return secrets.token_hex(32)
+
+    def load_or_generate_db_key(self):
+        logger.info(f"Attempting to load or generate DB encryption key from {self.db_key_file}")
+        if self.db_key_file.exists():
+            try:
+                with open(self.db_key_file, 'r') as f:
+                    key = f.read().strip()
+                if len(key) == 64: # Basic validation for a 32-byte hex key
+                    self.db_encryption_key = key
+                    logger.info("DB encryption key loaded successfully.")
+                else:
+                    logger.error("DB key file exists but content is invalid. Will attempt to regenerate.")
+                    self._regenerate_db_key()
+            except Exception as e:
+                logger.error(f"Failed to load DB encryption key: {e}. Will attempt to regenerate.")
+                self._regenerate_db_key()
+        else:
+            logger.info(f"No DB key file found at {self.db_key_file}. Generating a new key.")
+            self._regenerate_db_key()
+        return self.db_encryption_key
+
+    def _regenerate_db_key(self):
+        try:
+            new_key = self._generate_encryption_key()
+            with open(self.db_key_file, 'w') as f:
+                f.write(new_key)
+            # Attempt to set file permissions to be readable/writable by owner only
+            # This is platform-dependent and might not work on all OSes (e.g. Windows)
+            try:
+                os.chmod(self.db_key_file, 0o600) 
+                logger.info(f"Set permissions for {self.db_key_file} to 600.")
+            except OSError as e:
+                logger.warning(f"Could not set permissions for {self.db_key_file}: {e}. This is common on Windows.")
+
+            self.db_encryption_key = new_key
+            logger.info("New DB encryption key generated and stored successfully.")
+        except Exception as e:
+            logger.error(f"FATAL: Failed to generate and store DB encryption key: {e}")
+            # This is a critical failure. The application might not be able to proceed with local DB.
+            # Consider how to handle this - perhaps by disabling offline features or exiting.
+            self.db_encryption_key = None
+
+    def store_token(self, token):
+        logger.info(f"Api.store_token called. Token is {'present' if token else 'absent'}.")
+        if token:
+            try:
+                with open(self.token_file, 'w') as f:
+                    f.write(token)
+                self.current_token = token
+                logger.info(f"Token stored successfully at {self.token_file}")
+                return {"success": True, "message": "Token stored."}
+            except Exception as e:
+                logger.error(f"Failed to store token: {e}")
+                return {"success": False, "message": f"Failed to store token: {e}"}
+        else:
+            logger.warning("No token provided to store_token. Clearing existing token if any.")
+            if self.token_file.exists():
+                try:
+                    self.token_file.unlink()
+                    self.current_token = None
+                    logger.info("Existing token file removed as no token was provided.")
+                except Exception as e:
+                    logger.error(f"Failed to remove existing token file: {e}")
+            return {"success": False, "message": "No token provided."}
+
+    def load_token(self):
+        logger.info(f"Attempting to load token from {self.token_file}")
+        if self.token_file.exists():
+            try:
+                with open(self.token_file, 'r') as f:
+                    self.current_token = f.read().strip()
+                if self.current_token:
+                    logger.info(f"Token loaded successfully: {self.current_token[:20]}...") # Log a snippet
+                else:
+                    logger.info("Token file was empty. No token loaded.")
+                    self.current_token = None
+            except Exception as e:
+                logger.error(f"Failed to load token: {e}")
+                self.current_token = None
+        else:
+            logger.info(f"No token file found at {self.token_file}. No token loaded.")
+            self.current_token = None
+        return self.current_token
+
+    def get_current_token(self):
+        return self.current_token
+
+    def clear_token(self):
+        logger.info(f"Api.clear_token called. Attempting to clear token from {self.token_file}")
+        if self.token_file.exists():
+            try:
+                self.token_file.unlink()
+                self.current_token = None
+                logger.info("Token cleared successfully.")
+                return {"success": True, "message": "Token cleared."}
+            except Exception as e:
+                logger.error(f"Failed to clear token: {e}")
+                return {"success": False, "message": f"Failed to clear token: {e}"}
+        logger.info("No token file existed to clear.")
+        return {"success": True, "message": "No token to clear."}
+
+    def sync_with_server(self):
+        logger.info("Attempting to synchronize with server...")
+        if not self.current_token:
+            logger.warning("No auth token available. Sync aborted.")
+            return {"success": False, "message": "Authentication token not found. Please log in."}
+        
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available. Sync aborted.")
+            return {"success": False, "message": "Local database not configured. Cannot sync."}
+
+        headers = {
+            'Authorization': f'Bearer {self.current_token}',
+            'Content-Type': 'application/json'
+        }
+        sync_results = {"pull": {}, "push": {}}
+
+        # 1. PULL DATA FROM SERVER
+        try:
+            logger.info("Starting PULL operation from server.")
+            last_sync_ts = local_database.get_last_sync_timestamp(self.local_db_file, self.db_encryption_key)
+            pull_url = f"{FLASK_URL}/api/sync/pull"
+            params = {}
+            if last_sync_ts:
+                params['last_sync_timestamp'] = last_sync_ts
+            
+            logger.info(f"Pulling data from {pull_url} with params: {params}")
+            response = requests.get(pull_url, headers=headers, params=params, timeout=60)
+
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"Successfully pulled data. Server timestamp: {data.get('server_timestamp')}")
+                
+                # Order of upserting matters due to foreign key relationships
+                # Roles -> Users -> Sites -> Machines -> Parts -> AuditTasks -> MaintenanceRecords/AuditTaskCompletions
+                
+                if 'roles' in data:
+                    for role_data in data['roles']:
+                        local_database.upsert_role_from_server(self.local_db_file, self.db_encryption_key, role_data)
+                    logger.info(f"Processed {len(data['roles'])} roles.")
+                
+                if 'users' in data:
+                    for user_data in data['users']:
+                        local_database.upsert_user_from_server(self.local_db_file, self.db_encryption_key, user_data)
+                    logger.info(f"Processed {len(data['users'])} users.")
+
+                if 'sites' in data:
+                    for site_data in data['sites']:
+                        local_database.upsert_site_from_server(self.local_db_file, self.db_encryption_key, site_data)
+                    logger.info(f"Processed {len(data['sites'])} sites.")
+
+                if 'machines' in data:
+                    for machine_data in data['machines']:
+                        local_database.upsert_machine_from_server(self.local_db_file, self.db_encryption_key, machine_data)
+                    logger.info(f"Processed {len(data['machines'])} machines.")
+
+                if 'parts' in data:
+                    for part_data in data['parts']:
+                        local_database.upsert_part_from_server(self.local_db_file, self.db_encryption_key, part_data)
+                    logger.info(f"Processed {len(data['parts'])} parts.")
+                
+                if 'audit_tasks' in data:
+                    for task_data in data['audit_tasks']:
+                        local_database.upsert_audit_task_from_server(self.local_db_file, self.db_encryption_key, task_data)
+                    logger.info(f"Processed {len(data['audit_tasks'])} audit tasks.")
+
+                if 'maintenance_records' in data:
+                    for record_data in data['maintenance_records']:
+                        local_database.upsert_maintenance_record_from_server(self.local_db_file, self.db_encryption_key, record_data)
+                    logger.info(f"Processed {len(data['maintenance_records'])} maintenance records.")
+                
+                if 'audit_task_completions' in data:
+                    for completion_data in data['audit_task_completions']:
+                        local_database.upsert_audit_task_completion_from_server(self.local_db_file, self.db_encryption_key, completion_data)
+                    logger.info(f"Processed {len(data['audit_task_completions'])} audit task completions.")
+
+                local_database.update_last_sync_timestamp(self.local_db_file, self.db_encryption_key, data['server_timestamp'])
+                sync_results["pull"] = {"success": True, "message": "Pull successful", "timestamp": data['server_timestamp']}
+                logger.info("PULL operation completed successfully.")
+            elif response.status_code == 401:
+                logger.error("Pull failed: Unauthorized (401). Token might be invalid or expired.")
+                sync_results["pull"] = {"success": False, "message": "Pull failed: Unauthorized. Please log in again."}
+                # Optionally, could try to clear token here or prompt re-login
+            else:
+                logger.error(f"Pull failed with status {response.status_code}: {response.text}")
+                sync_results["pull"] = {"success": False, "message": f"Pull failed: Server error {response.status_code}"}
+        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Pull operation failed due to network error: {e}")
+            sync_results["pull"] = {"success": False, "message": f"Pull failed: Network error - {e}"}
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during PULL operation: {e}", exc_info=True)
+            sync_results["pull"] = {"success": False, "message": f"Pull failed: Unexpected error - {e}"}
+
+        # 2. PUSH DATA TO SERVER
+        try:
+            logger.info("Starting PUSH operation to server.")
+            unsynced_mrs = local_database.get_unsynced_maintenance_records(self.local_db_file, self.db_encryption_key)
+            unsynced_atcs = local_database.get_unsynced_audit_task_completions(self.local_db_file, self.db_encryption_key)
+
+            if not unsynced_mrs and not unsynced_atcs:
+                logger.info("No unsynced data to push.")
+                sync_results["push"] = {"success": True, "message": "No data to push."}
+            else:
+                push_payload = {}
+                if unsynced_mrs:
+                    push_payload['maintenance_records'] = unsynced_mrs
+                    logger.info(f"Prepared {len(unsynced_mrs)} maintenance records for push.")
+                if unsynced_atcs:
+                    push_payload['audit_task_completions'] = unsynced_atcs
+                    logger.info(f"Prepared {len(unsynced_atcs)} audit task completions for push.")
+
+                push_url = f"{FLASK_URL}/api/sync/push"
+                logger.info(f"Pushing data to {push_url}")
+                response = requests.post(push_url, headers=headers, json=push_payload, timeout=60)
+
+                if response.status_code == 200:
+                    push_response_data = response.json()
+                    logger.info(f"Push successful: {push_response_data.get('message')}")
+                    
+                    current_push_ts = local_database._get_current_timestamp_iso() # Get a consistent timestamp for updates
+
+                    # Process results for maintenance records
+                    mr_results = push_response_data.get('maintenance_records_status', [])
+                    successful_mr_pushes = 0
+                    for res in mr_results:
+                        if res.get('success') and res.get('client_id') and res.get('server_id'):
+                            local_database.update_sync_status(
+                                self.local_db_file, self.db_encryption_key, 
+                                'maintenance_records', res['client_id'], res['server_id'], current_push_ts
+                            )
+                            successful_mr_pushes += 1
+                        else:
+                            logger.error(f"Failed to push maintenance record (client_id: {res.get('client_id')}): {res.get('error')}")
+                    logger.info(f"Successfully updated sync status for {successful_mr_pushes} maintenance records.")
+
+                    # Process results for audit task completions
+                    atc_results = push_response_data.get('audit_task_completions_status', [])
+                    successful_atc_pushes = 0
+                    for res in atc_results:
+                        if res.get('success') and res.get('client_id') and res.get('server_id'):
+                            local_database.update_sync_status(
+                                self.local_db_file, self.db_encryption_key, 
+                                'audit_task_completions', res['client_id'], res['server_id'], current_push_ts
+                            )
+                            successful_atc_pushes += 1
+                        else:
+                            logger.error(f"Failed to push audit task completion (client_id: {res.get('client_id')}): {res.get('error')}")
+                    logger.info(f"Successfully updated sync status for {successful_atc_pushes} audit task completions.")
+                    
+                    sync_results["push"] = {"success": True, "message": "Push successful", "details": push_response_data}
+                    logger.info("PUSH operation completed successfully.")
+                elif response.status_code == 401:
+                    logger.error("Push failed: Unauthorized (401). Token might be invalid or expired.")
+                    sync_results["push"] = {"success": False, "message": "Push failed: Unauthorized. Please log in again."}
+                else:
+                    logger.error(f"Push failed with status {response.status_code}: {response.text}")
+                    sync_results["push"] = {"success": False, "message": f"Push failed: Server error {response.status_code}"}
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Push operation failed due to network error: {e}")
+            sync_results["push"] = {"success": False, "message": f"Push failed: Network error - {e}"}
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during PUSH operation: {e}", exc_info=True)
+            sync_results["push"] = {"success": False, "message": f"Push failed: Unexpected error - {e}"}
+        
+        final_success = sync_results["pull"].get("success", False) and sync_results["push"].get("success", False)
+        final_message = f"Pull: {sync_results['pull']['message']}. Push: {sync_results['push']['message']}."
+        logger.info(f"Synchronization attempt finished. Overall success: {final_success}. Message: {final_message}")
+        return {"success": final_success, "message": final_message, "details": sync_results}
+
+# --- END NEW API CLASS ---
 
 # Application configuration
 APP_TITLE = "AMRS Maintenance Tracker"
@@ -204,6 +516,10 @@ def start_app():
         splash_path = os.path.abspath(os.path.join('static', 'splash.html'))
     logger.info(f"[WEBVIEW] Final splash path: {splash_path} (exists: {os.path.exists(splash_path)})")
 
+    # Instantiate API for JS interaction
+    api = Api() # This will also attempt to load_token
+    logger.info(f"Initial token loaded by Api: {'TOKEN PRESENT' if api.get_current_token() else 'NO TOKEN'}.")
+
     # Create a splash window that will be replaced with the main window
     splash_html = ''
     if os.path.exists(splash_path):
@@ -219,32 +535,74 @@ def start_app():
     # Show splash window
     splash_window = webview.create_window('Loading...', html=splash_html, width=600, height=400, resizable=False, frameless=True)
     
-    def on_shown():
+    def on_splash_shown_handler(): # Renamed for clarity
         logger.info("[WEBVIEW] Splash screen shown, waiting for Flask...")
         
-        def check_flask_ready():
-            if wait_for_flask(f'http://localhost:{FLASK_PORT}/health-check'):
+        def check_flask_ready_and_launch_main(): # Renamed for clarity
+            if wait_for_flask(f"{FLASK_URL}/health-check"):
                 logger.info("[WEBVIEW] Flask is ready, switching to main window.")
-                # Create the main window
-                main_window = webview.create_window(APP_TITLE, FLASK_URL, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+                # Create the main window and pass the api instance
+                main_window = webview.create_window(
+                    APP_TITLE,
+                    FLASK_URL,
+                    width=WINDOW_WIDTH,
+                    height=WINDOW_HEIGHT,
+                    js_api=api  # Pass the API object here
+                )
+                # Ensure main window closure also triggers flask shutdown if not already handled globally
+                # main_window.events.closed += on_closed # The global on_closed should cover this.
+
                 # Destroy splash window after a slight delay to ensure main window is visible
-                def destroy_splash():
+                def destroy_splash_task(): # Renamed for clarity
                     time.sleep(0.5)
+                    logger.info("[WEBVIEW] Destroying splash screen.")
                     splash_window.destroy()
-                threading.Thread(target=destroy_splash, daemon=True).start()
+                threading.Thread(target=destroy_splash_task, daemon=True).start()
             else:
                 logger.error("[WEBVIEW] Flask did not start in time, showing error.")
-                splash_window.destroy()
-                webview.create_window('Error', html='<h1>Failed to start backend</h1>')
+                splash_window.destroy() # Destroy splash before showing error window
+                webview.create_window('Error', html='<h1>Failed to start backend application. Please restart.</h1>', width=500, height=200)
         
         # Check Flask in a background thread to avoid blocking UI
-        threading.Thread(target=check_flask_ready, daemon=True).start()
+        threading.Thread(target=check_flask_ready_and_launch_main, daemon=True).start()
     
-    # Register the shown event handler
-    splash_window.events.shown += on_shown
+    # Register the shown event handler for the splash window
+    splash_window.events.shown += on_splash_shown_handler
     
     logger.info("[WEBVIEW] Starting webview event loop with manual splash screen...")
-    webview.start(gui='edgechromium', debug=True)
+    webview.start(gui='edgechromium', debug=True, private_mode=False) # private_mode=False is default
+
+def main():
+    """Main entry point for the application"""
+    # Create the API object which handles token and DB key management
+    api = Api()
+
+    # Ensure Flask server is started
+    start_flask()
+
+    # Create and show the webview window
+    try:
+        webview.create_window(
+            APP_TITLE,
+            FLASK_URL,
+            width=WINDOW_WIDTH,
+            height=WINDOW_HEIGHT,
+            resizable=True,
+            js_api=api,  # Expose the Api class to JavaScript
+        )
+        webview.start(debug=True, gui='cef', http_server=False, private_mode=False) # Added private_mode=False
+    except Exception as e:
+        logger.error(f"Failed to create or start webview window: {e}")
+    finally:
+        # Clean up: terminate Flask process and close DB connection
+        if flask_process:
+            logger.info("Terminating Flask process...")
+            flask_process.terminate()
+            flask_process.wait()
+            logger.info("Flask process terminated.")
+        
+        local_database.close_db_connection() # Close local DB connection
+        logger.info("webview_app.py finished.")
 
 if __name__ == "__main__":
-    start_app()
+    main()
