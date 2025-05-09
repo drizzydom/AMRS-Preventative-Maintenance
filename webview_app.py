@@ -264,9 +264,13 @@ class Api:
             logger.info("Starting PUSH operation to server.")
             unsynced_mrs = local_database.get_unsynced_maintenance_records(self.local_db_file, self.db_encryption_key)
             unsynced_atcs = local_database.get_unsynced_audit_task_completions(self.local_db_file, self.db_encryption_key)
+            
+            # Get deleted records that need to be synced with server
+            deleted_mrs = local_database.get_deleted_maintenance_records(self.local_db_file, self.db_encryption_key)
+            deleted_atcs = local_database.get_deleted_audit_task_completions(self.local_db_file, self.db_encryption_key)
 
-            if not unsynced_mrs and not unsynced_atcs:
-                logger.info("No unsynced data to push.")
+            if not unsynced_mrs and not unsynced_atcs and not deleted_mrs and not deleted_atcs:
+                logger.info("No unsynced data or deletions to push.")
                 sync_results["push"] = {"success": True, "message": "No data to push."}
             else:
                 push_payload = {}
@@ -276,6 +280,12 @@ class Api:
                 if unsynced_atcs:
                     push_payload['audit_task_completions'] = unsynced_atcs
                     logger.info(f"Prepared {len(unsynced_atcs)} audit task completions for push.")
+                if deleted_mrs:
+                    push_payload['deleted_maintenance_records'] = deleted_mrs
+                    logger.info(f"Prepared {len(deleted_mrs)} deleted maintenance records for push.")
+                if deleted_atcs:
+                    push_payload['deleted_audit_task_completions'] = deleted_atcs
+                    logger.info(f"Prepared {len(deleted_atcs)} deleted audit task completions for push.")
 
                 push_url = f"{FLASK_URL}/api/sync/push"
                 logger.info(f"Pushing data to {push_url}")
@@ -315,7 +325,49 @@ class Api:
                             logger.error(f"Failed to push audit task completion (client_id: {res.get('client_id')}): {res.get('error')}")
                     logger.info(f"Successfully updated sync status for {successful_atc_pushes} audit task completions.")
                     
-                    sync_results["push"] = {"success": True, "message": "Push successful", "details": push_response_data}
+                    # Process deletion results for maintenance records
+                    mr_deletion_results = push_response_data.get('deleted_maintenance_records_status', [])
+                    successful_mr_deletions = 0
+                    mr_deletion_client_ids = []
+                    for res in mr_deletion_results:
+                        if res.get('success') and res.get('client_id'):
+                            mr_deletion_client_ids.append(res.get('client_id'))
+                            successful_mr_deletions += 1
+                        else:
+                            logger.error(f"Failed to sync deletion of maintenance record (client_id: {res.get('client_id')}): {res.get('error')}")
+                    
+                    if mr_deletion_client_ids:
+                        cleaned_mrs = local_database.clean_up_synced_deletions(
+                            self.local_db_file, self.db_encryption_key, 
+                            'maintenance_records', mr_deletion_client_ids
+                        )
+                        logger.info(f"Permanently removed {cleaned_mrs} synced maintenance record deletions.")
+                    
+                    # Process deletion results for audit task completions
+                    atc_deletion_results = push_response_data.get('deleted_audit_task_completions_status', [])
+                    successful_atc_deletions = 0
+                    atc_deletion_client_ids = []
+                    for res in atc_deletion_results:
+                        if res.get('success') and res.get('client_id'):
+                            atc_deletion_client_ids.append(res.get('client_id'))
+                            successful_atc_deletions += 1
+                        else:
+                            logger.error(f"Failed to sync deletion of audit task completion (client_id: {res.get('client_id')}): {res.get('error')}")
+                    
+                    if atc_deletion_client_ids:
+                        cleaned_atcs = local_database.clean_up_synced_deletions(
+                            self.local_db_file, self.db_encryption_key, 
+                            'audit_task_completions', atc_deletion_client_ids
+                        )
+                        logger.info(f"Permanently removed {cleaned_atcs} synced audit task completion deletions.")
+                    
+                    # Update overall results
+                    total_successful_ops = successful_mr_pushes + successful_atc_pushes + successful_mr_deletions + successful_atc_deletions
+                    sync_results["push"] = {
+                        "success": True, 
+                        "message": f"Push successful ({total_successful_ops} operations)", 
+                        "details": push_response_data
+                    }
                     logger.info("PUSH operation completed successfully.")
                 elif response.status_code == 401:
                     logger.error("Push failed: Unauthorized (401). Token might be invalid or expired.")
@@ -447,6 +499,28 @@ class Api:
             logger.error(f"Error creating maintenance record: {e}", exc_info=True)
             return {"success": False, "message": f"Error creating maintenance record: {e}"}
 
+    def update_maintenance_record(self, client_id: str, record_data: dict) -> dict:
+        logger.info(f"Api.update_maintenance_record called for client_id: {client_id} with data: {record_data}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available for update.")
+            return {"success": False, "message": "Local database not configured."}
+        try:
+            success = local_database.update_local_maintenance_record(
+                self.local_db_file, self.db_encryption_key,
+                client_id,
+                record_data
+            )
+            if success:
+                logger.info(f"Maintenance record (client_id: {client_id}) updated locally.")
+                return {"success": True, "message": "Maintenance record updated locally."}
+            else:
+                # The local_database function logs specific errors (e.g., not found)
+                logger.error(f"Failed to update maintenance record (client_id: {client_id}) locally.")
+                return {"success": False, "message": "Failed to update maintenance record locally. Record may not exist or no valid fields provided."}
+        except Exception as e:
+            logger.error(f"Error updating maintenance record (client_id: {client_id}): {e}", exc_info=True)
+            return {"success": False, "message": f"Error updating maintenance record: {e}"}
+
     def create_audit_task_completion(self, completion_data): # Renamed from create_local_audit_task_completion
         logger.info(f"Api.create_audit_task_completion called with data: {completion_data}")
         if not self.db_encryption_key or not self.local_db_file.exists():
@@ -477,6 +551,73 @@ class Api:
         except Exception as e:
             logger.error(f"Error creating audit task completion: {e}", exc_info=True)
             return {"success": False, "message": f"Error creating audit task completion: {e}"}
+
+    def update_audit_task_completion(self, client_id: str, completion_data: dict) -> dict:
+        logger.info(f"Api.update_audit_task_completion called for client_id: {client_id} with data: {completion_data}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available for update.")
+            return {"success": False, "message": "Local database not configured."}
+        try:
+            success = local_database.update_local_audit_task_completion(
+                self.local_db_file, self.db_encryption_key,
+                client_id,
+                completion_data
+            )
+            if success:
+                logger.info(f"Audit task completion (client_id: {client_id}) updated locally.")
+                return {"success": True, "message": "Audit task completion updated locally."}
+            else:
+                logger.error(f"Failed to update audit task completion (client_id: {client_id}) locally.")
+                return {"success": False, "message": "Failed to update audit task completion locally. Record may not exist or no valid fields provided."}
+        except Exception as e:
+            logger.error(f"Error updating audit task completion (client_id: {client_id}): {e}", exc_info=True)
+            return {"success": False, "message": f"Error updating audit task completion: {e}"}
+
+    def delete_maintenance_record(self, client_id: str) -> dict:
+        """Deletes a maintenance record locally.
+        Uses soft delete to mark it for deletion sync with the server.
+        """
+        logger.info(f"Api.delete_maintenance_record called for client_id: {client_id}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available for deletion.")
+            return {"success": False, "message": "Local database not configured."}
+        
+        try:
+            success = local_database.soft_delete_local_maintenance_record(
+                self.local_db_file, self.db_encryption_key, client_id
+            )
+            if success:
+                logger.info(f"Maintenance record (client_id: {client_id}) marked for deletion locally.")
+                return {"success": True, "message": "Maintenance record marked for deletion."}
+            else:
+                logger.error(f"Failed to mark maintenance record (client_id: {client_id}) for deletion.")
+                return {"success": False, "message": "Failed to delete maintenance record. Record may not exist."}
+        except Exception as e:
+            logger.error(f"Error deleting maintenance record (client_id: {client_id}): {e}", exc_info=True)
+            return {"success": False, "message": f"Error deleting maintenance record: {e}"}
+
+    def delete_audit_task_completion(self, client_id: str) -> dict:
+        """Deletes an audit task completion locally.
+        Uses soft delete to mark it for deletion sync with the server.
+        """
+        logger.info(f"Api.delete_audit_task_completion called for client_id: {client_id}")
+        if not self.db_encryption_key or not self.local_db_file.exists():
+            logger.error("Local database or encryption key not available for deletion.")
+            return {"success": False, "message": "Local database not configured."}
+        
+        try:
+            success = local_database.soft_delete_local_audit_task_completion(
+                self.local_db_file, self.db_encryption_key, client_id
+            )
+            if success:
+                logger.info(f"Audit task completion (client_id: {client_id}) marked for deletion locally.")
+                return {"success": True, "message": "Audit task completion marked for deletion."}
+            else:
+                logger.error(f"Failed to mark audit task completion (client_id: {client_id}) for deletion.")
+                return {"success": False, "message": "Failed to delete audit task completion. Record may not exist."}
+        except Exception as e:
+            logger.error(f"Error deleting audit task completion (client_id: {client_id}): {e}", exc_info=True)
+            return {"success": False, "message": f"Error deleting audit task completion: {e}"}
 
 # --- END NEW API CLASS ---
 
