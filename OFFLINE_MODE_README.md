@@ -12,6 +12,9 @@ The offline mode implementation consists of several key components:
 
 3. **Helper Scripts**:
    - `run_offline_app.py`: A wrapper script to run the offline app with SQLCipher disabled
+   - `run_offline_app_test.py`: A script to run the offline app on a different port for browser testing
+   - `test_offline_browser.sh`: A shell script for easily launching the browser test environment
+   - `full_offline_test_demo.py`: A comprehensive test that demonstrates the complete offline workflow
    - `fix_sqlcipher.py`: A utility to fix SQLCipher installation issues
 
 4. **JavaScript Utilities**:
@@ -149,10 +152,30 @@ Planned enhancements for the offline mode include:
 - Created: `db_controller.py`
 - Created: `offline_app.py`
 - Created: `run_offline_app.py`
+- Created: `run_offline_app_test.py`
+- Created: `test_offline_browser.sh`
+- Created: `full_offline_test_demo.py`
 - Created: `fix_sqlcipher.py`
 - Created: `static/js/offline.js`
 - Modified: Templates to support offline mode indicators
 - Created: `OFFLINE_MODE_USAGE.md` and `offline_mode_guide.md`
+- Created: `TESTING_OFFLINE_MODE.md` and `BROWSER_TESTING_GUIDE.md`
+
+## Browser Testing
+
+The offline mode can be tested in a web browser using the included testing tools:
+
+```bash
+# Start the test server on default port 8080
+./test_offline_browser.sh
+
+# Start on a custom port
+./test_offline_browser.sh 9090
+```
+
+For comprehensive testing instructions, see:
+- `BROWSER_TESTING_GUIDE.md`: Quick guide for browser testing
+- `TESTING_OFFLINE_MODE.md`: Detailed testing methodology
 
 ## References
 

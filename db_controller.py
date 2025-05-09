@@ -61,7 +61,10 @@ class DatabaseController:
         if db_path is None:
             db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
             os.makedirs(db_dir, exist_ok=True)
-            db_path = os.path.join(db_dir, 'maintenance.db')
+            
+            # Use custom database filename from environment variable if provided
+            db_filename = os.environ.get('DB_FILE', 'maintenance.db')
+            db_path = os.path.join(db_dir, db_filename)
             
         self.db_path = db_path
         self.encryption_key = encryption_key
