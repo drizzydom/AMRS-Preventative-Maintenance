@@ -1,25 +1,31 @@
 #!/usr/bin/env python3
 """
-Simplified AMRS Maintenance Tracker app for testing offline mode
+Test version of the Offline AMRS Maintenance Tracker app
+Used for automated testing of offline functionality
 """
 import os
 import sys
 import logging
-import time
 from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime, timedelta
 from db_controller import DatabaseController
-import time
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='[OFFLINE_APP] %(levelname)s - %(message)s')
-logger = logging.getLogger("offline_app")
+logging.basicConfig(level=logging.INFO, format='[TEST_OFFLINE_APP] %(levelname)s - %(message)s')
+logger = logging.getLogger("test_offline_app")
 
-# Create a database controller
-db_controller = DatabaseController(use_encryption=False)
+# Get test database path from environment
+test_db_path = os.environ.get('TEST_DATABASE')
+if test_db_path:
+    # Create a database controller pointing to the test database
+    db_controller = DatabaseController(db_path=test_db_path, use_encryption=False)
+    logger.info(f"Using test database at {test_db_path}")
+else:
+    # Fall back to default database
+    db_controller = DatabaseController(use_encryption=False)
+    logger.info("Using default database, TEST_DATABASE environment variable not set")
 
 # Create Flask app
 app = Flask(__name__, 
@@ -29,8 +35,10 @@ app = Flask(__name__,
 # Force offline mode
 os.environ['OFFLINE_MODE'] = 'true'
 
-# Configure the app
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'development-key')
+# Configure the app for testing
+app.config['SECRET_KEY'] = 'test-secret-key'
+app.config['TESTING'] = True
+app.config['WTF_CSRF_ENABLED'] = False  # Disable CSRF for testing
 
 # Initialize LoginManager
 login_manager = LoginManager()
@@ -76,47 +84,29 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Login route for the offline app"""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
         
     if request.method == 'POST':
-        try:
-            username = request.form.get('username')
-            password = request.form.get('password')
-            
-            logger.info(f"Login attempt for user: {username}")
-            
-            if not username or not password:
-                logger.warning("Login attempt with missing username or password")
-                flash('Username and password are required', 'danger')
-                return render_template('login.html', offline_mode=True)
-            
-            # Authenticate user
-            user_data = db_controller.authenticate_user(username, password)
-            
-            if user_data:
-                try:
-                    # Create User object and log in
-                    user = User(
-                        id=user_data['id'],
-                        username=user_data['username'],
-                        is_admin=user_data['is_admin'],
-                        role_id=user_data['role_id']
-                    )
-                    login_user(user)
-                    logger.info(f"Login successful for user: {username}")
-                    flash('Login successful!', 'success')
-                    return redirect(url_for('dashboard'))
-                except Exception as e:
-                    logger.error(f"Error during login_user: {str(e)}")
-                    flash('Error during login process. Please try again.', 'danger')
-            else:
-                logger.warning(f"Invalid credentials for user: {username}")
-                flash('Invalid username or password', 'danger')
-        except Exception as e:
-            logger.error(f"Unexpected login error: {str(e)}")
-            flash('An unexpected error occurred. Please try again.', 'danger')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Authenticate user
+        user_data = db_controller.authenticate_user(username, password)
+        
+        if user_data:
+            # Create User object and log in
+            user = User(
+                id=user_data['id'],
+                username=user_data['username'],
+                is_admin=user_data['is_admin'],
+                role_id=user_data['role_id']
+            )
+            login_user(user)
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'danger')
     
     return render_template('login.html', offline_mode=True)
 
@@ -131,47 +121,6 @@ def logout():
     logout_user()
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
-
-@app.route('/api/connection/status', methods=['GET'])
-def api_connection_status():
-    """API endpoint to check connection status"""
-    return jsonify({
-        'status': 'offline_mode',
-        'offline_mode': True,
-        'timestamp': datetime.utcnow().isoformat()
-    })
-
-@app.route('/api/sync/status', methods=['GET'])
-@login_required
-def sync_status():
-    """Return sync status information (when last sync occurred, pending changes, etc.)"""
-    return jsonify({
-        'last_sync': session.get('last_sync_time', None),
-        'pending_sync': {
-            'total': 0,
-            'machines': 0,
-            'parts': 0,
-            'maintenance': 0
-        },
-        'sync_available': False
-    })
-
-@app.route('/api/sync/trigger', methods=['POST'])
-@login_required
-def trigger_sync():
-    """Trigger a manual sync operation"""
-    # In the offline test app, we just simulate a sync operation
-    # In a real implementation, this would communicate with the server
-    time.sleep(2)  # Simulate network delay
-    
-    # Update last sync time
-    session['last_sync_time'] = datetime.utcnow().isoformat()
-    
-    return jsonify({
-        'status': 'success',
-        'message': 'Sync completed successfully',
-        'last_sync': session.get('last_sync_time')
-    })
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
@@ -188,7 +137,6 @@ def reset_password(token):
     flash('Password reset functionality is not available in offline mode.', 'warning')
     return redirect(url_for('login'))
 
-# Additional routes to handle possible navigation from templates
 @app.route('/profile')
 @login_required
 def profile():
@@ -204,6 +152,111 @@ def admin():
         return redirect(url_for('dashboard'))
     return render_template('admin.html', offline_mode=True)
 
+# API routes for testing
+@app.route('/api/connection/status', methods=['GET'])
+def api_connection_status():
+    """API endpoint to check connection status"""
+    return jsonify({
+        'status': 'offline_mode',
+        'offline_mode': True,
+        'timestamp': datetime.utcnow().isoformat()
+    })
+
+@app.route('/api/sync/status', methods=['GET'])
+def api_sync_status():
+    """API endpoint to check sync status"""
+    last_sync = db_controller.get_last_sync_time()
+    pending_sync = db_controller.get_pending_sync_count()
+    
+    return jsonify({
+        'last_sync': last_sync,
+        'pending_sync': pending_sync,
+        'offline_mode': True
+    })
+
+@app.route('/api/sync/trigger', methods=['POST'])
+@login_required
+def api_trigger_sync():
+    """API endpoint to trigger data synchronization"""
+    # For this simplified app, we just update the last sync time
+    success = db_controller.update_last_sync_time()
+    
+    if success:
+        return jsonify({
+            'success': True,
+            'message': 'Sync completed successfully',
+            'offline_mode': True
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Sync failed',
+            'offline_mode': True
+        })
+
+# Special testing API endpoints
+@app.route('/api/test/initialize_db', methods=['POST'])
+def api_test_initialize_db():
+    """API endpoint to initialize the test database"""
+    try:
+        initialize_database()
+        return jsonify({
+            'success': True,
+            'message': 'Test database initialized successfully'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error initializing test database: {str(e)}'
+        })
+
+@app.route('/api/test/create_record', methods=['POST'])
+def api_test_create_record():
+    """API endpoint to create a test record"""
+    try:
+        data = request.json or {}
+        site_id = data.get('site_id', 1)
+        machine_id = data.get('machine_id', 1)
+        notes = data.get('notes', 'Test record')
+        
+        client_id = f"test-{datetime.now().timestamp()}"
+        
+        # Make sure the maintenance_records table exists
+        if not db_controller.table_exists('maintenance_records'):
+            db_controller.execute_query('''
+            CREATE TABLE maintenance_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                site_id INTEGER,
+                machine_id INTEGER,
+                maintenance_date TEXT,
+                technician_id INTEGER,
+                notes TEXT,
+                is_synced INTEGER DEFAULT 0,
+                client_id TEXT,
+                server_id INTEGER,
+                sync_status TEXT DEFAULT 'pending',
+                last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+        
+        # Insert the record
+        cursor = db_controller.execute_query(
+            "INSERT INTO maintenance_records (site_id, machine_id, maintenance_date, technician_id, notes, is_synced, client_id) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (site_id, machine_id, datetime.now().isoformat(), 1, notes, 0, client_id)
+        )
+        
+        return jsonify({
+            'success': True,
+            'record_id': cursor.lastrowid,
+            'client_id': client_id
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error creating test record: {str(e)}'
+        })
+
 # Context processor for templates
 @app.context_processor
 def inject_offline_mode():
@@ -211,60 +264,6 @@ def inject_offline_mode():
 
 def initialize_database():
     """Initialize the database with default data if needed"""
-    # Get the database filename from the environment or use default
-    db_filename = os.environ.get('DB_FILE', 'maintenance.db')
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', db_filename)
-    
-    logger.info(f"Initializing database: {db_path}")
-    
-    # Check if we should recreate the database regardless of its state
-    force_recreate = os.environ.get('RECREATE_DB', '').lower() == 'true'
-    if force_recreate and os.path.exists(db_path):
-        try:
-            logger.info(f"Force recreating database due to RECREATE_DB environment variable")
-            os.remove(db_path)
-            logger.info(f"Removed database file: {db_path}")
-        except Exception as e:
-            logger.error(f"Error removing database file: {e}")
-    
-    # Check if database exists and is valid
-    db_exists = os.path.exists(db_path)
-    db_valid = False
-    
-    if db_exists:
-        # Try to connect and check if it's a valid database
-        try:
-            # Test if we can query the database
-            db_controller.get_connection().execute("SELECT 1")
-            logger.info(f"Database exists and is valid: {db_path}")
-            
-            # Also check if users table exists and has the admin user
-            try:
-                if db_controller.table_exists('users'):
-                    admin_user = db_controller.fetch_one("SELECT id FROM users WHERE username = 'admin'")
-                    if admin_user:
-                        logger.info("Admin user exists in the database")
-                        db_valid = True
-                    else:
-                        logger.warning("Users table exists but admin user is missing")
-                else:
-                    logger.warning("Users table does not exist in the database")
-            except Exception as e:
-                logger.error(f"Error checking for admin user: {e}")
-        except Exception as e:
-            # If there's an error, remove the file and recreate it
-            logger.warning(f"Database file exists but is not valid: {e}. Removing and recreating: {db_path}")
-            try:
-                os.remove(db_path)
-                logger.info(f"Removed invalid database file: {db_path}")
-                db_exists = False
-            except Exception as e:
-                logger.error(f"Error removing database file: {e}")
-    
-    # If database is valid, we're done
-    if db_exists and db_valid:
-        return
-    
     # Now initialize tables if they don't exist
     try:
         # Create tables if they don't exist
@@ -337,19 +336,34 @@ def initialize_database():
             )
             
             logger.info("Database initialized with default admin user (username: admin, password: admin)")
+            
+        # Initialize maintenance records table if it doesn't exist
+        if not db_controller.table_exists('maintenance_records'):
+            logger.info("Creating maintenance_records table")
+            db_controller.execute_query('''
+            CREATE TABLE maintenance_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                site_id INTEGER,
+                machine_id INTEGER,
+                maintenance_date TEXT,
+                technician_id INTEGER,
+                notes TEXT,
+                is_synced INTEGER DEFAULT 0,
+                client_id TEXT,
+                server_id INTEGER,
+                sync_status TEXT DEFAULT 'pending',
+                last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
+        raise
 
 if __name__ == '__main__':
     # Initialize database
     initialize_database()
     
     # Start the app
-    port = int(os.environ.get('PORT', 5000))
-    debug_mode = os.environ.get('FLASK_ENV', '') == 'development'
-    test_mode = os.environ.get('TEST_MODE', '').lower() == 'true'
-    
-    if test_mode:
-        print(f"Running in TEST mode on port {port}")
-        
-    app.run(host='0.0.0.0', port=port, debug=debug_mode)
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='127.0.0.1', port=port, debug=True)

@@ -663,6 +663,30 @@
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% if current_user.is_authenticated %}
     <script src="{{ url_for('static', filename='js/offline.js') }}"></script>
+    {% if offline_mode %}
+    <script>
+        // Initialize offline mode functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up initial connection status
+            updateConnectionStatus();
+            
+            // Set up periodic connection check
+            setInterval(updateConnectionStatus, 30000); // Check every 30 seconds
+            
+            // Update sync status for the offline banner
+            updateSyncStatus();
+            setInterval(updateSyncStatus, 60000); // Update sync status every minute
+            
+            // Setup manual sync button
+            const syncButton = document.getElementById('manual-sync-button');
+            if (syncButton) {
+                syncButton.addEventListener('click', function() {
+                    triggerManualSync();
+                });
+            }
+        });
+    </script>
+    {% endif %}
     {% endif %}
     
     <!-- Remove preload class after page load to enable animations -->
