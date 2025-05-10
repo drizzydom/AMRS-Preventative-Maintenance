@@ -11,7 +11,6 @@ import base64
 import os
 import hashlib
 import logging
-from secret_config import FERNET_KEY as SECRET_CONFIG_FERNET_KEY
 
 # Set up logger
 logging.basicConfig(level=logging.INFO)
@@ -33,31 +32,28 @@ if not FERNET_KEY:
     except ImportError:
         logger.error("key_manager module not available")
 
-# Final fallback: use secret_config.py
+# Remove fallback to secret_config.py and set FERNET_KEY to None if not found
 if not FERNET_KEY:
-    logger.warning("Falling back to FERNET_KEY from secret_config.py")
-    FERNET_KEY = SECRET_CONFIG_FERNET_KEY
+    logger.warning("No FERNET_KEY set. Field encryption is disabled.")
+    FERNET_KEY = None
 
 # Always strip whitespace
 FERNET_KEY = (FERNET_KEY or '').strip()
 
-if not FERNET_KEY:
-    raise ValueError("USER_FIELD_ENCRYPTION_KEY must be set. Please run the application through app_bootstrap.py or set a valid key in secret_config.py.")
-
 print(f"FERNET_KEY (repr): {repr(FERNET_KEY)}")
 print(f"FERNET_KEY length: {len(FERNET_KEY)}")
 # Initialize Fernet cipher with the key
-fernet = Fernet(FERNET_KEY)
+fernet = Fernet(FERNET_KEY) if FERNET_KEY else None
 
 def encrypt_value(value):
-    if value is None:
+    if value is None or not fernet:
         return None
     encrypted = fernet.encrypt(value.encode()).decode()
     print(f"[ENCRYPTION] encrypt_value('{value}') = {encrypted}")
     return encrypted
 
 def decrypt_value(value):
-    if value is None:
+    if value is None or not fernet:
         return None
     try:
         return fernet.decrypt(value.encode()).decode()

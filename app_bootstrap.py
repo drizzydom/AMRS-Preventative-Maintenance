@@ -59,20 +59,6 @@ import secrets
 import base64
 from pathlib import Path
 
-try:
-    from secret_config import ENCRYPTED_SECRET, FERNET_KEY
-except ImportError:
-    ENCRYPTED_SECRET = None
-    FERNET_KEY = None
-
-from cryptography.fernet import Fernet
-
-def get_decrypted_secret():
-    if ENCRYPTED_SECRET is None or FERNET_KEY is None:
-        raise RuntimeError("Encrypted secret or key not found. Please provide secret_config.py.")
-    f = Fernet(FERNET_KEY)
-    return f.decrypt(ENCRYPTED_SECRET).decode()
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
