@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+
+{% block title %}Offline Status{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Offline Mode Status</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This page shows the status of offline functionality and synchronized data.
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Connection Status</h5>
+                        <div class="d-flex align-items-center mb-3">
+                            <div id="connection-indicator" class="me-3">
+                                <i class="fas fa-circle text-success"></i>
+                            </div>
+                            <div id="connection-status">Online</div>
+                        </div>
+                        <div id="offline-message" class="alert alert-warning d-none">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            You are currently working offline. Any changes you make will be synchronized when you reconnect.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Synchronized Data</h5>
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Data Type</th>
+                                    <th>Records</th>
+                                    <th>Last Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sync-data-table">
+                                <tr>
+                                    <td>Sites</td>
+                                    <td id="sites-count">--</td>
+                                    <td id="sites-updated">--</td>
+                                </tr>
+                                <tr>
+                                    <td>Machines</td>
+                                    <td id="machines-count">--</td>
+                                    <td id="machines-updated">--</td>
+                                </tr>
+                                <tr>
+                                    <td>Parts</td>
+                                    <td id="parts-count">--</td>
+                                    <td id="parts-updated">--</td>
+                                </tr>
+                                <tr>
+                                    <td>Maintenance Records</td>
+                                    <td id="maintenance-count">--</td>
+                                    <td id="maintenance-updated">--</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Pending Changes</h5>
+                        <div id="pending-changes-container">
+                            <div class="d-flex justify-content-between align-items-center border p-3 rounded mb-3">
+                                <span id="pending-count">No pending changes</span>
+                                <button id="sync-pending-btn" class="btn btn-primary" disabled>
+                                    <i class="fas fa-cloud-upload-alt me-2"></i> Sync Changes
+                                </button>
+                            </div>
+                            <div id="pending-list" class="list-group">
+                                <!-- Pending changes will be listed here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i> Back to Dashboard
+                        </a>
+                        <a href="{{ url_for('offline.offline_sync') }}" class="btn btn-primary">
+                            <i class="fas fa-sync-alt me-2"></i> Synchronize Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we're in Electron
+    const isElectron = window.navigator.userAgent.indexOf('Electron') > -1;
+    
+    // Check online status initially and when it changes
+    function updateConnectionStatus() {
+        const isOnline = navigator.onLine;
+        const indicator = document.getElementById('connection-indicator');
+        const status = document.getElementById('connection-status');
+        const message = document.getElementById('offline-message');
+        
+        if (isOnline) {
+            indicator.innerHTML = '<i class="fas fa-circle text-success"></i>';
+            status.textContent = 'Online';
+            message.classList.add('d-none');
+        } else {
+            indicator.innerHTML = '<i class="fas fa-circle text-danger"></i>';
+            status.textContent = 'Offline';
+            message.classList.remove('d-none');
+        }
+    }
+    
+    // Update status when online/offline events fire
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+    
+    // Initial check
+    updateConnectionStatus();
+    
+    // Load sync data
+    function loadSyncData() {
+        if (isElectron && window.electronAPI) {
+            // Use Electron API
+            window.electronAPI.getSyncStatus()
+                .then(data => {
+                    updateSyncTable(data);
+                    updatePendingChanges(data.pendingChanges || []);
+                })
+                .catch(err => console.error('Error loading sync data:', err));
+        } else {
+            // Use web API
+            fetch('/offline/sync-status')
+                .then(response => response.json())
+                .then(data => {
+                    updateSyncTable(data);
+                    updatePendingChanges(data.pendingChanges || []);
+                })
+                .catch(err => console.error('Error loading sync data:', err));
+        }
+    }
+    
+    function updateSyncTable(data) {
+        // Update counts and timestamps
+        if (data.sites) {
+            document.getElementById('sites-count').textContent = data.sites.count || 0;
+            document.getElementById('sites-updated').textContent = 
+                data.sites.lastSync ? new Date(data.sites.lastSync).toLocaleString() : 'Never';
+        }
+        
+        if (data.machines) {
+            document.getElementById('machines-count').textContent = data.machines.count || 0;
+            document.getElementById('machines-updated').textContent = 
+                data.machines.lastSync ? new Date(data.machines.lastSync).toLocaleString() : 'Never';
+        }
+        
+        if (data.parts) {
+            document.getElementById('parts-count').textContent = data.parts.count || 0;
+            document.getElementById('parts-updated').textContent = 
+                data.parts.lastSync ? new Date(data.parts.lastSync).toLocaleString() : 'Never';
+        }
+        
+        if (data.maintenance) {
+            document.getElementById('maintenance-count').textContent = data.maintenance.count || 0;
+            document.getElementById('maintenance-updated').textContent = 
+                data.maintenance.lastSync ? new Date(data.maintenance.lastSync).toLocaleString() : 'Never';
+        }
+    }
+    
+    function updatePendingChanges(changes) {
+        const pendingCount = document.getElementById('pending-count');
+        const syncButton = document.getElementById('sync-pending-btn');
+        const pendingList = document.getElementById('pending-list');
+        
+        // Clear existing items
+        pendingList.innerHTML = '';
+        
+        if (changes.length === 0) {
+            pendingCount.textContent = 'No pending changes';
+            syncButton.disabled = true;
+            return;
+        }
+        
+        pendingCount.textContent = `${changes.length} pending change${changes.length > 1 ? 's' : ''}`;
+        syncButton.disabled = !navigator.onLine;
+        
+        // Add each pending change to the list
+        changes.forEach(change => {
+            const item = document.createElement('div');
+            item.className = 'list-group-item';
+            
+            const actionClass = change.action === 'create' ? 'text-success' : 
+                            change.action === 'update' ? 'text-primary' : 'text-danger';
+            
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge ${actionClass}">${change.action.toUpperCase()}</span>
+                        <strong>${change.table}</strong>: ${change.description || change.id}
+                    </div>
+                    <small>${new Date(change.timestamp).toLocaleString()}</small>
+                </div>
+            `;
+            
+            pendingList.appendChild(item);
+        });
+    }
+    
+    // Sync pending changes
+    document.getElementById('sync-pending-btn').addEventListener('click', function() {
+        if (!navigator.onLine) {
+            alert('You are currently offline. Please connect to the internet to synchronize changes.');
+            return;
+        }
+        
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Syncing...';
+        
+        if (isElectron && window.electronAPI) {
+            // Use Electron API
+            window.electronAPI.syncNow()
+                .then(result => {
+                    if (result.success) {
+                        showAlert('success', 'Changes synchronized successfully.');
+                        loadSyncData(); // Refresh data
+                    } else {
+                        showAlert('danger', 'Synchronization failed: ' + (result.error || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    showAlert('danger', 'Synchronization error: ' + err.message);
+                })
+                .finally(() => {
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-cloud-upload-alt me-2"></i> Sync Changes';
+                });
+        } else {
+            // Use web API
+            fetch('/offline/sync-pending', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', 'Changes synchronized successfully.');
+                    loadSyncData(); // Refresh data
+                } else {
+                    showAlert('danger', 'Synchronization failed: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                showAlert('danger', 'Synchronization error: ' + error.message);
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-cloud-upload-alt me-2"></i> Sync Changes';
+            });
+        }
+    });
+    
+    function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Insert before the first child of the card body
+        const cardBody = document.querySelector('.card-body');
+        cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        
+        // Auto dismiss after 5 seconds
+        setTimeout(() => {
+            alertDiv.classList.remove('show');
+            setTimeout(() => alertDiv.remove(), 150);
+        }, 5000);
+    }
+    
+    // Load initial data
+    loadSyncData();
+    
+    // Refresh every minute
+    setInterval(loadSyncData, 60000);
+});
+</script>
+{% endblock %}
