@@ -4,14 +4,26 @@ Debugging script for offline browser testing
 
 This script helps diagnose issues with the offline mode browser testing.
 It checks database connections, tables, and user authentication.
+It also provides utilities for token-based authentication testing.
 """
 import os
 import sys
 import logging
+import json
+import argparse
 from pathlib import Path
 import sqlite3
 import traceback
+import uuid
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
+
+# Add token manager if available
+try:
+    from token_manager import TokenManager
+    has_token_manager = True
+except ImportError:
+    has_token_manager = False
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='[DEBUG] %(levelname)s - %(message)s')
@@ -150,33 +162,94 @@ def fix_admin_user(db_filename="maintenance_test.db"):
 
 def main():
     """Main entry point for the debugging script"""
+    parser = argparse.ArgumentParser(description='Debug offline browser and token authentication')
+    
+    # Create subparsers for different commands
+    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    
+    # Database check command
+    db_parser = subparsers.add_parser('check', help='Check database and admin user')
+    db_parser.add_argument('--db', type=str, default=os.environ.get('DB_FILE', 'maintenance_test.db'),
+                          help='Database filename')
+    
+    # Fix admin user command
+    fix_parser = subparsers.add_parser('fix', help='Fix admin user')
+    fix_parser.add_argument('--db', type=str, default=os.environ.get('DB_FILE', 'maintenance_test.db'),
+                           help='Database filename')
+    
+    # Token commands (only if token_manager is available)
+    if has_token_manager:
+        # Create token command
+        create_token_parser = subparsers.add_parser('create-token', help='Create a test token')
+        create_token_parser.add_argument('--user-id', type=int, required=True, help='User ID')
+        create_token_parser.add_argument('--username', type=str, required=True, help='Username')
+        create_token_parser.add_argument('--expiry', type=int, default=30, help='Token expiry in days')
+        
+        # Validate token command
+        validate_token_parser = subparsers.add_parser('validate-token', help='Validate a token')
+        validate_token_parser.add_argument('--token', type=str, required=True, help='Token to validate')
+        
+        # List tokens command
+        list_parser = subparsers.add_parser('list-tokens', help='List all stored tokens')
+        
+        # Delete token command
+        delete_parser = subparsers.add_parser('delete-token', help='Delete a stored token')
+        delete_parser.add_argument('--user-id', type=int, required=True, help='User ID')
+    
+    args = parser.parse_args()
+    
     print("=" * 60)
     print("AMRS Preventative Maintenance - Offline Browser Testing Debug")
     print("=" * 60)
     
-    # Get database filename from command line or environment variable
-    db_filename = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('DB_FILE', 'maintenance_test.db')
-    
-    if check_database(db_filename):
-        print("\n✅ Database is valid and admin user exists")
-    else:
-        print("\n❌ Database check failed")
+    # Handle commands
+    if not args.command or args.command == 'check':
+        db_filename = args.db if hasattr(args, 'db') else os.environ.get('DB_FILE', 'maintenance_test.db')
         
-        # Ask user if they want to fix the database
-        response = input("\nWould you like to fix the admin user? (y/n): ")
-        if response.lower() == 'y':
-            if fix_admin_user(db_filename):
-                print("\n✅ Admin user fixed successfully")
-                print("\nYou can now log in with the following credentials:")
-                print("- Username: admin")
-                print("- Password: admin")
-            else:
-                print("\n❌ Failed to fix admin user")
+        if check_database(db_filename):
+            print("\n✅ Database is valid and admin user exists")
+        else:
+            print("\n❌ Database check failed")
+            print("\nTo fix the database, run: python debug_offline_browser.py fix")
     
-    print("\nTo run the offline app for browser testing, use one of these commands:")
-    print("- ./test_offline_browser.sh")
-    print("- python run_offline_app_test.py")
-    print("- RECREATE_DB=true python run_offline_app_test.py (to recreate the database)")
+    elif args.command == 'fix':
+        db_filename = args.db
+        if fix_admin_user(db_filename):
+            print("\n✅ Admin user fixed successfully")
+            print("\nYou can now log in with the following credentials:")
+            print("- Username: admin")
+            print("- Password: admin")
+        else:
+            print("\n❌ Failed to fix admin user")
+    
+    # Token management commands (only if token_manager is available)
+    elif has_token_manager and args.command == 'create-token':
+        create_test_token(args.user_id, args.username, args.expiry)
+    
+    elif has_token_manager and args.command == 'validate-token':
+        validate_token(args.token)
+    
+    elif has_token_manager and args.command == 'list-tokens':
+        list_stored_tokens()
+    
+    elif has_token_manager and args.command == 'delete-token':
+        delete_token(args.user_id)
+    
+    else:
+        parser.print_help()
+    
+    if args.command in ['check', 'fix', None]:
+        print("\nTo run the offline app for browser testing, use one of these commands:")
+        print("- ./test_offline_browser.sh")
+        print("- python run_offline_app_test.py")
+        print("- RECREATE_DB=true python run_offline_app_test.py (to recreate the database)")
+        
+        if has_token_manager:
+            print("\nToken management commands available:")
+            print("- python debug_offline_browser.py create-token --user-id 1 --username admin")
+            print("- python debug_offline_browser.py validate-token --token <token>")
+            print("- python debug_offline_browser.py list-tokens")
+            print("- python debug_offline_browser.py delete-token --user-id 1")
 
 if __name__ == "__main__":
     main()
