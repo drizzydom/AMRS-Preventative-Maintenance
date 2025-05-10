@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+
+{% block title %}Offline Synchronization{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Offline Mode - Data Synchronization</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Synchronize your data for offline use. This will download the necessary data to your device allowing you to work without an internet connection.
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Sync Status</h5>
+                        <div class="d-flex justify-content-between align-items-center border p-3 rounded">
+                            <div>
+                                <div><strong>Last Sync:</strong> <span id="last-sync-time">Never</span></div>
+                                <div><strong>Offline Access:</strong> <span id="offline-status">Not ready</span></div>
+                            </div>
+                            <button id="sync-now-btn" class="btn btn-primary">
+                                <i class="fas fa-sync-alt me-2"></i> Sync Now
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Sync Options</h5>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="sync-sites" checked>
+                            <label class="form-check-label" for="sync-sites">
+                                Sites
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="sync-machines" checked>
+                            <label class="form-check-label" for="sync-machines">
+                                Machines
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="sync-parts" checked>
+                            <label class="form-check-label" for="sync-parts">
+                                Parts
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="sync-maintenance" checked>
+                            <label class="form-check-label" for="sync-maintenance">
+                                Maintenance Records
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Offline Authentication</h5>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-key me-2"></i>
+                            Generate an offline access token to use the desktop application without an internet connection.
+                        </div>
+                        <button id="generate-token-btn" class="btn btn-warning">
+                            <i class="fas fa-key me-2"></i> Generate Offline Token
+                        </button>
+                        <div id="token-result" class="mt-3 d-none">
+                            <div class="alert alert-success">
+                                <p><strong>Your offline access token has been generated.</strong></p>
+                                <p class="mb-0">This token will be valid for 30 days. Keep your password safe, as it will be used to encrypt your offline database.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we're in Electron
+    const isElectron = window.navigator.userAgent.indexOf('Electron') > -1;
+    
+    // Update UI based on platform
+    if (isElectron) {
+        document.getElementById('generate-token-btn').classList.add('d-none');
+        document.querySelector('.alert-warning').classList.add('d-none');
+    }
+    
+    // Sync Now button
+    document.getElementById('sync-now-btn').addEventListener('click', function() {
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-sync-alt fa-spin me-2"></i> Syncing...';
+        
+        // Get selected options
+        const options = {
+            sites: document.getElementById('sync-sites').checked,
+            machines: document.getElementById('sync-machines').checked,
+            parts: document.getElementById('sync-parts').checked,
+            maintenance: document.getElementById('sync-maintenance').checked
+        };
+        
+        if (isElectron && window.electronAPI) {
+            // Use Electron API
+            window.electronAPI.syncNow(options)
+                .then(result => {
+                    if (result.success) {
+                        updateSyncStatus(new Date().toLocaleString(), 'Ready');
+                        showAlert('success', 'Synchronization completed successfully.');
+                    } else {
+                        showAlert('danger', 'Synchronization failed: ' + (result.error || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    showAlert('danger', 'Synchronization error: ' + err.message);
+                })
+                .finally(() => {
+                    resetSyncButton();
+                });
+        } else {
+            // Use web API
+            fetch('/offline/sync-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(options)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateSyncStatus(new Date().toLocaleString(), 'Ready');
+                    showAlert('success', 'Synchronization completed successfully.');
+                } else {
+                    showAlert('danger', 'Synchronization failed: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                showAlert('danger', 'Synchronization error: ' + error.message);
+            })
+            .finally(() => {
+                resetSyncButton();
+            });
+        }
+    });
+    
+    // Generate token button
+    document.getElementById('generate-token-btn').addEventListener('click', function() {
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating...';
+        
+        fetch('/offline/generate-offline-token', {
+            method: 'POST',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.token) {
+                // Show token section
+                document.getElementById('token-result').classList.remove('d-none');
+                
+                // Store token in localStorage for the desktop app to use
+                localStorage.setItem('offline_token', data.token);
+                localStorage.setItem('offline_token_expiry', data.expires_in);
+                localStorage.setItem('offline_token_generated', data.generated_at);
+                
+                showAlert('success', 'Offline token generated successfully.');
+            } else {
+                showAlert('danger', 'Failed to generate offline token.');
+            }
+        })
+        .catch(error => {
+            showAlert('danger', 'Error generating token: ' + error.message);
+        })
+        .finally(() => {
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-key me-2"></i> Generate Offline Token';
+        });
+    });
+    
+    // Helper functions
+    function resetSyncButton() {
+        const btn = document.getElementById('sync-now-btn');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i> Sync Now';
+    }
+    
+    function updateSyncStatus(time, status) {
+        document.getElementById('last-sync-time').textContent = time;
+        document.getElementById('offline-status').textContent = status;
+    }
+    
+    function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Insert before the first child of the card body
+        const cardBody = document.querySelector('.card-body');
+        cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        
+        // Auto dismiss after 5 seconds
+        setTimeout(() => {
+            alertDiv.classList.remove('show');
+            setTimeout(() => alertDiv.remove(), 150);
+        }, 5000);
+    }
+    
+    // Check initial status
+    if (isElectron && window.electronAPI) {
+        window.electronAPI.getSyncStatus()
+            .then(status => {
+                if (status.lastSync) {
+                    updateSyncStatus(new Date(status.lastSync).toLocaleString(), 'Ready');
+                }
+            })
+            .catch(err => console.error('Error getting sync status:', err));
+    } else {
+        fetch('/offline/sync-status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.lastSync) {
+                    updateSyncStatus(new Date(data.lastSync).toLocaleString(), 'Ready');
+                }
+            })
+            .catch(err => console.error('Error getting sync status:', err));
+    }
+});
+</script>
+{% endblock %}
