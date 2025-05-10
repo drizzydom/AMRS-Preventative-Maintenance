@@ -32,7 +32,8 @@ Flask-WTF>=1.0.0
 pytest
 pytest-cov
 cryptography
-pysqlcipher3
+
+# pysqlcipher3 removed - not needed for Render deployment
 
 # WebView2 app dependencies
 pywebview>=4.0.2
