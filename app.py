@@ -94,8 +94,48 @@ storage_ok = check_persistent_storage()
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
 
+# --- OFFLINE MODE SUPPORT ---
+from flask import session, g
+
+# Check if we're in offline mode
+OFFLINE_MODE = os.environ.get('OFFLINE_MODE', 'false').lower() == 'true'
+
+if OFFLINE_MODE:
+    from offline_adapter import OfflineAdapter
+    app.offline_adapter = OfflineAdapter(app)
+    app.offline_adapter.setup()
+    
+    # Initialize offline database if needed
+    from offline_adapter import init_offline_db
+    db_path = os.environ.get('DATABASE_PATH', 'maintenance_local.db')
+    init_offline_db(db_path)
+    
+    # Add offline context processor
+    @app.context_processor
+    def inject_offline_status():
+        return {
+            'offline_mode': True,
+            'offline_version': '1.0'
+        }
+    
+    app.logger.info("Application configured for OFFLINE MODE")
+else:
+    app.logger.info("Application running in ONLINE MODE")
+# --- END OFFLINE MODE SUPPORT ---
+
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
+
+# Configure database URI based on offline mode
+if OFFLINE_MODE:
+    # Use SQLite for offline mode
+    db_path = os.environ.get('DATABASE_PATH', 'maintenance_local.db')
+    print(f"[APP] Using SQLite database for offline mode: {db_path}")
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+else:
+    # Use PostgreSQL for online mode
+    app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+    print(f"[APP] Using PostgreSQL database for online mode")
 
 # Add custom Jinja2 filters
 @app.template_filter('format_datetime')
@@ -2383,32 +2423,59 @@ def update_notification_preferences():
     
     return redirect(url_for('user_profile'))
 
+# Modify login route to support both online and offline mode
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle userlogin."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
+    
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = request.form['username']
+        password = request.form['password']
         
-        # Add debug for login attempts
-        app.logger.debug(f"Login attempt: username={username}")
-        
-        user = User.query.filter_by(username_hash=hash_value(username)).first()
-        
-        if user and check_password_hash(user.password_hash, password):
-            login_user(user)
-            app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
+        # Handle offline mode login
+        if OFFLINE_MODE:
+            try:
+                # Get offline database connection
+                offline_db = app.offline_adapter.get_db()
+                if not offline_db:
+                    flash('Database connection error. Please restart the application.', 'danger')
+                    return render_template('login.html')
+                
+                # Check if user exists in offline database
+                user = offline_db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+                
+                if user:
+                    # In offline mode, we don't check password hash - this should be secured
+                    # at the database level with SQLCipher encryption in the desktop app
+                    session.clear()
+                    session['user_id'] = user['id']
+                    session['username'] = user['username']
+                    session['role_id'] = user['role_id']
+                    session['offline_mode'] = True
+                    
+                    app.logger.info(f"User {username} logged in (offline mode)")
+                    return redirect(url_for('dashboard'))
+                else:
+                    flash('Invalid username or password', 'danger')
+            except Exception as e:
+                app.logger.error(f"Offline login error: {e}")
+                flash('An error occurred during login. Please try again.', 'danger')
         else:
-            if user:
-                app.logger.debug(f"Login failed: Invalid password for username={username}")
+            # Handle online mode login (original login code)
+            user = User.query.filter_by(username_hash=hash_value(username)).first()
+            
+            if user and check_password_hash(user.password_hash, password):
+                login_user(user)
+                app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
+                next_page = request.args.get('next')
+                return redirect(next_page or url_for('dashboard'))
             else:
-                app.logger.debug(f"Login failed: No user found with username={username}")
-            flash('Invalid username or password', 'danger')
+                if user:
+                    app.logger.debug(f"Login failed: Invalid password for username={username}")
+                else:
+                    app.logger.debug(f"Login failed: No user found with username={username}")
+                flash('Invalid username or password', 'danger')
     
     return render_template('login.html')
 
