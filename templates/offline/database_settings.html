@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}Database Settings{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Database Settings</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        Manage your database encryption settings. The encryption password protects your offline data.
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Change Database Password</h5>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Changing your database password will re-encrypt all of your offline data. Make sure you remember your new password, as it cannot be recovered if lost.
+                        </div>
+                        
+                        <form id="password-change-form">
+                            <div class="mb-3">
+                                <label for="current-password" class="form-label">Current Password</label>
+                                <input type="password" class="form-control" id="current-password" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="new-password" class="form-label">New Password</label>
+                                <input type="password" class="form-control" id="new-password" required>
+                                <div class="form-text">Password must be at least 8 characters long.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="confirm-password" class="form-label">Confirm New Password</label>
+                                <input type="password" class="form-control" id="confirm-password" required>
+                            </div>
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-key me-2"></i> Change Password
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Database Information</h5>
+                        <table class="table">
+                            <tbody>
+                                <tr>
+                                    <th scope="row">Database Location</th>
+                                    <td id="db-location">--</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Database Size</th>
+                                    <td id="db-size">--</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Encryption Status</th>
+                                    <td id="encryption-status"><span class="badge bg-success">Encrypted</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we're in Electron
+    const isElectron = window.navigator.userAgent.indexOf('Electron') > -1;
+    
+    if (!isElectron) {
+        document.querySelector('.card-body').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                Database settings are only available in the desktop application.
+            </div>
+        `;
+        return;
+    }
+    
+    // Get database info
+    window.electronAPI.getDatabaseInfo()
+        .then(info => {
+            document.getElementById('db-location').textContent = info.location || '--';
+            document.getElementById('db-size').textContent = info.size ? formatBytes(info.size) : '--';
+        })
+        .catch(err => console.error('Error getting database info:', err));
+    
+    // Handle password change form
+    document.getElementById('password-change-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        
+        // Validate passwords
+        if (newPassword.length < 8) {
+            showAlert('danger', 'New password must be at least 8 characters long.');
+            return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+            showAlert('danger', 'New passwords do not match.');
+            return;
+        }
+        
+        // Submit button loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Changing Password...';
+        
+        // Change password
+        window.electronAPI.changePassword({
+            currentPassword: currentPassword,
+            newPassword: newPassword
+        })
+        .then(result => {
+            if (result.success) {
+                showAlert('success', 'Password changed successfully.');
+                this.reset();
+            } else {
+                showAlert('danger', 'Failed to change password: ' + (result.error || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            showAlert('danger', 'Error changing password: ' + err.message);
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-key me-2"></i> Change Password';
+        });
+    });
+    
+    // Helper functions
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+    
+    function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Insert before the first child of the card-body
+        const form = document.getElementById('password-change-form');
+        form.parentNode.insertBefore(alertDiv, form);
+        
+        // Auto dismiss after 5 seconds
+        setTimeout(() => {
+            alertDiv.classList.remove('show');
+            setTimeout(() => alertDiv.remove(), 150);
+        }, 5000);
+    }
+});
+</script>
+{% endblock %}
