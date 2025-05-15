@@ -4,9 +4,9 @@
   "description": "AMRS Maintenance Tracker",
   "main": "electron_app/main.js",
   "scripts": {
-    "start": "electron electron_app/main.js",
+    "start": "node electron_app/create-templates.js && electron electron_app/main.js",
     "bundle-templates": "node electron_app/bundle-templates.js",
-    "build": "node electron_app/build.js",
+    "build": "node electron_app/create-templates.js && node electron_app/build.js",
     "package": "electron-builder"
   },
   "build": {

@@ -200,6 +200,7 @@ if __name__ == "__main__":
         debug_app()
         print("\nDiagnostics completed successfully")
     except Exception as e:
+        import traceback
         print(f"Error during diagnostics: {e}")
         traceback.print_exc()
     
