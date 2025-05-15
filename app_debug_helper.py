@@ -1,13 +1,107 @@
 """
-Helper script to debug app.py in packaged environment
+Debug helper module for AMRS Maintenance Tracker application.
 """
 import os
 import sys
-import traceback
-from flask import Flask
+import platform
+import logging
+from datetime import datetime
+from flask import Flask, jsonify
 from flask_login import login_required
 from models import db, AuditTaskCompletion
 from app import app
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+def register_debug_routes(app):
+    """Register debug routes with the Flask application"""
+    logger.info("Registering debug routes")
+    
+    @app.route('/debug/info')
+    def debug_info():
+        """Return system information for debugging"""
+        
+        # System information
+        info = {
+            'timestamp': datetime.now().isoformat(),
+            'platform': {
+                'system': platform.system(),
+                'release': platform.release(),
+                'version': platform.version(),
+                'processor': platform.processor()
+            },
+            'python': {
+                'version': sys.version,
+                'executable': sys.executable,
+                'path': sys.path
+            },
+            'environment': {
+                'cwd': os.getcwd(),
+                'env_vars': {k: v for k, v in os.environ.items() 
+                             if not k.lower().startswith(('pass', 'secret', 'key'))}
+            }
+        }
+        
+        return jsonify(info)
+    
+    @app.route('/debug/database')
+    def debug_database():
+        """Return database information"""
+        import sqlite3
+        
+        try:
+            # Find database path
+            appdata_dir = os.environ.get('APPDATA', os.path.expanduser('~'))
+            db_dir = os.path.join(appdata_dir, 'amrs-preventative-maintenance', 'AMRS-Maintenance-Tracker')
+            db_path = os.path.join(db_dir, 'amrs_maintenance.db')
+            
+            if not os.path.exists(db_path):
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Database not found at {db_path}'
+                })
+            
+            # Connect to database
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get schema information
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [table[0] for table in cursor.fetchall()]
+            
+            # Get table schemas
+            schemas = {}
+            for table in tables:
+                cursor.execute(f"PRAGMA table_info({table});")
+                columns = [{
+                    'cid': col[0],
+                    'name': col[1],
+                    'type': col[2],
+                    'notnull': col[3],
+                    'default': col[4],
+                    'pk': col[5]
+                } for col in cursor.fetchall()]
+                schemas[table] = columns
+                
+            conn.close()
+            
+            return jsonify({
+                'status': 'success',
+                'database_path': db_path,
+                'tables': tables,
+                'schemas': schemas
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': str(e)
+            })
+    
+    logger.info("Debug routes registered")
+    return app
 
 def debug_app():
     """Run diagnostic checks for app packaging"""
@@ -96,6 +190,9 @@ def debug_audit_completions():
             'completed_at': str(r.completed_at),
         })
     return {'records': output}
+
+# Automatically registering with app is not necessary, will be imported in app.py
+logger.info("app_debug_helper module loaded successfully")
 
 if __name__ == "__main__":
     print("Running app.py diagnostics...")
