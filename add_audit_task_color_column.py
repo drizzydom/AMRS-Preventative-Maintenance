@@ -1,38 +1,75 @@
 #!/usr/bin/env python3
 """
-Script to add the color column to the audit_tasks table for per-site color wheel support.
+Migration module to add color column to audit_tasks table.
 """
-
 import os
-import sys
-import traceback
-from db_config import get_engine
-from sqlalchemy import text
+import logging
+import sqlite3
 
-def add_audit_task_color_column():
-    """Add the color column to the audit_tasks table."""
+logger = logging.getLogger(__name__)
+
+def migrate(db_connection=None):
+    """
+    Add color column to audit_tasks table if it doesn't exist.
+    
+    Args:
+        db_connection: SQLite database connection (optional)
+        
+    Returns:
+        bool: True if successful, False if failed
+    """
+    logger.info("Starting audit_task color column migration")
+    
     try:
-        engine = get_engine()
-        with engine.connect() as conn:
-            # Check if the column already exists
-            result = conn.execute(text("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='audit_tasks' AND column_name='color'
-            """))
-            if result.fetchone():
-                print("Column 'color' already exists in 'audit_tasks'.")
-                return True
-            print("Adding 'color' column to 'audit_tasks' table...")
-            conn.execute(text("""
-                ALTER TABLE audit_tasks ADD COLUMN color VARCHAR(32)
-            """))
-            print("Column 'color' added successfully.")
+        # If no connection provided, create one
+        connection_created = False
+        if db_connection is None:
+            appdata_dir = os.environ.get('APPDATA', os.path.expanduser('~'))
+            db_dir = os.path.join(appdata_dir, 'amrs-preventative-maintenance', 'AMRS-Maintenance-Tracker')
+            db_path = os.path.join(db_dir, 'amrs_maintenance.db')
+            
+            if not os.path.exists(db_path):
+                logger.error(f"Database not found at {db_path}")
+                return False
+                
+            db_connection = sqlite3.connect(db_path)
+            connection_created = True
+            logger.info(f"Connected to database at {db_path}")
+            
+        cursor = db_connection.cursor()
+        
+        # Check if audit_tasks table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_tasks';")
+        if not cursor.fetchone():
+            logger.info("audit_tasks table doesn't exist, skipping migration")
+            if connection_created:
+                db_connection.close()
+            return True
+            
+        # Check if color column already exists
+        cursor.execute("PRAGMA table_info(audit_tasks);")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'color' not in columns:
+            logger.info("Adding color column to audit_tasks table")
+            # For older SQLite versions that don't support IF NOT EXISTS in ALTER TABLE
+            cursor.execute("ALTER TABLE audit_tasks ADD COLUMN color TEXT DEFAULT '#3498db';")
+            db_connection.commit()
+            logger.info("Color column added successfully")
+        else:
+            logger.info("Color column already exists in audit_tasks table")
+            
+        if connection_created:
+            db_connection.close()
+            
         return True
+        
     except Exception as e:
-        print(f"Error adding color column to audit_tasks table: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"Error in audit_task color column migration: {e}")
         return False
 
+# If run directly
 if __name__ == "__main__":
-    success = add_audit_task_color_column()
-    sys.exit(0 if success else 1)
+    logging.basicConfig(level=logging.INFO)
+    result = migrate()
+    print(f"Migration {'successful' if result else 'failed'}")

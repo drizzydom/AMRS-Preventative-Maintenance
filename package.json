@@ -4,9 +4,10 @@
   "description": "AMRS Maintenance Tracker",
   "main": "electron_app/main.js",
   "scripts": {
-    "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "start": "electron electron_app/main.js",
+    "bundle-templates": "node electron_app/bundle-templates.js",
+    "build": "node electron_app/build.js",
+    "package": "electron-builder"
   },
   "build": {
     "appId": "com.amrs.maintenancetracker",
@@ -16,62 +17,13 @@
     },
     "files": [
       "electron_app/**/*",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
-      "!**/node_modules/*.d.ts",
-      "!**/node_modules/.bin",
-      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
-      "!.editorconfig",
-      "!**/._*",
-      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,__pycache__,thumbs.db,.gitignore,.gitattributes}",
-      "!**/node_modules/**/*",
-      "!**/__pycache__/*"
+      "!electron_app/templates/**/node_modules/**/*"
     ],
     "extraResources": [
       {
-        "from": "venv",
-        "to": "venv",
-        "filter": [
-          "**/*",
-          "!**/__pycache__/*",
-          "!**/*.pyc"
-        ]
-      },
-      {
-        "from": "app.py",
-        "to": "app.py"
-      },
-      {
-        "from": "app-launcher.py",
-        "to": "app-launcher.py"
-      },
-      {
-        "from": "static",
-        "to": "static"
-      },
-      {
-        "from": "templates",
-        "to": "templates"
-      },
-      {
-        "from": "modules",
-        "to": "modules"
-      },
-      {
-        "from": "requirements.txt",
-        "to": "requirements.txt"
-      },
-      {
-        "from": "flask-launcher.py",
-        "to": "flask-launcher.py"
-      },
-      {
-        "from": "models.py",
-        "to": "models.py"
-      },
-      {
-        "from": "auto_migrate.py",
-        "to": "auto_migrate.py"
+        "from": "electron_app/templates",
+        "to": "templates",
+        "filter": ["**/*"]
       }
     ],
     "publish": [
@@ -82,11 +34,10 @@
       }
     ],
     "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "electron_app/icons/app.png",
-      "compression": "store"
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
     },
     "nsis": {
       "oneClick": false,

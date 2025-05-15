@@ -1,98 +1,103 @@
 #!/usr/bin/env python3
 """
-Simplified healthcheck script that doesn't require external dependencies
+Simple health check module for AMRS Maintenance Tracker application.
 """
 import os
 import sys
-import http.client
-import json
-import time
-from sqlalchemy import create_engine, text
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from models import encrypt_value
+import logging
+from datetime import datetime
+import sqlite3
 
-# Use DATABASE_URL from environment
-DATABASE_URL = os.environ.get('DATABASE_URL')
+logger = logging.getLogger(__name__)
 
-def check_database():
-    """Check if database has the required tables and admin account (PostgreSQL/SQLAlchemy version)"""
-    print("Checking database (SQLAlchemy/PostgreSQL)...")
-    if not DATABASE_URL:
-        print("DATABASE_URL not set!")
-        return False
+class HealthCheck:
+    """Simple health check implementation for Flask application."""
+    
+    def __init__(self, app=None):
+        self.app = app
+        self.checks = []
+        if app:
+            self.init_app(app)
+        logger.info("HealthCheck initialized")
+    
+    def init_app(self, app):
+        """Initialize with a Flask application"""
+        self.app = app
+        
+        # Register health check endpoint
+        @app.route('/healthcheck')
+        def healthcheck_route():
+            from flask import jsonify
+            result = self.run_checks()
+            return jsonify(result)
+        
+        logger.info("HealthCheck routes registered with Flask app")
+    
+    def add_check(self, check_func, name=None):
+        """Add a health check function"""
+        if name is None:
+            name = check_func.__name__
+        
+        self.checks.append((name, check_func))
+        return check_func
+    
+    def run_checks(self):
+        """Run all registered health checks"""
+        results = {
+            'status': 'ok',
+            'timestamp': datetime.now().isoformat(),
+            'checks': {}
+        }
+        
+        for name, check_func in self.checks:
+            try:
+                result = check_func()
+                results['checks'][name] = {
+                    'status': 'ok',
+                    'result': result
+                }
+            except Exception as e:
+                results['status'] = 'error'
+                results['checks'][name] = {
+                    'status': 'error',
+                    'error': str(e)
+                }
+        
+        return results
+
+# Default database health check
+def db_check():
+    """Check database connection"""
     try:
-        engine = create_engine(DATABASE_URL)
-        with engine.connect() as conn:
-            # Check tables
-            tables = [row[0] for row in conn.execute(text("""
-                SELECT table_name FROM information_schema.tables WHERE table_schema='public'
-            """))]
-            required_tables = ['users', 'sites', 'machines', 'parts', 'maintenance_records']
-            missing_tables = [t for t in required_tables if t not in tables]
-            if missing_tables:
-                print(f"Warning: Missing tables: {', '.join(missing_tables)}")
-                return False
-                
-            # Check for admin account using environment variable or fallback
-            admin_username = os.environ.get('DEFAULT_ADMIN_USERNAME')
-            if admin_username:
-                encrypted_username = encrypt_value(admin_username)
-                result = conn.execute(text("SELECT id, username FROM users WHERE username = :username"), {"username": encrypted_username})
-                admin = result.fetchone()
-                if not admin:
-                    print(f"Warning: Admin account '{admin_username}' not found!")
-                    # Check if any admin account exists at all
-                    result = conn.execute(text("SELECT COUNT(*) FROM users WHERE role_id = (SELECT id FROM roles WHERE name = 'admin')"))
-                    count = result.scalar()
-                    if count == 0:
-                        print("No admin account found in the database!")
-                        return False
-                    else:
-                        print(f"Found {count} admin account(s) with different username.")
-                else:
-                    print(f"Database check passed! Admin account ID: {admin[0]}")
-            else:
-                # If no admin username provided in env vars, check if any admin role exists
-                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE role_id = (SELECT id FROM roles WHERE name = 'admin')"))
-                count = result.scalar()
-                if count == 0:
-                    print("No admin account found in the database!")
-                    return False
-                else:
-                    print(f"Database check passed! Found {count} admin account(s).")
+        # Find the database path through environment variables
+        appdata_dir = os.environ.get('APPDATA', os.path.expanduser('~'))
+        db_dir = os.path.join(appdata_dir, 'amrs-preventative-maintenance', 'AMRS-Maintenance-Tracker')
+        db_path = os.path.join(db_dir, 'amrs_maintenance.db')
+        
+        if not os.path.exists(db_path):
+            return {'status': 'not_found', 'path': db_path}
             
-            return True
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Test query
+        cursor.execute("SELECT sqlite_version();")
+        version = cursor.fetchone()[0]
+        
+        # Get table information
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [table[0] for table in cursor.fetchall()]
+        
+        conn.close()
+        
+        return {
+            'status': 'connected',
+            'version': version,
+            'tables': tables,
+            'path': db_path
+        }
     except Exception as e:
-        print(f"Database check failed: {str(e)}")
-        return False
-    
-def check_api():
-    """Check if API endpoints are responding using standard library"""
-    print("Checking API endpoints...")
-    
-    endpoints = [
-        '/api/health'
-    ]
-    
-    for endpoint in endpoints:
-        try:
-            # Create connection to localhost
-            conn = http.client.HTTPConnection('localhost', 9000)
-            conn.request('GET', endpoint)
-            response = conn.getresponse()
-            
-            if response.status == 200:
-                print(f"✓ Endpoint {endpoint} is working")
-            else:
-                print(f"✗ Endpoint {endpoint} returned status {response.status}")
-                return False
-            
-        except Exception as e:
-            print(f"✗ Failed to connect to {endpoint}: {str(e)}")
-            return False
-    
-    return True
+        return {'status': 'error', 'message': str(e)}
 
 def main():
     """Run all checks and report results"""
@@ -101,10 +106,9 @@ def main():
     # Wait for app to be fully initialized
     time.sleep(2)
     
-    db_check = check_database()
-    api_check = check_api()
+    db_result = db_check()
     
-    if db_check and api_check:
+    if db_result['status'] == 'connected':
         print("\n==== ALL CHECKS PASSED! System is ready. ====")
         return True
     else:

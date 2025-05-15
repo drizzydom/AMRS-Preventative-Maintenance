@@ -28,7 +28,6 @@ def main():
     site_packages_paths = [
         os.path.join(script_dir, 'venv', 'Lib', 'site-packages'),  # Windows
         os.path.join(script_dir, 'venv', 'lib', 'python3.9', 'site-packages'),  # Unix
-        os.path.join(script_dir, 'site-packages'),  # Fallback direct location
     ]
     
     for site_pkg_path in site_packages_paths:
@@ -56,20 +55,6 @@ def main():
         print("ERROR: app.py not found!")
         print(f"Searched paths: {app_paths}")
         sys.exit(1)
-    
-    # Try to install missing packages if necessary
-    try:
-        # First try to import and immediately run the installer if available
-        dependencies_installer_path = os.path.join(script_dir, 'install_dependencies.py')
-        if os.path.exists(dependencies_installer_path):
-            print(f"Running dependency installer from {dependencies_installer_path}")
-            spec = importlib.util.spec_from_file_location("install_deps", dependencies_installer_path)
-            deps_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(deps_module)
-            if hasattr(deps_module, 'main'):
-                deps_module.main()
-    except Exception as e:
-        print(f"Error running dependency installer: {str(e)}")
     
     # List available modules for debugging
     try:
@@ -100,13 +85,6 @@ def main():
             port = int(os.environ.get('PORT', 5000))
             host = os.environ.get('HOST', '127.0.0.1')
             print(f"Running Flask app on port {port}")
-            print("Setting Flask environment variables:")
-            os.environ['FLASK_ENV'] = 'production'
-            os.environ['FLASK_APP'] = app_path
-            os.environ['FLASK_DEBUG'] = '0'
-            print(f"  FLASK_ENV={os.environ.get('FLASK_ENV')}")
-            print(f"  FLASK_APP={os.environ.get('FLASK_APP')}")
-            print(f"  FLASK_DEBUG={os.environ.get('FLASK_DEBUG')}")
             app_module.app.run(host=host, port=port)
         else:
             print("ERROR: No app or main function found in app.py")

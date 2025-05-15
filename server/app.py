@@ -8,14 +8,35 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import (
     Flask, request, jsonify, render_template, redirect, 
-    url_for, session, g, abort
+    url_for, session, g, abort, make_response
 )
 from werkzeug.security import check_password_hash, generate_password_hash
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+
+# Import the API sync module we created
+from api_sync import register_api_blueprint, generate_token
 
 # Initialize Flask application
 app = Flask(__name__)
+CORS(app)
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key_for_debugging')
 app.config['DEBUG'] = os.environ.get('DEBUG', 'False').lower() == 'true'
+
+# Configure PostgreSQL database
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URI', 
+    'postgresql://username:password@localhost/amrs_maintenance'
+)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['JWT_SECRET'] = os.environ.get('JWT_SECRET', 'development_secret_key')
+
+# Initialize extensions
+db = SQLAlchemy(app)
+
+# Register API blueprint for sync functionality
+register_api_blueprint(app)
 
 # Database configuration
 DATABASE = '/app/data/app.db'
@@ -43,6 +64,18 @@ def login_required(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+
+# User model (example)
+class User(db.Model):
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    role = db.Column(db.String(20), default='user')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 # Routes
 @app.route('/')
@@ -152,6 +185,63 @@ def login():
             return redirect(url_for('index'))
     
     return render_template('login.html', error=error)
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """API login endpoint for web and Electron app"""
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    # Check if request is from Electron app
+    is_electron = request.headers.get('X-Electron-App') == 'true'
+    
+    if not username or not password:
+        return jsonify({'message': 'Username and password are required'}), 400
+    
+    # Find user
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password_hash(user.password, password):
+        return jsonify({'message': 'Invalid credentials'}), 401
+    
+    # Generate token
+    token = generate_token(user.id, user.username, user.role)
+    
+    # If from Electron app, return token for offline use
+    if is_electron:
+        return jsonify({
+            'token': token,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role
+            },
+            'message': 'Login successful'
+        })
+    
+    # For web app, set token in cookie
+    resp = make_response(jsonify({
+        'message': 'Login successful',
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role
+        }
+    }))
+    
+    # Set cookie with token for web app
+    resp.set_cookie(
+        'auth_token', 
+        token, 
+        httponly=True, 
+        secure=True,
+        samesite='Strict',
+        max_age=60*60*24*7  # 7 days
+    )
+    
+    return resp
 
 @app.route('/logout')
 def logout():
