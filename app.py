@@ -15,6 +15,24 @@ from io import BytesIO
 if any('pytest' in arg for arg in sys.argv):
     os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
+# --- ELECTRON DETECTION: Check if running in Electron environment ---
+def is_electron():
+    """Detect if running in Electron environment"""
+    return os.environ.get('ELECTRON_RUN_AS_NODE') is not None or os.environ.get('AMRS_ELECTRON') == '1' or os.environ.get('ELECTRON') == '1'
+
+# Set environment variables based on Electron mode
+if is_electron():
+    print("[APP] Running in Electron mode")
+    # Import Electron configuration
+    try:
+        from electron_config import get_database_uri, ElectronConfig
+        os.environ['DATABASE_URL'] = get_database_uri()
+        print(f"[APP] Using Electron database: {os.environ['DATABASE_URL']}")
+    except ImportError as e:
+        print(f"[APP] Warning: Failed to load Electron configuration: {e}")
+else:
+    print("[APP] Running in standard web mode")
+
 # Third-party imports
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort, current_app, send_file
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
@@ -31,6 +49,27 @@ from jinja2 import Environment, FileSystemLoader
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
+
+# Near the top of your file, add:
+try:
+    from cors_method_handlers import apply_cors_fixes
+except ImportError:
+    # Fallback implementation if module is not found
+    def apply_cors_fixes(app):
+        @app.after_request
+        def add_cors_headers(response):
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+            return response
+            
+        @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+        @app.route('/<path:path>', methods=['OPTIONS'])
+        def options_handler(path):
+            from flask import make_response
+            return make_response('', 204)
+        
+        return app
 
 # Patch is_admin property to User class immediately after import
 @property
@@ -94,8 +133,28 @@ storage_ok = check_persistent_storage()
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
 
-# Load configuration from config.py for secure local database
-app.config.from_object('config.Config')
+# Configure the app based on environment
+if is_electron():
+    # Use the Electron-specific configuration
+    app.config.from_object('electron_config.ElectronConfig')
+    # Ensure the database directory exists
+    from electron_config import get_app_dir
+    app_dir = get_app_dir()
+    print(f"[APP] Using Electron app directory: {app_dir}")
+    
+    # Initialize offline adapter
+    from offline_adapter import initialize as initialize_offline_adapter
+    initialize_offline_adapter()
+    
+    # Register Electron-specific routes
+    from electron_api import register_electron_routes
+    register_electron_routes(app)
+else:
+    # Load configuration from config.py for secure local database
+    app.config.from_object('config.Config')
+
+# Apply CORS fixes
+app = apply_cors_fixes(app)
 
 # Add custom Jinja2 filters
 @app.template_filter('format_datetime')
@@ -2590,23 +2649,11 @@ def sync_data():
                     'items': []  # Actual data would go here
                 }
             })
-        else:
-            return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
+        else:            return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/health-check')
-def health_check():
-
-    """Basic healthcheck endpoint."""
-    try:
-        # Update to use connection-based execute pattern
-        with db.engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return jsonify({'status': 'ok'}), 200
-    except Exception as e:
-        app.logger.error(f"Health check failed: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+# Health check endpoint has been moved to line ~3443
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -3403,6 +3450,28 @@ def delete_audit_task(audit_task_id):
     return redirect(url_for('audits_page'))
 
 import app_debug_helper  # Register debug routes
+
+# Health check endpoint for Electron
+@app.route('/health-check')
+def health_check():
+    """Health check endpoint for Electron connection verification"""
+    try:
+        # Verify database connection
+        db_ok = db.session.execute(text('SELECT 1')).fetchone() is not None
+        return jsonify({
+            'status': 'ok',
+            'timestamp': datetime.now().isoformat(),
+            'database': 'connected' if db_ok else 'error',
+            'mode': 'electron' if is_electron() else 'web'
+        })
+    except Exception as e:
+        app.logger.error(f"Health check failed: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat(),
+            'mode': 'electron' if is_electron() else 'web'
+        }), 500
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
