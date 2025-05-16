@@ -4,10 +4,14 @@
   "description": "AMRS Maintenance Tracker",
   "main": "electron_app/main.js",
   "scripts": {
-    "start": "node electron_app/create-templates.js && electron electron_app/main.js",
-    "bundle-templates": "node electron_app/bundle-templates.js",
-    "build": "node electron_app/create-templates.js && node electron_app/build.js",
-    "package": "electron-builder"
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "postinstall": "node electron_app/install-python-deps.js",
+    "prepare-python": "node electron_app/prepare-python.js",
+    "prebuild": "npm run prepare-python",
+    "build": "electron-builder"
   },
   "build": {
     "appId": "com.amrs.maintenancetracker",
@@ -23,7 +27,9 @@
       {
         "from": "electron_app/templates",
         "to": "templates",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "publish": [
@@ -49,12 +55,19 @@
   "license": "ISC",
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "extract-zip": "^2.0.1",
+    "rimraf": "^3.0.2"
   },
   "dependencies": {
+    "axios": "^1.9.0",
     "canvas": "^3.1.0",
+    "cors": "^2.8.5",
     "electron-log": "^5.3.3",
     "electron-updater": "^6.6.2",
-    "icon-gen": "^5.0.0"
+    "express": "^4.21.2",
+    "icon-gen": "^5.0.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }
