@@ -1,0 +1,58 @@
+appId: "com.amrs.maintenance"
+productName: "AMRS Maintenance Tracker"
+copyright: "Copyright © 2023 AMRS"
+
+directories:
+  output: "dist"
+  buildResources: "build"
+
+files:
+  - "**/*"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/.bin"
+  - "!**/.vscode/*"
+  - "!**/.idea/*"
+  - "!**/.vs/*"
+  - "!**/._*"
+  - "!**/{.DS_Store,.git,.gitignore,.npmignore}"
+  - "!{.env,.env.*,.*.env,*.log}"
+  - "electron_app/**/*"
+  - "templates/**/*"
+  - "static/**/*"
+  - "app.py"
+  - "requirements.txt"
+  - "instance/**/*"
+
+extraResources:
+  - from: "bundled-python"
+    to: "python"
+    filter: ["**/*"]
+
+# Uncomment to bundle Python (for production)
+# extraFiles:
+#   - from: "bundled-python"
+#     to: "python"
+#     filter: ["**/*"]
+
+win:
+  target: 
+    - "nsis"
+  icon: "build/icon.ico"
+
+mac:
+  target: 
+    - "dmg"
+  category: "public.app-category.utilities"
+  icon: "build/icon.icns"
+
+linux:
+  target: 
+    - "AppImage"
+  category: "Utility"
+  icon: "build/icon.png"
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false

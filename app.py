@@ -11,6 +11,86 @@ from functools import wraps
 import traceback
 from io import BytesIO
 
+# Set the environment variable for Electron mode if needed
+if os.environ.get('ELECTRON_MODE') != 'true':
+    print("[APP] Running in standard web mode")
+else:
+    print("[APP] Running in Electron mode")
+    # Make sure the current directory is in the Python path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+
+# Fix SQLAlchemy & Flask-SQLAlchemy dependencies for compatibility
+try:
+    import sqlalchemy
+    print(f"[APP] SQLAlchemy version: {sqlalchemy.__version__}")
+    
+    # Fix for SQLAlchemy 2.0.0 and Flask-SQLAlchemy 3.0.0 compatibility
+    if not hasattr(sqlalchemy, '__all__'):
+        print("[APP] Adding missing __all__ attribute to SQLAlchemy module")
+        sqlalchemy.__all__ = [
+            'Column', 'Table', 'Integer', 'String', 'Text', 'Boolean',
+            'ForeignKey', 'DateTime', 'Date', 'Time', 'Float', 'create_engine'
+        ]
+    
+    # Fix for SQLAlchemy ORM missing __all__ attribute
+    import sqlalchemy.orm
+    if not hasattr(sqlalchemy.orm, '__all__'):
+        print("[APP] Adding missing __all__ attribute to SQLAlchemy ORM module")
+        sqlalchemy.orm.__all__ = [
+            'relationship', 'backref', 'session', 'sessionmaker', 'scoped_session',
+            'Query', 'aliased', 'joinedload', 'selectinload', 'lazyload'
+        ]
+except ImportError:
+    print("[APP] SQLAlchemy not found, attempting to install...")
+    try:
+        import pip
+        pip.main(['install', 'sqlalchemy==1.4.46'])  # Use a compatible version
+        import sqlalchemy
+        print(f"[APP] Installed SQLAlchemy version: {sqlalchemy.__version__}")
+    except Exception as e:
+        print(f"[APP] Failed to install SQLAlchemy: {e}")
+
+try:
+    import flask_sqlalchemy
+    print(f"[APP] Flask-SQLAlchemy version: {flask_sqlalchemy.__version__}")
+    
+    # Monkey patch Flask-SQLAlchemy's __getattr__ method to avoid the __all__ lookup
+    from flask_sqlalchemy.extension import SQLAlchemy as FSQLAlchemy
+    original_getattr = FSQLAlchemy.__getattr__
+    
+    def patched_getattr(self, name):
+        try:
+            return original_getattr(self, name)
+        except AttributeError as e:
+            if "has no attribute '__all__'" in str(e):
+                # Direct fallback to sqlalchemy when __all__ is missing
+                import sqlalchemy
+                if hasattr(sqlalchemy, name):
+                    return getattr(sqlalchemy, name)
+                import sqlalchemy.orm
+                if hasattr(sqlalchemy.orm, name):
+                    return getattr(sqlalchemy.orm, name)
+            raise
+    
+    FSQLAlchemy.__getattr__ = patched_getattr
+    print("[APP] Patched Flask-SQLAlchemy __getattr__ method")
+    
+except ImportError:
+    print("[APP] Flask-SQLAlchemy not found, attempting to install...")
+    try:
+        import pip
+        pip.main(['install', 'flask_sqlalchemy==3.0.0'])
+        import flask_sqlalchemy
+        print(f"[APP] Installed Flask-SQLAlchemy version: {flask_sqlalchemy.__version__}")
+    except Exception as e:
+        print(f"[APP] Failed to install Flask-SQLAlchemy: {e}")
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # --- TEST DB PATCH: Force in-memory SQLite for pytest runs ---
 if any('pytest' in arg for arg in sys.argv):
     os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
@@ -19,6 +99,30 @@ if any('pytest' in arg for arg in sys.argv):
 def is_electron():
     """Detect if running in Electron environment"""
     return os.environ.get('ELECTRON_RUN_AS_NODE') is not None or os.environ.get('AMRS_ELECTRON') == '1' or os.environ.get('ELECTRON') == '1'
+
+# Check if we're in offline mode
+OFFLINE_MODE = os.environ.get('OFFLINE_MODE') == '1'
+FORCED_OFFLINE_MODE = os.environ.get('FORCED_OFFLINE_MODE') == '1'
+
+if OFFLINE_MODE:
+    logger.info("Starting Flask in OFFLINE MODE")
+    try:
+        from offline_mode_handler import configure_offline_mode
+    except ImportError as e:
+        logger.error(f"Failed to import offline mode handler: {e}")
+        # Create a simple health endpoint anyway
+        @app.route('/health')
+        def offline_health_check():  # Renamed from health_check to offline_health_check
+            return jsonify({
+                'status': 'ok',
+                'mode': 'offline',
+                'error': str(e)
+            })
+            
+        # Basic catch-all for offline routes
+        @app.route('/offline/<path:path>')
+        def catch_all_offline(path):
+            return render_template('login.html', offline_mode=True)
 
 # Set environment variables based on Electron mode
 if is_electron():
@@ -47,7 +151,15 @@ import smtplib
 from jinja2 import Environment, FileSystemLoader
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
+try:
+    from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
+    print("[APP] Successfully imported models")
+except Exception as e:
+    print(f"[APP] Error importing models: {e}")
+    print(f"[APP] Python path: {sys.path}")
+    print(f"[APP] Current directory: {os.path.abspath('.')}")
+    raise
+
 from auto_migrate import run_auto_migration
 
 # Near the top of your file, add:
@@ -70,6 +182,9 @@ except ImportError:
             return make_response('', 204)
         
         return app
+
+# Add this import for offline mode support
+from offline_mode_setup import setup_offline_mode
 
 # Patch is_admin property to User class immediately after import
 @property
@@ -130,8 +245,34 @@ def check_persistent_storage():
 # Call this function before your database setup
 storage_ok = check_persistent_storage()
 
-# Initialize Flask app
+# Create your Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Setup offline mode if needed
+if os.environ.get('OFFLINE_MODE') == '1':
+    try:
+        from simple_flask_offline import setup_offline_routes
+        setup_offline_routes(app)
+        app.logger.info("Offline routes configured")
+    except Exception as e:
+        app.logger.error(f"Error setting up offline routes: {e}")
+        
+        # Add basic health check endpoint in case of failure, with a unique name
+        @app.route('/health')
+        def offline_health_check():  # Renamed from health_check to offline_health_check
+            return jsonify({
+                'status': 'ok',
+                'mode': 'offline',
+                'error': str(e)
+            })
+            
+        # Basic catch-all for offline routes
+        @app.route('/offline/<path:path>')
+        def catch_all_offline(path):
+            return render_template('login.html', offline_mode=True)
+
+# Set up offline mode support
+offline_handler = setup_offline_mode(app)
 
 # Configure the app based on environment
 if is_electron():
@@ -152,6 +293,30 @@ if is_electron():
 else:
     # Load configuration from config.py for secure local database
     app.config.from_object('config.Config')
+
+# If in offline mode, configure the offline handler
+if OFFLINE_MODE:
+    try:
+        offline_handler = configure_offline_mode(app)
+        logger.info("Offline mode handler configured successfully")
+    except NameError:
+        logger.warning("Offline mode handler not available")
+    except Exception as e:
+        logger.error(f"Error configuring offline mode: {e}")
+        # Add a minimal health endpoint in case the import fails
+        @app.route('/health')
+        def basic_health():
+            return jsonify({'status': 'ok', 'offline_mode': True, 'error': str(e)})
+        # Add a simple catch-all route to handle any missing routes in offline mode
+        @app.route('/offline/<path:path>')
+        def catch_all_offline(path):
+            app.logger.info(f"Catch-all for offline path: {path}")
+            if path == 'login':
+                return render_template('login.html', offline_mode=True)
+            elif path == 'dashboard':
+                return render_template('dashboard.html', offline_mode=True)
+            else:
+                return render_template('index.html', offline_mode=True)
 
 # Apply CORS fixes
 app = apply_cors_fixes(app)
@@ -1567,7 +1732,7 @@ def audit_history_print_view():
     machine_data = {}
     for completion in completions:
         # Get the date string from the completion date
-        date_str = completion.created_at.date().strftime('%Y-%m-%d')
+        date_str = completion.created_at.date().strftime('%Y-%m-%d');
         
         # Initialize machine entry if not exists
         if completion.machine_id not in machine_data:
@@ -1587,12 +1752,11 @@ def audit_history_print_view():
     all_tasks_per_machine = {}
     for machine in machines:
         all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
-    
+
     # Get all users for reference
     users = {user.id: user for user in User.query.all()}
     
     # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
-    from collections import defaultdict
     interval_bars = defaultdict(lambda: defaultdict(list))
     for machine in machines:
         for task in all_tasks_per_machine[machine.id]:
@@ -1681,8 +1845,7 @@ def admin_users():
                 flash(f'Email "{email}" is already registered.', 'danger')
                 return redirect('/admin/users')
             
-            # Validate password length
-            if len(password) < 8:
+            # Validate password length            if len(password) < 8:
                 flash('Password must be at least 8 characters long.', 'danger')
                 return redirect('/admin/users')
             
@@ -1730,8 +1893,8 @@ def admin_users():
             'users_list': '/admin/users',
             'roles_list': '/admin/roles',
             'dashboard': '/dashboard',
-            'admin': '/admin'
-        }
+            'admin': '/admin',
+               }
         
         # Use the specific template instead of the generic admin.html
         return render_template('admin/users.html', 
@@ -1796,7 +1959,7 @@ def edit_user(user_id):
                     # Force detach from previous role
                     user.role_id = None
                     db.session.flush()
-                    # Assign new role
+                    # # Assign new role
                     user.role = role
                     user.role_id = role.id
                     new_role_name = role.name
@@ -2556,7 +2719,7 @@ def reset_password(token):
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
         if not password or len(password) < 8:
-            flash('Password must be at least 8 characterslong.', 'danger')
+            flash('Password must be at least 8 characters long.', 'danger')
             return redirect(url_for('reset_password', token=token))
         elif password != confirm_password:
             flash('Passwords do not match.', 'danger')
@@ -2653,7 +2816,21 @@ def sync_data():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# Health check endpoint has been moved to line ~3443
+# Health check endpoint for Electron - checks if an endpoint already exists first
+def endpoint_exists(app, endpoint_name):
+    """Check if an endpoint already exists in the Flask app"""
+    return endpoint_name in app.view_functions
+
+# Only register health check if it doesn't already exist
+if not endpoint_exists(app, 'health_check'):
+    @app.route('/health')
+    def health_check():
+        """Health check endpoint to verify the API is running."""
+        return jsonify({
+            "status": "ok",
+            "timestamp": datetime.now().isoformat(),
+            "electron_mode": os.environ.get('ELECTRON_MODE') == 'true'
+        })
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -2993,7 +3170,7 @@ def manage_parts():
         if machine_id:
             # Verify user can access this machine
             machine = Machine.query.get(machine_id)
-            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]):
+            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
                 flash('You do not have access to this machine.', 'danger')
                 return redirect(url_for('manage_parts'))
             
@@ -3250,21 +3427,6 @@ def maintenance_records_page():
     
     machine_ids = [machine.id for machine in machines]
     
-    if machine_id:
-        # Verify user can access this machine
-        machine = Machine.query.get(machine_id)
-        if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
-            flash('You do not have access to this machine.', 'danger')
-            return redirect(url_for('maintenance_records_page'))
-            
-        # Filter parts by selected machine
-        parts = Part.query.filter_by(machine_id=machine_id).all()
-    else:
-        # Get all parts for machines the user has access to
-        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
-    
-    part_ids = [part.id for part in parts]
-    
     if part_id:
         # Verify user can access this part
         part = Part.query.get(part_id)
@@ -3452,37 +3614,27 @@ def delete_audit_task(audit_task_id):
 import app_debug_helper  # Register debug routes
 
 # Health check endpoint for Electron
-@app.route('/health-check')
+@app.route('/health')
 def health_check():
-    """Health check endpoint for Electron connection verification"""
-    try:
-        # Verify database connection
-        db_ok = db.session.execute(text('SELECT 1')).fetchone() is not None
-        return jsonify({
-            'status': 'ok',
-            'timestamp': datetime.now().isoformat(),
-            'database': 'connected' if db_ok else 'error',
-            'mode': 'electron' if is_electron() else 'web'
-        })
-    except Exception as e:
-        app.logger.error(f"Health check failed: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat(),
-            'mode': 'electron' if is_electron() else 'web'
-        }), 500
+    """Health check endpoint to verify the API is running."""
+    return jsonify({
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "electron_mode": os.environ.get('ELECTRON_MODE') == 'true'
+    })
 
+# Add a flag to detect if running in Electron
+is_electron = os.environ.get('ELECTRON_MODE') == 'true'
+
+# Modify the main section to allow running in Electron
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
-    parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
-    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
-    args = parser.parse_args()
-    port = args.port or int(os.environ.get('PORT', 10000))
-    debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
-    
-    print(f"[APP] Starting Flask server on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    # Check if we're running in Electron mode
+    if is_electron:
+        # When running in Electron, use a fixed port and disable debug mode
+        app.run(host='127.0.0.1', port=5000, debug=False)
+    else:
+        # Normal operation for development
+        app.run(debug=True)
 
 # Import and patch audit history at the very end to avoid circular import
 try:

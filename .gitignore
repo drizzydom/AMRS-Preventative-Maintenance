@@ -66,3 +66,18 @@ backups/
 
 venv/.DS_Store
 .DS_Store
+
+# Make sure these directories aren't ignored
+!static/
+!static/css/
+!static/js/
+!static/images/
+!static/img/ 
+!static/fonts/
+
+# Make sure we have at least one file in each directory to ensure git tracks it
+!static/css/.gitkeep
+!static/js/.gitkeep
+!static/images/.gitkeep
+!static/img/.gitkeep
+!static/fonts/.gitkeep
