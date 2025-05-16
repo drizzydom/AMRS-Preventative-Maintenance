@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2025-05-16T04:25:40.584Z",
+  "directories": [
+    "static",
+    "static\\css",
+    "static\\js",
+    "static\\images",
+    "static\\img",
+    "static\\fonts"
+  ],
+  "purpose": "Static resources for AMRS Preventative Maintenance application"
+}

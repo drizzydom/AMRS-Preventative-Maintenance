@@ -1,595 +1,144 @@
-{% extends "base.html" %}
-
-{% block title %}Dashboard{% endblock %}
-
-{% block header_title %}Dashboard{% endblock %}
-
-{% block content %}
-<div class="dashboard">
-    {% if no_sites %}
-    <!-- Display message for users with no site assignments -->
-    <div class="alert alert-warning">
-        <h4><i class="fas fa-exclamation-triangle me-2"></i>No Sites Assigned</h4>
-        <p>You don't have any sites assigned to your account. Please contact your administrator to get access to sites.</p>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AMRS - Dashboard</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 0; 
+      background-color: #f5f5f5; 
+    }
+    .offline-banner { 
+      background: #f39c12; 
+      color: white; 
+      padding: 10px; 
+      text-align: center; 
+    }
+    .container { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      padding: 20px; 
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    h1 { 
+      color: #2c3e50; 
+      margin: 0;
+    }
+    .admin-badge {
+      background: #e74c3c;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-size: 14px;
+    }
+    .user-info {
+      margin-bottom: 20px;
+      font-style: italic;
+      color: #7f8c8d;
+    }
+    .card { 
+      background: white; 
+      border-radius: 5px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+      padding: 20px; 
+      margin-bottom: 20px; 
+    }
+    .card h2 {
+      margin-top: 0;
+      color: #2c3e50;
+    }
+    .button {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #3498db;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+    }
+    .button:hover {
+      background: #2980b9;
+    }
+    .logout-button {
+      background: #e74c3c;
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-banner">You are in offline mode</div>
+  <div class="container">
+    <div class="header">
+      <h1>Dashboard</h1>
+      <div id="admin-badge" style="display: none;" class="admin-badge">Admin Mode</div>
     </div>
-    {% elif error %}
-    <!-- Display error message when dashboard fails to load -->
-    <div class="alert alert-danger">
-        <h4><i class="fas fa-exclamation-circle me-2"></i>Error Loading Dashboard</h4>
-        <p>There was a problem loading your dashboard data. Please try refreshing the page or contact support if the issue persists.</p>
+    
+    <div class="user-info">
+      Logged in as: <span id="username">User</span>
     </div>
-    {% else %}
-    <!-- Site Filter Dropdown - Only show if user has access to multiple sites -->
-    {% if sites|length > 1 %}
-    <div class="card mb-3">
-        <div class="card-body py-2">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <label for="site-filter" class="form-label mb-0 me-2"><i class="fas fa-filter me-1"></i> Filter by Site:</label>
-                    <select class="form-select form-select-sm d-inline-block w-auto" id="site-filter">
-                        <option value="all" selected>All Sites</option>
-                        {% for site in sites %}
-                        <option value="{{ site.id }}">{{ site.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <small class="text-muted">Currently showing: <span id="current-filter">All Sites</span></small>
-            </div>
-        </div>
-    </div>
-    {% else %}
-    <!-- Single site users don't need a filter dropdown -->
-    <div class="d-none" id="single-site-identifier" data-site-id="{{ sites[0].id if sites }}"></div>
-    {% endif %}
-
-    <!-- Status counters -->
-    <div class="row g-2 mb-4">
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-danger h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="stats-icon bg-danger bg-opacity-10 text-danger">
-                            <i class="fas fa-exclamation-triangle fa-lg"></i>
-                        </div>
-                        <div>
-                            <div class="stats-value text-danger">{{ overdue_count }}</div>
-                            <div class="stats-label">Overdue</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-warning h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="stats-icon bg-warning bg-opacity-10 text-warning">
-                            <i class="fas fa-clock fa-lg"></i>
-                        </div>
-                        <div>
-                            <div class="stats-value text-warning">{{ due_soon_count }}</div>
-                            <div class="stats-label">Due Soon</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-success h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="stats-icon bg-success bg-opacity-10 text-success">
-                            <i class="fas fa-check fa-lg"></i>
-                        </div>
-                        <div>
-                            <div class="stats-value text-success">{{ ok_count }}</div>
-                            <div class="stats-label">OK</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-info h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="stats-icon bg-info bg-opacity-10 text-info">
-                            <i class="fas fa-cog fa-lg"></i>
-                        </div>
-                        <div>
-                            <div class="stats-value text-info">{{ total_parts }}</div>
-                            <div class="stats-label">Total Parts</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Maintenance Panels -->
-    <div class="row g-2">
-        <!-- Overdue Parts Panel -->
-        {% if overdue_count > 0 %}
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-exclamation-triangle text-danger me-2"></i>
-                        Overdue Maintenance
-                    </h5>
-                    <span class="badge bg-danger">{{ overdue_count }}</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive d-none d-md-block">
-                        <table class="table table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Part</th>
-                                    <th>Machine</th>
-                                    <th class="hide-sm">Site</th>
-                                    <th>Overdue</th>
-                                    <th>Next Maintenance</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for site in sites %}
-                                    {% for machine in site.machines %}
-                                        {% for part in machine.parts %}
-                                            {% set days_until = (part.next_maintenance - now).days %}
-                                            {% if days_until < 0 %}
-                                                <tr data-site-id="{{ site.id }}">
-                                                    <td>{{ part.name }}</td>
-                                                    <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
-                                                    <td>{{ site.name }}</td>
-                                                    <td><span class="text-danger fw-bold">{{ -days_until }} days</span></td>
-                                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
-                                                    <td>
-                                                        <!-- Maintenance button in the overdue parts panel -->
-                                                        {% if has_permission('maintenance.record') %}
-                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                            <i class="fas fa-tools"></i> Maintenance
-                                                        </a>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endfor %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    <!-- Mobile card-list version -->
-                    <div class="d-block d-md-none px-2 py-2">
-                        {% for site in sites %}
-                            {% for machine in site.machines %}
-                                {% for part in machine.parts %}
-                                    {% set days_until = (part.next_maintenance - now).days %}
-                                    {% if days_until < 0 %}
-                                    <div class="mobile-table-card mb-2" data-site-id="{{ site.id }}">
-                                        <div class="fw-bold">{{ part.name }}</div>
-                                        <div><span class="text-muted">Machine:</span> {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</div>
-                                        <div><span class="text-muted">Site:</span> {{ site.name }}</div>
-                                        <div><span class="text-danger fw-bold">Overdue: {{ -days_until }} days</span></div>
-                                        <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
-                                        <div class="mt-2">
-                                            <!-- Mobile card-list version - maintenance button -->
-                                            {% if has_permission('maintenance.record') %}
-                                            <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                <i class="fas fa-tools"></i> Maintenance
-                                            </a>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endfor %}
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Due Soon Parts Panel -->
-        {% if due_soon_count > 0 %}
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-clock text-warning me-2"></i> 
-                        Due Soon
-                    </h5>
-                    <span class="badge bg-warning text-dark">{{ due_soon_count }}</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive d-none d-md-block">
-                        <table class="table table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Part</th>
-                                    <th>Machine</th>
-                                    <th>Site</th>
-                                    <th>Due In</th>
-                                    <th>Next Maintenance</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for site in sites %}
-                                    {% for machine in site.machines %}
-                                        {% for part in machine.parts %}
-                                            {% set days_until = (part.next_maintenance - now).days %}
-                                            {% if days_until >= 0 and days_until <= site.notification_threshold %}
-                                                <tr data-site-id="{{ site.id }}">
-                                                    <td>{{ part.name }}</td>
-                                                    <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
-                                                    <td>{{ site.name }}</td>
-                                                    <td><span class="text-warning fw-bold">{{ days_until }} days</span></td>
-                                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
-                                                    <td>
-                                                        {% if has_permission('maintenance.record') %}
-                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                            <i class="fas fa-tools"></i> Maintenance
-                                                        </a>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endfor %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    <!-- Mobile card-list version -->
-                    <div class="d-block d-md-none px-2 py-2">
-                        {% for site in sites %}
-                            {% for machine in site.machines %}
-                                {% for part in machine.parts %}
-                                    {% set days_until = (part.next_maintenance - now).days %}
-                                    {% if days_until >= 0 and days_until <= site.notification_threshold %}
-                                    <div class="mobile-table-card mb-2" data-site-id="{{ site.id }}">
-                                        <div class="fw-bold">{{ part.name }}</div>
-                                        <div><span class="text-muted">Machine:</span> {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</div>
-                                        <div><span class="text-muted">Site:</span> {{ site.name }}</div>
-                                        <div><span class="text-warning fw-bold">Due In: {{ days_until }} days</span></div>
-                                        <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
-                                        <div class="mt-2">
-                                            <!-- Mobile card-list version - maintenance button -->
-                                            {% if has_permission('maintenance.record') %}
-                                            <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                <i class="fas fa-tools"></i> Maintenance
-                                            </a>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endfor %}
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Sites Overview -->
-    {% if sites %}
+    
     <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">
-                <i class="fas fa-building me-2"></i>
-                Sites Overview
-            </h5>
-            <div class="d-flex align-items-center">
-                <button id="toggleAllMachineParts" class="btn btn-sm btn-outline-secondary">
-                    <i class="fas fa-eye me-1"></i>
-                    <span id="toggleAllText">Show All Parts</span>
-                </button>
-            </div>
-        </div>
-        <div class="card-body p-0">
-            <div class="accordion" id="sitesAccordion">
-                {% for site in sites %}
-                <div class="accordion-item border-0 border-bottom site-item" data-site-id="{{ site.id }}">
-                    <h2 class="accordion-header site-header" id="heading-site-{{ site.id }}">
-                        <button class="accordion-button collapsed site-accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#site-{{ site.id }}" aria-expanded="false" aria-controls="site-{{ site.id }}">
-                            <div class="d-flex align-items-center w-100">
-                                <div class="flex-grow-1">
-                                    <div class="site-title">{{ site.name }}</div>
-                                    <span class="text-muted d-inline-block text-truncate site-location">{{ site.location }}</span>
-                                </div>
-                                <!-- Site statistics moved to inside the accordion panel -->
-                            </div>
-                        </button>
-                    </h2>
-                    <div id="site-{{ site.id }}" class="accordion-collapse collapse" aria-labelledby="heading-site-{{ site.id }}" data-bs-parent="#sitesAccordion">
-                        <div class="accordion-body p-0">
-                            <!-- Site statistics summary -->
-                            <div class="site-stats-summary px-3 py-2 bg-light border-bottom">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        {% set site_status = site.get_parts_status(now) %}
-                                        {% if site_status.overdue|length > 0 %}
-                                            <span class="badge bg-danger me-1">{{ site_status.overdue|length }} Parts Overdue</span>
-                                        {% endif %}
-                                        
-                                        {% if site_status.due_soon|length > 0 %}
-                                            <span class="badge bg-warning text-dark me-1">{{ site_status.due_soon|length }} Parts Due Soon</span>
-                                        {% endif %}
-                                        
-                                        {% if site_status.overdue|length == 0 and site_status.due_soon|length == 0 %}
-                                            <span class="badge bg-success me-1">All Parts OK</span>
-                                        {% endif %}
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-primary">{{ site.machines|length }} Machines</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="table-responsive">
-                              <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
-                              <table class="table table-hover mb-0">
-                                <thead>
-                                  <tr>
-                                    <th>Machine</th>
-                                    <th class="hide-sm">Model</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {% for machine in site.machines %}
-                                  {% set overdue_parts = [] %}
-                                  {% set due_soon_parts = [] %}
-                                  {% set ok_parts = [] %}
-                                  
-                                  {% for part in machine.parts %}
-                                      {% set days_until = (part.next_maintenance - now).days %}
-                                      {% if days_until < 0 %}
-                                          {% set overdue_parts = overdue_parts + [part] %}
-                                      {% elif days_until <= site.notification_threshold %}
-                                          {% set due_soon_parts = due_soon_parts + [part] %}
-                                      {% else %}
-                                          {% set ok_parts = ok_parts + [part] %}
-                                      {% endif %}
-                                  {% endfor %}
-                                  
-                                  {% set machine_status = "ok" %}
-                                  {% if overdue_parts|length > 0 %}
-                                      {% set machine_status = "overdue" %}
-                                  {% elif due_soon_parts|length > 0 %}
-                                      {% set machine_status = "due_soon" %}
-                                  {% endif %}
-                                  
-                                  <tr class="machine-row machine-status-{{ machine_status }}">
-                                      <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
-                                      <td>{{ machine.model }}</td>
-                                      <td>
-                                          {% if overdue_parts|length > 0 %}
-                                              <span class="badge bg-danger">{{ overdue_parts|length }} Overdue</span>
-                                          {% endif %}
-                                          
-                                          {% if due_soon_parts|length > 0 %}
-                                              <span class="badge bg-warning ms-1">{{ due_soon_parts|length }} Due Soon</span>
-                                          {% endif %}
-                                          
-                                          {% if overdue_parts|length == 0 and due_soon_parts|length == 0 %}
-                                              <span class="badge bg-success">All OK</span>
-                                          {% endif %}
-                                      </td>
-                                      <td>
-                                          <div class="btn-group btn-group-sm">
-                                              <button class="btn btn-sm btn-outline-secondary btn-icon toggle-parts-btn" type="button" 
-                                                      data-target="#machine-parts-{{ machine.id }}" 
-                                                      aria-label="Show parts">
-                                                  <i class="fas fa-list"></i>
-                                              </button>
-                                              
-                                              <a href="{{ url_for('machine_history', machine_id=machine.id) }}" class="btn btn-sm btn-outline-info btn-icon" aria-label="History">
-                                                  <i class="fas fa-history"></i>
-                                              </a>
-                                          </div>
-                                      </td>
-                                  </tr>
-                                  <tr class="collapse machine-parts-row" id="machine-parts-{{ machine.id }}">
-                                      <td colspan="4" class="p-0">
-                                          <div class="bg-light p-3">
-                                              <h6 class="mb-2">Parts for {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</h6>
-                                              <div class="table-responsive parts-table-container">
-                                                <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
-                                                <table class="table table-sm mb-0">
-                                                  <thead>
-                                                    <tr>
-                                                      <th>Part</th>
-                                                      <th>Last Maintenance</th>
-                                                      <th>Next Due</th>
-                                                      <th>Status</th>
-                                                      <th>Action</th>
-                                                    </tr>
-                                                  </thead>
-                                                  <tbody>
-                                                    {% for part in machine.parts %}
-                                                    {% set days_until = (part.next_maintenance - now).days %}
-                                                    <tr>
-                                                      <td>{{ part.name }}</td>
-                                                      <td>{{ part.last_maintenance.strftime('%Y-%m-%d') }}</td>
-                                                      <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
-                                                      <td>
-                                                        {% if days_until < 0 %}
-                                                          <span class="badge bg-danger">{{ -days_until }} days overdue</span>
-                                                        {% elif days_until <= site.notification_threshold %}
-                                                          <span class="badge bg-warning">Due in {{ days_until }} days</span>
-                                                        {% else %}
-                                                          <span class="badge bg-success">OK ({{ days_until }} days)</span>
-                                                        {% endif %}
-                                                      </td>
-                                                      <td>
-                                                        {% if has_permission('maintenance.record') %}
-                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-secondary">
-                                                          <i class="fas fa-tools"></i> Maintenance
-                                                        </a>
-                                                        {% endif %}
-                                                      </td>
-                                                    </tr>
-                                                    {% endfor %}
-                                                  </tbody>
-                                                </table>
-                                              </div>
-                                          </div>
-                                      </td>
-                                  </tr>
-                                  {% endfor %}
-                                </tbody>
-                              </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
+      <h2>Welcome to AMRS</h2>
+      <p>You are now logged in to the offline version.</p>
+      <button class="button" onclick="goToEquipment()">View Equipment</button>
     </div>
-    {% else %}
-    <div class="alert alert-info">
-        <i class="fas fa-info-circle me-2"></i> No sites available. {% if is_admin %}<a href="{{ url_for('manage_sites') }}">Add a site</a>{% endif %}
+    
+    <div id="admin-panel" style="display: none;" class="card">
+      <h2>Administration Panel</h2>
+      <p>You have access to administrative functions.</p>
+      <button class="button" onclick="goToSettings()">Settings</button>
     </div>
-    {% endif %}
-    {% endif %}
-</div>
-
-<style>
-/* Mobile-specific adjustments */
-@media (max-width: 767.98px) {
-    .stats-value {
-        font-size: 1.4rem;
-    }
-    .btn-sm {
-        padding: 0.15rem 0.4rem;
-        font-size: 0.75rem;
-    }
-    .badge {
-        font-size: 0.7rem;
+    
+    <button class="button logout-button" onclick="logout()">Logout</button>
+  </div>
+  
+  <script>
+    // Check if logged in as admin
+    if (window.electronAPI) {
+      // Get user information
+      const checkUser = async () => {
+        try {
+          const user = await window.electronAPI.getCurrentUser();
+          
+          if (user) {
+            document.getElementById('username').textContent = user.name || user.username;
+            
+            // Show admin panel for admin users
+            if (user.role === 'admin') {
+              document.getElementById('admin-badge').style.display = 'inline-block';
+              document.getElementById('admin-panel').style.display = 'block';
+            }
+          }
+        } catch (err) {
+          console.error('Error getting user info:', err);
+        }
+      };
+      
+      checkUser();
     }
     
-    /* Compact icon buttons */
-    .btn-icon {
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+    function goToEquipment() {
+      if (window.electronAPI && window.electronAPI.navigateToPage) {
+        window.electronAPI.navigateToPage('equipment');
+      }
     }
     
-    /* Better handling of collapsible parts tables */
-    .parts-table-container {
-        max-width: 100%;
-        overflow-x: auto;
+    function goToSettings() {
+      if (window.electronAPI && window.electronAPI.navigateToPage) {
+        window.electronAPI.navigateToPage('settings');
+      }
     }
     
-    .mobile-table-card {
-        background: #fff;
-        border: 1px solid #dee2e6;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-        padding: 1rem;
-        margin-bottom: 1rem;
+    function logout() {
+      if (window.electronAPI && window.electronAPI.logout) {
+        window.electronAPI.logout();
+      }
     }
-    .mobile-table-card .fw-bold {
-        font-size: 1.1rem;
-        margin-bottom: 0.25rem;
-    }
-}
-
-/* Machine status styling */
-.machine-row.machine-status-overdue {
-    background-color: rgba(220, 53, 69, 0.05);
-}
-
-.machine-row.machine-status-overdue:hover {
-    background-color: rgba(220, 53, 69, 0.1);
-}
-
-.machine-row.machine-status-due_soon {
-    background-color: rgba(255, 193, 7, 0.05);
-}
-
-.machine-row.machine-status-due_soon:hover {
-    background-color: rgba(255, 193, 7, 0.1);
-}
-
-/* Toggle button active state */
-.toggle-parts-btn[aria-expanded="true"] {
-    background-color: #6c757d;
-    color: white;
-}
-
-/* Site header styling */
-.site-accordion-button {
-    padding: 0.75rem 1rem;
-    background-color: #f8f9fa;
-    border: none;
-    box-shadow: none;
-}
-
-.site-accordion-button:not(.collapsed) {
-    background-color: #f1f3f5;
-    color: #212529;
-    box-shadow: none;
-}
-
-.site-accordion-button:focus {
-    box-shadow: none;
-    border-color: rgba(0,0,0,.125);
-}
-
-.site-accordion-button::after {
-    width: 1rem;
-    height: 1rem;
-    background-size: 1rem;
-}
-
-.site-title {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: #343a40;
-    margin-bottom: 0.1rem;
-    line-height: 1.3;
-}
-
-.site-location {
-    font-size: 0.9rem;
-    max-width: 250px;
-}
-
-.site-header {
-    margin-bottom: 0;
-}
-
-/* Remove the old stats-card styling that conflicts with unified-ui.css */
-/* Only keep necessary mobile styles */
-@media (max-width: 767.98px) {
-    .site-title {
-        font-size: 1.1rem;
-    }
-    
-    .site-location {
-        max-width: 150px;
-        font-size: 0.85rem;
-    }
-    
-    .site-accordion-button {
-        padding: 0.6rem 0.75rem;
-    }
-}
-</style>
-
-<!-- Remove the inline script to avoid conflict with dashboard.js -->
-<!-- Load dashboard.js with defer attribute to ensure DOM is ready -->
-<script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
-
-{% endblock %}
+  </script>
+</body>
+</html>

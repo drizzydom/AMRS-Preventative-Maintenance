@@ -1,0 +1,2 @@
+Build marker created at 2025-05-16T04:25:40.584Z
+This file ensures the static folder is included in the build.
