@@ -31,4 +31,4 @@ psycopg2-binary==2.9.5
 Flask-WTF>=1.0.0
 pytest
 pytest-cov
-cryptography
+cryptography==39.0.1
