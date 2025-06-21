@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/critical-fix.css') }}">
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
@@ -407,19 +408,7 @@
     
     /* --- GLOBAL CONSISTENCY FIX --- */
     /* This ensures all pages have the same indentation regardless of their structure */
-    body:not(.sidebar-collapsed) .content-container,
-    html body:not(.sidebar-collapsed) .content-container {
-        margin-left: 200px !important;
-        width: calc(100% - 200px) !important;
-        max-width: calc(100% - 200px) !important;
-    }
-    
-    body.sidebar-collapsed .content-container,
-    html body.sidebar-collapsed .content-container {
-        margin-left: 56px !important;
-        width: calc(100% - 56px) !important;
-        max-width: calc(100% - 56px) !important;
-    }
+    /* Moved to critical-fix.css for highest possible override priority */
     
     /* Force correct mobile margins regardless of page structure */
     @media (max-width: 991.98px) {

@@ -78,3 +78,45 @@ body.parts-page .page-header {
     box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25) !important;
     outline: none !important;
 }
+
+/* ==== SUPREME CRITICAL FIX FOR INDENTATION ==== */
+/* This ensures all pages have the same indentation regardless of structure */
+
+/* When sidebar is expanded, use this for ALL pages */
+html body:not(.sidebar-collapsed) .content-container,
+html body:not(.sidebar-collapsed) main .content-container,
+html body:not(.sidebar-collapsed) .row .content-container,
+html body:not(.sidebar-collapsed) .centered-layout .content-container,
+html body:not(.sidebar-collapsed) .centered-layout .row .centered-content-col .content-container,
+html body:not(.sidebar-collapsed) .centered-layout .row .centered-content-col > .content-container {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+}
+
+/* When sidebar is collapsed, use this for ALL pages */
+html body.sidebar-collapsed .content-container,
+html body.sidebar-collapsed main .content-container,
+html body.sidebar-collapsed .row .content-container,
+html body.sidebar-collapsed .centered-layout .content-container,
+html body.sidebar-collapsed .centered-layout .row .centered-content-col .content-container,
+html body.sidebar-collapsed .centered-layout .row .centered-content-col > .content-container {
+    margin-left: 56px !important;
+    width: calc(100% - 56px) !important;
+    max-width: calc(100% - 56px) !important;
+}
+
+/* Special case for mobile */
+@media (max-width: 991.98px) {
+    html body .content-container,
+    html body.sidebar-collapsed .content-container,
+    html body main .content-container,
+    html body .row .content-container,
+    html body .centered-layout .content-container,
+    html body .centered-layout .row .centered-content-col .content-container,
+    html body .centered-layout .row .centered-content-col > .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
