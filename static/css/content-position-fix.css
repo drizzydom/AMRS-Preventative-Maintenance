@@ -48,7 +48,15 @@ body {
 .user-profile-page .content-container,
 .admin-page .content-container,
 .audits-page-page .content-container,
-.audit-history-page-page .content-container {
+.audit-history-page-page .content-container,
+/* Exact endpoint page names from the application */
+.manage_machines-page .content-container, 
+.manage_parts-page .content-container,
+.maintenance_page-page .content-container,
+.user_profile-page .content-container,
+.admin-page .content-container,
+.audits_page-page .content-container,
+.audit_history_page-page .content-container {
     margin-left: 200px !important;
     width: calc(100% - 200px) !important;
     max-width: calc(100% - 200px) !important;
@@ -60,7 +68,15 @@ body.sidebar-collapsed.maintenance-page-page .content-container,
 body.sidebar-collapsed.user-profile-page .content-container,
 body.sidebar-collapsed.admin-page .content-container,
 body.sidebar-collapsed.audits-page-page .content-container,
-body.sidebar-collapsed.audit-history-page-page .content-container {
+body.sidebar-collapsed.audit-history-page-page .content-container,
+/* Exact endpoint page names from the application when sidebar is collapsed */
+body.sidebar-collapsed.manage_machines-page .content-container, 
+body.sidebar-collapsed.manage_parts-page .content-container,
+body.sidebar-collapsed.maintenance_page-page .content-container,
+body.sidebar-collapsed.user_profile-page .content-container,
+body.sidebar-collapsed.admin-page .content-container,
+body.sidebar-collapsed.audits_page-page .content-container,
+body.sidebar-collapsed.audit_history_page-page .content-container {
     margin-left: 56px !important;
     width: calc(100% - 56px) !important;
     max-width: calc(100% - 56px) !important;
