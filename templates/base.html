@@ -169,6 +169,18 @@
             left: 0;
         }
         
+        /* Mobile navbar adjustments */
+        .navbar-brand {
+            font-size: 1.1rem !important;
+            margin-right: 0.5rem !important;
+        }
+        
+        .nav-link.small {
+            font-size: 0.75rem !important;
+            white-space: nowrap;
+            padding: 0.25rem 0.5rem !important;
+        }
+        
         /* Mobile close button */
         .sidebar-close-btn {
             position: absolute;
@@ -203,6 +215,52 @@
             overflow: hidden;
             position: fixed;
             width: 100vw;
+        }
+    }        /* Extra small screens - further adjustments */
+    @media (max-width: 575.98px) {
+        .navbar-brand {
+            font-size: 1rem !important;
+        }
+        
+        .nav-link.small {
+            font-size: 0.7rem !important;
+            padding: 0.2rem 0.4rem !important;
+        }
+        
+        .navbar .container-fluid {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        
+        /* Ensure navbar brand doesn't take too much space */
+        .navbar-brand {
+            max-width: calc(100% - 120px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        /* Ensure visit main site link is properly sized */
+        .flex-shrink-0 .nav-link {
+            min-width: max-content;
+        }
+    }
+    
+    /* Very small screens - ultra compact */
+    @media (max-width: 350px) {
+        .navbar-brand {
+            font-size: 0.9rem !important;
+            max-width: calc(100% - 100px);
+        }
+        
+        .nav-link.small {
+            font-size: 0.65rem !important;
+            padding: 0.15rem 0.3rem !important;
+        }
+        
+        .navbar .container-fluid {
+            padding-left: 0.25rem;
+            padding-right: 0.25rem;
         }
     }
     /* --- SIDEBAR COLLAPSE FOR DESKTOP --- */
@@ -374,17 +432,19 @@
     <header>
         <!-- Navigation Bar - Simplified with reduced height -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
-            <div class="container-fluid">
-                <button class="navbar-toggler" type="button" id="hamburger-btn"
+            <div class="container-fluid d-flex align-items-center">
+                <button class="navbar-toggler flex-shrink-0" type="button" id="hamburger-btn"
                         aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-                    <i class="fas fa-tools me-2"></i> Dashboard
+                <a class="navbar-brand flex-grow-1 text-center mx-2" href="{{ url_for('dashboard') }}">
+                    <i class="fas fa-tools me-2"></i> Accurate Machine Repair Maintenance Tracker
                 </a>
-                <div class="ms-auto">
-                    <a href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer" class="nav-link">Visit Main Site</a>
+                
+                <div class="flex-shrink-0">
+                    <a href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer" 
+                       class="nav-link text-white small">Visit Main Site</a>
                 </div>
             </div>
         </nav>
