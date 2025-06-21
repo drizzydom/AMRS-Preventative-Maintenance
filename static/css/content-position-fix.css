@@ -1,6 +1,7 @@
 /* 
  * CONTENT POSITION FIX
  * Ensures content is properly positioned without excessive vertical spacing
+ * and handles consistent sidebar indentation across all pages
  */
 
 /* Reset all margins and padding to prevent content from being pushed down */
@@ -36,6 +37,55 @@ body {
 .page-header {
     margin-top: 0 !important;
     margin-bottom: 1rem !important;
+}
+
+/* ==== CONSISTENT PAGE INDENTATION FIX ==== */
+
+/* Force consistent layout for problematic pages */
+.manage-machines .content-container,
+.manage-parts .content-container,
+.maintenance-page .content-container,
+.user-profile .content-container,
+.admin .content-container,
+.audits-page .content-container,
+.audit-history-page .content-container {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+}
+
+body.sidebar-collapsed .manage-machines .content-container,
+body.sidebar-collapsed .manage-parts .content-container,
+body.sidebar-collapsed .maintenance-page .content-container,
+body.sidebar-collapsed .user-profile .content-container,
+body.sidebar-collapsed .admin .content-container,
+body.sidebar-collapsed .audits-page .content-container,
+body.sidebar-collapsed .audit-history-page .content-container {
+    margin-left: 56px !important;
+    width: calc(100% - 56px) !important;
+    max-width: calc(100% - 56px) !important;
+}
+
+/* Force correct mobile margins regardless of page structure */
+@media (max-width: 991.98px) {
+    .manage-machines .content-container,
+    .manage-parts .content-container,
+    .maintenance-page .content-container,
+    .user-profile .content-container,
+    .admin .content-container,
+    .audits-page .content-container,
+    .audit-history-page .content-container,
+    body.sidebar-collapsed .manage-machines .content-container,
+    body.sidebar-collapsed .manage-parts .content-container,
+    body.sidebar-collapsed .maintenance-page .content-container,
+    body.sidebar-collapsed .user-profile .content-container,
+    body.sidebar-collapsed .admin .content-container,
+    body.sidebar-collapsed .audits-page .content-container,
+    body.sidebar-collapsed .audit-history-page .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }
 
 /* Fix content padding */
