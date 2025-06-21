@@ -139,11 +139,7 @@
     
     /* 8. MOBILE ADJUSTMENTS */
     @media (max-width: 991.98px) {
-        html body .content-container {
-            margin-left: 0;
-            width: 100%;
-            max-width: 100%;
-        }
+        /* Content positioning moved to content-position-fix.css for consistency */
         
         html body .sidebar {
             position: fixed;
@@ -232,6 +228,7 @@
         }
     }
     /* --- SIDEBAR COLLAPSE FOR DESKTOP --- */
+    /* Sidebar collapse layout rules moved to content-position-fix.css for consistency */
     body.sidebar-collapsed .sidebar,
     html body.sidebar-collapsed .sidebar {
         width: 56px !important;
@@ -245,13 +242,6 @@
         min-width: 56px !important;
         max-width: 56px !important;
         transition: width 0.2s;
-    }
-    body.sidebar-collapsed .content-container,
-    html body.sidebar-collapsed .content-container {
-        margin-left: 56px !important;
-        width: calc(100% - 56px) !important;
-        max-width: calc(100% - 56px) !important;
-        transition: margin-left 0.2s, width 0.2s;
     }
     body.sidebar-collapsed .sidebar .sidebar-link-text {
         display: none !important;
@@ -396,20 +386,8 @@
     }
     
     /* --- GLOBAL CONSISTENCY FIX --- */
+    /* All layout rules consolidated in content-position-fix.css for consistency */
     /* This ensures all pages have the same indentation regardless of their structure */
-    /* Moved to critical-fix.css for highest possible override priority */
-    
-    /* Force correct mobile margins regardless of page structure */
-    @media (max-width: 991.98px) {
-        body .content-container,
-        html body .content-container,
-        body.sidebar-collapsed .content-container,
-        html body.sidebar-collapsed .content-container {
-            margin-left: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-    }
     /* --- END GLOBAL CONSISTENCY FIX --- */
     </style>
 </head>

@@ -71,12 +71,7 @@
     left: 0 !important;
   }
 
-  /* Ensure content takes full width on mobile */
-  .content-container {
-    margin-left: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-  }
+  /* Content positioning rules moved to content-position-fix.css for consistency */
 
   /* Add overlay when sidebar is active */
   body.sidebar-active::after {
