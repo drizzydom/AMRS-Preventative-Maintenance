@@ -42,25 +42,25 @@ body {
 /* ==== CONSISTENT PAGE INDENTATION FIX ==== */
 
 /* Force consistent layout for problematic pages */
-.manage-machines .content-container,
-.manage-parts .content-container,
-.maintenance-page .content-container,
-.user-profile .content-container,
-.admin .content-container,
-.audits-page .content-container,
-.audit-history-page .content-container {
+.manage-machines-page .content-container,
+.manage-parts-page .content-container,
+.maintenance-page-page .content-container,
+.user-profile-page .content-container,
+.admin-page .content-container,
+.audits-page-page .content-container,
+.audit-history-page-page .content-container {
     margin-left: 200px !important;
     width: calc(100% - 200px) !important;
     max-width: calc(100% - 200px) !important;
 }
 
-body.sidebar-collapsed .manage-machines .content-container,
-body.sidebar-collapsed .manage-parts .content-container,
-body.sidebar-collapsed .maintenance-page .content-container,
-body.sidebar-collapsed .user-profile .content-container,
-body.sidebar-collapsed .admin .content-container,
-body.sidebar-collapsed .audits-page .content-container,
-body.sidebar-collapsed .audit-history-page .content-container {
+body.sidebar-collapsed.manage-machines-page .content-container,
+body.sidebar-collapsed.manage-parts-page .content-container,
+body.sidebar-collapsed.maintenance-page-page .content-container,
+body.sidebar-collapsed.user-profile-page .content-container,
+body.sidebar-collapsed.admin-page .content-container,
+body.sidebar-collapsed.audits-page-page .content-container,
+body.sidebar-collapsed.audit-history-page-page .content-container {
     margin-left: 56px !important;
     width: calc(100% - 56px) !important;
     max-width: calc(100% - 56px) !important;
@@ -68,20 +68,46 @@ body.sidebar-collapsed .audit-history-page .content-container {
 
 /* Force correct mobile margins regardless of page structure */
 @media (max-width: 991.98px) {
-    .manage-machines .content-container,
-    .manage-parts .content-container,
-    .maintenance-page .content-container,
-    .user-profile .content-container,
-    .admin .content-container,
-    .audits-page .content-container,
-    .audit-history-page .content-container,
-    body.sidebar-collapsed .manage-machines .content-container,
-    body.sidebar-collapsed .manage-parts .content-container,
-    body.sidebar-collapsed .maintenance-page .content-container,
-    body.sidebar-collapsed .user-profile .content-container,
-    body.sidebar-collapsed .admin .content-container,
-    body.sidebar-collapsed .audits-page .content-container,
-    body.sidebar-collapsed .audit-history-page .content-container {
+    .manage-machines-page .content-container,
+    .manage-parts-page .content-container,
+    .maintenance-page-page .content-container,
+    .user-profile-page .content-container,
+    .admin-page .content-container,
+    .audits-page-page .content-container,
+    .audit-history-page-page .content-container,
+    body.sidebar-collapsed.manage-machines-page .content-container,
+    body.sidebar-collapsed.manage-parts-page .content-container,
+    body.sidebar-collapsed.maintenance-page-page .content-container,
+    body.sidebar-collapsed.user-profile-page .content-container,
+    body.sidebar-collapsed.admin-page .content-container,
+    body.sidebar-collapsed.audits-page-page .content-container,
+    body.sidebar-collapsed.audit-history-page-page .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* ==== UNIVERSAL CONTENT CONTAINER FIX ==== */
+/* This fix overrides all other specificity-based fixes to ensure consistency */
+
+/* Ensure every single page gets consistent indentation */
+body:not(.sidebar-collapsed) .content-container {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+}
+
+body.sidebar-collapsed .content-container {
+    margin-left: 56px !important;
+    width: calc(100% - 56px) !important;
+    max-width: calc(100% - 56px) !important;
+}
+
+/* This media query should override ALL margins on mobile, regardless of page */
+@media (max-width: 991.98px) {
+    body .content-container,
+    body.sidebar-collapsed .content-container {
         margin-left: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
