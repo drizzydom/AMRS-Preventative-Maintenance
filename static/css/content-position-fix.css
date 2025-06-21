@@ -1,8 +1,36 @@
 /* 
  * CONTENT POSITION FIX
- * Ensures content is properly positioned without excessive vertical spacing
+ * Clean, consolidated layout rules for consistent positioning across all pages
  */
 
+/* ==== DESKTOP LAYOUT (992px and above) ==== */
+@media (min-width: 992px) {
+    /* Sidebar expanded state */
+    .content-container {
+        margin-left: 200px;
+        width: calc(100% - 200px);
+        max-width: calc(100% - 200px);
+        transition: margin-left 0.3s ease, width 0.3s ease;
+    }
+    
+    /* Sidebar collapsed state */
+    body.sidebar-collapsed .content-container {
+        margin-left: 56px;
+        width: calc(100% - 56px);
+        max-width: calc(100% - 56px);
+    }
+}
+
+/* ==== MOBILE LAYOUT (991px and below) ==== */
+@media (max-width: 991.98px) {
+    .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* ==== VERTICAL SPACING FIXES ==== */
 /* Reset all margins and padding to prevent content from being pushed down */
 body {
     margin-top: 48px !important; /* Exactly navbar height */
@@ -54,19 +82,4 @@ body {
 .table-responsive {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-}
-
-/* Fix sidebar position */
-.sidebar {
-    top: 48px !important; /* Exactly navbar height */
-    height: calc(100vh - 48px) !important; /* Full height minus navbar */
-}
-
-/* Make content start exactly after the navbar */
-.content-container {
-    position: relative !important;
-    top: 0 !important;
-    padding-top: 0 !important;
-    height: calc(100vh - 48px) !important;
-    overflow-y: auto !important;
 }

@@ -1,18 +1,18 @@
 /**
  * CRITICAL EMERGENCY FIXES
- * Directly addresses core layout and sidebar issues
+ * Mobile-specific fixes and emergency overrides only
  */
 
-/* SIDEBAR VISIBILITY ON MOBILE */
+/* ==== MOBILE SIDEBAR FIXES ==== */
 @media (max-width: 991.98px) {
     /* Position sidebar off-screen by default on mobile */
     .sidebar {
         position: fixed !important;
         top: 48px !important;
-        bottom: 0 !important;
+        bottom: 48px !important; /* Account for footer */
         left: -100% !important; /* Off-screen by default */
         width: 280px !important;
-        height: calc(100vh - 48px) !important;
+        height: calc(100vh - 96px) !important; /* Account for navbar and footer */
         z-index: 9999 !important;
         transition: left 0.3s ease-in-out !important;
         overflow-y: auto !important;
@@ -35,32 +35,9 @@
         background: rgba(0, 0, 0, 0.5);
         z-index: 999;
     }
-
-    /* Ensure content doesn't shift when sidebar opens */
-    .content-container {
-        margin-left: 0 !important;
-        width: 100% !important;
-    }
 }
 
-/* FIX PARTS TABLE POSITION */
-body.parts-page .page-content {
-    padding-top: 0 !important;
-    margin-top: 0 !important;
-}
-
-body.parts-page .card {
-    margin-top: 0 !important;
-}
-
-body.parts-page .container-fluid {
-    padding-top: 0 !important;
-}
-
-body.parts-page .page-header {
-    margin-bottom: 0.5rem !important;
-}
-
+/* ==== NAVBAR AND HAMBURGER BUTTON FIXES ==== */
 /* ENSURE NAVBAR IS ABOVE SIDEBAR */
 .navbar {
     z-index: 10000 !important;

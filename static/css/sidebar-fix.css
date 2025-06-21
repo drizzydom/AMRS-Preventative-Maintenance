@@ -186,15 +186,8 @@ html body .sidebar {
 
 /* Mobile content should take up full width when sidebar is closed */
 @media (max-width: 991.98px) {
-  /* Content container should take full width */
-  html body .content-container,
-  body .content-container {
-    margin-left: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    transition: margin-left 0.3s ease;
-  }
-
+  /* Content positioning rules moved to content-position-fix.css for consistency */
+  
   /* Content positioning shouldn't be affected by sidebar state */
   html body .centered-layout .row,
   body .centered-layout .row {
@@ -209,9 +202,9 @@ html body .sidebar {
     flex: 0 0 0 !important;
   }
 
-  /* Don't push content aside when sidebar is open on mobile */
+  /* Prevent clicks on content when sidebar is open */
   body.sidebar-active .content-container {
-    margin-left: 0 !important;
+    pointer-events: none; /* Prevent background clicks */
   }
 }
 
@@ -264,7 +257,7 @@ body.sidebar-active .sidebar-overlay {
   padding: 0.25rem;
 }
 
-/* Fix sidebar collapse styles */
+/* Desktop sidebar collapse styles - content positioning moved to content-position-fix.css */
 body.sidebar-collapsed .sidebar,
 html body.sidebar-collapsed .sidebar {
   width: 56px !important;
@@ -279,14 +272,6 @@ html body.sidebar-collapsed .sidebar-container {
   min-width: 56px !important;
   max-width: 56px !important;
   transition: width 0.3s, min-width 0.3s;
-}
-
-body.sidebar-collapsed .content-container,
-html body.sidebar-collapsed .content-container {
-  margin-left: 56px !important;
-  width: calc(100% - 56px) !important;
-  max-width: calc(100% - 56px) !important;
-  transition: margin-left 0.3s, width 0.3s;
 }
 
 /* Hide text when collapsed */
