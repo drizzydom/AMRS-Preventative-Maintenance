@@ -81,19 +81,8 @@
         padding-top: 48px; /* Exactly match header height */
     }
     
-    /* 4. MAIN CONTENT POSITIONING - using more specific selectors */
-    html body .content-container,
-    body:not(.mobile-view) .content-container {
-        margin-left: 200px; /* Exactly match sidebar width */
-        width: calc(100% - 200px);
-        max-width: calc(100% - 200px);
-        padding-left: 0;
-        padding-right: 0;
-        min-height: calc(100vh - 96px); /* Account for both navbar and footer */
-        padding-bottom: 60px; /* Increased padding to avoid footer overlap */
-        margin-top: 0; /* No extra margin at top */
-        margin-bottom: 0; /* Ensure no margin at bottom */
-    }
+    /* 4. MAIN CONTENT POSITIONING - moved to content-position-fix.css for consistency */
+    /* All layout rules are now consolidated in CSS files for better maintainability */
     
     html body .container-fluid,
     .centered-layout .row .centered-content-col .container-fluid {
