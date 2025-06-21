@@ -83,3 +83,38 @@ body {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
 }
+
+/* ==== FINAL OVERRIDE - ULTRA HIGH SPECIFICITY ==== */
+/* This ensures layout rules take priority over any other CSS that might conflict */
+@media (min-width: 992px) {
+    html body .content-container,
+    html body .centered-layout .content-container,
+    html body .centered-layout .row .content-container,
+    html body .centered-layout .row .centered-content-col .content-container {
+        margin-left: 200px !important;
+        width: calc(100% - 200px) !important;
+        max-width: calc(100% - 200px) !important;
+        transition: margin-left 0.3s ease, width 0.3s ease !important;
+    }
+    
+    html body.sidebar-collapsed .content-container,
+    html body.sidebar-collapsed .centered-layout .content-container,
+    html body.sidebar-collapsed .centered-layout .row .content-container,
+    html body.sidebar-collapsed .centered-layout .row .centered-content-col .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+        max-width: calc(100% - 56px) !important;
+    }
+}
+
+@media (max-width: 991.98px) {
+    html body .content-container,
+    html body.sidebar-collapsed .content-container,
+    html body .centered-layout .content-container,
+    html body .centered-layout .row .content-container,
+    html body .centered-layout .row .centered-content-col .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
