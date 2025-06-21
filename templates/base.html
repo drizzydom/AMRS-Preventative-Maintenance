@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
@@ -403,9 +404,38 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.18);
         }
     }
+    
+    /* --- GLOBAL CONSISTENCY FIX --- */
+    /* This ensures all pages have the same indentation regardless of their structure */
+    body:not(.sidebar-collapsed) .content-container,
+    html body:not(.sidebar-collapsed) .content-container {
+        margin-left: 200px !important;
+        width: calc(100% - 200px) !important;
+        max-width: calc(100% - 200px) !important;
+    }
+    
+    body.sidebar-collapsed .content-container,
+    html body.sidebar-collapsed .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+        max-width: calc(100% - 56px) !important;
+    }
+    
+    /* Force correct mobile margins regardless of page structure */
+    @media (max-width: 991.98px) {
+        body .content-container,
+        html body .content-container,
+        body.sidebar-collapsed .content-container,
+        html body.sidebar-collapsed .content-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+    /* --- END GLOBAL CONSISTENCY FIX --- */
     </style>
 </head>
-<body class="preload">
+<body class="preload {{ request.endpoint | replace('_', '-') }}-page">
     <header>
         <!-- Navigation Bar - Simplified with reduced height -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
