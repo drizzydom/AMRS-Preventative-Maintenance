@@ -41,10 +41,18 @@
 </head>
 <body class="manage-machines-page">
     <div class="test-info">
+        <div><strong>LAYOUT VALIDATION</strong></div>
         <div>Screen: <span id="screen-size"></span></div>
         <div>Sidebar: <span id="sidebar-state">Expanded</span></div>
         <div>Content margin: <span id="content-margin"></span></div>
+        <div>Expected: <span id="expected-margin">200px</span></div>
+        <div>Status: <span id="status">✓ Correct</span></div>
         <button onclick="toggleSidebar()">Toggle Sidebar</button>
+        <div style="margin-top: 10px; font-size: 10px;">
+            ✓ All conflicting CSS rules cleaned up<br>
+            ✓ Single source of truth in content-position-fix.css<br>
+            ✓ Ultra-high specificity final override applied
+        </div>
     </div>
 
     <!-- Navbar -->
@@ -101,9 +109,24 @@
             const contentMargin = window.getComputedStyle(contentContainer).marginLeft;
             const sidebarState = document.body.classList.contains('sidebar-collapsed') ? 'Collapsed' : 'Expanded';
             
+            // Determine expected margin based on screen size and sidebar state
+            let expectedMargin;
+            if (window.innerWidth <= 991) {
+                expectedMargin = '0px';
+            } else if (document.body.classList.contains('sidebar-collapsed')) {
+                expectedMargin = '56px';
+            } else {
+                expectedMargin = '200px';
+            }
+            
+            const isCorrect = contentMargin === expectedMargin;
+            
             document.getElementById('screen-size').textContent = screenSize;
             document.getElementById('sidebar-state').textContent = sidebarState;
             document.getElementById('content-margin').textContent = contentMargin;
+            document.getElementById('expected-margin').textContent = expectedMargin;
+            document.getElementById('status').textContent = isCorrect ? '✓ Correct' : '✗ INCORRECT';
+            document.getElementById('status').style.color = isCorrect ? 'green' : 'red';
         }
         
         function toggleSidebar() {
