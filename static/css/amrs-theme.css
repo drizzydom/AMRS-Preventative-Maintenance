@@ -119,23 +119,11 @@ html .badge.bg-primary {
   background-color: var(--amrs-orange);
 }
 
-/* Content container positioning specific to AMRS theme */
-@media (min-width: 992px) {
-  .content-container,
-  html .content-container {
-    margin-left: var(--sidebar-width);
-    width: calc(100% - var(--sidebar-width));
-    max-width: calc(100% - var(--sidebar-width));
-  }
-}
+/* Content container positioning moved to content-position-fix.css for consistency */
+/* All layout rules are now consolidated in content-position-fix.css */
 
 /* Mobile adjustments for responsive design */
 @media (max-width: 991.98px) {
-  .content-container {
-    margin-left: 0;
-    width: 100%;
-    max-width: 100%;
-  }
   
   .sidebar {
     left: calc(-1 * var(--sidebar-mobile-width));
