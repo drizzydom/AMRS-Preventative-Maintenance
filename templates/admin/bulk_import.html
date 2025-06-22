@@ -54,39 +54,56 @@
                     <h6 class="m-0 font-weight-bold text-primary">Instructions</h6>
                 </div>
                 <div class="card-body">
-                    <h5>CSV Format</h5>
-                    <p>First row must be headers. Examples:</p>
+                    <h5>Intelligent Field Detection</h5>
+                    <p>The system automatically detects and maps field names from various formats.</p>
+                    
+                    <h6>Supported Machine Fields:</h6>
+                    <ul class="small text-muted">
+                        <li><strong>Name:</strong> name, machine, machine_name, Machine</li>
+                        <li><strong>Model:</strong> model, machine_model, Model</li>
+                        <li><strong>Serial:</strong> serial_number, serial, Serial Number, sn</li>
+                        <li><strong>Number:</strong> machine_number, Machine Number, number, id</li>
+                    </ul>
+                    
+                    <h6>Your JSON Format (Auto-Detected):</h6>
+                    <div class="mb-3">
+                        <strong>Machines:</strong> Automatically extracts from your Excel export format
+                        <pre class="small">[
+  {
+    "Machine Number": 523,
+    "Serial Number": 203710,
+    "Machine": "Mazak Nexus 4000 II",
+    "MaintenanceData": {...}
+  }
+]</pre>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Maintenance Records:</strong> Extracted from nested MaintenanceData
+                        <pre class="small">Automatically creates maintenance records from:
+- Last PM Done
+- Maintenance Type  
+- Maintenance Done
+- Required Materials
+- Frequency</pre>
+                    </div>
+                    
+                    <h6>Standard CSV Format:</h6>
                     <div class="mb-3">
                         <strong>Machines:</strong>
-                        <pre>name,model,serial_number,machine_number</pre>
-                        <small class="text-muted">Note: site_id will be automatically set to selected site</small>
+                        <pre class="small">name,model,serial_number,machine_number</pre>
                     </div>
                     <div class="mb-3">
                         <strong>Parts:</strong>
-                        <pre>name,description,machine_name,maintenance_frequency,maintenance_unit</pre>
-                        <small class="text-muted">Note: machine_name should match existing machine names in the selected site</small>
+                        <pre class="small">name,description,machine_name,maintenance_frequency,maintenance_unit</pre>
                     </div>
                     <div class="mb-3">
                         <strong>Maintenance Records:</strong>
-                        <pre>machine_name,part_name,maintenance_type,description,date,performed_by,status,notes</pre>
-                        <small class="text-muted">Note: machine_name and part_name should match existing records in the selected site</small>
+                        <pre class="small">machine_name,part_name,maintenance_type,description,date,performed_by,status,notes</pre>
                     </div>
                     
-                    <h5>JSON Format</h5>
-                    <p>Array of objects. Examples:</p>
-                    <div class="mb-3">
-                        <strong>Machines:</strong>
-                        <pre>[
-  {"name": "Machine 1", "model": "X100", "serial_number": "SN123"},
-  {"name": "Machine 2", "model": "X200", "serial_number": "SN124"}
-]</pre>
-                    </div>
-                    <div class="mb-3">
-                        <strong>Parts:</strong>
-                        <pre>[
-  {"name": "Motor", "description": "Main motor", "machine_name": "Machine 1", "maintenance_frequency": 30, "maintenance_unit": "day"},
-  {"name": "Belt", "description": "Drive belt", "machine_name": "Machine 2", "maintenance_frequency": 60, "maintenance_unit": "day"}
-]</pre>
+                    <div class="alert alert-info small mt-3">
+                        <strong>Pro Tip:</strong> Your Excel-exported JSON format is fully supported! Just select "Machines" to import machine data or "Maintenance" to extract historical maintenance records.
                     </div>
                 </div>
             </div>
