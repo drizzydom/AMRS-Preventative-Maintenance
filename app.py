@@ -3415,12 +3415,29 @@ def bulk_import():
         flash('You do not have permission to access bulk import.', 'danger')
         return redirect(url_for('admin'))
 
+    # Get sites for the dropdown
+    if current_user.is_admin:
+        sites = Site.query.all()
+    else:
+        sites = current_user.sites
+
     if request.method == 'POST':
         entity = request.form.get('entity')
+        site_id = request.form.get('site_id')
         file = request.files.get('file')
         
-        if not entity or not file:
-            flash('Entity type and file are required.', 'danger')
+        if not entity or not site_id or not file:
+            flash('Entity type, site, and file are required.', 'danger')
+            return redirect(url_for('bulk_import'))
+        
+        # Validate site access
+        site = Site.query.get(int(site_id))
+        if not site:
+            flash('Invalid site selected.', 'danger')
+            return redirect(url_for('bulk_import'))
+        
+        if not current_user.is_admin and site not in current_user.sites:
+            flash('You do not have access to the selected site.', 'danger')
             return redirect(url_for('bulk_import'))
         
         filename = secure_filename(file.filename)
@@ -3453,8 +3470,8 @@ def bulk_import():
                 for row in data:
                     try:
                         # Validate required fields
-                        if not row.get('name') or not row.get('site_id'):
-                            errors.append(f"Row missing required fields (name, site_id): {row}")
+                        if not row.get('name'):
+                            errors.append(f"Row missing required field 'name': {row}")
                             continue
                             
                         machine = Machine(
@@ -3462,7 +3479,7 @@ def bulk_import():
                             model=row.get('model', ''),
                             serial_number=row.get('serial_number', ''),
                             machine_number=row.get('machine_number', ''),
-                            site_id=int(row.get('site_id'))
+                            site_id=int(site_id)  # Use selected site
                         )
                         db.session.add(machine)
                         added += 1
@@ -3470,17 +3487,25 @@ def bulk_import():
                         errors.append(f"Error processing row {row}: {str(e)}")
                         
             elif entity == 'parts':
+                # Get machines for the selected site
+                site_machines = {m.name: m.id for m in Machine.query.filter_by(site_id=int(site_id)).all()}
+                
                 for row in data:
                     try:
                         # Validate required fields
-                        if not row.get('name') or not row.get('machine_id'):
-                            errors.append(f"Row missing required fields (name, machine_id): {row}")
+                        if not row.get('name') or not row.get('machine_name'):
+                            errors.append(f"Row missing required fields (name, machine_name): {row}")
+                            continue
+                        
+                        machine_name = row.get('machine_name')
+                        if machine_name not in site_machines:
+                            errors.append(f"Machine '{machine_name}' not found in site '{site.name}': {row}")
                             continue
                             
                         part = Part(
                             name=row.get('name'),
                             description=row.get('description', ''),
-                            machine_id=int(row.get('machine_id')),
+                            machine_id=site_machines[machine_name],
                             maintenance_frequency=int(row.get('maintenance_frequency', 30)),
                             maintenance_unit=row.get('maintenance_unit', 'day')
                         )
@@ -3490,22 +3515,44 @@ def bulk_import():
                         errors.append(f"Error processing row {row}: {str(e)}")
                         
             elif entity == 'maintenance':
+                # Get machines and parts for the selected site
+                site_machines = {m.name: m for m in Machine.query.filter_by(site_id=int(site_id)).all()}
+                site_parts = {}
+                for machine in site_machines.values():
+                    for part in machine.parts:
+                        site_parts[f"{machine.name}_{part.name}"] = part
+                
                 for row in data:
                     try:
                         # Validate required fields
-                        required_fields = ['machine_id', 'part_id', 'user_id', 'maintenance_type', 'description', 'date']
+                        required_fields = ['machine_name', 'part_name', 'maintenance_type', 'description', 'date']
                         if not all(row.get(field) for field in required_fields):
                             errors.append(f"Row missing required fields {required_fields}: {row}")
                             continue
+                        
+                        machine_name = row.get('machine_name')
+                        part_name = row.get('part_name')
+                        part_key = f"{machine_name}_{part_name}"
+                        
+                        if machine_name not in site_machines:
+                            errors.append(f"Machine '{machine_name}' not found in site '{site.name}': {row}")
+                            continue
+                        
+                        if part_key not in site_parts:
+                            errors.append(f"Part '{part_name}' not found in machine '{machine_name}': {row}")
+                            continue
                             
+                        machine = site_machines[machine_name]
+                        part = site_parts[part_key]
+                        
                         record = MaintenanceRecord(
-                            machine_id=int(row.get('machine_id')),
-                            part_id=int(row.get('part_id')),
-                            user_id=int(row.get('user_id')),
+                            machine_id=machine.id,
+                            part_id=part.id,
+                            user_id=current_user.id,  # Use current user as default
                             maintenance_type=row.get('maintenance_type'),
                             description=row.get('description'),
                             date=datetime.strptime(row.get('date'), '%Y-%m-%d'),
-                            performed_by=row.get('performed_by', ''),
+                            performed_by=row.get('performed_by', current_user.username),
                             status=row.get('status', 'completed'),
                             notes=row.get('notes', '')
                         )
@@ -3523,9 +3570,9 @@ def bulk_import():
             
             # Provide feedback
             if errors:
-                flash(f'Imported {added} records with {len(errors)} errors. First few errors: {"; ".join(errors[:3])}', 'warning')
+                flash(f'Imported {added} records to site "{site.name}" with {len(errors)} errors. First few errors: {"; ".join(errors[:3])}', 'warning')
             else:
-                flash(f'Successfully imported {added} records.', 'success')
+                flash(f'Successfully imported {added} records to site "{site.name}".', 'success')
                 
         except Exception as e:
             db.session.rollback()
@@ -3534,7 +3581,7 @@ def bulk_import():
         return redirect(url_for('bulk_import'))
     
     # GET request - show the form
-    return render_template('admin/bulk_import.html')
+    return render_template('admin/bulk_import.html', sites=sites)
 
 import app_debug_helper  # Register debug routes
 
