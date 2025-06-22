@@ -1523,7 +1523,7 @@ def audit_history_print_view():
         
         # Add completion to the appropriate machine/date
         machine_data[completion.machine_id][date_str].append(completion)
-    
+
     # Get all audit tasks for reference
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
     
@@ -1531,7 +1531,7 @@ def audit_history_print_view():
     all_tasks_per_machine = {}
     for machine in machines:
         all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
-    
+
     # Get all users for reference
     users = {user.id: user for user in User.query.all()}
     
@@ -1891,6 +1891,7 @@ def delete_site(site_id):
     try:
         # Replace get_or_404 for Site
         site = db.session.get(Site, site_id)
+       
         if not site:
             abort(404)
         
@@ -2867,8 +2868,8 @@ def manage_machines():
                 new_machine = Machine(
                     name=name,
                     model=model,
-                    machine_number=machine_number,
                     serial_number=serial_number,
+                    machine_number=str(machine_number).strip(),
                     site_id=site_id
                 )
                 
@@ -2949,7 +2950,7 @@ def manage_parts():
         if machine_id:
             # Verify user can access this machine
             machine = Machine.query.get(machine_id)
-            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]):
+            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
                 flash('You do not have access to this machine.', 'danger')
                 return redirect(url_for('manage_parts'))
             
@@ -3206,25 +3207,10 @@ def maintenance_records_page():
     
     machine_ids = [machine.id for machine in machines]
     
-    if machine_id:
-        # Verify user can access this machine
-        machine = Machine.query.get(machine_id)
-        if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
-            flash('You do not have access to this machine.', 'danger')
-            return redirect(url_for('maintenance_records_page'))
-            
-        # Filter parts by selected machine
-        parts = Part.query.filter_by(machine_id=machine_id).all()
-    else:
-        # Get all parts for machines the user has access to
-        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
-    
-    part_ids = [part.id for part in parts]
-    
     if part_id:
         # Verify user can access this part
         part = Part.query.get(part_id)
-        if not part or not part.machine or (not user_can_see_all_sites(current_user) and part.machine.site_id not in site_ids):
+        if not part or (not user_can_see_all_sites(current_user) and part.machine.site_id not in site_ids):
             flash('You do not have access to this part.', 'danger')
             return redirect(url_for('maintenance_records_page'))
             
@@ -3406,7 +3392,6 @@ def delete_audit_task(audit_task_id):
     return redirect(url_for('audits_page'))
 
 # --- BULK IMPORT ROUTE ---
-# --- BULK IMPORT ROUTE ---
 @app.route('/admin/bulk-import', methods=['GET', 'POST'])
 @login_required
 def bulk_import():
@@ -3445,9 +3430,7 @@ def bulk_import():
             return numeric_value, 'day'
         else:
             # If no unit specified, assume the number is in days
-            if numbers:
-                return numeric_value, 'day'
-            return 30, 'day'  # fallback default
+            return numeric_value, 'day'  # fallback default
 
     def smart_field_mapping(row, entity_type):
         """Intelligently map various field names to standard format"""
@@ -3653,8 +3636,9 @@ def bulk_import():
             # Create new part
             part = Part(
                 name=part_name,
-                description=part_data.get('description', ''),
+                description=description,
                 machine_id=machine.id,
+                site_id=site_id,
                 maintenance_frequency=freq_value,
                 maintenance_unit=freq_unit
             )
@@ -3715,7 +3699,7 @@ def bulk_import():
             )
             
             if is_duplicate:
-                # Update existing record with any better data
+                # Update existing record with any new/better data
                 updated = False
                 
                 # Update description if new one is more detailed
@@ -3800,7 +3784,7 @@ def bulk_import():
                 'date': maint_data.get('Last PM Done', ''),
                 'performed_by': 'System Import',
                 'status': 'completed',
-                'notes': f"Materials: {maint_data.get('Required Materials', '')}. Qty: {maint_data.get('Qty.', '')}. Frequency: {maint_data.get('Frequency', '')}"
+                'notes': f"Materials: {maint_data.get('Required Materials', 'N/A')}, Qty: {maint_data.get('Qty.', 'N/A')}, Frequency: {maint_data.get('Frequency', 'N/A')}"
             }
             
             # Clean up the date format
@@ -4102,6 +4086,22 @@ if __name__ == '__main__':
     debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     
     print(f"[APP] Starting Flask server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=debug)
+
+# Import and patch audit history at the very end to avoid circular import
+try:
+    import fix_audit_history_v2
+    print("[APP] Running enhanced audit history fix...")
+    success = fix_audit_history_v2.setup_enhanced_audit_history()
+    print(f"[APP] Enhanced audit history fix applied: {'Successfully' if success else 'Failed'}")
+except Exception as e:
+    print(f"[APP] Warning: Could not apply enhanced audit history fix: {str(e)}")
+    # Try the older fix as fallback
+    try:
+        import fix_audit_history
+        print("[APP] Falling back to basic audit history fix")
+    except Exception as e2:
+        print(f"[APP] Warning: Could not import audit history fix at end of app.py: {str(e2)}")
     app.run(host='0.0.0.0', port=port, debug=debug)
 
 # Import and patch audit history at the very end to avoid circular import
