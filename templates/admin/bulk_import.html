@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Import - Maintenance Tracker{% endblock %}
+
+{% block header_title %}Bulk Import Data{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0 text-gray-800">Bulk Import</h1>
+            <p class="mb-4">Upload a CSV or JSON file to import machines, parts, or maintenance records. Only users with manage permissions can access this feature.</p>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-8 col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Upload File</h6>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('bulk_import') }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="entity" class="form-label">Entity Type</label>
+                            <select class="form-select" id="entity" name="entity" required>
+                                <option value="">Select...</option>
+                                <option value="machines">Machines</option>
+                                <option value="parts">Parts</option>
+                                <option value="maintenance">Maintenance Records</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="file" class="form-label">File (CSV or JSON)</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".csv,.json" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Import Data</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Instructions</h6>
+                </div>
+                <div class="card-body">
+                    <h5>CSV Format</h5>
+                    <p>First row must be headers. Example for machines:</p>
+                    <pre>name,model,serial_number,site_id</pre>
+                    <h5>JSON Format</h5>
+                    <p>Array of objects, each with only the required fields. Example:</p>
+                    <pre>[
+  {"name": "Machine 1", "model": "X100", "serial_number": "SN123", "site_id": 1},
+  {"name": "Machine 2", "model": "X200", "serial_number": "SN124", "site_id": 2}
+]</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

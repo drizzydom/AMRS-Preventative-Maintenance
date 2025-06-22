@@ -22,11 +22,14 @@ from flask_mail import Mail, Message
 from sqlalchemy import or_, text
 from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
 import smtplib
 from jinja2 import Environment, FileSystemLoader
+import csv
+import json
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
@@ -3401,6 +3404,137 @@ def delete_audit_task(audit_task_id):
         flash(f'An error occurred while deleting the audit task: {str(e)}', 'danger')
     
     return redirect(url_for('audits_page'))
+
+# --- BULK IMPORT ROUTE ---
+@app.route('/admin/bulk-import', methods=['GET', 'POST'])
+@login_required
+def bulk_import():
+    """Handle bulk import of machines, parts, and maintenance records via CSV/JSON"""
+    # Only allow users with 'manage' permissions (admin or role with 'manage' in permissions)
+    if not (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'manage' in getattr(current_user.role, 'permissions', ''))):
+        flash('You do not have permission to access bulk import.', 'danger')
+        return redirect(url_for('admin'))
+
+    if request.method == 'POST':
+        entity = request.form.get('entity')
+        file = request.files.get('file')
+        
+        if not entity or not file:
+            flash('Entity type and file are required.', 'danger')
+            return redirect(url_for('bulk_import'))
+        
+        filename = secure_filename(file.filename)
+        if not filename:
+            flash('Invalid filename.', 'danger')
+            return redirect(url_for('bulk_import'))
+            
+        ext = filename.rsplit('.', 1)[-1].lower()
+        
+        try:
+            # Parse file based on extension
+            if ext == 'csv':
+                stream = file.stream.read().decode('utf-8')
+                reader = csv.DictReader(stream.splitlines())
+                data = list(reader)
+            elif ext == 'json':
+                data = json.load(file.stream)
+                if not isinstance(data, list):
+                    flash('JSON must be an array of objects.', 'danger')
+                    return redirect(url_for('bulk_import'))
+            else:
+                flash('Unsupported file type. Please upload CSV or JSON.', 'danger')
+                return redirect(url_for('bulk_import'))
+            
+            added = 0
+            errors = []
+            
+            # Process based on entity type
+            if entity == 'machines':
+                for row in data:
+                    try:
+                        # Validate required fields
+                        if not row.get('name') or not row.get('site_id'):
+                            errors.append(f"Row missing required fields (name, site_id): {row}")
+                            continue
+                            
+                        machine = Machine(
+                            name=row.get('name'),
+                            model=row.get('model', ''),
+                            serial_number=row.get('serial_number', ''),
+                            machine_number=row.get('machine_number', ''),
+                            site_id=int(row.get('site_id'))
+                        )
+                        db.session.add(machine)
+                        added += 1
+                    except Exception as e:
+                        errors.append(f"Error processing row {row}: {str(e)}")
+                        
+            elif entity == 'parts':
+                for row in data:
+                    try:
+                        # Validate required fields
+                        if not row.get('name') or not row.get('machine_id'):
+                            errors.append(f"Row missing required fields (name, machine_id): {row}")
+                            continue
+                            
+                        part = Part(
+                            name=row.get('name'),
+                            description=row.get('description', ''),
+                            machine_id=int(row.get('machine_id')),
+                            maintenance_frequency=int(row.get('maintenance_frequency', 30)),
+                            maintenance_unit=row.get('maintenance_unit', 'day')
+                        )
+                        db.session.add(part)
+                        added += 1
+                    except Exception as e:
+                        errors.append(f"Error processing row {row}: {str(e)}")
+                        
+            elif entity == 'maintenance':
+                for row in data:
+                    try:
+                        # Validate required fields
+                        required_fields = ['machine_id', 'part_id', 'user_id', 'maintenance_type', 'description', 'date']
+                        if not all(row.get(field) for field in required_fields):
+                            errors.append(f"Row missing required fields {required_fields}: {row}")
+                            continue
+                            
+                        record = MaintenanceRecord(
+                            machine_id=int(row.get('machine_id')),
+                            part_id=int(row.get('part_id')),
+                            user_id=int(row.get('user_id')),
+                            maintenance_type=row.get('maintenance_type'),
+                            description=row.get('description'),
+                            date=datetime.strptime(row.get('date'), '%Y-%m-%d'),
+                            performed_by=row.get('performed_by', ''),
+                            status=row.get('status', 'completed'),
+                            notes=row.get('notes', '')
+                        )
+                        db.session.add(record)
+                        added += 1
+                    except Exception as e:
+                        errors.append(f"Error processing row {row}: {str(e)}")
+            else:
+                flash('Invalid entity type.', 'danger')
+                return redirect(url_for('bulk_import'))
+            
+            # Commit changes
+            if added > 0:
+                db.session.commit()
+            
+            # Provide feedback
+            if errors:
+                flash(f'Imported {added} records with {len(errors)} errors. First few errors: {"; ".join(errors[:3])}', 'warning')
+            else:
+                flash(f'Successfully imported {added} records.', 'success')
+                
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Import failed: {str(e)}', 'danger')
+            
+        return redirect(url_for('bulk_import'))
+    
+    # GET request - show the form
+    return render_template('admin/bulk_import.html')
 
 import app_debug_helper  # Register debug routes
 
