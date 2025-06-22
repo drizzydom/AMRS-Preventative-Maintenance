@@ -3406,6 +3406,7 @@ def delete_audit_task(audit_task_id):
     return redirect(url_for('audits_page'))
 
 # --- BULK IMPORT ROUTE ---
+# --- BULK IMPORT ROUTE ---
 @app.route('/admin/bulk-import', methods=['GET', 'POST'])
 @login_required
 def bulk_import():
@@ -3420,6 +3421,80 @@ def bulk_import():
         sites = Site.query.all()
     else:
         sites = current_user.sites
+
+    def smart_field_mapping(row, entity_type):
+        """Intelligently map various field names to standard format"""
+        mapped = {}
+        
+        # Define field mappings for different naming conventions
+        field_mappings = {
+            'machines': {
+                'name': ['name', 'machine', 'machine_name', 'Machine'],
+                'model': ['model', 'machine_model', 'Model'],
+                'serial_number': ['serial_number', 'serial', 'Serial Number', 'sn'],
+                'machine_number': ['machine_number', 'Machine Number', 'number', 'id']
+            },
+            'parts': {
+                'name': ['name', 'part_name', 'Part', 'part'],
+                'description': ['description', 'desc', 'Description'],
+                'machine_name': ['machine_name', 'machine', 'Machine', 'Machine Name'],
+                'maintenance_frequency': ['maintenance_frequency', 'frequency', 'Frequency', 'interval'],
+                'maintenance_unit': ['maintenance_unit', 'unit', 'Unit', 'frequency_unit']
+            },
+            'maintenance': {
+                'machine_name': ['machine_name', 'machine', 'Machine', 'Machine Name'],
+                'part_name': ['part_name', 'part', 'Part', 'component'],
+                'maintenance_type': ['maintenance_type', 'type', 'Type', 'Maintenance Type'],
+                'description': ['description', 'desc', 'Description', 'work_done'],
+                'date': ['date', 'Date', 'maintenance_date', 'performed_date'],
+                'performed_by': ['performed_by', 'technician', 'Technician', 'worker'],
+                'status': ['status', 'Status', 'state'],
+                'notes': ['notes', 'Notes', 'comments', 'Comments']
+            }
+        }
+        
+        # Map fields based on entity type
+        if entity_type in field_mappings:
+            for standard_field, possible_names in field_mappings[entity_type].items():
+                for possible_name in possible_names:
+                    if possible_name in row and row[possible_name] is not None:
+                        mapped[standard_field] = row[possible_name]
+                        break
+        
+        return mapped
+
+    def extract_maintenance_data(machine_data):
+        """Extract maintenance records from nested machine data"""
+        records = []
+        
+        # Check if there's nested maintenance data
+        if 'MaintenanceData' in machine_data:
+            maint_data = machine_data['MaintenanceData']
+            
+            # Extract basic maintenance record
+            record = {
+                'machine_name': smart_field_mapping(machine_data, 'machines').get('name', ''),
+                'maintenance_type': maint_data.get('Maintenance Type', 'Scheduled'),
+                'description': maint_data.get('Maintenance Done', ''),
+                'date': maint_data.get('Last PM Done', ''),
+                'performed_by': 'System Import',
+                'status': 'completed',
+                'notes': f"Materials: {maint_data.get('Required Materials', '')}. Qty: {maint_data.get('Qty.', '')}. Frequency: {maint_data.get('Frequency', '')}"
+            }
+            
+            # Clean up the date format
+            if record['date']:
+                try:
+                    # Handle various date formats
+                    date_str = record['date'].split(' ')[0]  # Remove time part
+                    record['date'] = date_str
+                except:
+                    record['date'] = ''
+            
+            if record['machine_name'] and record['description']:
+                records.append(record)
+        
+        return records
 
     if request.method == 'POST':
         entity = request.form.get('entity')
@@ -3469,22 +3544,28 @@ def bulk_import():
             if entity == 'machines':
                 for row in data:
                     try:
+                        # Skip rows with missing essential data
+                        if not row or all(v is None or v == '' for v in row.values()):
+                            continue
+                            
+                        mapped = smart_field_mapping(row, 'machines')
+                        
                         # Validate required fields
-                        if not row.get('name'):
-                            errors.append(f"Row missing required field 'name': {row}")
+                        if not mapped.get('name'):
+                            errors.append(f"Row missing machine name: {row}")
                             continue
                             
                         machine = Machine(
-                            name=row.get('name'),
-                            model=row.get('model', ''),
-                            serial_number=row.get('serial_number', ''),
-                            machine_number=row.get('machine_number', ''),
-                            site_id=int(site_id)  # Use selected site
+                            name=str(mapped.get('name', '')),
+                            model=str(mapped.get('model', '')),
+                            serial_number=str(mapped.get('serial_number', '')),
+                            machine_number=str(mapped.get('machine_number', '')),
+                            site_id=int(site_id)
                         )
                         db.session.add(machine)
                         added += 1
                     except Exception as e:
-                        errors.append(f"Error processing row {row}: {str(e)}")
+                        errors.append(f"Error processing machine row: {str(e)}")
                         
             elif entity == 'parts':
                 # Get machines for the selected site
@@ -3492,74 +3573,108 @@ def bulk_import():
                 
                 for row in data:
                     try:
+                        if not row or all(v is None or v == '' for v in row.values()):
+                            continue
+                            
+                        mapped = smart_field_mapping(row, 'parts')
+                        
                         # Validate required fields
-                        if not row.get('name') or not row.get('machine_name'):
-                            errors.append(f"Row missing required fields (name, machine_name): {row}")
+                        if not mapped.get('name') or not mapped.get('machine_name'):
+                            errors.append(f"Row missing part name or machine name: {row}")
                             continue
                         
-                        machine_name = row.get('machine_name')
+                        machine_name = mapped.get('machine_name')
                         if machine_name not in site_machines:
                             errors.append(f"Machine '{machine_name}' not found in site '{site.name}': {row}")
                             continue
                             
                         part = Part(
-                            name=row.get('name'),
-                            description=row.get('description', ''),
+                            name=str(mapped.get('name', '')),
+                            description=str(mapped.get('description', '')),
                             machine_id=site_machines[machine_name],
-                            maintenance_frequency=int(row.get('maintenance_frequency', 30)),
-                            maintenance_unit=row.get('maintenance_unit', 'day')
+                            maintenance_frequency=int(mapped.get('maintenance_frequency', 30)),
+                            maintenance_unit=mapped.get('maintenance_unit', 'day')
                         )
                         db.session.add(part)
                         added += 1
                     except Exception as e:
-                        errors.append(f"Error processing row {row}: {str(e)}")
+                        errors.append(f"Error processing part row: {str(e)}")
                         
             elif entity == 'maintenance':
                 # Get machines and parts for the selected site
                 site_machines = {m.name: m for m in Machine.query.filter_by(site_id=int(site_id)).all()}
-                site_parts = {}
-                for machine in site_machines.values():
-                    for part in machine.parts:
-                        site_parts[f"{machine.name}_{part.name}"] = part
+                
+                # Handle both direct maintenance records and extracted from machine data
+                maintenance_records = []
                 
                 for row in data:
+                    if not row or all(v is None or v == '' for v in row.values()):
+                        continue
+                    
+                    # Check if this is machine data with nested maintenance
+                    if 'MaintenanceData' in row:
+                        maintenance_records.extend(extract_maintenance_data(row))
+                    else:
+                        # Direct maintenance record
+                        mapped = smart_field_mapping(row, 'maintenance')
+                        if mapped.get('machine_name') and mapped.get('description'):
+                            maintenance_records.append(mapped)
+                
+                # Process maintenance records
+                for record in maintenance_records:
                     try:
-                        # Validate required fields
-                        required_fields = ['machine_name', 'part_name', 'maintenance_type', 'description', 'date']
-                        if not all(row.get(field) for field in required_fields):
-                            errors.append(f"Row missing required fields {required_fields}: {row}")
-                            continue
-                        
-                        machine_name = row.get('machine_name')
-                        part_name = row.get('part_name')
-                        part_key = f"{machine_name}_{part_name}"
+                        machine_name = record.get('machine_name', '')
                         
                         if machine_name not in site_machines:
-                            errors.append(f"Machine '{machine_name}' not found in site '{site.name}': {row}")
+                            errors.append(f"Machine '{machine_name}' not found in site '{site.name}'")
                             continue
                         
-                        if part_key not in site_parts:
-                            errors.append(f"Part '{part_name}' not found in machine '{machine_name}': {row}")
-                            continue
-                            
                         machine = site_machines[machine_name]
-                        part = site_parts[part_key]
                         
-                        record = MaintenanceRecord(
+                        # For imported maintenance without specific part, create a general part
+                        part_name = record.get('part_name', 'General Maintenance')
+                        
+                        # Find or create the part
+                        part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                        if not part:
+                            part = Part(
+                                name=part_name,
+                                description=f'Auto-created for maintenance import',
+                                machine_id=machine.id,
+                                maintenance_frequency=365,  # Default to yearly
+                                maintenance_unit='day'
+                            )
+                            db.session.add(part)
+                            db.session.flush()  # Get the ID
+                        
+                        # Parse date
+                        date_obj = datetime.now()
+                        if record.get('date'):
+                            try:
+                                date_str = record['date'].split(' ')[0]  # Remove time part
+                                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                            except:
+                                try:
+                                    date_obj = datetime.strptime(date_str, '%m/%d/%Y')
+                                except:
+                                    pass  # Use current date as fallback
+                        
+                        maintenance = MaintenanceRecord(
                             machine_id=machine.id,
                             part_id=part.id,
-                            user_id=current_user.id,  # Use current user as default
-                            maintenance_type=row.get('maintenance_type'),
-                            description=row.get('description'),
-                            date=datetime.strptime(row.get('date'), '%Y-%m-%d'),
-                            performed_by=row.get('performed_by', current_user.username),
-                            status=row.get('status', 'completed'),
-                            notes=row.get('notes', '')
+                            user_id=current_user.id,
+                            maintenance_type=record.get('maintenance_type', 'Scheduled'),
+                            description=record.get('description', ''),
+                            date=date_obj,
+                            performed_by=record.get('performed_by', current_user.username),
+                            status=record.get('status', 'completed'),
+                            notes=record.get('notes', '')
                         )
-                        db.session.add(record)
+                        db.session.add(maintenance)
                         added += 1
+                        
                     except Exception as e:
-                        errors.append(f"Error processing row {row}: {str(e)}")
+                        errors.append(f"Error processing maintenance record: {str(e)}")
             else:
                 flash('Invalid entity type.', 'danger')
                 return redirect(url_for('bulk_import'))
