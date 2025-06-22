@@ -95,7 +95,10 @@
                     </div>
                     <div class="mb-3">
                         <strong>Parts:</strong>
-                        <pre class="small">name,description,machine_name,maintenance_frequency,maintenance_unit</pre>
+                        <pre class="small">name,description,machine_name,maintenance_frequency,maintenance_unit
+OR with text frequency:
+name,description,machine_name,frequency_text
+Examples: "6 Months", "1 Year", "30 Days", "2 Years"</pre>
                     </div>
                     <div class="mb-3">
                         <strong>Maintenance Records:</strong>
@@ -110,6 +113,7 @@
                             <li><strong>Parts Deduplication:</strong> Prevents duplicate parts per machine, updates with better data</li>
                             <li><strong>Maintenance Deduplication:</strong> Detects duplicate records on same day/type, merges intelligently</li>
                             <li><strong>Nested Data Extraction:</strong> Automatically extracts parts and maintenance from JSON structures</li>
+                            <li><strong>Smart Frequency Parsing:</strong> Handles "6 Months", "1 Year", "30 Days", etc. automatically</li>
                             <li><strong>Data Preservation:</strong> Updates existing records without losing information</li>
                             <li><strong>Excel JSON Support:</strong> Your Excel-exported format works perfectly!</li>
                         </ul>

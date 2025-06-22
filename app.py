@@ -3422,6 +3422,33 @@ def bulk_import():
     else:
         sites = current_user.sites
 
+    def parse_frequency_string(frequency_str):
+        """Parse a frequency string like '6 Months', '1 Year', '30 Days' into numeric value and unit"""
+        if not frequency_str:
+            return 30, 'day'  # default
+        
+        import re
+        freq_lower = str(frequency_str).lower().strip()
+        
+        # Extract numeric value from the frequency string
+        numbers = re.findall(r'\d+', freq_lower)
+        numeric_value = int(numbers[0]) if numbers else 1
+        
+        # Convert everything to days for consistency
+        if 'year' in freq_lower:
+            return numeric_value * 365, 'day'
+        elif 'month' in freq_lower:
+            return numeric_value * 30, 'day'
+        elif 'week' in freq_lower:
+            return numeric_value * 7, 'day'
+        elif 'day' in freq_lower:
+            return numeric_value, 'day'
+        else:
+            # If no unit specified, assume the number is in days
+            if numbers:
+                return numeric_value, 'day'
+            return 30, 'day'  # fallback default
+
     def smart_field_mapping(row, entity_type):
         """Intelligently map various field names to standard format"""
         mapped = {}
@@ -3439,7 +3466,8 @@ def bulk_import():
                 'description': ['description', 'desc', 'Description'],
                 'machine_name': ['machine_name', 'machine', 'Machine', 'Machine Name'],
                 'maintenance_frequency': ['maintenance_frequency', 'frequency', 'Frequency', 'interval'],
-                'maintenance_unit': ['maintenance_unit', 'unit', 'Unit', 'frequency_unit']
+                'maintenance_unit': ['maintenance_unit', 'unit', 'Unit', 'frequency_unit'],
+                'frequency_text': ['frequency_text', 'frequency_string', 'interval_text', 'schedule']
             },
             'maintenance': {
                 'machine_name': ['machine_name', 'machine', 'Machine', 'Machine Name'],
@@ -3478,30 +3506,7 @@ def bulk_import():
                 
                 # Parse frequency to get numeric value and unit
                 frequency_str = maintenance.get('Frequency', '1 Year')
-                freq_value = 30  # default
-                freq_unit = 'day'
-                
-                if frequency_str:
-                    freq_lower = frequency_str.lower()
-                    if 'year' in freq_lower:
-                        freq_value = 365
-                        freq_unit = 'day'
-                    elif 'month' in freq_lower:
-                        # Extract number if present
-                        import re
-                        numbers = re.findall(r'\d+', freq_lower)
-                        months = int(numbers[0]) if numbers else 1
-                        freq_value = months * 30
-                        freq_unit = 'day'
-                    elif 'week' in freq_lower:
-                        numbers = re.findall(r'\d+', freq_lower)
-                        weeks = int(numbers[0]) if numbers else 1
-                        freq_value = weeks * 7
-                        freq_unit = 'day'
-                    elif 'day' in freq_lower:
-                        numbers = re.findall(r'\d+', freq_lower)
-                        freq_value = int(numbers[0]) if numbers else 30
-                        freq_unit = 'day'
+                freq_value, freq_unit = parse_frequency_string(frequency_str)
                 
                 part = {
                     'name': part_data.get('Part Name', ''),
@@ -3528,6 +3533,10 @@ def bulk_import():
         
         if not name:
             return None, "Missing machine name"
+        
+        # Default model to machine name if not provided
+        if not model:
+            model = name
         
         # Try to find existing machine using multiple criteria
         existing = None
@@ -3614,6 +3623,12 @@ def bulk_import():
             # Update maintenance frequency if new data is provided and different
             new_freq = part_data.get('maintenance_frequency', 0)
             new_unit = part_data.get('maintenance_unit', 'day')
+            
+            # Check if there's a text-based frequency to parse
+            frequency_text = part_data.get('frequency_text', '')
+            if frequency_text and not new_freq:
+                new_freq, new_unit = parse_frequency_string(frequency_text)
+            
             if new_freq and (new_freq != existing.maintenance_frequency or new_unit != existing.maintenance_unit):
                 existing.maintenance_frequency = new_freq
                 existing.maintenance_unit = new_unit
@@ -3621,13 +3636,27 @@ def bulk_import():
             
             return existing, "Updated existing part" if updated else "Found existing part"
         else:
+            # Parse frequency data for new part
+            freq_value = part_data.get('maintenance_frequency', 0)
+            freq_unit = part_data.get('maintenance_unit', 'day')
+            
+            # Check if there's a text-based frequency to parse
+            frequency_text = part_data.get('frequency_text', '')
+            if frequency_text and not freq_value:
+                freq_value, freq_unit = parse_frequency_string(frequency_text)
+            
+            # Use defaults if still not set
+            if not freq_value:
+                freq_value = 30
+                freq_unit = 'day'
+            
             # Create new part
             part = Part(
                 name=part_name,
                 description=part_data.get('description', ''),
                 machine_id=machine.id,
-                maintenance_frequency=part_data.get('maintenance_frequency', 30),
-                maintenance_unit=part_data.get('maintenance_unit', 'day')
+                maintenance_frequency=freq_value,
+                maintenance_unit=freq_unit
             )
             return part, "Created new part"
     def find_or_create_maintenance(maintenance_data, machine, part):
@@ -3705,6 +3734,23 @@ def bulk_import():
                     existing.notes = f"{existing.notes}\n{new_notes}".strip()
                     updated = True
                 
+                # Check if we need to update part's maintenance dates
+                if part.last_maintenance is None or date_obj > part.last_maintenance:
+                    part.last_maintenance = date_obj
+                    # Calculate next maintenance date based on frequency
+                    freq = part.maintenance_frequency or 1
+                    unit = part.maintenance_unit or 'day'
+                    if unit == 'week':
+                        delta = timedelta(weeks=freq)
+                    elif unit == 'month':
+                        delta = timedelta(days=freq * 30)
+                    elif unit == 'year':
+                        delta = timedelta(days=freq * 365)
+                    else:
+                        delta = timedelta(days=freq)
+                    part.next_maintenance = date_obj + delta
+                    updated = True
+                
                 return existing, "Updated existing maintenance record" if updated else "Found existing maintenance record"
         
         # Create new maintenance record
@@ -3719,6 +3765,22 @@ def bulk_import():
             status=maintenance_data.get('status', 'completed'),
             notes=maintenance_data.get('notes', '')
         )
+        
+        # Update part's last_maintenance and next_maintenance dates
+        if part.last_maintenance is None or date_obj > part.last_maintenance:
+            part.last_maintenance = date_obj
+            # Calculate next maintenance date based on frequency
+            freq = part.maintenance_frequency or 1
+            unit = part.maintenance_unit or 'day'
+            if unit == 'week':
+                delta = timedelta(weeks=freq)
+            elif unit == 'month':
+                delta = timedelta(days=freq * 30)
+            elif unit == 'year':
+                delta = timedelta(days=freq * 365)
+            else:
+                delta = timedelta(days=freq)
+            part.next_maintenance = date_obj + delta
         
         return maintenance, "Created new maintenance record"
 
@@ -3844,6 +3906,48 @@ def bulk_import():
                         
                         if parts_added > 0 or parts_updated > 0:
                             print(f"Processed {parts_added} new parts and {parts_updated} updated parts for machine '{machine_name}'")
+                        
+                        # Extract and add maintenance records from nested data
+                        maintenance_records = extract_maintenance_data(row)
+                        
+                        maint_added = 0
+                        maint_updated = 0
+                        for record in maintenance_records:
+                            try:
+                                # For imported maintenance without specific part, use the first part or create a general part
+                                part_name = record.get('part_name', 'General Maintenance')
+                                part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                                
+                                if not part and parts_data:
+                                    # Use the first part from the machine data if available
+                                    part = Part.query.filter_by(machine_id=machine.id).first()
+                                
+                                if not part:
+                                    # Create a general maintenance part
+                                    part = Part(
+                                        name=part_name,
+                                        description=f'Auto-created for maintenance import',
+                                        machine_id=machine.id,
+                                        maintenance_frequency=365,  # Default to yearly
+                                        maintenance_unit='day'
+                                    )
+                                    db.session.add(part)
+                                    db.session.flush()  # Get the ID
+                                
+                                # Use smart maintenance record creation with deduplication
+                                maintenance, maint_status = find_or_create_maintenance(record, machine, part)
+                                
+                                if maintenance:
+                                    if maintenance.id is None:  # New maintenance record
+                                        db.session.add(maintenance)
+                                        maint_added += 1
+                                    elif "Updated" in maint_status:
+                                        maint_updated += 1
+                            except Exception as e:
+                                errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
+                        
+                        if maint_added > 0 or maint_updated > 0:
+                            print(f"Processed {maint_added} new maintenance records and {maint_updated} updated maintenance records for machine '{machine_name}'")
                             
                     except Exception as e:
                         errors.append(f"Error processing machine row: {str(e)}")
