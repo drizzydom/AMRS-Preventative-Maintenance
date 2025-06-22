@@ -1511,18 +1511,16 @@ def audit_history_print_view():
     machine_data = {}
     for completion in completions:
         # Get the date string from the completion date
-        date_str = completion.created_at.date().strftime('%Y-%m-%d')
+        date_str = completion.created_at.date().strftime('%Y-%m-%d');
         
         # Initialize machine entry if not exists
         if completion.machine_id not in machine_data:
-            machine_data[completion.machine_id] = {}
-        
+            machine_data[completion.machine_id] = {};
         # Initialize date entry if not exists
         if date_str not in machine_data[completion.machine_id]:
-            machine_data[completion.machine_id][date_str] = []
-        
+            machine_data[completion.machine_id][date_str] = [];
         # Add completion to the appropriate machine/date
-        machine_data[completion.machine_id][date_str].append(completion)
+        machine_data[completion.machine_id][date_str].append(completion);
 
     # Get all audit tasks for reference
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
@@ -3191,6 +3189,7 @@ def maintenance_records_page():
     machines = []
     parts = []
     records = []
+    part_ids = []  # Initialize part_ids here
 
     if site_id:
         # Verify user can access this site
@@ -3230,6 +3229,9 @@ def maintenance_records_page():
         records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_site)).order_by(MaintenanceRecord.date.desc()).all()
     else:
         # No filters selected - show all records for parts the user has access to
+        if machine_ids:
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
+            part_ids = [part.id for part in parts]
         records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids)).order_by(MaintenanceRecord.date.desc()).all() if part_ids else []
 
     return render_template(
@@ -3790,8 +3792,6 @@ def bulk_import():
             # Clean up the date format
             if record['date']:
                 try:
-                    # Handle various date formats
-                    date_str = record['date'].split(' ')[0]  # Remove time part
                     record['date'] = date_str
                 except:
                     record['date'] = ''
