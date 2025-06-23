@@ -13,12 +13,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Sites</h5>
-            </div>
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Sites</h5>
+    </div>
             <div class="card-body">
                 {% if sites %}
                 <div class="table-responsive">
@@ -73,8 +71,6 @@
                 {% endif %}
             </div>
         </div>
-    </div>
-</div>
 
 <!-- Add Site Modal -->
 <div class="modal fade" id="addSiteModal" tabindex="-1" aria-labelledby="addSiteModalLabel" aria-hidden="true">
