@@ -143,8 +143,8 @@ def get_site(current_user, site_id):
     if not current_user.is_admin and site not in current_user.sites:
         return jsonify({'error': 'Access denied'}), 403
     
-    # Get all machines for this site
-    machines = Machine.query.filter_by(site_id=site.id).all()
+    # Get all active (non-decommissioned) machines for this site
+    machines = Machine.query.filter_by(site_id=site.id, decommissioned=False).all()
     machines_data = []
     
     for machine in machines:
@@ -171,15 +171,18 @@ def get_machines(current_user):
     
     # Filter machines by site if provided
     if site_id:
-        machines = Machine.query.filter_by(site_id=site_id).all()
+        machines = Machine.query.filter_by(site_id=site_id, decommissioned=False).all()
     else:
         # Filter based on user permissions
         if current_user.is_admin:
-            machines = Machine.query.all()
+            machines = Machine.query.filter(Machine.decommissioned == False).all()
         else:
             # Get machines from sites user has access to
             site_ids = [site.id for site in current_user.sites]
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
     
     machines_data = []
     for machine in machines:
