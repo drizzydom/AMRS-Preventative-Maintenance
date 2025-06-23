@@ -767,8 +767,8 @@ def inject_site_helpers():
     def get_site_parts_status(site):
         """Get status of parts for a site's machines."""
         try:
-            # Get all machines at this site
-            machines = Machine.query.filter_by(site_id=site.id).all()
+            # Get all active (non-decommissioned) machines at this site
+            machines = Machine.query.filter_by(site_id=site.id, decommissioned=False).all()
             
             # Count parts
             total_parts = 0
@@ -930,11 +930,14 @@ def dashboard():
                 .all()
             )
         
-        # Get all machines across accessible sites
+        # Get all active (non-decommissioned) machines across accessible sites
         machines = []
         site_ids = [site.id for site in sites]
         if site_ids:
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
         
         # Get all parts that need maintenance soon or are overdue
         parts = []
@@ -1002,7 +1005,9 @@ def admin():
         roles_count = Role.query.count()
         site_count = Site.query.count()  # Keep this as site_count
         sites_count = site_count  # Add this line to have both variable names
-        machine_count = Machine.query.count()
+        machine_count = Machine.query.filter(Machine.decommissioned == False).count()
+        total_machine_count = Machine.query.count()
+        decommissioned_machine_count = Machine.query.filter(Machine.decommissioned == True).count()
         part_count = Part.query.count()
         
         # Create safe URLs for admin navigation - provide ALL possible links needed by template
@@ -1030,6 +1035,8 @@ def admin():
                               site_count=site_count,
                               sites_count=sites_count,  # Include both variables
                               machine_count=machine_count,
+                              total_machine_count=total_machine_count,
+                              decommissioned_machine_count=decommissioned_machine_count,
                               part_count=part_count,
                               admin_links=admin_links,
                               section='dashboard',
@@ -1319,15 +1326,18 @@ def audit_history_page():
     if len(sites) == 1 and not site_id:
         site_id = sites[0].id
 
-    # Get available machines based on selected site
+    # Get available active machines based on selected site
     if site_id:
-        available_machines = Machine.query.filter_by(site_id=site_id).all()
+        available_machines = Machine.query.filter_by(site_id=site_id, decommissioned=False).all()
     else:
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
-            available_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            available_machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
         else:
-            available_machines = Machine.query.all()
+            available_machines = Machine.query.filter(Machine.decommissioned == False).all()
 
     # Query completions for the selected month
     query = AuditTaskCompletion.query.filter(
@@ -2032,8 +2042,11 @@ def maintenance_page():
         else:
             sites = current_user.sites
 
-        # Get all machines, parts, and sites for the form
-        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in sites])).all()
+        # Get all active machines, parts, and sites for the form
+        machines = Machine.query.filter(
+            Machine.site_id.in_([site.id for site in sites]),
+            Machine.decommissioned == False
+        ).all()
         parts = Part.query.filter(Part.machine_id.in_([machine.id for machine in machines])).all()
         
         # Get all maintenance records with related data
@@ -2812,6 +2825,9 @@ def manage_machines():
             
         machine_ids = [machine.id for machine in accessible_machines]
         
+        # Get filter parameters
+        show_decommissioned = request.args.get('show_decommissioned', 'false').lower() == 'true'
+        
         # Filter machines by site if site_id is provided
         if site_id:
             # Verify user can access this site
@@ -2820,12 +2836,27 @@ def manage_machines():
                 return redirect(url_for('manage_machines'))
                 
             # Filter machines by selected site
-            machines = Machine.query.filter_by(site_id=site_id).all()
+            machines_query = Machine.query.filter_by(site_id=site_id)
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
             # Show machines from all sites user has access to
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
+            machines_query = Machine.query.filter(Machine.site_id.in_(site_ids)) if site_ids else Machine.query.filter(False)
             title = "Machines"
+        
+        # Apply decommissioned filter
+        if not show_decommissioned:
+            machines_query = machines_query.filter(Machine.decommissioned == False)
+            
+        machines = machines_query.all()
+        
+        # Count decommissioned machines for the toggle
+        if site_id:
+            decommissioned_count = Machine.query.filter_by(site_id=site_id, decommissioned=True).count()
+        else:
+            decommissioned_count = Machine.query.filter(
+                Machine.site_id.in_(site_ids), 
+                Machine.decommissioned == True
+            ).count() if site_ids else 0
         
         # Pre-generate URLs for admin navigation - provide ALL possible links needed by template
         safe_urls = {
@@ -2883,6 +2914,8 @@ def manage_machines():
                               site_id=site_id,
                               title=title,
                               safe_urls=safe_urls,
+                              show_decommissioned=show_decommissioned,
+                              decommissioned_count=decommissioned_count,
                               now=datetime.now())
     except Exception as e:
         app.logger.error(f"Error in manage_machines route: {e}")
@@ -2909,6 +2942,34 @@ def edit_machine(machine_id):
             site_id = int(request.form['site_id'])
             machine.site_id = site_id
             
+            # Handle decommissioned status if user has permission
+            if (current_user.is_admin or 
+                (hasattr(current_user, 'role') and current_user.role and 
+                 'machines.decommission' in (current_user.role.permissions or ''))):
+                
+                was_decommissioned = machine.decommissioned
+                is_being_decommissioned = request.form.get('decommissioned') == 'on'
+                
+                if is_being_decommissioned and not was_decommissioned:
+                    # Machine is being decommissioned
+                    reason = request.form.get('decommissioned_reason', '').strip()
+                    machine.decommission(current_user, reason)
+                    app.logger.info(f"Machine '{machine.name}' decommissioned by {current_user.username}: {reason}")
+                    flash(f'Machine "{machine.name}" has been marked as decommissioned.', 'warning')
+                    
+                elif not is_being_decommissioned and was_decommissioned:
+                    # Machine is being recommissioned
+                    machine.recommission()
+                    app.logger.info(f"Machine '{machine.name}' recommissioned by {current_user.username}")
+                    flash(f'Machine "{machine.name}" has been recommissioned and is now active.', 'success')
+                    
+                elif is_being_decommissioned and was_decommissioned:
+                    # Update decommissioned reason if provided
+                    new_reason = request.form.get('decommissioned_reason', '').strip()
+                    if new_reason != machine.decommissioned_reason:
+                        machine.decommissioned_reason = new_reason
+                        app.logger.info(f"Updated decommission reason for '{machine.name}': {new_reason}")
+            
             db.session.commit()
             flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
             return redirect(url_for('manage_machines'))
@@ -2932,11 +2993,14 @@ def manage_parts():
         # Get accessible sites based on user permissions
         if user_can_see_all_sites(current_user):
             sites = Site.query.all()
-            accessible_machines = Machine.query.all()
+            accessible_machines = Machine.query.filter(Machine.decommissioned == False).all()
         else:
             sites = current_user.sites
             site_ids = [site.id for site in sites]
-            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            accessible_machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
             
         machine_ids = [machine.id for machine in accessible_machines]
         

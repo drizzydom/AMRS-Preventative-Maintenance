@@ -224,14 +224,45 @@ class Machine(db.Model):
     machine_number = db.Column(db.String(50))
     serial_number = db.Column(db.String(50))
     site_id = db.Column(db.Integer, db.ForeignKey('sites.id'), nullable=False)
+    decommissioned = db.Column(db.Boolean, default=False, nullable=False)  # Track if machine is decommissioned
+    decommissioned_date = db.Column(db.DateTime, nullable=True)  # When it was decommissioned
+    decommissioned_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Who decommissioned it
+    decommissioned_reason = db.Column(db.Text, nullable=True)  # Why it was decommissioned
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Define the one-to-many relationship with Part
     parts = db.relationship('Part', backref='machine', lazy=True, cascade="all, delete-orphan")
     
+    # Relationship for decommissioned_by user
+    decommissioned_by_user = db.relationship('User', foreign_keys=[decommissioned_by], backref='decommissioned_machines')
+    
+    @property
+    def is_active(self):
+        """Return True if machine is not decommissioned"""
+        return not self.decommissioned
+    
+    def decommission(self, user, reason=None):
+        """Mark machine as decommissioned"""
+        from datetime import datetime
+        self.decommissioned = True
+        self.decommissioned_date = datetime.utcnow()
+        self.decommissioned_by = user.id if user else None
+        self.decommissioned_reason = reason
+        self.updated_at = datetime.utcnow()
+    
+    def recommission(self):
+        """Mark machine as active again"""
+        from datetime import datetime
+        self.decommissioned = False
+        self.decommissioned_date = None
+        self.decommissioned_by = None
+        self.decommissioned_reason = None
+        self.updated_at = datetime.utcnow()
+    
     def __repr__(self):
-        return f'<Machine {self.name}>'
+        status = "Decommissioned" if self.decommissioned else "Active"
+        return f'<Machine {self.name} ({status})>'
 
 class Part(db.Model):
     """Part model representing components of a machine that need maintenance"""
