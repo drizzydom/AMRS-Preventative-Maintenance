@@ -619,8 +619,13 @@ def assign_colors_to_audit_tasks():
 with app.app_context():
     try:
         run_auto_migration()  # Ensure columns exist before any queries
+        print("[STARTUP] Auto-migration completed successfully")
     except Exception as e:
-        print(f'[AUTO_MIGRATE ERROR] {e}')
+        print(f'[AUTO_MIGRATE ERROR] Critical migration failed: {e}')
+        print("App startup may fail due to missing database columns")
+        # Don't exit here, but log the critical error
+        import traceback
+        print(traceback.format_exc())
     try:
         # --- Ensure audit_tasks.color column exists ---
         from sqlalchemy import text
@@ -1035,8 +1040,6 @@ def admin():
                               site_count=site_count,
                               sites_count=sites_count,  # Include both variables
                               machine_count=machine_count,
-                              total_machine_count=total_machine_count,
-                              decommissioned_machine_count=decommissioned_machine_count,
                               part_count=part_count,
                               admin_links=admin_links,
                               section='dashboard',
@@ -1326,18 +1329,15 @@ def audit_history_page():
     if len(sites) == 1 and not site_id:
         site_id = sites[0].id
 
-    # Get available active machines based on selected site
+    # Get available machines based on selected site
     if site_id:
-        available_machines = Machine.query.filter_by(site_id=site_id, decommissioned=False).all()
+        available_machines = Machine.query.filter_by(site_id=site_id).all()
     else:
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
-            available_machines = Machine.query.filter(
-                Machine.site_id.in_(site_ids),
-                Machine.decommissioned == False
-            ).all()
+            available_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
         else:
-            available_machines = Machine.query.filter(Machine.decommissioned == False).all()
+            available_machines = Machine.query.all()
 
     # Query completions for the selected month
     query = AuditTaskCompletion.query.filter(
@@ -2042,11 +2042,8 @@ def maintenance_page():
         else:
             sites = current_user.sites
 
-        # Get all active machines, parts, and sites for the form
-        machines = Machine.query.filter(
-            Machine.site_id.in_([site.id for site in sites]),
-            Machine.decommissioned == False
-        ).all()
+        # Get all machines, parts, and sites for the form
+        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in sites])).all()
         parts = Part.query.filter(Part.machine_id.in_([machine.id for machine in machines])).all()
         
         # Get all maintenance records with related data

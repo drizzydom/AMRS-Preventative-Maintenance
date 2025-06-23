@@ -263,6 +263,22 @@ class Machine(db.Model):
     def __repr__(self):
         status = "Decommissioned" if self.decommissioned else "Active"
         return f'<Machine {self.name} ({status})>'
+    
+    @classmethod
+    def safe_filter_active(cls, query):
+        """
+        Safely filter for active (non-decommissioned) machines.
+        Falls back to all machines if decommissioned column doesn't exist yet.
+        """
+        try:
+            # Try to filter by decommissioned field
+            return query.filter(cls.decommissioned == False)
+        except Exception as e:
+            # If the column doesn't exist yet, return all machines
+            # This handles the case during migration where columns don't exist
+            import logging
+            logging.getLogger(__name__).warning(f"decommissioned column not available yet: {e}")
+            return query
 
 class Part(db.Model):
     """Part model representing components of a machine that need maintenance"""
