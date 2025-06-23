@@ -190,20 +190,29 @@ body .centered-layout .centered-content-col .content-container {
 /* ==== TEMPLATE-SPECIFIC OVERRIDES ==== */
 /* Fix for Bootstrap row/col wrappers that are causing extra indentation */
 @media (min-width: 992px) {
-    /* Override Bootstrap row classes inside content-container */
+    /* CRITICAL FIX: Override problematic Bootstrap row classes inside content-container */
     html body .content-container .row.mx-0.w-100,
     body .content-container .row.mx-0.w-100,
-    .content-container .row.mx-0.w-100,
-    html body .content-container .row.mx-0,
-    body .content-container .row.mx-0,
-    .content-container .row.mx-0 {
+    .content-container .row.mx-0.w-100 {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+    
+    /* CRITICAL FIX: Override Bootstrap row classes without specific classes */
+    html body .content-container .row,
+    body .content-container .row,
+    .content-container .row {
         margin-left: 0 !important;
         margin-right: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
     }
     
-    /* Override Bootstrap column classes inside content-container */
+    /* CRITICAL FIX: Override Bootstrap column classes inside content-container */
     html body .content-container .col-12.px-0,
     body .content-container .col-12.px-0,
     .content-container .col-12.px-0,
@@ -216,9 +225,13 @@ body .centered-layout .centered-content-col .content-container {
         margin-right: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
+        flex: none !important;
     }
     
-    /* Specific fixes for admin pages that use nested containers */
+    /* CRITICAL FIX: Prevent any nested containers from adding extra margins */
+    html body .content-container .container,
+    body .content-container .container,
+    .content-container .container,
     html body .content-container .container-fluid,
     body .content-container .container-fluid,
     .content-container .container-fluid {
@@ -238,6 +251,14 @@ body .centered-layout .centered-content-col .content-container {
         margin-right: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
+    }
+    
+    /* CRITICAL FIX: Force all direct children of content-container to not add spacing */
+    html body .content-container > *,
+    body .content-container > *,
+    .content-container > * {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
     }
 }
 
@@ -261,9 +282,31 @@ body .centered-layout .centered-content-col .content-container {
     html body .content-container .row.mx-0.w-100,
     body .content-container .row.mx-0.w-100,
     .content-container .row.mx-0.w-100,
+    html body .content-container .row,
+    body .content-container .row,
+    .content-container .row,
     html body .content-container .col-12.px-0,
     body .content-container .col-12.px-0,
-    .content-container .col-12.px-0 {
+    .content-container .col-12.px-0,
+    html body .content-container .col-12,
+    body .content-container .col-12,
+    .content-container .col-12 {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: none !important;
+    }
+    
+    /* Force mobile containers to behave */
+    html body .content-container .container,
+    body .content-container .container,
+    .content-container .container,
+    html body .content-container .container-fluid,
+    body .content-container .container-fluid,
+    .content-container .container-fluid {
         margin-left: 0 !important;
         margin-right: 0 !important;
         padding-left: 1rem !important;
