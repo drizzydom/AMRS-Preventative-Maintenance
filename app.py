@@ -1530,9 +1530,6 @@ def audit_history_print_view():
     for machine in machines:
         all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
 
-    # Get all users for reference
-    users = {user.id: user for user in User.query.all()}
-    
     # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
     from collections import defaultdict
     interval_bars = defaultdict(lambda: defaultdict(list))
@@ -1577,7 +1574,6 @@ def audit_history_print_view():
         machines=machines,
         machine_data=machine_data,
         audit_tasks=audit_tasks,
-        users=users,
         today=today,
         start_date=start_date,
         end_date=end_date,
@@ -2987,7 +2983,7 @@ def manage_parts():
                     flash('Invalid machine selected.', 'danger')
                     return redirect(url_for('manage_parts'))
                     
-                if not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]:
+                if not user_can_see_all_sites(current_user) and int(machine.site_id) not in [site.id for site in current_user.sites]:
                     flash('You do not have permission to add parts to this machine.', 'danger')
                     return redirect(url_for('manage_parts'))
                 
@@ -3650,25 +3646,40 @@ def bulk_import():
         from datetime import datetime, timedelta
         
         # Parse the maintenance date
-        date_obj = datetime.now()
+        date_obj = None
         date_str = maintenance_data.get('date', '')
         
         if date_str:
             try:
+                # Clean the date string - remove time part and extra whitespace
+                date_str = str(date_str).strip().split(' ')[0]
+                
                 # Try different date formats
-                date_str = date_str.split(' ')[0]  # Remove time part
-                try:
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                except:
+                date_formats = [
+                    '%Y-%m-%d',      # 2025-01-16
+                    '%m/%d/%Y',      # 01/16/2025
+                    '%d/%m/%Y',      # 16/01/2025
+                    '%Y/%m/%d',      # 2025/01/16
+                    '%m-%d-%Y',      # 01-16-2025
+                    '%d-%m-%Y'       # 16-01-2025
+                ]
+                
+                for date_format in date_formats:
                     try:
-                        date_obj = datetime.strptime(date_str, '%m/%d/%Y')
-                    except:
-                        try:
-                            date_obj = datetime.strptime(date_str, '%d/%m/%Y')
-                        except:
-                            pass  # Use current date as fallback
-            except:
-                pass
+                        date_obj = datetime.strptime(date_str, date_format)
+                        break
+                    except ValueError:
+                        continue
+                        
+            except Exception as e:
+                app.logger.warning(f"Failed to parse date '{date_str}': {e}")
+        
+        # If we couldn't parse the date, use a reasonable default (30 days ago)
+        # This prevents all maintenance from showing as "today"
+        if date_obj is None:
+            if date_str:
+                app.logger.warning(f"Could not parse maintenance date '{date_str}', using 30 days ago as fallback")
+            date_obj = datetime.now() - timedelta(days=30)
         
         maintenance_type = maintenance_data.get('maintenance_type', 'Scheduled')
         description = maintenance_data.get('description', '').strip()
@@ -3720,23 +3731,6 @@ def bulk_import():
                     existing.notes = f"{existing.notes}\n{new_notes}".strip()
                     updated = True
                 
-                # Check if we need to update part's maintenance dates
-                if part.last_maintenance is None or date_obj > part.last_maintenance:
-                    part.last_maintenance = date_obj
-                    # Calculate next maintenance date based on frequency
-                    freq = part.maintenance_frequency or 1
-                    unit = part.maintenance_unit or 'day'
-                    if unit == 'week':
-                        delta = timedelta(weeks=freq)
-                    elif unit == 'month':
-                        delta = timedelta(days=freq * 30)
-                    elif unit == 'year':
-                        delta = timedelta(days=freq * 365)
-                    else:
-                        delta = timedelta(days=freq)
-                    part.next_maintenance = date_obj + delta
-                    updated = True
-                
                 return existing, "Updated existing maintenance record" if updated else "Found existing maintenance record"
         
         # Create new maintenance record
@@ -3752,22 +3746,7 @@ def bulk_import():
             notes=maintenance_data.get('notes', '')
         )
         
-        # Update part's last_maintenance and next_maintenance dates
-        if part.last_maintenance is None or date_obj > part.last_maintenance:
-            part.last_maintenance = date_obj
-            # Calculate next maintenance date based on frequency
-            freq = part.maintenance_frequency or 1
-            unit = part.maintenance_unit or 'day'
-            if unit == 'week':
-                delta = timedelta(weeks=freq)
-            elif unit == 'month':
-                delta = timedelta(days=freq * 30)
-            elif unit == 'year':
-                delta = timedelta(days=freq * 365)
-            else:
-                delta = timedelta(days=freq)
-            part.next_maintenance = date_obj + delta
-        
+        # Note: Part maintenance dates will be updated in bulk after all imports are complete
         return maintenance, "Created new maintenance record"
 
     def extract_maintenance_data(machine_data):
@@ -4068,7 +4047,7 @@ def bulk_import():
                                 if part:
                                     if part.id is None:  # New part
                                         db.session.add(part)
-                                        added += 1
+                                        parts_added += 1
                                     elif "Updated" in status:
                                         updated += 1
                                     elif "Found" in status:
@@ -4098,7 +4077,7 @@ def bulk_import():
                                     if part:
                                         if part.id is None:  # New part
                                             db.session.add(part)
-                                            added += 1
+                                            parts_added += 1
                                         elif "Updated" in status:
                                             updated += 1
                                         elif "Found" in status:
@@ -4208,8 +4187,8 @@ def bulk_import():
                         part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
                         if not part:
                             # Create part with proper maintenance schedule from the record
-                            freq_value = 365  # Default to yearly
-                            freq_unit = 'day'
+                            freq_value = record.get('maintenance_frequency', 365)
+                            freq_unit = record.get('maintenance_unit', 'day')
                             
                             part = Part(
                                 name=part_name,
@@ -4227,7 +4206,7 @@ def bulk_import():
                         if maintenance:
                             if maintenance.id is None:  # New maintenance record
                                 db.session.add(maintenance)
-                                added += 1
+                                maintenance_added += 1
                             elif "Updated" in status:
                                 updated += 1
                             elif "Found" in status:
@@ -4333,6 +4312,33 @@ def bulk_import():
             # Commit changes
             if added > 0 or updated > 0:
                 db.session.commit()
+                
+                # After importing, update all part maintenance dates based on actual maintenance records
+                # This ensures parts show correct last/next maintenance dates regardless of import order
+                if entity in ['maintenance', 'unified']:
+                    updated_parts = set()
+                    
+                    # Find all parts that were affected by the import
+                    if entity == 'maintenance':
+                        # For maintenance imports, get parts from the selected site
+                        site_machines = Machine.query.filter_by(site_id=int(site_id)).all()
+                        for machine in site_machines:
+                            for part in machine.parts:
+                                update_part_maintenance_dates(part)
+                                updated_parts.add(part.name)
+                    
+                    elif entity == 'unified':
+                        # For unified imports, get all parts from the imported machines
+                        site_machines = Machine.query.filter_by(site_id=int(site_id)).all()
+                        for machine in site_machines:
+                            for part in machine.parts:
+                                update_part_maintenance_dates(part)
+                                updated_parts.add(part.name)
+                    
+                    # Commit the part updates
+                    if updated_parts:
+                        db.session.commit()
+                        app.logger.info(f"Updated maintenance dates for {len(updated_parts)} parts: {', '.join(list(updated_parts)[:10])}")
             
             # Provide detailed feedback
             total_processed = added + updated + merged
@@ -4366,6 +4372,40 @@ def bulk_import():
     
     # GET request - show the form
     return render_template('admin/bulk_import.html', sites=sites)
+
+def update_part_maintenance_dates(part):
+    """Update part's last_maintenance and next_maintenance based on actual maintenance records"""
+    from datetime import timedelta
+    
+    # Find the most recent maintenance record for this part
+    latest_maintenance = MaintenanceRecord.query.filter_by(
+        part_id=part.id
+    ).order_by(MaintenanceRecord.date.desc()).first()
+    
+    if latest_maintenance:
+        # Update last_maintenance to the actual latest date
+        part.last_maintenance = latest_maintenance.date
+        
+        # Calculate next maintenance date based on frequency
+        freq = part.maintenance_frequency or 30
+        unit = part.maintenance_unit or 'day'
+        
+        if unit == 'week':
+            delta = timedelta(weeks=freq)
+        elif unit == 'month':
+            delta = timedelta(days=freq * 30)
+        elif unit == 'year':
+            delta = timedelta(days=freq * 365)
+        else:
+            delta = timedelta(days=freq)
+            
+        part.next_maintenance = part.last_maintenance + delta
+        
+        app.logger.info(f"Updated part '{part.name}' - Last maintenance: {part.last_maintenance}, Next: {part.next_maintenance}")
+    else:
+        # No maintenance records found, clear the dates
+        part.last_maintenance = None
+        part.next_maintenance = None
 
 
 
