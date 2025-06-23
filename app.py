@@ -3786,17 +3786,38 @@ def bulk_import():
                         continue
                     
                     part_name = part_data.get('Part Name', '')
-                    maintenance = part_data.get('Maintenance', {})
+                    maintenance_done = part_data.get('Maintenance Done', '')
+                    maintenance_type = part_data.get('Maintenance Type', '')
+                    last_pm_done = part_data.get('Last PM Done', '')
+                    required_materials = part_data.get('Required Materials', '')
+                    qty = part_data.get('Qty.', '')
+                    frequency = part_data.get('Frequency', '')
+                    
+                    # Skip if no maintenance info
+
+                    if not maintenance_done and not maintenance_type and not last_pm_done:
+                        continue
+                    
+                    # Create a description from available fields
+                    description_parts = [maintenance_done, maintenance_type, required_materials, f"Qty: {qty}"]
+                    description = ' - '.join([part for part in description_parts if part]).strip(' -')
+                    
+                    # Parse frequency to get numeric value and unit
+                    freq_value, freq_unit = 30, 'day'  # Default values
+                    if frequency:
+                        freq_value, freq_unit = parse_frequency_string(frequency)
                     
                     record = {
                         'machine_name': machine_name,
                         'part_name': part_name,  # Use the actual part name from JSON
-                        'maintenance_type': maintenance.get('Maintenance Type', 'Scheduled'),
-                        'description': maintenance.get('Maintenance Done', ''),
-                        'date': maintenance.get('Last PM Done', ''),
+                        'maintenance_type': maintenance_type,
+                        'description': description,
+                        'date': last_pm_done,
                         'performed_by': 'System Import',
                         'status': 'completed',
-                        'notes': f"Materials: {maintenance.get('Required Materials', 'N/A')}, Qty: {maintenance.get('Qty.', 'N/A')}, Frequency: {maintenance.get('Frequency', 'N/A')}"
+                        'notes': f"Materials: {required_materials}, Qty: {qty}, Frequency: {frequency}",
+                        'maintenance_frequency': freq_value,
+                        'maintenance_unit': freq_unit
                     }
                     
                     # Clean up the date format
@@ -4031,7 +4052,20 @@ def bulk_import():
                 site_machines = {m.name: m for m in Machine.query.filter_by(site_id=int(site_id)).all()}
                 
                 # Handle both direct maintenance records and extracted from machine data
-                maintenance_records = extract_maintenance_data(row)
+                maintenance_records = []
+                
+                for row in data:
+                    if not row or all(v is None or v == '' for v in row.values()):
+                        continue
+                    
+                    # Check if this is machine data with nested maintenance
+                    if 'MaintenanceData' in row:
+                        maintenance_records.extend(extract_maintenance_data(row))
+                    else:
+                        # Direct maintenance record
+                        mapped = smart_field_mapping(row, 'maintenance')
+                        if mapped.get('machine_name') and mapped.get('description'):
+                            maintenance_records.append(mapped)
                 
                 # Process maintenance records
                 for record in maintenance_records:
@@ -4053,16 +4087,20 @@ def bulk_import():
                         # Find or create the part
                         part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
                         if not part:
+                            # Create part with proper maintenance schedule from the record
+                            frequency_text = record.get('frequency_text', record.get('notes', ''))
+                            freq_value, freq_unit = parse_frequency_string(frequency_text) if frequency_text else (365, 'day')
+                            
                             part = Part(
                                 name=part_name,
                                 description=record.get('description', f'Auto-created for maintenance import'),
                                 machine_id=machine.id,
-                                maintenance_frequency=365,  # Default to yearly
-                                maintenance_unit='day'
+                                maintenance_frequency=freq_value,
+                                maintenance_unit=freq_unit
                             )
                             db.session.add(part)
                             db.session.flush()  # Get the ID
-
+                        
                         # Use smart maintenance record creation with deduplication
                         maintenance, status = find_or_create_maintenance(record, machine, part)
                         
