@@ -23,7 +23,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">`
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
@@ -394,6 +393,9 @@
         }
     }
     </style>
+    
+    <!-- Content position fix must be loaded AFTER inline styles to override them -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
 </head>
 <body class="preload">
     <header>
