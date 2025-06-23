@@ -1,37 +1,10 @@
 /* 
  * CONTENT POSITION FIX
  * Simple, targeted layout rules for consistent positioning across all pages
+ * Note: Main positioning rules are now in base.html inline styles for higher precedence
  */
 
-/* ==== DESKTOP LAYOUT (992px and above) ==== */
-@media (min-width: 992px) {
-    /* Sidebar expanded state */
-    .content-container {
-        margin-left: 200px !important;
-        width: calc(100% - 200px) !important;
-        max-width: calc(100% - 200px) !important;
-        transition: margin-left 0.3s ease, width 0.3s ease;
-        box-sizing: border-box !important;
-    }
-    
-    /* Sidebar collapsed state */
-    body.sidebar-collapsed .content-container {
-        margin-left: 56px !important;
-        width: calc(100% - 56px) !important;
-        max-width: calc(100% - 56px) !important;
-    }
-}
-
-/* ==== MOBILE LAYOUT (991px and below) ==== */
-@media (max-width: 991.98px) {
-    .content-container {
-        margin-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-}
-
-/* ==== BASIC SPACING FIXES ==== */
+/* ==== BASIC SPACING FIXES ONLY ==== */
 body {
     margin-top: 48px !important; /* Navbar height */
     padding-top: 0 !important;
@@ -41,4 +14,10 @@ body {
 .content-container {
     padding-top: 0 !important;
     margin-top: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Ensure smooth transitions */
+.content-container {
+    transition: margin-left 0.3s ease, width 0.3s ease;
 }
