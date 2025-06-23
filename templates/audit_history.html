@@ -5,20 +5,6 @@
 {% block header_title %}Audit History{% endblock %}
 
 {% block content %}
-<!-- Flashed messages -->
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    <div class="container-fluid">
-      {% for category, message in messages %}
-        <div class="alert alert-{{ category }} alert-dismissible fade show mt-2" role="alert">
-          {{ message }}
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-{% endwith %}
-
 {% if not (current_user.is_admin or (current_user.is_authenticated and current_user.role and (
     (hasattr(current_user.role, 'name') and 'audits.access' in (current_user.role.permissions or '')) or
     (not hasattr(current_user.role, 'name') and Role.query.filter_by(name=current_user.role).first() and 'audits.access' in (Role.query.filter_by(name=current_user.role).first().permissions or ''))
