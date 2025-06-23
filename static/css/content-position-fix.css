@@ -1,28 +1,43 @@
 /* 
  * CONTENT POSITION FIX
  * Clean, consolidated layout rules for consistent positioning across all pages
+ * Using high specificity to override conflicting rules in base.html
  */
 
 /* ==== DESKTOP LAYOUT (992px and above) ==== */
 @media (min-width: 992px) {
-    /* Sidebar expanded state */
+    /* Sidebar expanded state - using high specificity to override base.html */
+    html body .content-container,
+    body .content-container,
     .content-container {
-        margin-left: 200px;
-        width: calc(100% - 200px);
-        max-width: calc(100% - 200px);
+        margin-left: 200px !important;
+        width: calc(100% - 200px) !important;
+        max-width: calc(100% - 200px) !important;
         transition: margin-left 0.3s ease, width 0.3s ease;
+        box-sizing: border-box !important;
     }
     
-    /* Sidebar collapsed state */
+    /* Sidebar collapsed state - using high specificity to override base.html */
+    html body.sidebar-collapsed .content-container,
     body.sidebar-collapsed .content-container {
-        margin-left: 56px;
-        width: calc(100% - 56px);
-        max-width: calc(100% - 56px);
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+        max-width: calc(100% - 56px) !important;
+    }
+    
+    /* Override any double indentation from base.html */
+    html body .content-container .content-container,
+    body .content-container .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
 }
 
 /* ==== MOBILE LAYOUT (991px and below) ==== */
 @media (max-width: 991.98px) {
+    html body .content-container,
+    body .content-container,
     .content-container {
         margin-left: 0 !important;
         width: 100% !important;
@@ -32,6 +47,7 @@
 
 /* ==== VERTICAL SPACING FIXES ==== */
 /* Reset all margins and padding to prevent content from being pushed down */
+html body,
 body {
     margin-top: 48px !important; /* Exactly navbar height */
     padding-top: 0 !important;
@@ -39,47 +55,151 @@ body {
 }
 
 /* Properly position content under navbar */
+html body .content-container,
+body .content-container,
 .content-container {
     padding-top: 0 !important;
     margin-top: 0 !important;
 }
 
 /* Fix excessive spacing in cards */
+html body .card,
+body .card,
 .card {
     margin-top: 0 !important;
 }
 
 /* Fix row spacing */
+html body .row,
+body .row,
 .row {
     margin-top: 0 !important;
     margin-bottom: 1rem !important;
 }
 
 /* Reset first row margin */
+html body .row:first-child,
+body .row:first-child,
 .row:first-child {
     margin-top: 0 !important;
 }
 
 /* Fix page header spacing */
+html body .page-header,
+body .page-header,
 .page-header {
     margin-top: 0 !important;
     margin-bottom: 1rem !important;
 }
 
 /* Fix content padding */
+html body .container-fluid,
+body .container-fluid,
 .container-fluid {
     padding-top: 1rem !important;
     padding-bottom: 1rem !important;
 }
 
 /* Fix page content position */
+html body .page-content,
+body .page-content,
 .page-content {
     padding-top: 0 !important;
     margin-top: 0 !important;
 }
 
 /* Fix tables layout */
+html body .table-responsive,
+body .table-responsive,
 .table-responsive {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
+}
+
+/* ==== ADDITIONAL OVERRIDES FOR CONFLICTING STYLES ==== */
+/* Override any conflicting styles from base.html */
+html body .centered-layout .centered-content-col .content-container,
+body .centered-layout .centered-content-col .content-container {
+    margin-left: 200px !important;
+    width: calc(100% - 200px) !important;
+}
+
+@media (min-width: 992px) {
+    html body .centered-layout .centered-content-col .content-container,
+    body .centered-layout .centered-content-col .content-container {
+        margin-left: 200px !important;
+        width: calc(100% - 200px) !important;
+    }
+    
+    html body.sidebar-collapsed .centered-layout .centered-content-col .content-container,
+    body.sidebar-collapsed .centered-layout .centered-content-col .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+    }
+}
+
+/* Ensure audit pages don't get double indentation */
+@media (min-width: 992px) {
+    html body:has(.audit-history-container) .content-container,
+    body:has(.audit-history-container) .content-container {
+        margin-left: 200px !important;
+        width: calc(100% - 200px) !important;
+    }
+    
+    html body.sidebar-collapsed:has(.audit-history-container) .content-container,
+    body.sidebar-collapsed:has(.audit-history-container) .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+    }
+}
+
+/* ==== FINAL OVERRIDE SECTION - HIGHEST PRIORITY ==== */
+/* These rules have the absolute highest priority and will override everything */
+@media (min-width: 992px) {
+    /* Force correct positioning for all possible selectors */
+    html body div.content-container,
+    html body .container-fluid .content-container,
+    html body .main-content .content-container,
+    body div.content-container,
+    body .container-fluid .content-container,
+    body .main-content .content-container,
+    div.content-container,
+    .container-fluid .content-container,
+    .main-content .content-container {
+        margin-left: 200px !important;
+        width: calc(100% - 200px) !important;
+        max-width: calc(100% - 200px) !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* Force correct collapsed positioning */
+    html body.sidebar-collapsed div.content-container,
+    html body.sidebar-collapsed .container-fluid .content-container,
+    html body.sidebar-collapsed .main-content .content-container,
+    body.sidebar-collapsed div.content-container,
+    body.sidebar-collapsed .container-fluid .content-container,
+    body.sidebar-collapsed .main-content .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+        max-width: calc(100% - 56px) !important;
+    }
+}
+
+/* Force mobile layout */
+@media (max-width: 991.98px) {
+    html body div.content-container,
+    html body .container-fluid .content-container,
+    html body .main-content .content-container,
+    body div.content-container,
+    body .container-fluid .content-container,
+    body .main-content .content-container,
+    div.content-container,
+    .container-fluid .content-container,
+    .main-content .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }
