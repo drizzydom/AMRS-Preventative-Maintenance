@@ -58,6 +58,12 @@ def run_auto_migration():
         add_column_if_not_exists(engine, 'users', 'username_hash', 'VARCHAR(64)')
         add_column_if_not_exists(engine, 'users', 'email_hash', 'VARCHAR(64)')
         
+        # Ensure machines table has decommissioned fields
+        add_column_if_not_exists(engine, 'machines', 'decommissioned', 'BOOLEAN DEFAULT FALSE NOT NULL')
+        add_column_if_not_exists(engine, 'machines', 'decommissioned_date', 'TIMESTAMP NULL')
+        add_column_if_not_exists(engine, 'machines', 'decommissioned_by', 'INTEGER NULL')
+        add_column_if_not_exists(engine, 'machines', 'decommissioned_reason', 'TEXT NULL')
+        
         # Add your new database migrations here
         
         # Run data fixes
