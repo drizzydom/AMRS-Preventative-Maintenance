@@ -80,19 +80,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Restore sidebar collapsed state from localStorage on desktop
-    if (window.innerWidth >= 992) {
-        const isCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
-        if (isCollapsed) {
-            document.body.classList.add('sidebar-collapsed');
+    // if (window.innerWidth >= 992) {
+    //     const isCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+    //     if (isCollapsed) {
+    //         document.body.classList.add('sidebar-collapsed');
             
-            // Update icon if needed
-            var collapseIcon = document.querySelector('.sidebar-toggle-item.d-none.d-lg-block .fas');
-            if (collapseIcon) {
-                collapseIcon.classList.remove('fa-angle-double-left');
-                collapseIcon.classList.add('fa-angle-double-right');
-            }
-        }
-    }
+    //         // Update icon if needed
+    //         var collapseIcon = document.querySelector('.sidebar-toggle-item.d-none.d-lg-block .fas');
+    //         if (collapseIcon) {
+    //             collapseIcon.classList.remove('fa-angle-double-left');
+    //             collapseIcon.classList.add('fa-angle-double-right');
+    //         }
+    //     }
+    // }
 });
 
 // Helper function for AJAX requests
