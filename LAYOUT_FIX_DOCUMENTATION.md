@@ -1,21 +1,29 @@
 # Layout Fix Documentation
 
 ## Problem Fixed
-Several pages in the AMRS Preventative Maintenance system had an extra 200px indentation when the sidebar was expanded. This was caused by unnecessary Bootstrap grid wrappers (`<div class="row"><div class="col-12">`) in the templates that created double nesting with the base template's grid structure.
+Several pages in the AMRS Preventative Maintenance system had an extra 200px indentation when the sidebar was expanded. This was caused by inconsistent CSS flexbox properties and unnecessary Bootstrap grid/container wrappers in templates that created conflicting positioning with the base template's layout structure.
 
-## Root Cause
-The issue was caused by extra Bootstrap grid containers in child templates that conflicted with the grid structure already established in `base.html`. Problematic patterns included:
-- `<div class="row"><div class="col-12">`
-- `<div class="row mb-4"><div class="col-12">`
-- `<div class="container-fluid"><div class="row"><div class="col-12">`
+## Root Cause  
+The issue was caused by:
+1. **Extra Bootstrap grid containers** in child templates that conflicted with the grid structure already established in `base.html`
+2. **Duplicate flashed message handling** with `<div class="container-fluid">` wrappers in some templates
+3. **Inconsistent CSS class applications** leading to different flexbox properties being applied to content containers
+
+The browser inspector showed different CSS class labels and flex positioning for problematic pages vs. working pages, confirming that the issue was in the CSS flexbox properties rather than just Bootstrap grid structure.
+
+Problematic patterns included:
+- `<div class="row"><div class="col-12">` (unnecessary Bootstrap grid wrappers)
+- `<div class="row mb-4"><div class="col-12">` (extra spacing with grid wrappers)
+- `<div class="container-fluid">` (duplicate flashed message containers)
+- Custom flashed message handling conflicting with base template
 
 ## Files Fixed
 
-### Templates (Removed unnecessary Bootstrap wrappers):
+### Templates (Removed unnecessary Bootstrap wrappers and fixed CSS conflicts):
 1. **`/templates/machines.html`** - Removed `<div class="row"><div class="col-12">` wrapper
 2. **`/templates/maintenance.html`** - Removed multiple `<div class="row mb-4"><div class="col-12">` wrappers
-3. **`/templates/audits.html`** - Removed `<div class="container-fluid"><div class="row"><div class="col-12">` wrapper
-4. **`/templates/audit_history.html`** - Removed `<div class="container-fluid"><div class="row"><div class="col-12">` wrapper
+3. **`/templates/audits.html`** - Removed `<div class="container-fluid">` wrapper and duplicate flashed message handling
+4. **`/templates/audit_history.html`** - Removed `<div class="container-fluid">` wrapper and duplicate flashed message handling
 5. **`/templates/sites.html`** - Removed `<div class="row"><div class="col-12">` wrapper
 
 ### CSS (Simplified layout rules):
@@ -23,9 +31,14 @@ The issue was caused by extra Bootstrap grid containers in child templates that 
 
 ## Solution Applied
 1. **Removed Extra Grid Wrappers**: Eliminated unnecessary Bootstrap grid containers from child templates
-2. **Consistent Structure**: Ensured all templates follow the same pattern as working pages (e.g., `dashboard.html`)
-3. **Simplified CSS**: Removed aggressive and page-specific CSS overrides in favor of source template fixes
-4. **Future-Proof Design**: Fixed the root cause rather than applying band-aid CSS solutions
+2. **Fixed Duplicate Message Handling**: Removed custom flashed message containers that conflicted with base template
+3. **Consistent Structure**: Ensured all templates follow the same pattern as working pages (e.g., `dashboard.html`)
+4. **Consistent CSS Classes**: Fixed inconsistent CSS class applications that led to different flexbox properties
+5. **Simplified CSS**: Removed aggressive and page-specific CSS overrides in favor of source template fixes
+6. **Future-Proof Design**: Fixed the root cause rather than applying band-aid CSS solutions
+
+## Key Insight
+The browser inspector analysis revealed that problematic pages had different CSS class labels and flex positioning compared to working pages. This confirmed that the issue wasn't just Bootstrap grid nesting, but inconsistent CSS flexbox properties being applied to content containers due to conflicting template structures.
 
 ## Correct Template Structure
 
