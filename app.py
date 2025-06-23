@@ -3636,11 +3636,11 @@ def bulk_import():
                 freq_unit = 'day'
             
             # Create new part
+            description = part_data.get('description', '').strip()
             part = Part(
                 name=part_name,
                 description=description,
                 machine_id=machine.id,
-                site_id=site_id,
                 maintenance_frequency=freq_value,
                 maintenance_unit=freq_unit
             )
@@ -3786,15 +3786,17 @@ def bulk_import():
                         continue
                     
                     part_name = part_data.get('Part Name', '')
-                    maintenance_done = part_data.get('Maintenance Done', '')
-                    maintenance_type = part_data.get('Maintenance Type', '')
-                    last_pm_done = part_data.get('Last PM Done', '')
-                    required_materials = part_data.get('Required Materials', '')
-                    qty = part_data.get('Qty.', '')
-                    frequency = part_data.get('Frequency', '')
+                    maintenance_info = part_data.get('Maintenance', {})
+                    
+                    # Extract maintenance fields from the nested Maintenance object
+                    maintenance_done = maintenance_info.get('Maintenance Done', '')
+                    maintenance_type = maintenance_info.get('Maintenance Type', '')
+                    last_pm_done = maintenance_info.get('Last PM Done', '')
+                    required_materials = maintenance_info.get('Required Materials', '')
+                    qty = maintenance_info.get('Qty.', '')
+                    frequency = maintenance_info.get('Frequency', '')
                     
                     # Skip if no maintenance info
-
                     if not maintenance_done and not maintenance_type and not last_pm_done:
                         continue
                     
@@ -3857,12 +3859,12 @@ def bulk_import():
         return records
 
     if request.method == 'POST':
-        entity = request.form.get('entity')
+        entity = request.form.get('entity', 'unified')  # Default to unified import
         site_id = request.form.get('site_id')
         file = request.files.get('file')
         
-        if not entity or not site_id or not file:
-            flash('Entity type, site, and file are required.', 'danger')
+        if not site_id or not file:
+            flash('Site and file are required.', 'danger')
             return redirect(url_for('bulk_import'))
         
         # Validate site access
@@ -4066,10 +4068,10 @@ def bulk_import():
                                 if part:
                                     if part.id is None:  # New part
                                         db.session.add(part)
-                                        parts_added += 1
-                                    elif "Updated" in part_status:
-                                        parts_updated += 1
-                                    elif "Found" in part_status:
+                                        added += 1
+                                    elif "Updated" in status:
+                                        updated += 1
+                                    elif "Found" in status:
                                         merged += 1
                         else:
                             # Fallback: try to extract from top-level MaintenanceData if no Parts array
@@ -4096,9 +4098,9 @@ def bulk_import():
                                     if part:
                                         if part.id is None:  # New part
                                             db.session.add(part)
-                                            parts_added += 1
+                                            added += 1
                                         elif "Updated" in status:
-                                            parts_updated += 1
+                                            updated += 1
                                         elif "Found" in status:
                                             merged += 1
                             
@@ -4184,6 +4186,145 @@ def bulk_import():
                         mapped = smart_field_mapping(row, 'maintenance')
                         if mapped.get('machine_name') and mapped.get('description'):
                             maintenance_records.append(mapped)
+                
+                # Process maintenance records
+                for record in maintenance_records:
+                    try:
+                        machine_name = record.get('machine_name', '')
+                        
+                        if machine_name not in site_machines:
+                            errors.append(f"Machine '{machine_name}' not found in site '{site.name}'")
+                            continue
+                        
+                        machine = site_machines[machine_name]
+                        
+                        # Use the actual part name from the record, not a default
+                        part_name = record.get('part_name')
+                        if not part_name:
+                            # If no part name specified, use the description or default
+                            part_name = record.get('description', 'General Maintenance')
+                        
+                        # Find or create the part
+                        part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                        if not part:
+                            # Create part with proper maintenance schedule from the record
+                            freq_value = 365  # Default to yearly
+                            freq_unit = 'day'
+                            
+                            part = Part(
+                                name=part_name,
+                                description=record.get('description', f'Auto-created for maintenance import'),
+                                machine_id=machine.id,
+                                maintenance_frequency=freq_value,
+                                maintenance_unit=freq_unit
+                            )
+                            db.session.add(part)
+                            db.session.flush()  # Get the ID
+                        
+                        # Use smart maintenance record creation with deduplication
+                        maintenance, status = find_or_create_maintenance(record, machine, part)
+                        
+                        if maintenance:
+                            if maintenance.id is None:  # New maintenance record
+                                db.session.add(maintenance)
+                                added += 1
+                            elif "Updated" in status:
+                                updated += 1
+                            elif "Found" in status:
+                                merged += 1
+                        
+                    except Exception as e:
+                        errors.append(f"Error processing maintenance record: {str(e)}")
+            
+            elif entity == 'unified':
+                # Unified import - automatically process everything from the JSON
+                # This processes machines, parts, and maintenance records in one go
+                machines_added = 0
+                parts_added = 0
+                maintenance_added = 0
+                
+                for row in data:
+                    try:
+                        if not row or all(v is None or v == '' for v in row.values()):
+                            continue
+                        
+                        # Step 1: Process machine
+                        machine, machine_status = find_or_create_machine(row, int(site_id))
+                        if not machine:
+                            errors.append(f"Could not process machine: {machine_status}")
+                            continue
+                        
+                        # Add or update machine
+                        if machine.id is None:  # New machine
+                            db.session.add(machine)
+                            db.session.flush()  # Get the ID
+                            machines_added += 1
+                        elif "Updated" in machine_status:
+                            updated += 1
+                        elif "Found" in machine_status:
+                            merged += 1
+                        
+                        # Step 2: Extract and process parts from nested data
+                        machine_name = smart_field_mapping(row, 'machines').get('name', '')
+                        parts_data = extract_parts_data(row, machine_name)
+                        
+                        for part_data in parts_data:
+                            try:
+                                part, part_status = find_or_create_part(part_data, machine)
+                                if part:
+                                    if part.id is None:  # New part
+                                        db.session.add(part)
+                                        parts_added += 1
+                                    elif "Updated" in part_status:
+                                        updated += 1
+                                    elif "Found" in part_status:
+                                        merged += 1
+                            except Exception as e:
+                                errors.append(f"Error processing part '{part_data.get('name', '')}': {str(e)}")
+                        
+                        # Step 3: Extract and process maintenance records from nested data
+                        maintenance_records = extract_maintenance_data(row)
+                        
+                        for record in maintenance_records:
+                            try:
+                                # Use the actual part name from the record
+                                part_name = record.get('part_name', 'General Maintenance')
+                                part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                                
+                                if not part:
+                                    # If part doesn't exist, create it
+                                    freq_value = record.get('maintenance_frequency', 365)
+                                    freq_unit = record.get('maintenance_unit', 'day')
+                                    
+                                    part = Part(
+                                        name=part_name,
+                                        description=record.get('description', f'Auto-created for maintenance import'),
+                                        machine_id=machine.id,
+                                        maintenance_frequency=freq_value,
+                                        maintenance_unit=freq_unit
+                                    )
+                                    db.session.add(part)
+                                    db.session.flush()  # Get the ID
+                                
+                                # Use smart maintenance record creation with deduplication
+                                maintenance, maint_status = find_or_create_maintenance(record, machine, part)
+                                
+                                if maintenance:
+                                    if maintenance.id is None:  # New maintenance record
+                                        db.session.add(maintenance)
+                                        maintenance_added += 1
+                                    elif "Updated" in maint_status:
+                                        updated += 1
+                                    elif "Found" in maint_status:
+                                        merged += 1
+                            except Exception as e:
+                                errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
+                    
+                    except Exception as e:
+                        errors.append(f"Error processing row: {str(e)}")
+                
+                # Update the added count to include all types
+                added = machines_added + parts_added + maintenance_added
             
             else:
                 flash('Invalid entity type.', 'danger')
