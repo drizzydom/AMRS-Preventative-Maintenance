@@ -187,6 +187,60 @@ body .centered-layout .centered-content-col .content-container {
     }
 }
 
+/* ==== TEMPLATE-SPECIFIC OVERRIDES ==== */
+/* Fix for Bootstrap row/col wrappers that are causing extra indentation */
+@media (min-width: 992px) {
+    /* Override Bootstrap row classes inside content-container */
+    html body .content-container .row.mx-0.w-100,
+    body .content-container .row.mx-0.w-100,
+    .content-container .row.mx-0.w-100,
+    html body .content-container .row.mx-0,
+    body .content-container .row.mx-0,
+    .content-container .row.mx-0 {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Override Bootstrap column classes inside content-container */
+    html body .content-container .col-12.px-0,
+    body .content-container .col-12.px-0,
+    .content-container .col-12.px-0,
+    html body .content-container .col-12,
+    body .content-container .col-12,
+    .content-container .col-12 {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Specific fixes for admin pages that use nested containers */
+    html body .content-container .container-fluid,
+    body .content-container .container-fluid,
+    .content-container .container-fluid {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Fix for dashboard and admin pages */
+    html body .content-container .dashboard,
+    body .content-container .dashboard,
+    .content-container .dashboard {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
 /* Force mobile layout */
 @media (max-width: 991.98px) {
     html body div.content-container,
@@ -201,5 +255,109 @@ body .centered-layout .centered-content-col .content-container {
         margin-left: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
+    }
+    
+    /* Also override Bootstrap classes on mobile */
+    html body .content-container .row.mx-0.w-100,
+    body .content-container .row.mx-0.w-100,
+    .content-container .row.mx-0.w-100,
+    html body .content-container .col-12.px-0,
+    body .content-container .col-12.px-0,
+    .content-container .col-12.px-0 {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* ==== PAGE-SPECIFIC FIXES ==== */
+/* Additional overrides for specific problematic pages */
+@media (min-width: 992px) {
+    /* Fix for audit pages */
+    html body .content-container .audit-history-container,
+    body .content-container .audit-history-container,
+    .content-container .audit-history-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Fix for maintenance pages */
+    html body .content-container .maintenance-page,
+    body .content-container .maintenance-page,
+    .content-container .maintenance-page {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Fix for profile pages */
+    html body .content-container .profile,
+    body .content-container .profile,
+    .content-container .profile {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Ensure cards don't add extra spacing */
+    html body .content-container .card,
+    body .content-container .card,
+    .content-container .card {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Fix for table containers */
+    html body .content-container .table-responsive,
+    body .content-container .table-responsive,
+    .content-container .table-responsive {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* ==== NUCLEAR OPTION - ABSOLUTE FINAL OVERRIDE ==== */
+/* If all else fails, this will force correct positioning */
+@media (min-width: 992px) {
+    /* Use the highest possible specificity to force correct layout */
+    html body:not(.sidebar-collapsed) .content-container,
+    html body:not(.sidebar-collapsed) .content-container * {
+        box-sizing: border-box !important;
+    }
+    
+    html body:not(.sidebar-collapsed) .content-container {
+        margin-left: 200px !important;
+        width: calc(100% - 200px) !important;
+        max-width: calc(100% - 200px) !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        transform: none !important;
+        left: auto !important;
+        right: auto !important;
+        position: relative !important;
+    }
+    
+    html body.sidebar-collapsed .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+        max-width: calc(100% - 56px) !important;
+    }
+}
+
+/* Mobile override for nuclear option */
+@media (max-width: 991.98px) {
+    html body .content-container,
+    html body.sidebar-collapsed .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
 }
