@@ -28,17 +28,14 @@
       <p>This feature is not available in your current plan. If you would like access to the Audits module, please contact <a href="mailto:sales@accuratemachinerepair.com">sales@accuratemachinerepair.com</a> for more information.</p>
   </div>
 {% else %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12 mb-4">
-            <h2 class="h4">Audit Tasks for {{ today.strftime('%Y-%m-%d') }}</h2>
-        </div>
-        {% if current_user.is_admin %}
-        <div class="col-12 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Create New Audit Task</h5>
-                </div>
+<div class="mb-4">
+    <h2 class="h4">Audit Tasks for {{ today.strftime('%Y-%m-%d') }}</h2>
+</div>
+{% if current_user.is_admin %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Create New Audit Task</h5>
+    </div>
                 <div class="card-body">
                     <form method="post">
                         <input type="hidden" name="create_audit" value="1">
@@ -105,12 +102,10 @@
                     </form>
                 </div>
             </div>
-        </div>
         {% endif %}
-        <div class="col-12">
-            <form method="post">
-                <input type="hidden" name="checkoff" value="1">
-                <style>
+        <form method="post">
+            <input type="hidden" name="checkoff" value="1">
+            <style>
 .audit-checkoff {
   width: 1.25em !important;
   height: 1.25em !important;
@@ -277,8 +272,6 @@
                 </div>
             </form>
         </div>
-    </div>
-</div>
 {% endif %}
 {% endblock %}
 
