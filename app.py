@@ -3600,19 +3600,22 @@ def bulk_import():
                 site_id=site_id
             ).first()
         
-        # Third try: match on name and model (in case serial is missing/different)
-        if not existing and model:
-            existing = Machine.query.filter_by(
-                name=name,
-                model=model,
-                site_id=site_id
-            ).first()
-        
-        # Fourth try: match on name only (if it's unique within site)
-        if not existing:
-            name_matches = Machine.query.filter_by(name=name, site_id=site_id).all()
-            if len(name_matches) == 1:
-                existing = name_matches[0]
+        # If we have a serial number and haven't found a match, this should be a new machine
+        # Only check name/model matches if there's no serial number provided
+        if not existing and not serial:
+            # Third try: match on name and model (only if no serial number)
+            if model:
+                existing = Machine.query.filter_by(
+                    name=name,
+                    model=model,
+                    site_id=site_id
+                ).first()
+            
+            # Fourth try: match on name only (if it's unique within site and no serial)
+            if not existing:
+                name_matches = Machine.query.filter_by(name=name, site_id=site_id).all()
+                if len(name_matches) == 1:
+                    existing = name_matches[0]
         
         if existing:
             # Update existing machine with any new/better data
