@@ -81,8 +81,15 @@
         padding-top: 48px; /* Exactly match header height */
     }
     
-    /* 4. MAIN CONTENT POSITIONING - moved to content-position-fix.css for consistency */
-    /* All layout rules are now consolidated in CSS files for better maintainability */
+    /* 4. MAIN CONTENT POSITIONING - Essential desktop layout rules */
+    @media (min-width: 992px) {
+        html body .content-container,
+        .content-container {
+            margin-left: 200px !important;
+            width: calc(100% - 200px) !important;
+            max-width: calc(100% - 200px) !important;
+        }
+    }
     
     html body .container-fluid,
     .centered-layout .row .centered-content-col .container-fluid {
@@ -137,10 +144,11 @@
     
     /* 8. MOBILE ADJUSTMENTS */
     @media (max-width: 991.98px) {
-        html body .content-container {
-            margin-left: 0;
-            width: 100%;
-            max-width: 100%;
+        html body .content-container,
+        .content-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
         }
         
         html body .sidebar {
@@ -230,26 +238,28 @@
         }
     }
     /* --- SIDEBAR COLLAPSE FOR DESKTOP --- */
-    body.sidebar-collapsed .sidebar,
-    html body.sidebar-collapsed .sidebar {
-        width: 56px !important;
-        min-width: 56px !important;
-        max-width: 56px !important;
-        transition: width 0.2s;
-    }
-    body.sidebar-collapsed .sidebar-container,
-    html body.sidebar-collapsed .sidebar-container {
-        width: 56px !important;
-        min-width: 56px !important;
-        max-width: 56px !important;
-        transition: width 0.2s;
-    }
-    body.sidebar-collapsed .content-container,
-    html body.sidebar-collapsed .content-container {
-        margin-left: 56px !important;
-        width: calc(100% - 56px) !important;
-        max-width: calc(100% - 56px) !important;
-        transition: margin-left 0.2s, width 0.2s;
+    @media (min-width: 992px) {
+        body.sidebar-collapsed .sidebar,
+        html body.sidebar-collapsed .sidebar {
+            width: 56px !important;
+            min-width: 56px !important;
+            max-width: 56px !important;
+            transition: width 0.2s;
+        }
+        body.sidebar-collapsed .sidebar-container,
+        html body.sidebar-collapsed .sidebar-container {
+            width: 56px !important;
+            min-width: 56px !important;
+            max-width: 56px !important;
+            transition: width 0.2s;
+        }
+        body.sidebar-collapsed .content-container,
+        html body.sidebar-collapsed .content-container {
+            margin-left: 56px !important;
+            width: calc(100% - 56px) !important;
+            max-width: calc(100% - 56px) !important;
+            transition: margin-left 0.2s, width 0.2s;
+        }
     }
     body.sidebar-collapsed .sidebar .sidebar-link-text {
         display: none !important;
