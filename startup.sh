@@ -18,6 +18,10 @@ echo "[STARTUP] Ensuring error templates directory exists..."
 mkdir -p templates/errors
 chmod -R 755 templates/ || echo "[ERROR] Failed to set permissions on templates directory"
 
+# Run database migration for decommissioned fields
+echo "[STARTUP] Running decommissioned fields migration..."
+python3 ensure_decommission_fields.py || echo "[ERROR] Failed to run decommissioned fields migration"
+
 # Check if the error templates exist
 if [ -f "templates/errors/404.html" ]; then
     echo "[STARTUP] Error templates verified."
