@@ -3535,9 +3535,10 @@ def bulk_import():
         return mapped
 
     def extract_parts_data(machine_data, machine_name):
-        """Extract parts from nested MaintenanceData.Parts"""
+        """Extract parts from nested MaintenanceData.Parts or flat CSV structure"""
         parts = []
         
+        # Handle nested JSON structure (existing logic)
         if 'MaintenanceData' in machine_data and 'Parts' in machine_data['MaintenanceData']:
             parts_list = machine_data['MaintenanceData']['Parts']
             
@@ -3564,6 +3565,43 @@ def bulk_import():
                 if part['name']:
                     parts.append(part)
         
+        # Handle flat CSV structure
+        elif machine_data.get('part_name'):
+            # Extract part data from flat CSV row
+            part_name = machine_data.get('part_name', '').strip()
+            if part_name:
+                # Parse frequency from CSV columns
+                freq_value = 30  # default
+                freq_unit = 'day'  # default
+                
+                if machine_data.get('maintenance_frequency'):
+                    try:
+                        freq_value = int(machine_data.get('maintenance_frequency', 30))
+                    except (ValueError, TypeError):
+                        freq_value = 30
+                
+                if machine_data.get('maintenance_unit'):
+                    freq_unit = machine_data.get('maintenance_unit', 'day').lower()
+                    # Convert months to days for consistency
+                    if freq_unit in ['month', 'months']:
+                        freq_value = freq_value * 30
+                        freq_unit = 'day'
+                    elif freq_unit in ['year', 'years']:
+                        freq_value = freq_value * 365
+                        freq_unit = 'day'
+                
+                part = {
+                    'name': part_name,
+                    'description': machine_data.get('description', '').strip(),
+                    'machine_name': machine_name,
+                    'maintenance_frequency': freq_value,
+                    'maintenance_unit': freq_unit,
+                    'materials': machine_data.get('materials', ''),
+                    'quantity': machine_data.get('quantity', '')
+                }
+                
+                parts.append(part)
+        
         return parts
 
     def find_or_create_machine(machine_data, site_id):
@@ -3573,6 +3611,10 @@ def bulk_import():
         name = str(mapped.get('name', '')).strip()
         model = str(mapped.get('model', '')).strip()
         serial = str(mapped.get('serial_number', '')).strip()
+        
+        # If no name found in standard mapping, try machine_name field
+        if not name:
+            name = str(machine_data.get('machine_name', '')).strip()
         
         if not name:
             return None, "Missing machine name"
@@ -3815,10 +3857,10 @@ def bulk_import():
         return maintenance, "Created new maintenance record"
 
     def extract_maintenance_data(machine_data):
-        """Extract maintenance records from nested machine data"""
+        """Extract maintenance records from nested machine data or flat CSV structure"""
         records = []
         
-        # Check if there's nested maintenance data
+        # Handle nested JSON structure (existing logic)
         if 'MaintenanceData' in machine_data:
             maint_data = machine_data['MaintenanceData']
             machine_name = smart_field_mapping(machine_data, 'machines').get('name', '')
@@ -3899,6 +3941,58 @@ def bulk_import():
                 
                 if record['machine_name'] and record['description']:
                     records.append(record)
+        
+        # Handle flat CSV structure
+        elif machine_data.get('part_name') and (machine_data.get('description') or machine_data.get('maintenance_type')):
+            # Extract maintenance data from flat CSV row
+            machine_name = smart_field_mapping(machine_data, 'machines').get('name', '')
+            if not machine_name:
+                # Try alternative machine name field
+                machine_name = machine_data.get('machine_name', '')
+            
+            part_name = machine_data.get('part_name', '').strip()
+            maintenance_type = machine_data.get('maintenance_type', 'Scheduled').strip()
+            description = machine_data.get('description', '').strip()
+            date = machine_data.get('date', '').strip()
+            performed_by = machine_data.get('performed_by', 'System Import').strip()
+            status = machine_data.get('status', 'completed').strip()
+            notes = machine_data.get('notes', '').strip()
+            
+            # Parse frequency
+            freq_value = 30  # default
+            freq_unit = 'day'  # default
+            
+            if machine_data.get('maintenance_frequency'):
+                try:
+                    freq_value = int(machine_data.get('maintenance_frequency', 30))
+                except (ValueError, TypeError):
+                    freq_value = 30
+            
+            if machine_data.get('maintenance_unit'):
+                freq_unit = machine_data.get('maintenance_unit', 'day').lower()
+                # Convert months to days for consistency
+                if freq_unit in ['month', 'months']:
+                    freq_value = freq_value * 30
+                    freq_unit = 'day'
+                elif freq_unit in ['year', 'years']:
+                    freq_value = freq_value * 365
+                    freq_unit = 'day'
+            
+            if machine_name and part_name:
+                record = {
+                    'machine_name': machine_name,
+                    'part_name': part_name,
+                    'maintenance_type': maintenance_type,
+                    'description': description,
+                    'date': date,
+                    'performed_by': performed_by or 'System Import',
+                    'status': status or 'completed',
+                    'notes': notes,
+                    'maintenance_frequency': freq_value,
+                    'maintenance_unit': freq_unit
+                }
+                
+                records.append(record)
         
         return records
 
