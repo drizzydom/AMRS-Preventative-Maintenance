@@ -25,6 +25,7 @@ Problematic patterns included:
 3. **`/templates/audits.html`** - Removed `<div class="container-fluid">` wrapper and duplicate flashed message handling
 4. **`/templates/audit_history.html`** - Removed `<div class="container-fluid">` wrapper and duplicate flashed message handling
 5. **`/templates/sites.html`** - Removed `<div class="row"><div class="col-12">` wrapper
+6. **`/templates/maintenance_records.html`** - Removed `<div class="container-fluid">` wrapper at the content block level
 
 ### CSS (Simplified layout rules):
 6. **`/static/css/content-position-fix.css`** - Simplified to only include essential layout rules
@@ -89,6 +90,7 @@ The browser inspector analysis revealed that problematic pages had different CSS
 - ✅ Machines
 - ✅ Parts (was already working)
 - ✅ Record Maintenance (maintenance.html)
+- ✅ Maintenance Records (maintenance_records.html) 
 - ✅ User Profile (was already working)
 - ✅ Admin Dashboard (was already working)
 - ✅ Audits
