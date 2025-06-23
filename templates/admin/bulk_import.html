@@ -9,7 +9,7 @@
     <div class="row mb-4">
         <div class="col-12">
             <h1 class="h3 mb-0 text-gray-800">Bulk Import</h1>
-            <p class="mb-4">Upload a CSV or JSON file to import machines, parts, or maintenance records. Only users with manage permissions can access this feature.</p>
+            <p class="mb-4">Upload a JSON file to automatically import machines, parts, and maintenance records. The system will process all data types found in the file.</p>
         </div>
     </div>
     <div class="row">
@@ -30,22 +30,47 @@
                             </select>
                             <div class="form-text">All imported data will be associated with this site.</div>
                         </div>
+                        
+                        <!-- Hidden field to set unified import as default -->
+                        <input type="hidden" name="entity" value="unified">
+                        
                         <div class="mb-3">
-                            <label for="entity" class="form-label">Entity Type</label>
-                            <select class="form-select" id="entity" name="entity" required>
-                                <option value="">Select...</option>
-                                <option value="machines">Machines</option>
-                                <option value="parts">Parts</option>
-                                <option value="maintenance">Maintenance Records</option>
-                            </select>
+                            <label for="file" class="form-label">Data File (JSON or CSV)</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".json,.csv" required>
+                            <div class="form-text">
+                                Upload a JSON or CSV file containing your maintenance data.
+                                <br><strong>The system will automatically import:</strong>
+                                <ul class="mt-2 mb-0">
+                                    <li>Machines with their details</li>
+                                    <li>Parts with proper names (not "General Maintenance")</li>
+                                    <li>Maintenance records with historical dates</li>
+                                </ul>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="file" class="form-label">File (CSV or JSON)</label>
-                            <input type="file" class="form-control" id="file" name="file" accept=".csv,.json" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Import Data</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Import All Data
+                        </button>
                     </form>
                 </div>
+            </div>
+            
+            <div class="alert alert-info">
+                <h6><i class="fas fa-info-circle"></i> What happens during import:</h6>
+                <ul class="mb-0">
+                    <li><strong>Machines:</strong> Imported with names, models, serial numbers</li>
+                    <li><strong>Parts:</strong> Created with actual part names from the JSON (e.g., "Spindle Lubrication", "Hydraulic Power Unit")</li>
+                    <li><strong>Maintenance Records:</strong> Historical records with proper "Last PM Done" dates</li>
+                    <li><strong>Duplicates:</strong> Automatically detected and merged</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-warning">
+                <h6><i class="fas fa-exclamation-triangle"></i> Important:</h6>
+                <ul class="mb-0">
+                    <li>Large files may take several minutes to process</li>
+                    <li>Always backup your data before importing</li>
+                    <li>The system will create parts automatically if they don't exist</li>
+                </ul>
             </div>
         </div>
         <div class="col-lg-4 col-md-12">
@@ -123,4 +148,23 @@ Examples: "6 Months", "1 Year", "30 Days", "2 Years"</pre>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    form.addEventListener('submit', function() {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        submitBtn.disabled = true;
+        
+        // Re-enable the button after 2 minutes in case something goes wrong
+        setTimeout(function() {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 120000);
+    });
+});
+</script>
 {% endblock %}
