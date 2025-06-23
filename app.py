@@ -1421,6 +1421,7 @@ def audit_history_page():
 
     return render_template('audit_history.html',
         completions=completions,
+        today=today,
         month=month,
         year=year,
         month_weeks=month_weeks,
