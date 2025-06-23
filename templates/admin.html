@@ -5,49 +5,50 @@
 {% block header_title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-<!-- First row with stats cards -->
-<div class="row">
-        <div class="col-md-3 mb-4">
-            <div class="card text-center h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Users</h5>
-                    <h2 class="display-4">{{ user_count }}</h2>
-                    <a href="{{ url_for_safe('manage_users') }}" class="btn btn-primary">Manage Users</a>
+<div class="card">
+    <div class="card-body">
+        <!-- First row with stats cards -->
+        <div class="row">
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Users</h5>
+                        <h2 class="display-4">{{ user_count }}</h2>
+                        <a href="{{ url_for_safe('manage_users') }}" class="btn btn-primary">Manage Users</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Sites</h5>
+                        <h2 class="display-4">{{ site_count }}</h2>
+                        <a href="{{ url_for_safe('manage_sites') }}" class="btn btn-primary">Manage Sites</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Machines</h5>
+                        <h2 class="display-4">{{ machine_count }}</h2>
+                        <a href="{{ url_for_safe('manage_machines') }}" class="btn btn-primary">Manage Machines</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Parts</h5>
+                        <h2 class="display-4">{{ part_count }}</h2>
+                        <a href="{{ url_for_safe('manage_parts') }}" class="btn btn-primary">Manage Parts</a>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3 mb-4">
-            <div class="card text-center h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Sites</h5>
-                    <h2 class="display-4">{{ site_count }}</h2>
-                    <a href="{{ url_for_safe('manage_sites') }}" class="btn btn-primary">Manage Sites</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-4">
-            <div class="card text-center h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Machines</h5>
-                    <h2 class="display-4">{{ machine_count }}</h2>
-                    <a href="{{ url_for_safe('manage_machines') }}" class="btn btn-primary">Manage Machines</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-4">
-            <div class="card text-center h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Parts</h5>
-                    <h2 class="display-4">{{ part_count }}</h2>
-                    <a href="{{ url_for_safe('manage_parts') }}" class="btn btn-primary">Manage Parts</a>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Admin Functions Section -->
-    <section class="my-4">
-        <div class="container">
+        
+        <!-- Admin Functions Section -->
+        <section class="my-4">
             <div class="row">
                 <div class="col-12">
                     <h2 class="mb-3">System Management</h2>
@@ -86,6 +87,7 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+    </div>
+</div>
 {% endblock %}
