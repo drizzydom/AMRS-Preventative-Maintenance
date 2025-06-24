@@ -1437,7 +1437,8 @@ def audit_history_page():
         available_machines=available_machines,
         selected_month=selected_month,
         all_tasks_per_machine=all_tasks_per_machine,
-        interval_bars=interval_bars
+        interval_bars=interval_bars,
+        get_calendar_weeks=get_calendar_weeks  # <-- Pass the function to the template
     )
 
 @app.route('/audit-history/print-view')
@@ -2819,7 +2820,10 @@ def manage_machines():
         else:
             sites = current_user.sites
             site_ids = [site.id for site in sites]
-            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            accessible_machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
             
         machine_ids = [machine.id for machine in accessible_machines]
         
@@ -4100,38 +4104,20 @@ def bulk_import():
                                 part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
                                 
                                 if not part:
-                                    # Find the part by looking through the imported parts data first
-                                    for part_data in parts_data:
-                                        if part_data.get('name') == part_name:
-                                            part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
-                                            break
+                                    # If part doesn't exist, create it
+                                    freq_value = record.get('maintenance_frequency', 365)
+                                    freq_unit = record.get('maintenance_unit', 'day')
                                     
-                                    # If still not found, create the part
-                                    if not part:
-                                        # Try to find part info from the parts_data that was extracted
-                                        matching_part_data = next((p for p in parts_data if p.get('name') == part_name), None)
-                                        
-                                        if matching_part_data:
-                                            part = Part(
-                                                name=part_name,
-                                                description=matching_part_data.get('description', f'Auto-created for maintenance import'),
-                                                machine_id=machine.id,
-                                                maintenance_frequency=matching_part_data.get('maintenance_frequency', 365),
-                                                maintenance_unit=matching_part_data.get('maintenance_unit', 'day')
-                                            )
-                                        else:
-                                            # Fallback part creation
-                                            part = Part(
-                                                name=part_name,
-                                                description=f'Auto-created for maintenance import',
-                                                machine_id=machine.id,
-                                                maintenance_frequency=365,
-                                                maintenance_unit='day'
-                                            )
-                                        
-                                        db.session.add(part)
-                                        db.session.flush()  # Get the ID
-
+                                    part = Part(
+                                        name=part_name,
+                                        description=record.get('description', f'Auto-created for maintenance import'),
+                                        machine_id=machine.id,
+                                        maintenance_frequency=freq_value,
+                                        maintenance_unit=freq_unit
+                                    )
+                                    db.session.add(part)
+                                    db.session.flush()  # Get the ID
+                                
                                 # Use smart maintenance record creation with deduplication
                                 maintenance, maint_status = find_or_create_maintenance(record, machine, part)
                                 
