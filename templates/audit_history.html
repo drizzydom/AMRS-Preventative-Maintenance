@@ -98,8 +98,9 @@
                 {% set current_month = today.month %}
             {% endif %}
             
-            <!-- Using the month_name filter we've added in fix_audit_history.py -->
-            {% set display_month = '%s %s'|format(current_month|month_name, current_year) %}
+            <!-- Generate month name from month number -->
+            {% set month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] %}
+            {% set display_month = '%s %s'|format(month_names[current_month], current_year) %}
             
             <!-- Generate full month calendar -->
             {% set month_weeks = get_calendar_weeks(current_year, current_month) %}
