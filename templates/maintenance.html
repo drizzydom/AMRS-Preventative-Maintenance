@@ -8,7 +8,7 @@
 <div class="card">
     <div class="card-body">
         <h4 class="card-title">Select a Machine</h4>
-        <form method="get" action="{{ url_for('record_maintenance') }}" class="d-flex mb-4">
+        <form method="get" action="{{ url_for('maintenance_page') }}" class="d-flex mb-4">
             <select name="machine_id" class="form-select me-2" onchange="this.form.submit()">
                 <option value="">-- Select Machine --</option>
                 {% for machine in machines %}
@@ -30,7 +30,7 @@
 
         <div class="record-maintenance-form">
             <h5>Record Maintenance</h5>
-            <form method="post" action="{{ url_for('record_maintenance') }}">
+            <form method="post" action="{{ url_for('maintenance_page') }}">
                 <input type="hidden" name="machine_id" value="{{ selected_machine_id }}">
                 <div class="mb-3">
                     <label for="maintenance_type" class="form-label">Maintenance Type</label>
