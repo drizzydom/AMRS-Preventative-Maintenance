@@ -58,7 +58,7 @@
                         <td>{{ record.machine.name }}</td>
                         <td>{{ record.maintenance_type }}</td>
                         <td>{{ record.description }}</td>
-                        <td>{{ record.date_performed.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
                         <td>{{ record.user.username }}</td>
                     </tr>
                     {% endfor %}
