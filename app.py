@@ -1239,6 +1239,16 @@ def audits_page():
     # Helper function for the template
     def get_calendar_weeks(start, end):
         """Get calendar weeks for the date range."""
+        # Handle both date objects and year/month integers
+        if isinstance(start, int) and isinstance(end, int):
+            # start is year, end is month
+            year, month = start, end
+            import calendar
+            start = date(year, month, 1)
+            # Get last day of the month
+            last_day = calendar.monthrange(year, month)[1]
+            end = date(year, month, last_day)
+        
         # Find the first Sunday before or on the start date
         first_day_week = start - timedelta(days=start.weekday() + 1)
         if first_day_week.weekday() != 6:  # If not Sunday
@@ -1444,6 +1454,16 @@ def audit_history_page():
     # Helper function for the template
     def get_calendar_weeks(start, end):
         """Get calendar weeks for the date range."""
+        # Handle both date objects and year/month integers
+        if isinstance(start, int) and isinstance(end, int):
+            # start is year, end is month
+            year, month = start, end
+            import calendar
+            start = date(year, month, 1)
+            # Get last day of the month
+            last_day = calendar.monthrange(year, month)[1]
+            end = date(year, month, last_day)
+        
         # Find the first Sunday before or on the start date
         first_day_week = start - timedelta(days=start.weekday() + 1)
         if first_day_week.weekday() != 6:  # If not Sunday
