@@ -92,7 +92,7 @@
                     
                     <div class="mb-3">
                         <label for="site_ids" class="form-label">Assign to Sites</label>
-                        <select multiple class="form-select" id="site_ids" name="site_ids">
+                        <select multiple class="form-select site-select-scroll" id="site_ids" name="site_ids">
                             {% for site in sites %}
                             <option value="{{ site.id }}">{{ site.name }}</option>
                             {% endfor %}
@@ -133,6 +133,17 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block styles %}
+<style>
+    /* Limit height and enable scroll for multi-select in Add User modal */
+    #addUserModal .site-select-scroll {
+        max-height: 180px;
+        min-height: 80px;
+        overflow-y: auto;
+    }
+</style>
 {% endblock %}
 
 {% block scripts %}
