@@ -49,6 +49,48 @@
                             </select>
                         </div>
 
+                        {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'machines.decommission' in (current_user.role.permissions or '')) %}
+                        <div class="mb-3">
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-exclamation-triangle"></i> Machine Status
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="decommissioned" name="decommissioned" 
+                                               {% if machine.decommissioned %}checked{% endif %}
+                                               onchange="toggleDecommissionedFields()">
+                                        <label class="form-check-label" for="decommissioned">
+                                            <strong>Mark as Decommissioned</strong>
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">
+                                        Decommissioned machines are hidden from dashboards and alerts but remain accessible for historical tracking.
+                                    </small>
+                                    
+                                    <div id="decommissionedFields" {% if not machine.decommissioned %}style="display: none;"{% endif %}>
+                                        <div class="mt-3">
+                                            <label for="decommissioned_reason" class="form-label">Reason for Decommissioning</label>
+                                            <textarea class="form-control" id="decommissioned_reason" name="decommissioned_reason" 
+                                                    rows="3" placeholder="Optional: Reason for decommissioning this machine">{{ machine.decommissioned_reason or '' }}</textarea>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if machine.decommissioned %}
+                                    <div class="mt-3 text-muted small">
+                                        <strong>Decommissioned:</strong> {{ machine.decommissioned_date.strftime('%Y-%m-%d %H:%M') if machine.decommissioned_date }}<br>
+                                        {% if machine.decommissioned_by_user %}
+                                        <strong>By:</strong> {{ machine.decommissioned_by_user.username }}
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <div class="d-flex justify-content-between">
                             <a href="{{ url_for('manage_machines') }}" class="btn btn-secondary">Cancel</a>
                             <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -79,8 +121,24 @@
 
 {% block scripts %}
 <script>
+    function toggleDecommissionedFields() {
+        const checkbox = document.getElementById('decommissioned');
+        const fields = document.getElementById('decommissionedFields');
+        const reasonField = document.getElementById('decommissioned_reason');
+        
+        if (checkbox.checked) {
+            fields.style.display = 'block';
+            // Don't require reason field, keep it optional
+        } else {
+            fields.style.display = 'none';
+            // Clear the reason if unchecking
+            reasonField.value = '';
+        }
+    }
+    
     document.addEventListener('DOMContentLoaded', function() {
-        // Any JavaScript needed for the page
+        // Initialize the form state
+        toggleDecommissionedFields();
     });
 </script>
 {% endblock %}

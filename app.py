@@ -22,11 +22,14 @@ from flask_mail import Mail, Message
 from sqlalchemy import or_, text
 from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import secrets
 from sqlalchemy import inspect
 import smtplib
 from jinja2 import Environment, FileSystemLoader
+import csv
+import json
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
@@ -616,8 +619,13 @@ def assign_colors_to_audit_tasks():
 with app.app_context():
     try:
         run_auto_migration()  # Ensure columns exist before any queries
+        print("[STARTUP] Auto-migration completed successfully")
     except Exception as e:
-        print(f'[AUTO_MIGRATE ERROR] {e}')
+        print(f'[AUTO_MIGRATE ERROR] Critical migration failed: {e}')
+        print("App startup may fail due to missing database columns")
+        # Don't exit here, but log the critical error
+        import traceback
+        print(traceback.format_exc())
     try:
         # --- Ensure audit_tasks.color column exists ---
         from sqlalchemy import text
@@ -764,8 +772,8 @@ def inject_site_helpers():
     def get_site_parts_status(site):
         """Get status of parts for a site's machines."""
         try:
-            # Get all machines at this site
-            machines = Machine.query.filter_by(site_id=site.id).all()
+            # Get all active (non-decommissioned) machines at this site
+            machines = Machine.query.filter_by(site_id=site.id, decommissioned=False).all()
             
             # Count parts
             total_parts = 0
@@ -927,11 +935,14 @@ def dashboard():
                 .all()
             )
         
-        # Get all machines across accessible sites
+        # Get all active (non-decommissioned) machines across accessible sites
         machines = []
         site_ids = [site.id for site in sites]
         if site_ids:
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
         
         # Get all parts that need maintenance soon or are overdue
         parts = []
@@ -999,7 +1010,9 @@ def admin():
         roles_count = Role.query.count()
         site_count = Site.query.count()  # Keep this as site_count
         sites_count = site_count  # Add this line to have both variable names
-        machine_count = Machine.query.count()
+        machine_count = Machine.query.filter(Machine.decommissioned == False).count()
+        total_machine_count = Machine.query.count()
+        decommissioned_machine_count = Machine.query.filter(Machine.decommissioned == True).count()
         part_count = Part.query.count()
         
         # Create safe URLs for admin navigation - provide ALL possible links needed by template
@@ -1408,6 +1421,7 @@ def audit_history_page():
 
     return render_template('audit_history.html',
         completions=completions,
+        today=today,
         month=month,
         year=year,
         month_weeks=month_weeks,
@@ -1508,19 +1522,17 @@ def audit_history_print_view():
     machine_data = {}
     for completion in completions:
         # Get the date string from the completion date
-        date_str = completion.created_at.date().strftime('%Y-%m-%d')
+        date_str = completion.created_at.date().strftime('%Y-%m-%d');
         
         # Initialize machine entry if not exists
         if completion.machine_id not in machine_data:
-            machine_data[completion.machine_id] = {}
-        
+            machine_data[completion.machine_id] = {};
         # Initialize date entry if not exists
         if date_str not in machine_data[completion.machine_id]:
-            machine_data[completion.machine_id][date_str] = []
-        
+            machine_data[completion.machine_id][date_str] = [];
         # Add completion to the appropriate machine/date
-        machine_data[completion.machine_id][date_str].append(completion)
-    
+        machine_data[completion.machine_id][date_str].append(completion);
+
     # Get all audit tasks for reference
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
     
@@ -1528,10 +1540,7 @@ def audit_history_print_view():
     all_tasks_per_machine = {}
     for machine in machines:
         all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
-    
-    # Get all users for reference
-    users = {user.id: user for user in User.query.all()}
-    
+
     # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
     from collections import defaultdict
     interval_bars = defaultdict(lambda: defaultdict(list))
@@ -1576,7 +1585,6 @@ def audit_history_print_view():
         machines=machines,
         machine_data=machine_data,
         audit_tasks=audit_tasks,
-        users=users,
         today=today,
         start_date=start_date,
         end_date=end_date,
@@ -1888,6 +1896,7 @@ def delete_site(site_id):
     try:
         # Replace get_or_404 for Site
         site = db.session.get(Site, site_id)
+       
         if not site:
             abort(404)
         
@@ -2814,6 +2823,9 @@ def manage_machines():
             
         machine_ids = [machine.id for machine in accessible_machines]
         
+        # Get filter parameters
+        show_decommissioned = request.args.get('show_decommissioned', 'false').lower() == 'true'
+        
         # Filter machines by site if site_id is provided
         if site_id:
             # Verify user can access this site
@@ -2822,12 +2834,27 @@ def manage_machines():
                 return redirect(url_for('manage_machines'))
                 
             # Filter machines by selected site
-            machines = Machine.query.filter_by(site_id=site_id).all()
+            machines_query = Machine.query.filter_by(site_id=site_id)
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
             # Show machines from all sites user has access to
-            machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
+            machines_query = Machine.query.filter(Machine.site_id.in_(site_ids)) if site_ids else Machine.query.filter(False)
             title = "Machines"
+        
+        # Apply decommissioned filter
+        if not show_decommissioned:
+            machines_query = machines_query.filter(Machine.decommissioned == False)
+            
+        machines = machines_query.all()
+        
+        # Count decommissioned machines for the toggle
+        if site_id:
+            decommissioned_count = Machine.query.filter_by(site_id=site_id, decommissioned=True).count()
+        else:
+            decommissioned_count = Machine.query.filter(
+                Machine.site_id.in_(site_ids), 
+                Machine.decommissioned == True
+            ).count() if site_ids else 0
         
         # Pre-generate URLs for admin navigation - provide ALL possible links needed by template
         safe_urls = {
@@ -2864,8 +2891,8 @@ def manage_machines():
                 new_machine = Machine(
                     name=name,
                     model=model,
-                    machine_number=machine_number,
                     serial_number=serial_number,
+                    machine_number=str(machine_number).strip(),
                     site_id=site_id
                 )
                 
@@ -2885,6 +2912,8 @@ def manage_machines():
                               site_id=site_id,
                               title=title,
                               safe_urls=safe_urls,
+                              show_decommissioned=show_decommissioned,
+                              decommissioned_count=decommissioned_count,
                               now=datetime.now())
     except Exception as e:
         app.logger.error(f"Error in manage_machines route: {e}")
@@ -2911,6 +2940,34 @@ def edit_machine(machine_id):
             site_id = int(request.form['site_id'])
             machine.site_id = site_id
             
+            # Handle decommissioned status if user has permission
+            if (current_user.is_admin or 
+                (hasattr(current_user, 'role') and current_user.role and 
+                 'machines.decommission' in (current_user.role.permissions or ''))):
+                
+                was_decommissioned = machine.decommissioned
+                is_being_decommissioned = request.form.get('decommissioned') == 'on'
+                
+                if is_being_decommissioned and not was_decommissioned:
+                    # Machine is being decommissioned
+                    reason = request.form.get('decommissioned_reason', '').strip()
+                    machine.decommission(current_user, reason)
+                    app.logger.info(f"Machine '{machine.name}' decommissioned by {current_user.username}: {reason}")
+                    flash(f'Machine "{machine.name}" has been marked as decommissioned.', 'warning')
+                    
+                elif not is_being_decommissioned and was_decommissioned:
+                    # Machine is being recommissioned
+                    machine.recommission()
+                    app.logger.info(f"Machine '{machine.name}' recommissioned by {current_user.username}")
+                    flash(f'Machine "{machine.name}" has been recommissioned and is now active.', 'success')
+                    
+                elif is_being_decommissioned and was_decommissioned:
+                    # Update decommissioned reason if provided
+                    new_reason = request.form.get('decommissioned_reason', '').strip()
+                    if new_reason != machine.decommissioned_reason:
+                        machine.decommissioned_reason = new_reason
+                        app.logger.info(f"Updated decommission reason for '{machine.name}': {new_reason}")
+            
             db.session.commit()
             flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
             return redirect(url_for('manage_machines'))
@@ -2934,11 +2991,14 @@ def manage_parts():
         # Get accessible sites based on user permissions
         if user_can_see_all_sites(current_user):
             sites = Site.query.all()
-            accessible_machines = Machine.query.all()
+            accessible_machines = Machine.query.filter(Machine.decommissioned == False).all()
         else:
             sites = current_user.sites
             site_ids = [site.id for site in sites]
-            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            accessible_machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
             
         machine_ids = [machine.id for machine in accessible_machines]
         
@@ -2946,7 +3006,7 @@ def manage_parts():
         if machine_id:
             # Verify user can access this machine
             machine = Machine.query.get(machine_id)
-            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]):
+            if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
                 flash('You do not have access to this machine.', 'danger')
                 return redirect(url_for('manage_parts'))
             
@@ -2985,7 +3045,7 @@ def manage_parts():
                     flash('Invalid machine selected.', 'danger')
                     return redirect(url_for('manage_parts'))
                     
-                if not user_can_see_all_sites(current_user) and machine.site_id not in [site.id for site in current_user.sites]:
+                if not user_can_see_all_sites(current_user) and int(machine.site_id) not in [site.id for site in current_user.sites]:
                     flash('You do not have permission to add parts to this machine.', 'danger')
                     return redirect(url_for('manage_parts'))
                 
@@ -3187,6 +3247,7 @@ def maintenance_records_page():
     machines = []
     parts = []
     records = []
+    part_ids = []  # Initialize part_ids here
 
     if site_id:
         # Verify user can access this site
@@ -3203,25 +3264,10 @@ def maintenance_records_page():
     
     machine_ids = [machine.id for machine in machines]
     
-    if machine_id:
-        # Verify user can access this machine
-        machine = Machine.query.get(machine_id)
-        if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
-            flash('You do not have access to this machine.', 'danger')
-            return redirect(url_for('maintenance_records_page'))
-            
-        # Filter parts by selected machine
-        parts = Part.query.filter_by(machine_id=machine_id).all()
-    else:
-        # Get all parts for machines the user has access to
-        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
-    
-    part_ids = [part.id for part in parts]
-    
     if part_id:
         # Verify user can access this part
         part = Part.query.get(part_id)
-        if not part or not part.machine or (not user_can_see_all_sites(current_user) and part.machine.site_id not in site_ids):
+        if not part or (not user_can_see_all_sites(current_user) and part.machine.site_id not in site_ids):
             flash('You do not have access to this part.', 'danger')
             return redirect(url_for('maintenance_records_page'))
             
@@ -3241,6 +3287,9 @@ def maintenance_records_page():
         records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_site)).order_by(MaintenanceRecord.date.desc()).all()
     else:
         # No filters selected - show all records for parts the user has access to
+        if machine_ids:
+            parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
+            part_ids = [part.id for part in parts]
         records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids)).order_by(MaintenanceRecord.date.desc()).all() if part_ids else []
 
     return render_template(
@@ -3402,33 +3451,1120 @@ def delete_audit_task(audit_task_id):
     
     return redirect(url_for('audits_page'))
 
-import app_debug_helper  # Register debug routes
+# --- BULK IMPORT ROUTE ---
+@app.route('/admin/bulk-import', methods=['GET', 'POST'])
+@login_required
+def bulk_import():
+    """Handle bulk import of machines, parts, and maintenance records via CSV/JSON"""
+    # Only allow users with 'manage' permissions (admin or role with 'manage' in permissions)
+    if not (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'manage' in getattr(current_user.role, 'permissions', ''))):
+        flash('You do not have permission to access bulk import.', 'danger')
+        return redirect(url_for('admin'))
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='AMRS Maintenance Tracker Server')
-    parser.add_argument('--port', type=int, default=10000, help='Port to run the server on')
-    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
-    args = parser.parse_args()
-    port = args.port or int(os.environ.get('PORT', 10000))
-    debug = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    # Get sites for the dropdown
+    if current_user.is_admin:
+        sites = Site.query.all()
+    else:
+        sites = current_user.sites
+
+    def parse_frequency_string(frequency_str):
+        """Parse a frequency string like '6 Months', '1 Year', '30 Days' into numeric value and unit"""
+        if not frequency_str:
+            return 30, 'day'  # default
+        
+        import re
+        freq_lower = str(frequency_str).lower().strip()
+        
+        # Extract numeric value from the frequency string
+        numbers = re.findall(r'\d+', freq_lower)
+        numeric_value = int(numbers[0]) if numbers else 1
+        
+        # Convert everything to days for consistency
+        if 'year' in freq_lower:
+            return numeric_value * 365, 'day'
+        elif 'month' in freq_lower:
+            return numeric_value * 30, 'day'
+        elif 'week' in freq_lower:
+            return numeric_value * 7, 'day'
+        elif 'day' in freq_lower:
+            return numeric_value, 'day'
+        else:
+            # If no unit specified, assume the number is in days
+            return numeric_value, 'day'  # fallback default
+
+    def smart_field_mapping(row, entity_type):
+        """Intelligently map various field names to standard format"""
+        mapped = {}
+        
+        # Define field mappings for different naming conventions
+        field_mappings = {
+            'machines': {
+                'name': ['name', 'machine', 'machine_name', 'Machine'],
+                'model': ['model', 'machine_model', 'Model'],
+                'serial_number': ['serial_number', 'serial', 'Serial Number', 'sn'],
+                'machine_number': ['machine_number', 'Machine Number', 'number', 'id']
+            },
+            'parts': {
+                'name': ['name', 'part_name', 'Part', 'part'],
+                'description': ['description', 'desc', 'Description'],
+                'machine_name': ['machine_name', 'machine', 'Machine', 'Machine Name'],
+                'maintenance_frequency': ['maintenance_frequency', 'frequency', 'Frequency', 'interval'],
+                'maintenance_unit': ['maintenance_unit', 'unit', 'Unit', 'frequency_unit'],
+                'frequency_text': ['frequency_text', 'frequency_string', 'interval_text', 'schedule']
+            },
+            'maintenance': {
+                'machine_name': ['machine_name', 'machine', 'Machine', 'Machine Name'],
+                'part_name': ['part_name', 'part', 'Part', 'component'],
+                'maintenance_type': ['maintenance_type', 'type', 'Type', 'Maintenance Type'],
+                'description': ['description', 'desc', 'Description', 'work_done'],
+                'date': ['date', 'Date', 'maintenance_date', 'performed_date'],
+                'performed_by': ['performed_by', 'technician', 'Technician', 'worker'],
+                'status': ['status', 'Status', 'state'],
+                'notes': ['notes', 'Notes', 'comments', 'Comments']
+            }
+        }
+        
+        # Map fields based on entity type
+        if entity_type in field_mappings:
+            for standard_field, possible_names in field_mappings[entity_type].items():
+                for possible_name in possible_names:
+                    if possible_name in row and row[possible_name] is not None:
+                        mapped[standard_field] = row[possible_name]
+                        break
+        
+        return mapped
+
+    def extract_parts_data(machine_data, machine_name):
+        """Extract parts from nested MaintenanceData.Parts or flat CSV structure"""
+        parts = []
+        
+        # Handle nested JSON structure (existing logic)
+        if 'MaintenanceData' in machine_data and 'Parts' in machine_data['MaintenanceData']:
+            parts_list = machine_data['MaintenanceData']['Parts']
+            
+            for part_data in parts_list:
+                if not part_data or not part_data.get('Part Name'):
+                    continue
+                    
+                maintenance = part_data.get('Maintenance', {})
+                
+                # Parse frequency to get numeric value and unit
+                frequency_str = maintenance.get('Frequency', '1 Year')
+                freq_value, freq_unit = parse_frequency_string(frequency_str)
+                
+                part = {
+                    'name': part_data.get('Part Name', ''),
+                    'description': f"{maintenance.get('Maintenance Done', '')} - {maintenance.get('Maintenance Type', '')}".strip(' -'),
+                    'machine_name': machine_name,
+                    'maintenance_frequency': freq_value,
+                    'maintenance_unit': freq_unit,
+                    'materials': maintenance.get('Required Materials', ''),
+                    'quantity': maintenance.get('Qty.', '')
+                }
+                
+                if part['name']:
+                    parts.append(part)
+        
+        # Handle flat CSV structure
+        elif machine_data.get('part_name'):
+            # Extract part data from flat CSV row
+            part_name = machine_data.get('part_name', '').strip()
+            if part_name:
+                # Parse frequency from CSV columns
+                freq_value = 30  # default
+                freq_unit = 'day'  # default
+                
+                if machine_data.get('maintenance_frequency'):
+                    try:
+                        freq_value = int(machine_data.get('maintenance_frequency', 30))
+                    except (ValueError, TypeError):
+                        freq_value = 30
+                
+                if machine_data.get('maintenance_unit'):
+                    freq_unit = machine_data.get('maintenance_unit', 'day').lower()
+                    # Convert months to days for consistency
+                    if freq_unit in ['month', 'months']:
+                        freq_value = freq_value * 30
+                        freq_unit = 'day'
+                    elif freq_unit in ['year', 'years']:
+                        freq_value = freq_value * 365
+                        freq_unit = 'day'
+                
+                part = {
+                    'name': part_name,
+                    'description': machine_data.get('description', '').strip(),
+                    'machine_name': machine_name,
+                    'maintenance_frequency': freq_value,
+                    'maintenance_unit': freq_unit,
+                    'materials': machine_data.get('materials', ''),
+                    'quantity': machine_data.get('quantity', '')
+                }
+                
+                parts.append(part)
+        
+        return parts
+
+    def find_or_create_machine(machine_data, site_id):
+        """Find existing machine or create new one with smart duplicate detection"""
+        mapped = smart_field_mapping(machine_data, 'machines')
+        
+        name = str(mapped.get('name', '')).strip()
+        model = str(mapped.get('model', '')).strip()
+        serial = str(mapped.get('serial_number', '')).strip()
+        
+        # If no name found in standard mapping, try machine_name field
+        if not name:
+            name = str(machine_data.get('machine_name', '')).strip()
+        
+        if not name:
+            return None, "Missing machine name"
+        
+        # Default model to machine name if not provided
+        if not model:
+            model = name
+        
+        # Try to find existing machine using multiple criteria
+        existing = None
+        
+        # First try: exact match on name, model, and serial
+        if serial:
+            existing = Machine.query.filter_by(
+                name=name, 
+                model=model, 
+                serial_number=serial,
+                site_id=site_id
+            ).first()
+        
+        # Second try: match on name and serial (in case model is slightly different)
+        if not existing and serial:
+            existing = Machine.query.filter_by(
+                name=name,
+                serial_number=serial,
+                site_id=site_id
+            ).first()
+        
+        # If we have a serial number and haven't found a match, this should be a new machine
+        # Only check name/model matches if there's no serial number provided
+        if not existing and not serial:
+            # Third try: match on name and model (only if no serial number)
+            if model:
+                existing = Machine.query.filter_by(
+                    name=name,
+                    model=model,
+                    site_id=site_id
+                ).first()
+            
+            # Fourth try: match on name only (if it's unique within site and no serial)
+            if not existing:
+                name_matches = Machine.query.filter_by(name=name, site_id=site_id).all()
+                if len(name_matches) == 1:
+                    existing = name_matches[0]
+        
+        if existing:
+            # Update existing machine with any new/better data
+            updated = False
+            if not existing.model and model:
+                existing.model = model
+                updated = True
+            if not existing.serial_number and serial:
+                existing.serial_number = serial
+                updated = True
+            if not existing.machine_number and mapped.get('machine_number'):
+                existing.machine_number = str(mapped.get('machine_number', '')).strip()
+                updated = True
+            
+            return existing, "Updated existing machine" if updated else "Found existing machine"
+        else:
+            # Create new machine
+            machine = Machine(
+                name=name,
+                model=model,
+                serial_number=serial,
+                machine_number=str(mapped.get('machine_number', '')).strip(),
+                site_id=site_id
+            )
+            return machine, "Created new machine"
+
+    def find_or_create_part(part_data, machine):
+        """Find existing part or create new one with smart duplicate detection"""
+        part_name = part_data.get('name', '').strip()
+        
+        if not part_name:
+            return None, "Missing part name"
+        
+        # Try to find existing part for this machine
+        existing = Part.query.filter_by(
+            name=part_name,
+            machine_id=machine.id
+        ).first()
+        
+        if existing:
+            # Update existing part with any new/better data
+            updated = False
+            
+            # Update description if empty or new one is more detailed
+            new_desc = part_data.get('description', '').strip()
+            if new_desc and (not existing.description or len(new_desc) > len(existing.description)):
+                existing.description = new_desc
+                updated = True
+            
+            # Update maintenance frequency if new data is provided and different
+            new_freq = part_data.get('maintenance_frequency', 0)
+            new_unit = part_data.get('maintenance_unit', 'day')
+            
+            # Check if there's a text-based frequency to parse
+            frequency_text = part_data.get('frequency_text', '')
+            if frequency_text and not new_freq:
+                new_freq, new_unit = parse_frequency_string(frequency_text)
+            
+            if new_freq and (new_freq != existing.maintenance_frequency or new_unit != existing.maintenance_unit):
+                existing.maintenance_frequency = new_freq
+                existing.maintenance_unit = new_unit
+                updated = True
+            
+            return existing, "Updated existing part" if updated else "Found existing part"
+        else:
+            # Parse frequency data for new part
+            freq_value = part_data.get('maintenance_frequency', 0)
+            freq_unit = part_data.get('maintenance_unit', 'day')
+            
+            # Check if there's a text-based frequency to parse
+            frequency_text = part_data.get('frequency_text', '')
+            if frequency_text and not freq_value:
+                freq_value, freq_unit = parse_frequency_string(frequency_text)
+            
+            # Use defaults if still not set
+            if not freq_value:
+                freq_value = 30
+                freq_unit = 'day'
+            
+            # Create new part
+            description = part_data.get('description', '').strip()
+            part = Part(
+                name=part_name,
+                description=description,
+                machine_id=machine.id,
+                maintenance_frequency=freq_value,
+                maintenance_unit=freq_unit
+            )
+            return part, "Created new part"
+    def find_or_create_maintenance(maintenance_data, machine, part):
+        """Find existing maintenance record or create new one with smart duplicate detection"""
+        from datetime import datetime, timedelta
+        
+        # Parse the maintenance date
+        date_obj = None
+        date_str = maintenance_data.get('date', '')
+        
+        if date_str:
+            try:
+                # Clean the date string - remove time part and extra whitespace
+                date_str = str(date_str).strip().split(' ')[0]
+                
+                # Try different date formats
+                date_formats = [
+                    '%Y-%m-%d',      # 2025-01-16
+                    '%m/%d/%Y',      # 01/16/2025
+                    '%d/%m/%Y',      # 16/01/2025
+                    '%Y/%m/%d',      # 2025/01/16
+                    '%m-%d-%Y',      # 01-16-2025
+                    '%d-%m-%Y'       # 16-01-2025
+                ]
+                
+                for date_format in date_formats:
+                    try:
+                        date_obj = datetime.strptime(date_str, date_format)
+                        break
+                    except ValueError:
+                        continue
+                        
+            except Exception as e:
+                app.logger.warning(f"Failed to parse date '{date_str}': {e}")
+        
+        # If we couldn't parse the date, use a reasonable default (30 days ago)
+        # This prevents all maintenance from showing as "today"
+        if date_obj is None:
+            if date_str:
+                app.logger.warning(f"Could not parse maintenance date '{date_str}', using 30 days ago as fallback")
+            date_obj = datetime.now() - timedelta(days=30)
+        
+        maintenance_type = maintenance_data.get('maintenance_type', 'Scheduled')
+        description = maintenance_data.get('description', '').strip()
+        performed_by = maintenance_data.get('performed_by', current_user.username)
+        
+        # Look for existing maintenance records that might be duplicates
+        # Check for records on the same day with similar description
+        date_start = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_end = date_start + timedelta(days=1)
+        
+        existing = MaintenanceRecord.query.filter(
+            MaintenanceRecord.machine_id == machine.id,
+            MaintenanceRecord.part_id == part.id,
+            MaintenanceRecord.date >= date_start,
+            MaintenanceRecord.date < date_end,
+            MaintenanceRecord.maintenance_type == maintenance_type
+        ).first()
+        
+        # If we found a record on the same day with same type, check if it's likely the same
+        if existing:
+            # If descriptions are very similar or one is empty, consider it a duplicate
+            existing_desc = existing.description.strip().lower()
+            new_desc = description.lower()
+            
+            # Check for similarity (either exact match, one contains the other, or both are short)
+            is_duplicate = (
+                existing_desc == new_desc or
+                (len(existing_desc) < 20 and len(new_desc) < 20) or
+                (existing_desc and new_desc and (existing_desc in new_desc or new_desc in existing_desc))
+            )
+            
+            if is_duplicate:
+                # Update existing record with any new/better data
+                updated = False
+                
+                # Update description if new one is more detailed
+                if len(description) > len(existing.description):
+                    existing.description = description
+                    updated = True
+                
+                # Update performed_by if it was generic
+                if existing.performed_by in ['System Import', 'Unknown'] and performed_by not in ['System Import', 'Unknown']:
+                    existing.performed_by = performed_by
+                    updated = True
+                
+                # Update notes if we have additional information
+                new_notes = maintenance_data.get('notes', '').strip()
+                if new_notes and new_notes not in existing.notes:
+                    existing.notes = f"{existing.notes}\n{new_notes}".strip()
+                    updated = True
+                
+                return existing, "Updated existing maintenance record" if updated else "Found existing maintenance record"
+        
+        # Create new maintenance record
+        maintenance = MaintenanceRecord(
+            machine_id=machine.id,
+            part_id=part.id,
+            user_id=current_user.id,
+            maintenance_type=maintenance_type,
+            description=description,
+            date=date_obj,
+            performed_by=performed_by,
+            status=maintenance_data.get('status', 'completed'),
+            notes=maintenance_data.get('notes', '')
+        )
+        
+        # Note: Part maintenance dates will be updated in bulk after all imports are complete
+        return maintenance, "Created new maintenance record"
+
+    def extract_maintenance_data(machine_data):
+        """Extract maintenance records from nested machine data or flat CSV structure"""
+        records = []
+        
+        # Handle nested JSON structure (existing logic)
+        if 'MaintenanceData' in machine_data:
+            maint_data = machine_data['MaintenanceData']
+            machine_name = smart_field_mapping(machine_data, 'machines').get('name', '')
+            
+            # Process each part in the Parts array
+            if 'Parts' in maint_data:
+                for part_data in maint_data['Parts']:
+                    if not part_data or not part_data.get('Part Name'):
+                        continue
+                    
+                    part_name = part_data.get('Part Name', '')
+                    maintenance_info = part_data.get('Maintenance', {})
+                    
+                    # Extract maintenance fields from the nested Maintenance object
+                    maintenance_done = maintenance_info.get('Maintenance Done', '')
+                    maintenance_type = maintenance_info.get('Maintenance Type', '')
+                    last_pm_done = maintenance_info.get('Last PM Done', '')
+                    required_materials = maintenance_info.get('Required Materials', '')
+                    qty = maintenance_info.get('Qty.', '')
+                    frequency = maintenance_info.get('Frequency', '')
+                    
+                    # Skip if no maintenance info
+                    if not maintenance_done and not maintenance_type and not last_pm_done:
+                        continue
+                    
+                    # Create a description from available fields
+                    description_parts = [maintenance_done, maintenance_type, required_materials, f"Qty: {qty}"]
+                    description = ' - '.join([part for part in description_parts if part]).strip(' -');
+                    
+                    # Parse frequency to get numeric value and unit
+                    freq_value, freq_unit = 30, 'day'  # Default values
+                    if frequency:
+                        freq_value, freq_unit = parse_frequency_string(frequency)
+                    
+                    record = {
+                        'machine_name': machine_name,
+                        'part_name': part_name,  # Use the actual part name from JSON
+                        'maintenance_type': maintenance_type,
+                        'description': description,
+                        'date': last_pm_done,
+                        'performed_by': 'System Import',
+                        'status': 'completed',
+                        'notes': f"Materials: {required_materials}, Qty: {qty}, Frequency: {frequency}",
+                        'maintenance_frequency': freq_value,
+                        'maintenance_unit': freq_unit
+                    }
+                    
+                    # Clean up the date format
+                    if record['date']:
+                        try:
+                            # Handle the date format from JSON (e.g., "2025-01-16 00:00:00")
+                            date_str = record['date'].split(' ')[0]  # Remove time part
+                            record['date'] = date_str
+                        except:
+                            record['date'] = ''
+                    
+                    if record['machine_name'] and record['part_name']:
+                        records.append(record)
+            else:
+                # Fallback for machines without Parts array - use main maintenance data
+                record = {
+                    'machine_name': machine_name,
+                    'part_name': maint_data.get('Maintenance Done', 'General Maintenance'),  # Use maintenance done as part name
+                    'maintenance_type': maint_data.get('Maintenance Type', 'Scheduled'),
+                    'description': maint_data.get('Maintenance Done', ''),
+                    'date': maint_data.get('Last PM Done', ''),
+                    'performed_by': 'System Import',
+                    'status': 'completed',
+                    'notes': f"Materials: {maint_data.get('Required Materials', 'N/A')}, Qty: {maint_data.get('Qty.', 'N/A')}, Frequency: {maint_data.get('Frequency', 'N/A')}"
+                }
+                
+                if record['date']:
+                    try:
+                        date_str = record['date'].split(' ')[0]
+                        record['date'] = date_str
+                    except:
+                        record['date'] = ''
+                
+                if record['machine_name'] and record['description']:
+                    records.append(record)
+        
+        # Handle flat CSV structure
+        elif machine_data.get('part_name') and (machine_data.get('description') or machine_data.get('maintenance_type')):
+            # Extract maintenance data from flat CSV row
+            machine_name = smart_field_mapping(machine_data, 'machines').get('name', '')
+            if not machine_name:
+                # Try alternative machine name field
+                machine_name = machine_data.get('machine_name', '')
+            
+            part_name = machine_data.get('part_name', '').strip()
+            maintenance_type = machine_data.get('maintenance_type', 'Scheduled').strip()
+            description = machine_data.get('description', '').strip()
+            date = machine_data.get('date', '').strip()
+            performed_by = machine_data.get('performed_by', 'System Import').strip()
+            status = machine_data.get('status', 'completed').strip()
+            notes = machine_data.get('notes', '').strip()
+            
+            # Parse frequency
+            freq_value = 30  # default
+            freq_unit = 'day'  # default
+            
+            if machine_data.get('maintenance_frequency'):
+                try:
+                    freq_value = int(machine_data.get('maintenance_frequency', 30))
+                except (ValueError, TypeError):
+                    freq_value = 30
+            
+            if machine_data.get('maintenance_unit'):
+                freq_unit = machine_data.get('maintenance_unit', 'day').lower()
+                # Convert months to days for consistency
+                if freq_unit in ['month', 'months']:
+                    freq_value = freq_value * 30
+                    freq_unit = 'day'
+                elif freq_unit in ['year', 'years']:
+                    freq_value = freq_value * 365
+                    freq_unit = 'day'
+            
+            if machine_name and part_name:
+                record = {
+                    'machine_name': machine_name,
+                    'part_name': part_name,
+                    'maintenance_type': maintenance_type,
+                    'description': description,
+                    'date': date,
+                    'performed_by': performed_by or 'System Import',
+                    'status': status or 'completed',
+                    'notes': notes,
+                    'maintenance_frequency': freq_value,
+                    'maintenance_unit': freq_unit
+                }
+                
+                records.append(record)
+        
+        return records
+
+    if request.method == 'POST':
+        entity = request.form.get('entity', 'unified')  # Default to unified import
+        site_id = request.form.get('site_id')
+        file = request.files.get('file')
+        
+        if not site_id or not file:
+            flash('Site and file are required.', 'danger')
+            return redirect(url_for('bulk_import'))
+        
+        # Validate site access
+        site = Site.query.get(int(site_id))
+        if not site:
+            flash('Invalid site selected.', 'danger')
+            return redirect(url_for('bulk_import'))
+        
+        if not current_user.is_admin and site not in current_user.sites:
+            flash('You do not have access to the selected site.', 'danger')
+            return redirect(url_for('bulk_import'))
+        
+        filename = secure_filename(file.filename)
+        if not filename:
+            flash('Invalid filename.', 'danger')
+            return redirect(url_for('bulk_import'))
+            
+        ext = filename.rsplit('.', 1)[-1].lower()
+        
+        try:
+            # Parse file based on extension
+            if ext == 'csv':
+                stream = file.stream.read().decode('utf-8')
+                reader = csv.DictReader(stream.splitlines())
+                data = list(reader)
+            elif ext == 'json':
+                data = json.load(file.stream)
+                if not isinstance(data, list):
+                    flash('JSON must be an array of objects.', 'danger')
+                    return redirect(url_for('bulk_import'))
+            else:
+                flash('Unsupported file type. Please upload CSV or JSON.', 'danger')
+                return redirect(url_for('bulk_import'))
+            
+            added = 0
+            updated = 0
+            merged = 0
+            errors = []
+            
+            # Process based on entity type
+            if entity == 'machines':
+                for row in data:
+                    try:
+                        # Skip rows with missing essential data
+                        if not row or all(v is None or v == '' for v in row.values()):
+                            continue
+                        
+                        machine, status = find_or_create_machine(row, int(site_id))
+                        if not machine:
+                            errors.append(f"Could not process machine: {status}")
+                            continue
+                        
+                        # Add or update machine
+                        if machine.id is None:  # New machine
+                            db.session.add(machine)
+                            db.session.flush()  # Get the ID
+                            added += 1
+                        elif "Updated" in status:
+                            updated += 1
+                        elif "Found" in status:
+                            merged += 1
+                        
+                        # Extract and add parts from nested data
+                        machine_name = smart_field_mapping(row, 'machines').get('name', '')
+                        parts_data = extract_parts_data(row, machine_name)
+                        
+                        parts_added = 0
+                        parts_updated = 0
+                        for part_data in parts_data:
+                            try:
+                                part, part_status = find_or_create_part(part_data, machine)
+                                if part:
+                                    if part.id is None:  # New part
+                                        db.session.add(part)
+                                        parts_added += 1
+                                    elif "Updated" in part_status:
+                                        parts_updated += 1
+                                    elif "Found" in part_status:
+                                        merged += 1
+                            except Exception as e:
+                                errors.append(f"Error processing part '{part_data.get('name', '')}': {str(e)}")
+                        
+                        if parts_added > 0 or parts_updated > 0:
+                            print(f"Processed {parts_added} new parts and {parts_updated} updated parts for machine '{machine_name}'")
+                        
+                        # Extract and add maintenance records from nested data
+                        maintenance_records = extract_maintenance_data(row)
+                        
+                        maint_added = 0
+                        maint_updated = 0
+                        for record in maintenance_records:
+                            try:
+                                # Use the actual part name from the record
+                                part_name = record.get('part_name', 'General Maintenance')
+                                part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                                
+                                if not part:
+                                    # Find the part by looking through the imported parts data first
+                                    for part_data in parts_data:
+                                        if part_data.get('name') == part_name:
+                                            part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                                            break
+                                    
+                                    # If still not found, create the part
+                                    if not part:
+                                        # Try to find part info from the parts_data that was extracted
+                                        matching_part_data = next((p for p in parts_data if p.get('name') == part_name), None)
+                                        
+                                        if matching_part_data:
+                                            part = Part(
+                                                name=part_name,
+                                                description=matching_part_data.get('description', f'Auto-created for maintenance import'),
+                                                machine_id=machine.id,
+                                                maintenance_frequency=matching_part_data.get('maintenance_frequency', 365),
+                                                maintenance_unit=matching_part_data.get('maintenance_unit', 'day')
+                                            )
+                                        else:
+                                            # Fallback part creation
+                                            part = Part(
+                                                name=part_name,
+                                                description=f'Auto-created for maintenance import',
+                                                machine_id=machine.id,
+                                                maintenance_frequency=365,
+                                                maintenance_unit='day'
+                                            )
+                                        
+                                        db.session.add(part)
+                                        db.session.flush()  # Get the ID
+
+                                # Use smart maintenance record creation with deduplication
+                                maintenance, maint_status = find_or_create_maintenance(record, machine, part)
+                                
+                                if maintenance:
+                                    if maintenance.id is None:  # New maintenance record
+                                        db.session.add(maintenance)
+                                        maint_added += 1
+                                    elif "Updated" in maint_status:
+                                        maint_updated += 1
+                                    elif "Found" in maint_status:
+                                        merged += 1
+                            except Exception as e:
+                                errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
+                        
+                        if maint_added > 0 or maint_updated > 0:
+                            print(f"Processed {maint_added} new maintenance records and {maint_updated} updated maintenance records for machine '{machine_name}'")
+                    
+                    except Exception as e:
+                        errors.append(f"Error processing machine row: {str(e)}")
+                        
+            elif entity == 'parts':
+                # Get machines for the selected site
+                site_machines = {m.name: m.id for m in Machine.query.filter_by(site_id=int(site_id)).all()}
+                
+                for row in data:
+                    try:
+                        if not row or all(v is None or v == '' for v in row.values()):
+                            continue
+                        
+                        # For parts import, we need to extract parts from the nested structure
+                        machine_name = row.get('Machine')
+                        if not machine_name:
+                            errors.append(f"Row missing machine name: {row}")
+                            continue
+                        
+                        if machine_name not in site_machines:
+                            errors.append(f"Machine '{machine_name}' not found in site '{site.name}': {row}")
+                            continue
+                        
+                        machine_id = site_machines[machine_name]
+                        machine = Machine.query.get(machine_id)
+                        
+                        # Extract parts from MaintenanceData.Parts
+                        if 'MaintenanceData' in row and 'Parts' in row['MaintenanceData']:
+                            parts_list = row['MaintenanceData']['Parts']
+                            
+                            for part_data in parts_list:
+                                if not part_data or not part_data.get('Part Name'):
+                                    continue
+                                
+                                part_name = part_data.get('Part Name')
+                                maintenance_info = part_data.get('Maintenance', {})
+                                
+                                # Parse frequency to get numeric value and unit
+                                frequency_str = maintenance_info.get('Frequency', '1 Year')
+                                freq_value, freq_unit = parse_frequency_string(frequency_str)
+                                
+                                # Create the part data in the format expected by find_or_create_part
+                                mapped_part_data = {
+                                    'name': part_name,
+                                    'description': maintenance_info.get('Maintenance Done', ''),
+                                    'machine_name': machine_name,
+                                    'maintenance_frequency': freq_value,
+                                    'maintenance_unit': freq_unit,
+                                    'materials': maintenance_info.get('Required Materials', ''),
+                                    'quantity': maintenance_info.get('Qty.', '')
+                                }
+                                
+                                # Use smart part creation
+                                part, status = find_or_create_part(mapped_part_data, machine)
+                                
+                                if part:
+                                    if part.id is None:  # New part
+                                        db.session.add(part)
+                                        parts_added += 1
+                                    elif "Updated" in status:
+                                        updated += 1
+                                    elif "Found" in status:
+                                        merged += 1
+                        else:
+                            # Fallback: try to extract from top-level MaintenanceData if no Parts array
+                            if 'MaintenanceData' in row:
+                                maint_data = row['MaintenanceData']
+                                part_name = maint_data.get('Maintenance Done', 'General Maintenance')
+                                
+                                if part_name and part_name != 'General Maintenance':
+                                    frequency_str = maint_data.get('Frequency', '1 Year')
+                                    freq_value, freq_unit = parse_frequency_string(frequency_str)
+                                    
+                                    mapped_part_data = {
+                                        'name': part_name,
+                                        'description': maint_data.get('Maintenance Done', ''),
+                                        'machine_name': machine_name,
+                                        'maintenance_frequency': freq_value,
+                                        'maintenance_unit': freq_unit,
+                                        'materials': maint_data.get('Required Materials', ''),
+                                        'quantity': maint_data.get('Qty.', '')
+                                    }
+                                    
+                                    part, status = find_or_create_part(mapped_part_data, machine)
+                                    
+                                    if part:
+                                        if part.id is None:  # New part
+                                            db.session.add(part)
+                                            parts_added += 1
+                                        elif "Updated" in status:
+                                            updated += 1
+                                        elif "Found" in status:
+                                            merged += 1
+                            
+                    except Exception as e:
+                        errors.append(f"Error processing part row: {str(e)}")
+
+            elif entity == 'maintenance':
+                # Get machines and parts for the selected site
+                site_machines = {m.name: m for m in Machine.query.filter_by(site_id=int(site_id)).all()}
+                
+                # Handle both direct maintenance records and extracted from machine data
+                maintenance_records = []
+                
+                for row in data:
+                    if not row or all(v is None or v == '' for v in row.values()):
+                        continue
+                    
+                    # Extract machine name from the row
+                    machine_name = row.get('Machine')
+                    if not machine_name:
+                        continue
+                    
+                    # Check if this is machine data with nested maintenance
+                    if 'MaintenanceData' in row and 'Parts' in row['MaintenanceData']:
+                        # Extract maintenance records from each part
+                        parts_list = row['MaintenanceData']['Parts']
+                        
+                        for part_data in parts_list:
+                            if not part_data or not part_data.get('Part Name'):
+                                continue
+                            
+                            part_name = part_data.get('Part Name')
+                            maintenance_info = part_data.get('Maintenance', {})
+                            
+                            maintenance_record = {
+                                'machine_name': machine_name,
+                                'part_name': part_name,
+                                'maintenance_type': maintenance_info.get('Maintenance Type', 'Scheduled'),
+                                'description': maintenance_info.get('Maintenance Done', ''),
+                                'date': maintenance_info.get('Last PM Done', ''),
+                                'performed_by': 'System Import',
+                                'status': 'completed',
+                                'notes': f"Materials: {maintenance_info.get('Required Materials', 'N/A')}, Qty: {maintenance_info.get('Qty.', 'N/A')}, Frequency: {maintenance_info.get('Frequency', 'N/A')}"
+                            }
+                            
+                            # Clean up the date format
+                            if maintenance_record['date']:
+                                try:
+                                    date_str = maintenance_record['date'].split(' ')[0]  # Remove time part
+                                    maintenance_record['date'] = date_str
+                                except:
+                                    maintenance_record['date'] = ''
+                            
+                            if maintenance_record['machine_name'] and maintenance_record['part_name']:
+                                maintenance_records.append(maintenance_record)
+                    
+                    elif 'MaintenanceData' in row:
+                        # Fallback: extract from top-level MaintenanceData if no Parts array
+                        maint_data = row['MaintenanceData']
+                        
+                        maintenance_record = {
+                            'machine_name': machine_name,
+                            'part_name': maint_data.get('Maintenance Done', 'General Maintenance'),
+                            'maintenance_type': maint_data.get('Maintenance Type', 'Scheduled'),
+                            'description': maint_data.get('Maintenance Done', ''),
+                            'date': maint_data.get('Last PM Done', ''),
+                            'performed_by': 'System Import',
+                            'status': 'completed',
+                            'notes': f"Materials: {maint_data.get('Required Materials', 'N/A')}, Qty: {maint_data.get('Qty.', 'N/A')}, Frequency: {maint_data.get('Frequency', 'N/A')}"
+                        }
+                        
+                        if maintenance_record['date']:
+                            try:
+                                date_str = maintenance_record['date'].split(' ')[0]
+                                maintenance_record['date'] = date_str
+                            except:
+                                maintenance_record['date'] = ''
+                        
+                        if maintenance_record['machine_name'] and maintenance_record['description']:
+                            maintenance_records.append(maintenance_record)
+                    else:
+                        # Direct maintenance record (not nested in MaintenanceData)
+                        mapped = smart_field_mapping(row, 'maintenance')
+                        if mapped.get('machine_name') and mapped.get('description'):
+                            maintenance_records.append(mapped)
+                
+                # Process maintenance records
+                for record in maintenance_records:
+                    try:
+                        machine_name = record.get('machine_name', '')
+                        
+                        if machine_name not in site_machines:
+                            errors.append(f"Machine '{machine_name}' not found in site '{site.name}'")
+                            continue
+                        
+                        machine = site_machines[machine_name]
+                        
+                        # Use the actual part name from the record, not a default
+                        part_name = record.get('part_name')
+                        if not part_name:
+                            # If no part name specified, use the description or default
+                            part_name = record.get('description', 'General Maintenance')
+                        
+                        # Find or create the part
+                        part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                        if not part:
+                            # Create part with proper maintenance schedule from the record
+                            freq_value = record.get('maintenance_frequency', 365)
+                            freq_unit = record.get('maintenance_unit', 'day')
+                            
+                            part = Part(
+                                name=part_name,
+                                description=record.get('description', f'Auto-created for maintenance import'),
+                                machine_id=machine.id,
+                                maintenance_frequency=freq_value,
+                                maintenance_unit=freq_unit
+                            )
+                            db.session.add(part)
+                            db.session.flush()  # Get the ID
+                        
+                        # Use smart maintenance record creation with deduplication
+                        maintenance, status = find_or_create_maintenance(record, machine, part)
+                        
+                        if maintenance:
+                            if maintenance.id is None:  # New maintenance record
+                                db.session.add(maintenance)
+                                maintenance_added += 1
+                            elif "Updated" in status:
+                                updated += 1
+                            elif "Found" in status:
+                                merged += 1
+                        
+                    except Exception as e:
+                        errors.append(f"Error processing maintenance record: {str(e)}")
+            
+            elif entity == 'unified':
+                # Unified import - automatically process everything from the JSON
+                # This processes machines, parts, and maintenance records in one go
+                machines_added = 0
+                parts_added = 0
+                maintenance_added = 0
+                
+                for row in data:
+                    try:
+                        if not row or all(v is None or v == '' for v in row.values()):
+                            continue
+                        
+                        # Step 1: Process machine
+                        machine, machine_status = find_or_create_machine(row, int(site_id))
+                        if not machine:
+                            errors.append(f"Could not process machine: {machine_status}")
+                            continue
+                        
+                        # Add or update machine
+                        if machine.id is None:  # New machine
+                            db.session.add(machine)
+                            db.session.flush()  # Get the ID
+                            machines_added += 1
+                        elif "Updated" in machine_status:
+                            updated += 1
+                        elif "Found" in machine_status:
+                            merged += 1
+                        
+                        # Step 2: Extract and process parts from nested data
+                        machine_name = smart_field_mapping(row, 'machines').get('name', '')
+                        parts_data = extract_parts_data(row, machine_name)
+                        
+                        for part_data in parts_data:
+                            try:
+                                part, part_status = find_or_create_part(part_data, machine)
+                                if part:
+                                    if part.id is None:  # New part
+                                        db.session.add(part)
+                                        parts_added += 1
+                                    elif "Updated" in part_status:
+                                        updated += 1
+                                    elif "Found" in part_status:
+                                        merged += 1
+                            except Exception as e:
+                                errors.append(f"Error processing part '{part_data.get('name', '')}': {str(e)}")
+                        
+                        # Step 3: Extract and process maintenance records from nested data
+                        maintenance_records = extract_maintenance_data(row)
+                        
+                        for record in maintenance_records:
+                            try:
+                                # Use the actual part name from the record
+                                part_name = record.get('part_name', 'General Maintenance')
+                                part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
+                                
+                                if not part:
+                                    # If part doesn't exist, create it
+                                    freq_value = record.get('maintenance_frequency', 365)
+                                    freq_unit = record.get('maintenance_unit', 'day')
+                                    
+                                    part = Part(
+                                        name=part_name,
+                                        description=record.get('description', f'Auto-created for maintenance import'),
+                                        machine_id=machine.id,
+                                        maintenance_frequency=freq_value,
+                                        maintenance_unit=freq_unit
+                                    )
+                                    db.session.add(part)
+                                    db.session.flush()  # Get the ID
+                                
+                                # Use smart maintenance record creation with deduplication
+                                maintenance, maint_status = find_or_create_maintenance(record, machine, part)
+                                
+                                if maintenance:
+                                    if maintenance.id is None:  # New maintenance record
+                                        db.session.add(maintenance)
+                                        maintenance_added += 1
+                                    elif "Updated" in maint_status:
+                                        updated += 1
+                                    elif "Found" in maint_status:
+                                        merged += 1
+                            except Exception as e:
+                                errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
+                    
+                    except Exception as e:
+                        errors.append(f"Error processing row: {str(e)}")
+                
+                # Update the added count to include all types
+                added = machines_added + parts_added + maintenance_added
+            
+            else:
+                flash('Invalid entity type.', 'danger')
+                return redirect(url_for('bulk_import'))
+            
+            # Commit changes
+            if added > 0 or updated > 0:
+                db.session.commit()
+                
+                # After importing, update all part maintenance dates based on actual maintenance records
+                # This ensures parts show correct last/next maintenance dates regardless of import order
+                if entity in ['maintenance', 'unified']:
+                    updated_parts = set()
+                    
+                    # Find all parts that were affected by the import
+                    if entity == 'maintenance':
+                        # For maintenance imports, get parts from the selected site
+                        site_machines = Machine.query.filter_by(site_id=int(site_id)).all()
+                        for machine in site_machines:
+                            for part in machine.parts:
+                                update_part_maintenance_dates(part)
+                                updated_parts.add(part.name)
+                    
+                    elif entity == 'unified':
+                        # For unified imports, get all parts from the imported machines
+                        site_machines = Machine.query.filter_by(site_id=int(site_id)).all()
+                        for machine in site_machines:
+                            for part in machine.parts:
+                                update_part_maintenance_dates(part)
+                                updated_parts.add(part.name)
+                    
+                    # Commit the part updates
+                    if updated_parts:
+                        db.session.commit()
+                        app.logger.info(f"Updated maintenance dates for {len(updated_parts)} parts: {', '.join(list(updated_parts)[:10])}")
+            
+            # Provide detailed feedback
+            total_processed = added + updated + merged
+            if total_processed > 0:
+                feedback_parts = []
+                if added > 0:
+                    feedback_parts.append(f"{added} new")
+                if updated > 0:
+                    feedback_parts.append(f"{updated} updated")
+                if merged > 0:
+                    feedback_parts.append(f"{merged} merged/skipped")
+                
+                feedback_msg = f'Successfully processed {total_processed} records to site "{site.name}" ({", ".join(feedback_parts)})'
+                
+                if errors:
+                    feedback_msg += f' with {len(errors)} errors. First few errors: {"; ".join(errors[:3])}'
+                    flash(feedback_msg, 'warning')
+                else:
+                    flash(feedback_msg, 'success')
+            else:
+                if errors:
+                    flash(f'No records processed due to {len(errors)} errors. First few: {"; ".join(errors[:3])}', 'danger')
+                else:
+                    flash('No valid records found to import.', 'warning')
+                
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Import failed: {str(e)}', 'danger')
+            
+        return redirect(url_for('bulk_import'))
     
-    print(f"[APP] Starting Flask server on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    # GET request - show the form
+    return render_template('admin/bulk_import.html', sites=sites)
 
-# Import and patch audit history at the very end to avoid circular import
-try:
-    import fix_audit_history_v2
-    print("[APP] Running enhanced audit history fix...")
-    success = fix_audit_history_v2.setup_enhanced_audit_history()
-    print(f"[APP] Enhanced audit history fix applied: {'Successfully' if success else 'Failed'}")
-except Exception as e:
-    print(f"[APP] Warning: Could not apply enhanced audit history fix: {str(e)}")
-    # Try the older fix as fallback
-    try:
-        import fix_audit_history
-        print("[APP] Falling back to basic audit history fix")
-    except Exception as e2:
-        print(f"[APP] Warning: Could not import audit history fix at end of app.py: {str(e2)}")
+def update_part_maintenance_dates(part):
+    """Update part's last_maintenance and next_maintenance based on actual maintenance records"""
+    from datetime import timedelta
+    
+    # Find the most recent maintenance record for this part
+    latest_maintenance = MaintenanceRecord.query.filter_by(
+        part_id=part.id
+    ).order_by(MaintenanceRecord.date.desc()).first()
+    
+    if latest_maintenance:
+        # Update last_maintenance to the actual latest date
+        part.last_maintenance = latest_maintenance.date
+        
+        # Calculate next maintenance date based on frequency
+        freq = part.maintenance_frequency or 30
+        unit = part.maintenance_unit or 'day'
+        
+        if unit == 'week':
+            delta = timedelta(weeks=freq)
+        elif unit == 'month':
+            delta = timedelta(days=freq * 30)
+        elif unit == 'year':
+            delta = timedelta(days=freq * 365)
+        else:
+            delta = timedelta(days=freq)
+            
+        part.next_maintenance = part.last_maintenance + delta
+        
+        app.logger.info(f"Updated part '{part.name}' - Last maintenance: {part.last_maintenance}, Next: {part.next_maintenance}")
+    else:
+        # No maintenance records found, clear the dates
+        part.last_maintenance = None
+        part.next_maintenance = None
 
 
 

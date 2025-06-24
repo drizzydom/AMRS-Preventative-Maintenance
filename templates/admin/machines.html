@@ -8,9 +8,21 @@
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h2 class="card-title h5 mb-0">Machines</h2>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addMachineModal">
-            <i class="fas fa-plus"></i> Add Machine
-        </button>
+        <div class="d-flex gap-2">
+            {% if decommissioned_count > 0 %}
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="showDecommissioned" 
+                       {% if show_decommissioned %}checked{% endif %}
+                       onchange="toggleDecommissioned()">
+                <label class="form-check-label text-muted small" for="showDecommissioned">
+                    Show {{ decommissioned_count }} decommissioned
+                </label>
+            </div>
+            {% endif %}
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addMachineModal">
+                <i class="fas fa-plus"></i> Add Machine
+            </button>
+        </div>
     </div>
     <div class="card-body">
         {% if machines %}
@@ -18,10 +30,11 @@
             <table class="table table-hover table-fixed table-compact">
                 <thead>
                     <tr>
-                        <th style="width: 40%">Machine Details</th>
-                        <th style="width: 18%">Site</th>
+                        <th style="width: 35%">Machine Details</th>
+                        <th style="width: 15%">Site</th>
+                        <th style="width: 10%">Status</th>
                         <th style="width: 7%">Parts</th>
-                        <th style="width: 35%">Actions</th>
+                        <th style="width: 33%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -38,6 +51,17 @@
                             </div>
                         </td>
                         <td>{{ machine.site.name }}</td>
+                        <td>
+                            {% if machine.decommissioned %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-power-off"></i> Decommissioned
+                                </span>
+                            {% else %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle"></i> Active
+                                </span>
+                            {% endif %}
+                        </td>
                         <td>{{ machine.parts|length }}</td>
                         <td>
                             <div class="d-flex gap-2 flex-wrap">
@@ -209,4 +233,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleDecommissioned() {
+        const checkbox = document.getElementById('showDecommissioned');
+        const currentUrl = new URL(window.location);
+        
+        if (checkbox.checked) {
+            currentUrl.searchParams.set('show_decommissioned', 'true');
+        } else {
+            currentUrl.searchParams.delete('show_decommissioned');
+        }
+        
+        window.location.href = currentUrl.toString();
+    }
+</script>
 {% endblock %}

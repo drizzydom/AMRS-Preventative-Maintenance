@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Import - Maintenance Tracker{% endblock %}
+
+{% block header_title %}Bulk Import Data{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0 text-gray-800">Bulk Import</h1>
+            <p class="mb-4">Upload a JSON file to automatically import machines, parts, and maintenance records. The system will process all data types found in the file.</p>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-8 col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Upload File</h6>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('bulk_import') }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="site_id" class="form-label">Target Site</label>
+                            <select class="form-select" id="site_id" name="site_id" required>
+                                <option value="">Select Site...</option>
+                                {% for site in sites %}
+                                <option value="{{ site.id }}">{{ site.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">All imported data will be associated with this site.</div>
+                        </div>
+                        
+                        <!-- Hidden field to set unified import as default -->
+                        <input type="hidden" name="entity" value="unified">
+                        
+                        <div class="mb-3">
+                            <label for="file" class="form-label">Data File (JSON or CSV)</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".json,.csv" required>
+                            <div class="form-text">
+                                Upload a JSON or CSV file containing your maintenance data.
+                                <br><strong>The system will automatically import:</strong>
+                                <ul class="mt-2 mb-0">
+                                    <li>Machines with their details</li>
+                                    <li>Parts with proper names (not "General Maintenance")</li>
+                                    <li>Maintenance records with historical dates</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Import All Data
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="alert alert-info">
+                <h6><i class="fas fa-info-circle"></i> What happens during import:</h6>
+                <ul class="mb-0">
+                    <li><strong>Machines:</strong> Imported with names, models, serial numbers</li>
+                    <li><strong>Parts:</strong> Created with actual part names from the JSON (e.g., "Spindle Lubrication", "Hydraulic Power Unit")</li>
+                    <li><strong>Maintenance Records:</strong> Historical records with proper "Last PM Done" dates</li>
+                    <li><strong>Duplicates:</strong> Automatically detected and merged</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-warning">
+                <h6><i class="fas fa-exclamation-triangle"></i> Important:</h6>
+                <ul class="mb-0">
+                    <li>Large files may take several minutes to process</li>
+                    <li>Always backup your data before importing</li>
+                    <li>The system will create parts automatically if they don't exist</li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Instructions</h6>
+                </div>
+                <div class="card-body">
+                    <h5>Intelligent Field Detection</h5>
+                    <p>The system automatically detects and maps field names from various formats.</p>
+                    
+                    <h6>Supported Machine Fields:</h6>
+                    <ul class="small text-muted">
+                        <li><strong>Name:</strong> name, machine, machine_name, Machine</li>
+                        <li><strong>Model:</strong> model, machine_model, Model</li>
+                        <li><strong>Serial:</strong> serial_number, serial, Serial Number, sn</li>
+                        <li><strong>Number:</strong> machine_number, Machine Number, number, id</li>
+                    </ul>
+                    
+                    <h6>Your JSON Format (Auto-Detected):</h6>
+                    <div class="mb-3">
+                        <strong>Machines:</strong> Automatically extracts from your Excel export format
+                        <pre class="small">[
+  {
+    "Machine Number": 523,
+    "Serial Number": 203710,
+    "Machine": "Mazak Nexus 4000 II",
+    "MaintenanceData": {...}
+  }
+]</pre>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Maintenance Records:</strong> Extracted from nested MaintenanceData
+                        <pre class="small">Automatically creates maintenance records from:
+- Last PM Done
+- Maintenance Type  
+- Maintenance Done
+- Required Materials
+- Frequency</pre>
+                    </div>
+                    
+                    <h6>Standard CSV Format:</h6>
+                    <div class="mb-3">
+                        <strong>Machines:</strong>
+                        <pre class="small">name,model,serial_number,machine_number</pre>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Parts:</strong>
+                        <pre class="small">name,description,machine_name,maintenance_frequency,maintenance_unit
+OR with text frequency:
+name,description,machine_name,frequency_text
+Examples: "6 Months", "1 Year", "30 Days", "2 Years"</pre>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Maintenance Records:</strong>
+                        <pre class="small">machine_name,part_name,maintenance_type,description,date,performed_by,status,notes</pre>
+                    </div>
+                    
+                    <div class="alert alert-info small mt-3">
+                        <strong>🎯 Smart Features:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><strong>Intelligent Duplicate Detection:</strong> Automatically finds and merges existing records</li>
+                            <li><strong>Machine Deduplication:</strong> Matches on name, model, and serial number across multiple tiers</li>
+                            <li><strong>Parts Deduplication:</strong> Prevents duplicate parts per machine, updates with better data</li>
+                            <li><strong>Maintenance Deduplication:</strong> Detects duplicate records on same day/type, merges intelligently</li>
+                            <li><strong>Nested Data Extraction:</strong> Automatically extracts parts and maintenance from JSON structures</li>
+                            <li><strong>Smart Frequency Parsing:</strong> Handles "6 Months", "1 Year", "30 Days", etc. automatically</li>
+                            <li><strong>Data Preservation:</strong> Updates existing records without losing information</li>
+                            <li><strong>Excel JSON Support:</strong> Your Excel-exported format works perfectly!</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    form.addEventListener('submit', function() {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        submitBtn.disabled = true;
+        
+        // Re-enable the button after 2 minutes in case something goes wrong
+        setTimeout(function() {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 120000);
+    });
+});
+</script>
+{% endblock %}

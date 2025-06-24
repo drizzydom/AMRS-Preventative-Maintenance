@@ -9,14 +9,25 @@ logger = logging.getLogger(__name__)
 
 def add_column_if_not_exists(engine, table, column, coltype):
     inspector = inspect(engine)
-    existing_columns = [col['name'] for col in inspector.get_columns(table)]
-    if column not in existing_columns:
-        with engine.connect() as conn:
-            try:
-                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {coltype}'))
-                logger.info(f"[AUTO_MIGRATE] Added column {column} to {table}")
-            except Exception as e:
-                logger.error(f"[AUTO_MIGRATE] Error adding column {column} to {table}: {e}")
+    try:
+        existing_columns = [col['name'] for col in inspector.get_columns(table)]
+        if column not in existing_columns:
+            with engine.connect() as conn:
+                try:
+                    # Use transaction to ensure atomic operation
+                    trans = conn.begin()
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {coltype}'))
+                    trans.commit()
+                    logger.info(f"[AUTO_MIGRATE] Added column {column} to {table}")
+                except Exception as e:
+                    trans.rollback()
+                    logger.error(f"[AUTO_MIGRATE] Error adding column {column} to {table}: {e}")
+                    raise
+        else:
+            logger.info(f"[AUTO_MIGRATE] Column {column} already exists in {table}")
+    except Exception as e:
+        logger.error(f"[AUTO_MIGRATE] Error checking/adding column {column} to {table}: {e}")
+        raise
 
 def run_data_fix(engine, fix_function, description):
     """Run a data fix function and log the result"""
@@ -47,6 +58,23 @@ def run_auto_migration():
     with app.app_context():
         db.create_all()
         engine = db.engine
+        
+        # Critical migration: Ensure decommissioned fields exist first
+        critical_fields = [
+            ('machines', 'decommissioned', 'BOOLEAN DEFAULT FALSE NOT NULL'),
+            ('machines', 'decommissioned_date', 'TIMESTAMP NULL'),
+            ('machines', 'decommissioned_by', 'INTEGER NULL'),
+            ('machines', 'decommissioned_reason', 'TEXT NULL')
+        ]
+        
+        logger.info("[AUTO_MIGRATE] Starting critical decommissioned fields migration...")
+        for table, column, coltype in critical_fields:
+            try:
+                add_column_if_not_exists(engine, table, column, coltype)
+            except Exception as e:
+                logger.error(f"[AUTO_MIGRATE] CRITICAL ERROR: Failed to add {table}.{column}: {e}")
+                raise  # Re-raise to prevent app startup with missing critical columns
+        
         # Ensure audit_tasks columns
         add_column_if_not_exists(engine, 'audit_tasks', 'interval', "VARCHAR(20) DEFAULT 'daily'")
         add_column_if_not_exists(engine, 'audit_tasks', 'custom_interval_days', "INTEGER")
