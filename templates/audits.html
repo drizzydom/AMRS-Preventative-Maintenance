@@ -98,84 +98,6 @@
             <h2 class="h4">Audit Tasks for {{ today.strftime('%Y-%m-%d') }}</h2>
             <form method="post">
                 <input type="hidden" name="checkoff" value="1">
-                <style>
-                    .audit-checkoff {
-                        width: 1.25em !important;
-                        height: 1.25em !important;
-                        min-width: 1.25em !important;
-                        min-height: 1.25em !important;
-                        accent-color: #198754;
-                        margin-right: 0.5em;
-                        border-radius: 0.25em;
-                        border: 2px solid #198754;
-                    }
-                    .audit-machine-section {
-                        border: 1px solid #dee2e6;
-                        border-radius: 0.5em;
-                        margin-bottom: 1.5em;
-                        padding: 1em;
-                        background: #f8f9fa;
-                    }
-                    .audit-machine-title {
-                        font-weight: bold;
-                        font-size: 1.1em;
-                        margin-bottom: 0.5em;
-                    }
-                    @media (max-width: 767.98px) {
-                        .audit-task-list {
-                            overflow-x: auto;
-                            -webkit-overflow-scrolling: touch;
-                            padding-bottom: 1em;
-                        }
-                        .audit-machine-section {
-                            min-width: 320px;
-                            margin-left: 0;
-                            margin-right: 0;
-                            padding: 0.75em 0.5em;
-                        }
-                        .audit-machine-title {
-                            font-size: 1em;
-                        }
-                        .audit-checkoff {
-                            width: 2em !important;
-                            height: 2em !important;
-                            min-width: 2em !important;
-                            min-height: 2em !important;
-                            margin-right: 1em;
-                        }
-                        .form-check-label {
-                            font-size: 1.1em;
-                            padding-left: 0.25em;
-                        }
-                        .btn {
-                            font-size: 1.1em;
-                            padding: 0.75em 1.25em;
-                        }
-                        .btn-lg {
-                            font-size: 1.2em;
-                            padding: 1em 2em;
-                        }
-                        .sticky-save {
-                            position: fixed;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            z-index: 1050;
-                            background: rgba(255,255,255,0.95);
-                            box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
-                            padding: 0.75em 1em;
-                            text-align: right;
-                        }
-                    }
-                    @media (max-width: 575.98px) {
-                        .audit-machine-section {
-                            padding: 0.5em 0.25em;
-                        }
-                        .form-check-label {
-                            font-size: 1em;
-                        }
-                    }
-                </style>
                 {% if audit_tasks %}
                     <p class="mb-2 text-info"><strong>Check off completed audit tasks below and click <span class="badge bg-success">Save Check-Offs</span> to record your progress for today.</strong></p>
                     <div class="audit-task-list">
@@ -231,6 +153,84 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+    .audit-checkoff {
+        width: 1.25em !important;
+        height: 1.25em !important;
+        min-width: 1.25em !important;
+        min-height: 1.25em !important;
+        accent-color: #198754;
+        margin-right: 0.5em;
+        border-radius: 0.25em;
+        border: 2px solid #198754;
+    }
+    .audit-machine-section {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5em;
+        margin-bottom: 1.5em;
+        padding: 1em;
+        background: #f8f9fa;
+    }
+    .audit-machine-title {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 0.5em;
+    }
+    @media (max-width: 767.98px) {
+        .audit-task-list {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 1em;
+        }
+        .audit-machine-section {
+            min-width: 320px;
+            margin-left: 0;
+            margin-right: 0;
+            padding: 0.75em 0.5em;
+        }
+        .audit-machine-title {
+            font-size: 1em;
+        }
+        .audit-checkoff {
+            width: 2em !important;
+            height: 2em !important;
+            min-width: 2em !important;
+            min-height: 2em !important;
+            margin-right: 1em;
+        }
+        .form-check-label {
+            font-size: 1.1em;
+            padding-left: 0.25em;
+        }
+        .btn {
+            font-size: 1.1em;
+            padding: 0.75em 1.25em;
+        }
+        .btn-lg {
+            font-size: 1.2em;
+            padding: 1em 2em;
+        }
+        .sticky-save {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1050;
+            background: rgba(255,255,255,0.95);
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+            padding: 0.75em 1em;
+            text-align: right;
+        }
+    }
+    @media (max-width: 575.98px) {
+        .audit-machine-section {
+            padding: 0.5em 0.25em;
+        }
+        .form-check-label {
+            font-size: 1em;
+        }
+    }
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const intervalSelect = document.getElementById('interval');
