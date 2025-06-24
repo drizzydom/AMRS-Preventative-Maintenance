@@ -123,7 +123,7 @@
                     
                     <div class="mb-3">
                         <label for="site_ids" class="form-label">Assign to Sites</label>
-                        <select multiple class="form-select" id="site_ids" name="site_ids">
+                        <select multiple class="form-select site-select-scroll" id="site_ids" name="site_ids">
                             {% for site in sites %}
                             <option value="{{ site.id }}">{{ site.name }}</option>
                             {% endfor %}
@@ -196,13 +196,11 @@
         display: block !important;
         margin-top: 0 !important;
     }
-    
     /* Make buttons more compact */
     .btn-group-sm .btn {
         padding: 0.25rem 0.5rem;
         font-size: 0.75rem;
     }
-    
     /* Force proper table headers */
     thead th {
         background-color: #444 !important;
@@ -210,13 +208,11 @@
         font-weight: 600 !important;
         white-space: nowrap;
     }
-    
     /* Table cell text handling */
     .multi-line-name {
         max-width: 150px;
         white-space: normal;
     }
-    
     /* Improve table responsiveness */
     .table-responsive {
         width: 100%;
@@ -224,7 +220,6 @@
         -webkit-overflow-scrolling: touch;
         margin-bottom: 0;
     }
-    
     /* Make table take full width but not exceed container */
     .table {
         width: 100%;
@@ -232,11 +227,16 @@
         margin-bottom: 0;
         table-layout: fixed;
     }
-    
     /* Remove any margin in card body to avoid extra space */
     .card-body {
         padding: 1rem;
         margin: 0;
+    }
+    /* Limit height and enable scroll for multi-select in Add User modal */
+    #addUserModal .site-select-scroll {
+        max-height: 180px;
+        min-height: 80px;
+        overflow-y: auto;
     }
 </style>
 {% endblock %}
