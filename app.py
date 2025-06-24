@@ -641,7 +641,6 @@ with app.app_context():
                 print("[APP] Column 'color' added to 'audit_tasks'.")
             else:
                 print("[APP] 'color' column already exists in 'audit_tasks'.")
-        # ...existing code...
         import expand_user_fields
     except Exception as e:
         print(f"[STARTUP] User field length expansion migration failed: {e}")
@@ -1237,7 +1236,30 @@ def audits_page():
             flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'warning')
         return redirect(url_for('audits_page'))
     
-    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility)
+    # Helper function for the template
+    def get_calendar_weeks(start, end):
+        """Get calendar weeks for the date range."""
+        # Find the first Sunday before or on the start date
+        first_day_week = start - timedelta(days=start.weekday() + 1)
+        if first_day_week.weekday() != 6:  # If not Sunday
+            first_day_week = start - timedelta(days=(start.weekday() + 1) % 7)
+        
+        # Find the last Saturday after or on the end date
+        last_day_week = end + timedelta(days=(5 - end.weekday()) % 7)
+        
+        # Generate weeks
+        weeks = []
+        current = first_day_week
+        while current <= last_day_week:
+            week = []
+            for _ in range(7):
+                week.append(current)
+                current = current + timedelta(days=1)
+            weeks.append(week)
+        
+        return weeks
+
+    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility, get_calendar_weeks=get_calendar_weeks)
 
 @app.route('/audit-history', methods=['GET'])
 @login_required
@@ -1419,6 +1441,29 @@ def audit_history_page():
     machines_dict = {machine.id: machine for machine in available_machines}
     users = {user.id: user for user in User.query.all()}
 
+    # Helper function for the template
+    def get_calendar_weeks(start, end):
+        """Get calendar weeks for the date range."""
+        # Find the first Sunday before or on the start date
+        first_day_week = start - timedelta(days=start.weekday() + 1)
+        if first_day_week.weekday() != 6:  # If not Sunday
+            first_day_week = start - timedelta(days=(start.weekday() + 1) % 7)
+        
+        # Find the last Saturday after or on the end date
+        last_day_week = end + timedelta(days=(5 - end.weekday()) % 7)
+        
+        # Generate weeks
+        weeks = []
+        current = first_day_week
+        while current <= last_day_week:
+            week = []
+            for _ in range(7):
+                week.append(current)
+                current = current + timedelta(days=1)
+            weeks.append(week)
+        
+        return weeks
+
     return render_template('audit_history.html',
         completions=completions,
         today=today,
@@ -1561,17 +1606,17 @@ def audit_history_print_view():
     def get_calendar_weeks(start, end):
         """Get calendar weeks for the date range."""
         # Find the first Sunday before or on the start date
-        first_day = start - timedelta(days=start.weekday() + 1)
-        if first_day.weekday() != 6:  # If not Sunday
-            first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+        first_day_week = start - timedelta(days=start.weekday() + 1)
+        if first_day_week.weekday() != 6:  # If not Sunday
+            first_day_week = start - timedelta(days=(start.weekday() + 1) % 7)
         
         # Find the last Saturday after or on the end date
-        last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+        last_day_week = end + timedelta(days=(5 - end.weekday()) % 7)
         
         # Generate weeks
         weeks = []
-        current = first_day
-        while current <= last_day:
+        current = first_day_week
+        while current <= last_day_week:
             week = []
             for _ in range(7):
                 week.append(current)
@@ -4131,9 +4176,6 @@ def bulk_import():
                                         merged += 1
                             except Exception as e:
                                 errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
-                        
-                        if maint_added > 0 or maint_updated > 0:
-                            print(f"Processed {maint_added} new maintenance records and {maint_updated} updated maintenance records for machine '{machine_name}'")
                     
                     except Exception as e:
                         errors.append(f"Error processing machine row: {str(e)}")
