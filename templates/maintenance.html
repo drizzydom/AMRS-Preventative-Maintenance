@@ -7,65 +7,45 @@
 {% block content %}
 <div class="card">
     <div class="card-body">
-        <div class="row mb-4">
-            <div class="col-12">
-                <h4>Select a Machine</h4>
-                <form method="get" action="{{ url_for('record_maintenance') }}" class="d-flex">
-                    <select name="machine_id" class="form-select me-2" onchange="this.form.submit()">
-                        <option value="">-- Select Machine --</option>
-                        {% for machine in machines %}
-                            <option value="{{ machine.id }}" {% if machine.id == selected_machine_id %}selected{% endif %}>
-                                {{ machine.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    <noscript><button type="submit" class="btn btn-primary">Load</button></noscript>
-                </form>
-            </div>
-        </div>
+        <h4 class="card-title">Select a Machine</h4>
+        <form method="get" action="{{ url_for('record_maintenance') }}" class="d-flex mb-4">
+            <select name="machine_id" class="form-select me-2" onchange="this.form.submit()">
+                <option value="">-- Select Machine --</option>
+                {% for machine in machines %}
+                    <option value="{{ machine.id }}" {% if machine.id == selected_machine_id %}selected{% endif %}>
+                        {{ machine.name }}
+                    </option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit" class="btn btn-primary">Load</button></noscript>
+        </form>
 
         {% if selected_machine %}
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Machine Details</h5>
-                    </div>
-                    <div class="card-body">
-                        <p><strong>Name:</strong> {{ selected_machine.name }}</p>
-                        <p><strong>Site:</strong> {{ selected_machine.site.name }}</p>
-                        <p><strong>Description:</strong> {{ selected_machine.description }}</p>
-                    </div>
-                </div>
-            </div>
+        <div class="machine-details mb-4">
+            <h5>Machine Details</h5>
+            <p><strong>Name:</strong> {{ selected_machine.name }}</p>
+            <p><strong>Site:</strong> {{ selected_machine.site.name }}</p>
+            <p><strong>Description:</strong> {{ selected_machine.description }}</p>
         </div>
 
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Record Maintenance</h5>
-                    </div>
-                    <div class="card-body">
-                        <form method="post" action="{{ url_for('record_maintenance') }}">
-                            <input type="hidden" name="machine_id" value="{{ selected_machine_id }}">
-                            <div class="mb-3">
-                                <label for="maintenance_type" class="form-label">Maintenance Type</label>
-                                <input type="text" class="form-control" id="maintenance_type" name="maintenance_type" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="description" class="form-label">Description</label>
-                                <textarea class="form-control" id="description" name="description" rows="3"></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label for="date_performed" class="form-label">Date Performed</label>
-                                <input type="date" class="form-control" id="date_performed" name="date_performed" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Record Maintenance</button>
-                        </form>
-                    </div>
+        <div class="record-maintenance-form">
+            <h5>Record Maintenance</h5>
+            <form method="post" action="{{ url_for('record_maintenance') }}">
+                <input type="hidden" name="machine_id" value="{{ selected_machine_id }}">
+                <div class="mb-3">
+                    <label for="maintenance_type" class="form-label">Maintenance Type</label>
+                    <input type="text" class="form-control" id="maintenance_type" name="maintenance_type" required>
                 </div>
-            </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="date_performed" class="form-label">Date Performed</label>
+                    <input type="date" class="form-control" id="date_performed" name="date_performed" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Record Maintenance</button>
+            </form>
         </div>
         {% endif %}
     </div>
