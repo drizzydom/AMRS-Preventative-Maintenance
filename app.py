@@ -1465,6 +1465,10 @@ def audit_history_page():
                 )
     completions = query.all()
 
+    print(f"[DEBUG] Main audit history - Found {len(completions)} completions for {month}/{year}")
+    if completions:
+        print(f"[DEBUG] Sample completion: task_id={completions[0].audit_task_id}, machine_id={completions[0].machine_id}, date={completions[0].date}")
+
     # --- Build calendar weeks for the month ---
     import calendar
     cal = calendar.Calendar(firstweekday=6)  # Sunday start
@@ -1649,14 +1653,46 @@ def audit_history_print_view():
     # Get machine IDs
     machine_ids = [m.id for m in machines]
     
-    # Get audit task completions for the time period
+    # Use the same filtering logic as the main audit history route
     completions_query = AuditTaskCompletion.query.filter(
         AuditTaskCompletion.machine_id.in_(machine_ids),
         AuditTaskCompletion.date.between(start_date, end_date),
         AuditTaskCompletion.completed == True
-    ).order_by(AuditTaskCompletion.date)
+    )
     
-    completions = completions_query.all()
+    # Apply the same site/audit task filtering as the main route
+    if site_id:
+        site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
+        task_ids = [task.id for task in site_audit_tasks]
+        if task_ids:
+            completions_query = completions_query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+        else:
+            completions = []
+    else:
+        if not current_user.is_admin and available_sites:
+            site_ids = [site.id for site in available_sites]
+            site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
+            task_ids = [task.id for task in site_audit_tasks]
+            if task_ids:
+                completions_query = completions_query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+            else:
+                completions = []
+    
+    if 'completions' not in locals():
+        completions = completions_query.order_by(AuditTaskCompletion.date).all()
+    
+    # Debug information to help understand data availability
+    print(f"[DEBUG] Print view - Date range: {start_date} to {end_date}")
+    print(f"[DEBUG] Print view - Site filter: {site_id}, Machine filter: {machine_id}")
+    print(f"[DEBUG] Print view - Available sites: {len(available_sites)}")
+    print(f"[DEBUG] Print view - Found {len(machines)} machines, machine_ids: {machine_ids[:5] if machine_ids else []}...")
+    print(f"[DEBUG] Print view - Found {len(completions)} completions")
+    if completions:
+        completion_machine_ids = list(set(c.machine_id for c in completions))
+        print(f"[DEBUG] Print view - Completion machine IDs: {completion_machine_ids[:5]}...")
+        print(f"[DEBUG] Sample completion: task_id={completions[0].audit_task_id}, machine_id={completions[0].machine_id}, date={completions[0].date}")
+    else:
+        print(f"[DEBUG] Print view - No completions found")
     
     # Organize data by machine and date
     machine_data = {}
@@ -1702,6 +1738,10 @@ def audit_history_print_view():
     # Set available machines and display machines
     available_machines = machines
     display_machines = [machine for machine in machines if machine.id in machine_data]
+    
+    print(f"[DEBUG] Print view - machine_data keys: {list(machine_data.keys())}")
+    print(f"[DEBUG] Print view - display_machines: {len(display_machines)} out of {len(machines)} total machines")
+    print(f"[DEBUG] Print view - unique_tasks: {len(unique_tasks)}")
     
     # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
     all_tasks_per_machine = {}
