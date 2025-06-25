@@ -192,26 +192,26 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Search functionality
+        // Simple search functionality
         const searchInput = document.getElementById('search-pparts');
         if (searchInput) {
             searchInput.addEventListener('input', function() {
-                // Get current active filter
-                const activeButton = document.querySelector('.btn-group .btn.active');
-                let currentFilter = 'all';
+                const searchTerm = this.value.toLowerCase().trim();
+                const rows = document.querySelectorAll('.part-row');
                 
-                if (activeButton) {
-                    if (activeButton.classList.contains('btn-danger') || activeButton.classList.contains('btn-outline-danger')) {
-                        currentFilter = 'overdue';
-                    } else if (activeButton.classList.contains('btn-warning') || activeButton.classList.contains('btn-outline-warning')) {
-                        currentFilter = 'due-soon';
-                    } else if (activeButton.classList.contains('btn-success') || activeButton.classList.contains('btn-outline-success')) {
-                        currentFilter = 'ok';
+                rows.forEach(row => {
+                    if (searchTerm === '') {
+                        row.style.display = '';
+                    } else {
+                        // Simple text content search
+                        const rowText = row.textContent.toLowerCase();
+                        if (rowText.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
                     }
-                }
-                
-                // Re-apply filter with search
-                filterParts(currentFilter);
+                });
             });
         }
     });
@@ -237,25 +237,8 @@
             
             // Apply search filter if there's a search term
             if (shouldShow && searchTerm !== '') {
-                const partInfo = row.querySelector('.part-info');
-                let searchableText = '';
-                
-                if (partInfo) {
-                    const partName = partInfo.querySelector('.part-name');
-                    if (partName) searchableText += partName.textContent + ' ';
-                    
-                    const textElements = partInfo.querySelectorAll('.text-muted div');
-                    textElements.forEach(element => {
-                        searchableText += element.textContent + ' ';
-                    });
-                }
-                
-                const statusBadge = row.querySelector('.badge');
-                if (statusBadge) {
-                    searchableText += statusBadge.textContent + ' ';
-                }
-                
-                if (!searchableText.toLowerCase().includes(searchTerm)) {
+                const rowText = row.textContent.toLowerCase();
+                if (!rowText.includes(searchTerm)) {
                     shouldShow = false;
                 }
             }
