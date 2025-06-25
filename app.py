@@ -1626,7 +1626,7 @@ def audit_history_print_view():
     # Check permission to access the audit feature
     user_has_audit_access = current_user.is_admin or (
         current_user.is_authenticated and current_user.role and 
-        'audits.access' in (current_user.role.permissions or '')
+        current_user.role.permissions and 'audits.access' in current_user.role.permissions.split(',')
     )
     
     if not user_has_audit_access:
@@ -1710,6 +1710,23 @@ def audit_history_print_view():
         # Quick check: are there ANY completions in the database for any date?
         any_completions = AuditTaskCompletion.query.filter(AuditTaskCompletion.completed == True).count()
         print(f"[DEBUG] Print view - Total completed audits in database: {any_completions}")
+        
+        # Check if there are completions for May 2025 specifically
+        may_2025_start = date(2025, 5, 1)
+        may_2025_end = date(2025, 5, 31)
+        may_completions = AuditTaskCompletion.query.filter(
+            AuditTaskCompletion.date.between(may_2025_start, may_2025_end),
+            AuditTaskCompletion.completed == True
+        ).count()
+        print(f"[DEBUG] Print view - May 2025 completions in database: {may_completions}")
+        
+        # Check if there are completions for the exact machines we're querying
+        if machine_ids:
+            machine_any_date_completions = AuditTaskCompletion.query.filter(
+                AuditTaskCompletion.machine_id.in_(machine_ids),
+                AuditTaskCompletion.completed == True
+            ).count()
+            print(f"[DEBUG] Print view - Completions for these machines (any date): {machine_any_date_completions}")
     
     # Organize data by machine and date
     machine_data = {}
@@ -1760,6 +1777,11 @@ def audit_history_print_view():
     print(f"[DEBUG] Print view - display_machines: {len(display_machines)} out of {len(machines)} total machines")
     print(f"[DEBUG] Print view - unique_tasks: {len(unique_tasks)}")
     print(f"[DEBUG] Print view - Template will receive machines list with IDs: {[m.id for m in machines]}")
+    
+    # IMPORTANT: Pass display_machines to template instead of all machines
+    # This ensures only machines with audit data are shown
+    machines_for_template = display_machines if display_machines else machines
+    print(f"[DEBUG] Print view - Sending {len(machines_for_template)} machines to template")
     
     # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
     all_tasks_per_machine = {}
@@ -1813,7 +1835,7 @@ def audit_history_print_view():
         machine_data=machine_data,
         audit_tasks=audit_tasks,
         unique_tasks=unique_tasks,
-        machines=machines,  # Pass the list, not the dict
+        machines=machines_for_template,  # Pass only machines with data
         machines_dict=machines_dict,  # Also pass the dict for lookup
         users=users,
         sites=sites,
