@@ -193,45 +193,74 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Search functionality
-        const searchInput = document.getElementById('search-parts');
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
-            const rows = document.querySelectorAll('.part-row');
-            
-            rows.forEach(row => {
-                let shouldShow = false;
-                // Check all cell title attributes which contain the full text
-                row.querySelectorAll('td[title]').forEach(cell => {
-                    if (cell.getAttribute('title').toLowerCase().includes(searchTerm)) {
-                        shouldShow = true;
+        const searchInput = document.getElementById('search-pparts');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                // Get current active filter
+                const activeButton = document.querySelector('.btn-group .btn.active');
+                let currentFilter = 'all';
+                
+                if (activeButton) {
+                    if (activeButton.classList.contains('btn-danger') || activeButton.classList.contains('btn-outline-danger')) {
+                        currentFilter = 'overdue';
+                    } else if (activeButton.classList.contains('btn-warning') || activeButton.classList.contains('btn-outline-warning')) {
+                        currentFilter = 'due-soon';
+                    } else if (activeButton.classList.contains('btn-success') || activeButton.classList.contains('btn-outline-success')) {
+                        currentFilter = 'ok';
                     }
-                });
-                // Also check visible text
-                if (row.textContent.toLowerCase().includes(searchTerm)) {
-                    shouldShow = true;
                 }
                 
-                row.style.display = shouldShow ? '' : 'none';
+                // Re-apply filter with search
+                filterParts(currentFilter);
             });
-        });
+        }
     });
     
     // Filter parts by status
     function filterParts(status) {
         const rows = document.querySelectorAll('.part-row');
+        const searchTerm = document.getElementById('search-pparts').value.toLowerCase().trim();
         
         rows.forEach(row => {
-            if (status === 'all') {
-                row.style.display = '';
-            } else if (status === 'overdue' && row.classList.contains('part-overdue')) {
-                row.style.display = '';
-            } else if (status === 'due-soon' && row.classList.contains('part-due-soon')) {
-                row.style.display = '';
-            } else if (status === 'ok' && row.classList.contains('part-ok')) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
+            let shouldShow = true;
+            
+            // Apply status filter
+            if (status !== 'all') {
+                if (status === 'overdue' && !row.classList.contains('part-overdue')) {
+                    shouldShow = false;
+                } else if (status === 'due-soon' && !row.classList.contains('part-due-soon')) {
+                    shouldShow = false;
+                } else if (status === 'ok' && !row.classList.contains('part-ok')) {
+                    shouldShow = false;
+                }
             }
+            
+            // Apply search filter if there's a search term
+            if (shouldShow && searchTerm !== '') {
+                const partInfo = row.querySelector('.part-info');
+                let searchableText = '';
+                
+                if (partInfo) {
+                    const partName = partInfo.querySelector('.part-name');
+                    if (partName) searchableText += partName.textContent + ' ';
+                    
+                    const textElements = partInfo.querySelectorAll('.text-muted div');
+                    textElements.forEach(element => {
+                        searchableText += element.textContent + ' ';
+                    });
+                }
+                
+                const statusBadge = row.querySelector('.badge');
+                if (statusBadge) {
+                    searchableText += statusBadge.textContent + ' ';
+                }
+                
+                if (!searchableText.toLowerCase().includes(searchTerm)) {
+                    shouldShow = false;
+                }
+            }
+            
+            row.style.display = shouldShow ? '' : 'none';
         });
         
         // Update active button state
