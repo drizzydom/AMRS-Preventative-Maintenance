@@ -168,10 +168,22 @@
                                         {% for week in month_weeks %}
                                         <tr>
                                             {% for day in week %}
-                                            <td class="calendar-day {% if day == 0 %}empty-day{% endif %} {% if day == today.day and current_month == today.month and current_year == today.year %}today{% endif %}">
-                                                {% if day != 0 %}
-                                                <div class="date-number">{{ day }}</div>
-                                                {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day) %}
+                                            {% if day == 0 or day is none %}
+                                                {% set day_num = 0 %}
+                                                {% set day_obj = none %}
+                                            {% else %}
+                                                {% if day.day is defined %}
+                                                    {% set day_num = day.day %}
+                                                    {% set day_obj = day %}
+                                                {% else %}
+                                                    {% set day_num = day %}
+                                                    {% set day_obj = none %}
+                                                {% endif %}
+                                            {% endif %}
+                                            <td class="calendar-day {% if day_num == 0 %}empty-day{% endif %} {% if day_obj and day_obj == today or (day_num == today.day and current_month == today.month and current_year == today.year) %}today{% endif %}">
+                                                {% if day_num != 0 %}
+                                                <div class="date-number">{{ day_num }}</div>
+                                                {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day_num) %}
                                                 <div class="task-markers">
                                                     {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
                                                         {% set day_audit_tasks = {} %}
@@ -196,7 +208,7 @@
                                                         {% for bar in interval_bars[machine.id][task.id] %}
                                                           {% set bar_start = bar[0] %}
                                                           {% set bar_end = bar[1] %}
-                                                          {% set day_date_obj = datetime(current_year, current_month, day).date() %}
+                                                          {% set day_date_obj = datetime(current_year, current_month, day_num).date() %}
                                                           {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
                                                             <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
                                                           {% endif %}
@@ -288,10 +300,22 @@
                                             {% for week in month_weeks %}
                                             <tr>
                                                 {% for day in week %}
-                                                <td class="calendar-day {% if day == 0 %}empty-day{% endif %} {% if day == today.day and current_month == today.month and current_year == today.year %}today{% endif %}">
-                                                    {% if day != 0 %}
-                                                    <div class="date-number">{{ day }}</div>
-                                                    {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day) %}
+                                                {% if day == 0 or day is none %}
+                                                    {% set day_num = 0 %}
+                                                    {% set day_obj = none %}
+                                                {% else %}
+                                                    {% if day.day is defined %}
+                                                        {% set day_num = day.day %}
+                                                        {% set day_obj = day %}
+                                                    {% else %}
+                                                        {% set day_num = day %}
+                                                        {% set day_obj = none %}
+                                                    {% endif %}
+                                                {% endif %}
+                                                <td class="calendar-day {% if day_num == 0 %}empty-day{% endif %} {% if day_obj and day_obj == today or (day_num == today.day and current_month == today.month and current_year == today.year) %}today{% endif %}">
+                                                    {% if day_num != 0 %}
+                                                    <div class="date-number">{{ day_num }}</div>
+                                                    {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day_num) %}
                                                     <div class="task-markers">
                                                         {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
                                                             {% set day_audit_tasks = {} %}
@@ -316,7 +340,7 @@
                                                             {% for bar in interval_bars[machine.id][task.id] %}
                                                               {% set bar_start = bar[0] %}
                                                               {% set bar_end = bar[1] %}
-                                                              {% set day_date_obj = datetime(current_year, current_month, day).date() %}
+                                                              {% set day_date_obj = datetime(current_year, current_month, day_num).date() %}
                                                               {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
                                                                 <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
                                                               {% endif %}
