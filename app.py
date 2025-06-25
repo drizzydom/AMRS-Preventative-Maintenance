@@ -1496,6 +1496,8 @@ def audit_history_page():
         today=today,
         month=month,
         year=year,
+        current_month=month,  # Add current_month for template compatibility
+        current_year=year,    # Add current_year for template compatibility
         month_weeks=month_weeks,
         machine_data=machine_data,
         audit_tasks=audit_tasks,
