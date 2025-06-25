@@ -187,7 +187,145 @@
     font-size: 1em;
   }
 }
+
+/* Calendar Styles */
+.calendar-table {
+  width: 100%;
+}
+.calendar-table th,
+.calendar-table td {
+  border: 1px solid #dee2e6;
+  text-align: center;
+  vertical-align: top;
+}
+.calendar-table th {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  padding: 0.5rem;
+}
+.calendar-day {
+  height: 80px;
+  position: relative;
+  padding: 0.25rem;
+}
+.calendar-day.empty-day {
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
+.calendar-day.today {
+  background-color: #007bff !important;
+  color: white !important;
+}
+.date-number {
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+.task-markers {
+  position: absolute;
+  bottom: 5px;
+  left: 2px;
+  right: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+}
+.task-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.legend-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.5rem;
+}
 </style>
+                
+                <!-- Monthly Calendar View -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">{{ today.strftime('%B %Y') }} Audit Calendar</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-lg-9">
+                                <div class="monthly-calendar">
+                                    <table class="table table-bordered calendar-table">
+                                        <thead>
+                                            <tr class="calendar-header">
+                                                <th class="text-center">Sun</th>
+                                                <th class="text-center">Mon</th>
+                                                <th class="text-center">Tue</th>
+                                                <th class="text-center">Wed</th>
+                                                <th class="text-center">Thu</th>
+                                                <th class="text-center">Fri</th>
+                                                <th class="text-center">Sat</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% set calendar_weeks = get_calendar_weeks(today.year, today.month) %}
+                                            {% for week in calendar_weeks %}
+                                            <tr>
+                                                {% for day in week %}
+                                                {% if day.month != today.month %}
+                                                    {% set day_num = 0 %}
+                                                    {% set day_obj = none %}
+                                                {% else %}
+                                                    {% set day_num = day.day %}
+                                                    {% set day_obj = day %}
+                                                {% endif %}
+                                                <td class="calendar-day text-center {% if day_num == 0 %}empty-day{% endif %} {% if day_obj and day_obj == today %}today bg-primary text-white{% endif %}" style="height: 80px; position: relative;">
+                                                    {% if day_num != 0 %}
+                                                    <div class="date-number fw-bold">{{ day_num }}</div>
+                                                    {% set day_date = day_obj.strftime('%Y-%m-%d') %}
+                                                    <div class="task-markers d-flex flex-wrap justify-content-center" style="position: absolute; bottom: 5px; left: 2px; right: 2px;">
+                                                        {% for task in audit_tasks %}
+                                                            {% for machine in task.machines %}
+                                                                {% if month_completions.get((task.id, machine.id, day_date)) %}
+                                                                    <div class="task-marker rounded-circle me-1 mb-1" 
+                                                                         style="width: 8px; height: 8px; background-color: {{ task.color or '#007bff' }};" 
+                                                                         title="{{ task.name }} - {{ machine.name }}" 
+                                                                         data-bs-toggle="tooltip"></div>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endfor %}
+                                                    </div>
+                                                    {% endif %}
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-lg-3">
+                                <div class="calendar-legend">
+                                    <h6 class="legend-title">Legend</h6>
+                                    <div class="legend-items">
+                                        {% for task in audit_tasks %}
+                                            <div class="legend-item d-flex align-items-center mb-2">
+                                                <span class="legend-marker rounded-circle me-2" 
+                                                      style="width: 12px; height: 12px; background-color: {{ task.color or '#007bff' }};"></span>
+                                                <small>{{ task.name }}</small>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">Today's Audit Tasks</h5>
