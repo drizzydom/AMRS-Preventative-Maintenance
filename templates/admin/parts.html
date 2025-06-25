@@ -192,46 +192,58 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Search functionality
-        const searchInput = document.getElementById('search-parts');
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
-            const rows = document.querySelectorAll('.part-row');
-            
-            rows.forEach(row => {
-                let shouldShow = false;
-                // Check all cell title attributes which contain the full text
-                row.querySelectorAll('td[title]').forEach(cell => {
-                    if (cell.getAttribute('title').toLowerCase().includes(searchTerm)) {
-                        shouldShow = true;
+        // Simple search functionality
+        const searchInput = document.getElementById('search-pparts');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase().trim();
+                const rows = document.querySelectorAll('.part-row');
+                
+                rows.forEach(row => {
+                    if (searchTerm === '') {
+                        row.style.display = '';
+                    } else {
+                        // Simple text content search
+                        const rowText = row.textContent.toLowerCase();
+                        if (rowText.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
                     }
                 });
-                // Also check visible text
-                if (row.textContent.toLowerCase().includes(searchTerm)) {
-                    shouldShow = true;
-                }
-                
-                row.style.display = shouldShow ? '' : 'none';
             });
-        });
+        }
     });
     
     // Filter parts by status
     function filterParts(status) {
         const rows = document.querySelectorAll('.part-row');
+        const searchTerm = document.getElementById('search-pparts').value.toLowerCase().trim();
         
         rows.forEach(row => {
-            if (status === 'all') {
-                row.style.display = '';
-            } else if (status === 'overdue' && row.classList.contains('part-overdue')) {
-                row.style.display = '';
-            } else if (status === 'due-soon' && row.classList.contains('part-due-soon')) {
-                row.style.display = '';
-            } else if (status === 'ok' && row.classList.contains('part-ok')) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
+            let shouldShow = true;
+            
+            // Apply status filter
+            if (status !== 'all') {
+                if (status === 'overdue' && !row.classList.contains('part-overdue')) {
+                    shouldShow = false;
+                } else if (status === 'due-soon' && !row.classList.contains('part-due-soon')) {
+                    shouldShow = false;
+                } else if (status === 'ok' && !row.classList.contains('part-ok')) {
+                    shouldShow = false;
+                }
             }
+            
+            // Apply search filter if there's a search term
+            if (shouldShow && searchTerm !== '') {
+                const rowText = row.textContent.toLowerCase();
+                if (!rowText.includes(searchTerm)) {
+                    shouldShow = false;
+                }
+            }
+            
+            row.style.display = shouldShow ? '' : 'none';
         });
         
         // Update active button state

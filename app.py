@@ -6,6 +6,7 @@ import string
 import logging
 import signal
 import argparse
+import calendar
 from datetime import datetime, timedelta, date
 from functools import wraps
 import traceback
@@ -641,7 +642,6 @@ with app.app_context():
                 print("[APP] Column 'color' added to 'audit_tasks'.")
             else:
                 print("[APP] 'color' column already exists in 'audit_tasks'.")
-        # ...existing code...
         import expand_user_fields
     except Exception as e:
         print(f"[STARTUP] User field length expansion migration failed: {e}")
@@ -832,7 +832,8 @@ def inject_common_variables():
         'now': datetime.now(),
         'hasattr': hasattr,  # Add hasattr function to be available in templates
         'has_permission': has_permission,  # Add permission checking helper
-        'Role': Role  # Add Role class to template context so it can be used in templates
+        'Role': Role,  # Add Role class to template context so it can be used in templates
+        'safe_date': safe_date  # Add safe_date function for templates
     }
 
 def url_for_safe(endpoint, **values):
@@ -1055,7 +1056,7 @@ def admin_audit_history():
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
-    completions = AuditTaskCompletion.query.order_by(AuditTaskCompletion.completed_at.desc()).all()
+    completions = AuditTaskCompletion.query.filter_by(completed=True).order_by(AuditTaskCompletion.completed_at.desc()).all()
     audit_tasks = {t.id: t for t in AuditTask.query.all()}
     machines = {m.id: m for m in Machine.query.all()}
     users = {u.id: u for u in User.query.all()}
@@ -1237,7 +1238,58 @@ def audits_page():
             flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'warning')
         return redirect(url_for('audits_page'))
     
-    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility)
+    # Helper function for the template
+    def get_calendar_weeks(start, end):
+        """Get calendar weeks for the date range."""
+        # Handle both date objects and year/month integers
+        if isinstance(start, int) and isinstance(end, int):
+            # start is year, end is month
+            year, month = start, end
+            import calendar
+            start = date(year, month, 1)
+            # Get last day of the month
+            last_day = calendar.monthrange(year, month)[1]
+            end = date(year, month, last_day)
+        
+        # Find the first Sunday before or on the start date
+        first_day_week = start - timedelta(days=start.weekday() + 1)
+        if first_day_week.weekday() != 6:  # If not Sunday
+            first_day_week = start - timedelta(days=(start.weekday() + 1) % 7)
+        
+        # Find the last Saturday after or on the end date
+        last_day_week = end + timedelta(days=(5 - end.weekday()) % 7)
+        
+        # Generate weeks
+        weeks = []
+        current = first_day_week
+        while current <= last_day_week:
+            week = []
+            for _ in range(7):
+                week.append(current)
+                current = current + timedelta(days=1)
+            weeks.append(week)
+        
+        return weeks
+
+    # Get monthly completions for calendar view
+    from calendar import monthrange
+    month_start = date(today.year, today.month, 1)
+    month_end = date(today.year, today.month, monthrange(today.year, today.month)[1])
+    
+    monthly_completions = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.date >= month_start,
+        AuditTaskCompletion.date <= month_end,
+        AuditTaskCompletion.completed == True
+    ).all()
+    
+    # Build month_completions: {(task_id, machine_id, date_string): completion}
+    month_completions = {}
+    for completion in monthly_completions:
+        date_str = completion.date.strftime('%Y-%m-%d')
+        key = (completion.audit_task_id, completion.machine_id, date_str)
+        month_completions[key] = completion
+
+    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility, get_calendar_weeks=get_calendar_weeks, month_completions=month_completions)
 
 @app.route('/audit-history', methods=['GET'])
 @login_required
@@ -1342,7 +1394,8 @@ def audit_history_page():
     # Query completions for the selected month
     query = AuditTaskCompletion.query.filter(
         AuditTaskCompletion.date >= first_day,
-        AuditTaskCompletion.date <= last_day
+        AuditTaskCompletion.date <= last_day,
+        AuditTaskCompletion.completed == True
     )
     if site_id:
         site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
@@ -1352,7 +1405,30 @@ def audit_history_page():
         else:
             completions = []
             machine_data = {}
-            return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
+            return render_template('audit_history.html', 
+                completions=completions, 
+                month=month, 
+                year=year, 
+                current_month=month,
+                current_year=year,
+                month_weeks=[], 
+                machine_data=machine_data, 
+                audit_tasks={}, 
+                unique_tasks=[], 
+                machines={}, 
+                users={}, 
+                sites=sites, 
+                selected_site=site_id, 
+                selected_machine=selected_machine, 
+                available_months=available_months, 
+                available_machines=available_machines, 
+                selected_month=selected_month,
+                all_tasks_per_machine={},
+                interval_bars={},
+                display_machines=[],
+                get_calendar_weeks=lambda start, end: [],
+                today=today
+            )
     else:
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
@@ -1363,24 +1439,54 @@ def audit_history_page():
             else:
                 completions = []
                 machine_data = {}
-                return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
+                return render_template('audit_history.html', 
+                    completions=completions, 
+                    month=month, 
+                    year=year, 
+                    current_month=month,
+                    current_year=year,
+                    month_weeks=[], 
+                    machine_data=machine_data, 
+                    audit_tasks={}, 
+                    unique_tasks=[], 
+                    machines={}, 
+                    users={}, 
+                    sites=sites, 
+                    selected_site=site_id, 
+                    selected_machine=selected_machine, 
+                    available_months=available_months, 
+                    available_machines=available_machines, 
+                    selected_month=selected_month,
+                    all_tasks_per_machine={},
+                    interval_bars={},
+                    display_machines=[],
+                    get_calendar_weeks=lambda start, end: [],
+                    today=today
+                )
     completions = query.all()
+
+    print(f"[DEBUG] Main audit history - Date range: {first_day} to {last_day}")
+    print(f"[DEBUG] Main audit history - Site filter: {site_id}, Machine filter: {machine_id}")
+    print(f"[DEBUG] Main audit history - Found {len(completions)} completions for {month}/{year}")
+    if completions:
+        print(f"[DEBUG] Sample completion: task_id={completions[0].audit_task_id}, machine_id={completions[0].machine_id}, date={completions[0].date}")
 
     # --- Build calendar weeks for the month ---
     import calendar
     cal = calendar.Calendar(firstweekday=6)  # Sunday start
     month_weeks = list(cal.monthdayscalendar(year, month))
 
-    # --- Build machine_data: {machine_id: {date: [completions]}} ---
+    # --- Build machine_data: {machine_id: {date_string: [completions]}} ---
     machine_data = {}
     for completion in completions:
         m_id = completion.machine_id
-        d = completion.date
-        if m_id not in machine_data:
+        d = completion.date.strftime('%Y-%m-%d') if completion.date else None
+        if d and m_id not in machine_data:
             machine_data[m_id] = {}
-        if d not in machine_data[m_id]:
+        if d and d not in machine_data[m_id]:
             machine_data[m_id][d] = []
-        machine_data[m_id][d].append(completion)
+        if d:
+            machine_data[m_id][d].append(completion)
 
     # --- Build audit_tasks and unique_tasks for legend ---
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
@@ -1419,11 +1525,52 @@ def audit_history_page():
     machines_dict = {machine.id: machine for machine in available_machines}
     users = {user.id: user for user in User.query.all()}
 
+    # Helper function for the template
+    def get_calendar_weeks(start, end):
+        """Get calendar weeks for the date range."""
+        # Handle both date objects and year/month integers
+        if isinstance(start, int) and isinstance(end, int):
+            # start is year, end is month
+            year, month = start, end
+            import calendar
+            start = date(year, month, 1)
+            # Get last day of the month
+            last_day = calendar.monthrange(year, month)[1]
+            end = date(year, month, last_day)
+        
+        # Find the first Sunday before or on the start date
+        first_day_week = start - timedelta(days=start.weekday() + 1)
+        if first_day_week.weekday() != 6:  # If not Sunday
+            first_day_week = start - timedelta(days=(start.weekday() + 1) % 7)
+        
+        # Find the last Saturday after or on the end date
+        last_day_week = end + timedelta(days=(5 - end.weekday()) % 7)
+        
+        # Generate weeks
+        weeks = []
+        current = first_day_week
+        while current <= last_day_week:
+            week = []
+            for _ in range(7):
+                week.append(current)
+                current = current + timedelta(days=1)
+            weeks.append(week)
+        
+        return weeks
+
+    # Determine which machines to display (machines with audit data)
+    display_machines = []
+    for machine in available_machines:
+        if machine.id in machine_data:
+            display_machines.append(machine)
+    
     return render_template('audit_history.html',
         completions=completions,
         today=today,
         month=month,
         year=year,
+        current_month=month,  # Add current_month for template compatibility
+        current_year=year,    # Add current_year for template compatibility
         month_weeks=month_weeks,
         machine_data=machine_data,
         audit_tasks=audit_tasks,
@@ -1437,7 +1584,9 @@ def audit_history_page():
         available_machines=available_machines,
         selected_month=selected_month,
         all_tasks_per_machine=all_tasks_per_machine,
-        interval_bars=interval_bars
+        interval_bars=interval_bars,
+        display_machines=display_machines,  # <-- Add the missing display_machines variable
+        get_calendar_weeks=get_calendar_weeks  # <-- Pass the function to the template
     )
 
 @app.route('/audit-history/print-view')
@@ -1448,6 +1597,13 @@ def audit_history_print_view():
     site_id = request.args.get('site_id', None, type=int)
     machine_id = request.args.get('machine_id', None, type=int)
     
+    # Debug: Show what parameters we received
+    print(f"[DEBUG] Print view called with parameters:")
+    print(f"[DEBUG] - site_id: {site_id}")
+    print(f"[DEBUG] - machine_id: {machine_id}")
+    print(f"[DEBUG] - month_year: {request.args.get('month_year')}")
+    print(f"[DEBUG] - All request args: {dict(request.args)}")
+    
     # Date range: use month_year if provided, else fallback to the current month
     month_year = request.args.get('month_year')
     from calendar import monthrange
@@ -1457,17 +1613,20 @@ def audit_history_print_view():
             year, month = map(int, month_year.split('-'))
             start_date = date(year, month, 1)
             end_date = date(year, month, monthrange(year, month)[1])
-        except Exception:
+            print(f"[DEBUG] Print view - Parsed month_year '{month_year}' to year={year}, month={month}")
+        except Exception as e:
+            print(f"[DEBUG] Print view - Failed to parse month_year '{month_year}': {e}")
             start_date = today.replace(day=1)
             end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     else:
+        print(f"[DEBUG] Print view - No month_year provided, using current month")
         start_date = today.replace(day=1)
         end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     
     # Check permission to access the audit feature
     user_has_audit_access = current_user.is_admin or (
         current_user.is_authenticated and current_user.role and 
-        'audits.access' in (current_user.role.permissions or '')
+        current_user.role.permissions and 'audits.access' in current_user.role.permissions.split(',')
     )
     
     if not user_has_audit_access:
@@ -1503,38 +1662,126 @@ def audit_history_print_view():
     # Get the machines
     machines = machines_query.order_by(Machine.name).all()
     
-    # Get audit task completions for the time period
-    start_datetime = datetime.combine(start_date, datetime.min.time())
-    end_datetime = datetime.combine(end_date, datetime.max.time())
-    
     # Get machine IDs
     machine_ids = [m.id for m in machines]
     
-    # Get audit task completions
+    # Use the same filtering logic as the main audit history route
     completions_query = AuditTaskCompletion.query.filter(
         AuditTaskCompletion.machine_id.in_(machine_ids),
-        AuditTaskCompletion.created_at.between(start_datetime, end_datetime)
-    ).order_by(AuditTaskCompletion.created_at)
+        AuditTaskCompletion.date.between(start_date, end_date),
+        AuditTaskCompletion.completed == True
+    )
     
-    completions = completions_query.all()
+    # Apply the same site/audit task filtering as the main route
+    if site_id:
+        site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
+        task_ids = [task.id for task in site_audit_tasks]
+        if task_ids:
+            completions_query = completions_query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+        else:
+            completions = []
+    else:
+        if not current_user.is_admin and available_sites:
+            site_ids = [site.id for site in available_sites]
+            site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
+            task_ids = [task.id for task in site_audit_tasks]
+            if task_ids:
+                completions_query = completions_query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+            else:
+                completions = []
+    
+    if 'completions' not in locals():
+        completions = completions_query.order_by(AuditTaskCompletion.date).all()
+    
+    # Debug information to help understand data availability
+    print(f"[DEBUG] Print view - Date range: {start_date} to {end_date}")
+    print(f"[DEBUG] Print view - Site filter: {site_id}, Machine filter: {machine_id}")
+    print(f"[DEBUG] Print view - Available sites: {len(available_sites)}")
+    print(f"[DEBUG] Print view - Found {len(machines)} machines, machine_ids: {machine_ids[:5] if machine_ids else []}...")
+    print(f"[DEBUG] Print view - Found {len(completions)} completions")
+    if completions:
+        completion_machine_ids = list(set(c.machine_id for c in completions))
+        completion_dates = list(set(c.date.strftime('%Y-%m-%d') for c in completions))
+        print(f"[DEBUG] Print view - Completion machine IDs: {completion_machine_ids[:5]}...")
+        print(f"[DEBUG] Print view - Completion dates: {completion_dates[:5]}...")
+        print(f"[DEBUG] Sample completion: task_id={completions[0].audit_task_id}, machine_id={completions[0].machine_id}, date={completions[0].date}")
+    else:
+        print(f"[DEBUG] Print view - No completions found")
+        # Quick check: are there ANY completions in the database for any date?
+        any_completions = AuditTaskCompletion.query.filter(AuditTaskCompletion.completed == True).count()
+        print(f"[DEBUG] Print view - Total completed audits in database: {any_completions}")
+        
+        # Check if there are completions for May 2025 specifically
+        may_2025_start = date(2025, 5, 1)
+        may_2025_end = date(2025, 5, 31)
+        may_completions = AuditTaskCompletion.query.filter(
+            AuditTaskCompletion.date.between(may_2025_start, may_2025_end),
+            AuditTaskCompletion.completed == True
+        ).count()
+        print(f"[DEBUG] Print view - May 2025 completions in database: {may_completions}")
+        
+        # Check if there are completions for the exact machines we're querying
+        if machine_ids:
+            machine_any_date_completions = AuditTaskCompletion.query.filter(
+                AuditTaskCompletion.machine_id.in_(machine_ids),
+                AuditTaskCompletion.completed == True
+            ).count()
+            print(f"[DEBUG] Print view - Completions for these machines (any date): {machine_any_date_completions}")
     
     # Organize data by machine and date
     machine_data = {}
     for completion in completions:
-        # Get the date string from the completion date
-        date_str = completion.created_at.date().strftime('%Y-%m-%d');
+        # Get the date string from the completion date (use the same field as main route)
+        date_str = completion.date.strftime('%Y-%m-%d') if completion.date else None
         
         # Initialize machine entry if not exists
-        if completion.machine_id not in machine_data:
-            machine_data[completion.machine_id] = {};
+        if date_str and completion.machine_id not in machine_data:
+            machine_data[completion.machine_id] = {}
         # Initialize date entry if not exists
-        if date_str not in machine_data[completion.machine_id]:
-            machine_data[completion.machine_id][date_str] = [];
+        if date_str and date_str not in machine_data[completion.machine_id]:
+            machine_data[completion.machine_id][date_str] = []
         # Add completion to the appropriate machine/date
-        machine_data[completion.machine_id][date_str].append(completion);
+        if date_str:
+            machine_data[completion.machine_id][date_str].append(completion)
 
     # Get all audit tasks for reference
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
+    
+    # Extract month and year from date range for template compatibility
+    month = start_date.month
+    year = start_date.year
+    
+    # Build calendar weeks for the month
+    import calendar
+    cal = calendar.Calendar(firstweekday=6)  # Sunday start
+    month_weeks = list(cal.monthdayscalendar(year, month))
+    
+    # Build unique_tasks for legend
+    unique_tasks = [audit_tasks[tid] for tid in {completion.audit_task_id for completion in completions if completion.audit_task_id in audit_tasks}]
+    
+    # Get sites for template
+    sites = available_sites
+    
+    # Set selected values for template
+    selected_machine = machine_id if machine_id else ''
+    selected_month = f"{year:04d}-{month:02d}"
+    
+    # Generate available months (simplified for print view)
+    available_months = [{'value': selected_month, 'display': f"{calendar.month_name[month]} {year}"}]
+    
+    # Set available machines and display machines
+    available_machines = machines
+    display_machines = [machine for machine in machines if machine.id in machine_data]
+    
+    print(f"[DEBUG] Print view - machine_data keys: {list(machine_data.keys())}")
+    print(f"[DEBUG] Print view - display_machines: {len(display_machines)} out of {len(machines)} total machines")
+    print(f"[DEBUG] Print view - unique_tasks: {len(unique_tasks)}")
+    print(f"[DEBUG] Print view - Template will receive machines list with IDs: {[m.id for m in machines]}")
+    
+    # IMPORTANT: Pass display_machines to template instead of all machines
+    # This ensures only machines with audit data are shown
+    machines_for_template = display_machines if display_machines else machines
+    print(f"[DEBUG] Print view - Sending {len(machines_for_template)} machines to template")
     
     # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
     all_tasks_per_machine = {}
@@ -1551,26 +1798,24 @@ def audit_history_print_view():
                 # We'll keep this empty for now, just making sure the structure exists
                 pass
     
-    # Helper functions for the template
-    def get_date_range(start, end):
-        """Get a list of dates between start and end, inclusive."""
-        delta = end - start
-        return [start + timedelta(days=i) for i in range(delta.days + 1)]
-    
+    machines_dict = {machine.id: machine for machine in machines}
+    users = {user.id: user for user in User.query.all()}
+
+    # Helper function for the template
     def get_calendar_weeks(start, end):
         """Get calendar weeks for the date range."""
         # Find the first Sunday before or on the start date
-        first_day = start - timedelta(days=start.weekday() + 1)
-        if first_day.weekday() != 6:  # If not Sunday
-            first_day = start - timedelta(days=(start.weekday() + 1) % 7)
+        first_day_week = start - timedelta(days=start.weekday() + 1)
+        if first_day_week.weekday() != 6:  # If not Sunday
+            first_day_week = start - timedelta(days=(start.weekday() + 1) % 7)
         
         # Find the last Saturday after or on the end date
-        last_day = end + timedelta(days=(5 - end.weekday()) % 7)
+        last_day_week = end + timedelta(days=(5 - end.weekday()) % 7)
         
         # Generate weeks
         weeks = []
-        current = first_day
-        while current <= last_day:
+        current = first_day_week
+        while current <= last_day_week:
             week = []
             for _ in range(7):
                 week.append(current)
@@ -1579,20 +1824,32 @@ def audit_history_print_view():
         
         return weeks
     
-    # Render the template directly for printing
-    return render_template(
-        'audit_history_pdf.html',
-        machines=machines,
+    return render_template('audit_history_pdf.html',
+        completions=completions,
+        today=today,
+        month=month,
+        year=year,
+        current_month=month,  # Add current_month for template compatibility
+        current_year=year,    # Add current_year for template compatibility
+        month_weeks=month_weeks,
         machine_data=machine_data,
         audit_tasks=audit_tasks,
-        today=today,
-        start_date=start_date,
-        end_date=end_date,
-        completions=completions,
-        get_date_range=get_date_range,
-        get_calendar_weeks=get_calendar_weeks,
+        unique_tasks=unique_tasks,
+        machines=machines_for_template,  # Pass only machines with data
+        machines_dict=machines_dict,  # Also pass the dict for lookup
+        users=users,
+        sites=sites,
+        selected_site=site_id,
+        selected_machine=selected_machine,
+        available_months=available_months,
+        available_machines=available_machines,
+        selected_month=selected_month,
         all_tasks_per_machine=all_tasks_per_machine,
         interval_bars=interval_bars,
+        display_machines=display_machines,
+        get_calendar_weeks=get_calendar_weeks,
+        start_date=start_date,
+        end_date=end_date,
         current_user=current_user,
         datetime=datetime,
         timedelta=timedelta
@@ -1783,6 +2040,7 @@ def edit_user(user_id):
             db.session.rollback()
             app.logger.error(f"Error updating user: {e}")
             flash(f'Error updating user: {str(e)}', 'danger')
+
     
     # For GET request, show the edit form
     return render_template('edit_user.html', 
@@ -2819,7 +3077,10 @@ def manage_machines():
         else:
             sites = current_user.sites
             site_ids = [site.id for site in sites]
-            accessible_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            accessible_machines = Machine.query.filter(
+                Machine.site_id.in_(site_ids),
+                Machine.decommissioned == False
+            ).all()
             
         machine_ids = [machine.id for machine in accessible_machines]
         
@@ -4100,38 +4361,20 @@ def bulk_import():
                                 part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
                                 
                                 if not part:
-                                    # Find the part by looking through the imported parts data first
-                                    for part_data in parts_data:
-                                        if part_data.get('name') == part_name:
-                                            part = Part.query.filter_by(name=part_name, machine_id=machine.id).first()
-                                            break
+                                    # If part doesn't exist, create it
+                                    freq_value = record.get('maintenance_frequency', 365)
+                                    freq_unit = record.get('maintenance_unit', 'day')
                                     
-                                    # If still not found, create the part
-                                    if not part:
-                                        # Try to find part info from the parts_data that was extracted
-                                        matching_part_data = next((p for p in parts_data if p.get('name') == part_name), None)
-                                        
-                                        if matching_part_data:
-                                            part = Part(
-                                                name=part_name,
-                                                description=matching_part_data.get('description', f'Auto-created for maintenance import'),
-                                                machine_id=machine.id,
-                                                maintenance_frequency=matching_part_data.get('maintenance_frequency', 365),
-                                                maintenance_unit=matching_part_data.get('maintenance_unit', 'day')
-                                            )
-                                        else:
-                                            # Fallback part creation
-                                            part = Part(
-                                                name=part_name,
-                                                description=f'Auto-created for maintenance import',
-                                                machine_id=machine.id,
-                                                maintenance_frequency=365,
-                                                maintenance_unit='day'
-                                            )
-                                        
-                                        db.session.add(part)
-                                        db.session.flush()  # Get the ID
-
+                                    part = Part(
+                                        name=part_name,
+                                        description=record.get('description', f'Auto-created for maintenance import'),
+                                        machine_id=machine.id,
+                                        maintenance_frequency=freq_value,
+                                        maintenance_unit=freq_unit
+                                    )
+                                    db.session.add(part)
+                                    db.session.flush()  # Get the ID
+                                
                                 # Use smart maintenance record creation with deduplication
                                 maintenance, maint_status = find_or_create_maintenance(record, machine, part)
                                 
@@ -4145,9 +4388,6 @@ def bulk_import():
                                         merged += 1
                             except Exception as e:
                                 errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
-                        
-                        if maint_added > 0 or maint_updated > 0:
-                            print(f"Processed {maint_added} new maintenance records and {maint_updated} updated maintenance records for machine '{machine_name}'")
                     
                     except Exception as e:
                         errors.append(f"Error processing machine row: {str(e)}")
@@ -4212,7 +4452,7 @@ def bulk_import():
                                     elif "Found" in status:
                                         merged += 1
                         else:
-                            # Fallback: try to extract from top-level MaintenanceData if no Parts array
+                            # Fallback for machines without Parts array - use main maintenance data
                             if 'MaintenanceData' in row:
                                 maint_data = row['MaintenanceData']
                                 part_name = maint_data.get('Maintenance Done', 'General Maintenance')
@@ -4565,6 +4805,19 @@ def update_part_maintenance_dates(part):
         # No maintenance records found, clear the dates
         part.last_maintenance = None
         part.next_maintenance = None
+
+def safe_date(year, month, day):
+    """Safely create a date object, returning None if the date is invalid."""
+    from datetime import date
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+@app.context_processor
+def inject_safe_date_utility():
+    """Inject the safe_date function into the template context."""
+    return dict(safe_date=safe_date)
 
 
 
