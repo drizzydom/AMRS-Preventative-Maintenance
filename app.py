@@ -1465,6 +1465,8 @@ def audit_history_page():
                 )
     completions = query.all()
 
+    print(f"[DEBUG] Main audit history - Date range: {first_day} to {last_day}")
+    print(f"[DEBUG] Main audit history - Site filter: {site_id}, Machine filter: {machine_id}")
     print(f"[DEBUG] Main audit history - Found {len(completions)} completions for {month}/{year}")
     if completions:
         print(f"[DEBUG] Sample completion: task_id={completions[0].audit_task_id}, machine_id={completions[0].machine_id}, date={completions[0].date}")
@@ -1595,6 +1597,13 @@ def audit_history_print_view():
     site_id = request.args.get('site_id', None, type=int)
     machine_id = request.args.get('machine_id', None, type=int)
     
+    # Debug: Show what parameters we received
+    print(f"[DEBUG] Print view called with parameters:")
+    print(f"[DEBUG] - site_id: {site_id}")
+    print(f"[DEBUG] - machine_id: {machine_id}")
+    print(f"[DEBUG] - month_year: {request.args.get('month_year')}")
+    print(f"[DEBUG] - All request args: {dict(request.args)}")
+    
     # Date range: use month_year if provided, else fallback to the current month
     month_year = request.args.get('month_year')
     from calendar import monthrange
@@ -1604,10 +1613,13 @@ def audit_history_print_view():
             year, month = map(int, month_year.split('-'))
             start_date = date(year, month, 1)
             end_date = date(year, month, monthrange(year, month)[1])
-        except Exception:
+            print(f"[DEBUG] Print view - Parsed month_year '{month_year}' to year={year}, month={month}")
+        except Exception as e:
+            print(f"[DEBUG] Print view - Failed to parse month_year '{month_year}': {e}")
             start_date = today.replace(day=1)
             end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     else:
+        print(f"[DEBUG] Print view - No month_year provided, using current month")
         start_date = today.replace(day=1)
         end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
     
@@ -1689,10 +1701,15 @@ def audit_history_print_view():
     print(f"[DEBUG] Print view - Found {len(completions)} completions")
     if completions:
         completion_machine_ids = list(set(c.machine_id for c in completions))
+        completion_dates = list(set(c.date.strftime('%Y-%m-%d') for c in completions))
         print(f"[DEBUG] Print view - Completion machine IDs: {completion_machine_ids[:5]}...")
+        print(f"[DEBUG] Print view - Completion dates: {completion_dates[:5]}...")
         print(f"[DEBUG] Sample completion: task_id={completions[0].audit_task_id}, machine_id={completions[0].machine_id}, date={completions[0].date}")
     else:
         print(f"[DEBUG] Print view - No completions found")
+        # Quick check: are there ANY completions in the database for any date?
+        any_completions = AuditTaskCompletion.query.filter(AuditTaskCompletion.completed == True).count()
+        print(f"[DEBUG] Print view - Total completed audits in database: {any_completions}")
     
     # Organize data by machine and date
     machine_data = {}
@@ -1742,6 +1759,7 @@ def audit_history_print_view():
     print(f"[DEBUG] Print view - machine_data keys: {list(machine_data.keys())}")
     print(f"[DEBUG] Print view - display_machines: {len(display_machines)} out of {len(machines)} total machines")
     print(f"[DEBUG] Print view - unique_tasks: {len(unique_tasks)}")
+    print(f"[DEBUG] Print view - Template will receive machines list with IDs: {[m.id for m in machines]}")
     
     # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
     all_tasks_per_machine = {}
