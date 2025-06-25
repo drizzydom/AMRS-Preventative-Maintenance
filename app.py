@@ -1619,7 +1619,6 @@ def audit_history_print_view():
         all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
 
     # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
-    from collections import defaultdict
     interval_bars = defaultdict(lambda: defaultdict(list))
     for machine in machines:
         for task in all_tasks_per_machine[machine.id]:
@@ -1628,12 +1627,10 @@ def audit_history_print_view():
                 # We'll keep this empty for now, just making sure the structure exists
                 pass
     
-    # Helper functions for the template
-    def get_date_range(start, end):
-        """Get a list of dates between start and end, inclusive."""
-        delta = end - start
-        return [start + timedelta(days=i) for i in range(delta.days + 1)]
-    
+    machines_dict = {machine.id: machine for machine in machines}
+    users = {user.id: user for user in User.query.all()}
+
+    # Helper function for the template
     def get_calendar_weeks(start, end):
         """Get calendar weeks for the date range."""
         # Find the first Sunday before or on the start date
@@ -1656,23 +1653,29 @@ def audit_history_print_view():
         
         return weeks
     
-    # Render the template directly for printing
-    return render_template(
-        'audit_history_pdf.html',
-        machines=machines,
+    return render_template('audit_history_pdf.html',
+        completions=completions,
+        today=today,
+        month=month,
+        year=year,
+        current_month=month,  # Add current_month for template compatibility
+        current_year=year,    # Add current_year for template compatibility
+        month_weeks=month_weeks,
         machine_data=machine_data,
         audit_tasks=audit_tasks,
-        today=today,
-        start_date=start_date,
-        end_date=end_date,
-        completions=completions,
-        get_date_range=get_date_range,
-        get_calendar_weeks=get_calendar_weeks,
+        unique_tasks=unique_tasks,
+        machines=machines_dict,
+        users=users,
+        sites=sites,
+        selected_site=site_id,
+        selected_machine=selected_machine,
+        available_months=available_months,
+        available_machines=available_machines,
+        selected_month=selected_month,
         all_tasks_per_machine=all_tasks_per_machine,
         interval_bars=interval_bars,
-        current_user=current_user,
-        datetime=datetime,
-        timedelta=timedelta
+        display_machines=display_machines,  # <-- Add the missing display_machines variable
+        get_calendar_weeks=get_calendar_weeks  # <-- Pass the function to the template
     )
 
 @app.route('/admin/users', methods=['GET', 'POST'])
@@ -1860,6 +1863,7 @@ def edit_user(user_id):
             db.session.rollback()
             app.logger.error(f"Error updating user: {e}")
             flash(f'Error updating user: {str(e)}', 'danger')
+
     
     # For GET request, show the edit form
     return render_template('edit_user.html', 
@@ -4271,7 +4275,7 @@ def bulk_import():
                                     elif "Found" in status:
                                         merged += 1
                         else:
-                            # Fallback: try to extract from top-level MaintenanceData if no Parts array
+                            # Fallback for machines without Parts array - use main maintenance data
                             if 'MaintenanceData' in row:
                                 maint_data = row['MaintenanceData']
                                 part_name = maint_data.get('Maintenance Done', 'General Maintenance')
@@ -4624,6 +4628,19 @@ def update_part_maintenance_dates(part):
         # No maintenance records found, clear the dates
         part.last_maintenance = None
         part.next_maintenance = None
+
+def safe_date(year, month, day):
+    """Safely create a date object, returning None if the date is invalid."""
+    from datetime import date
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+@app.context_processor
+def inject_safe_date_utility():
+    """Inject the safe_date function into the template context."""
+    return dict(safe_date=safe_date)
 
 
 
