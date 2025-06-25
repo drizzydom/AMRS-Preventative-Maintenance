@@ -9,17 +9,7 @@
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
     <div class="container-fluid">
-      {% for category, message                                                               {% set bar_start = bar[0] %}
-                                                              {% set bar_end = bar[1] %}
-                                                              {% if day_obj %}
-                                                                {% set day_date_obj = day_obj %}
-                                                              {% elif day_num > 0 %}
-                                                                {# Skip interval check for integer days to avoid date construction errors #}
-                                                                {% set day_date_obj = none %}
-                                                              {% else %}
-                                                                {% set day_date_obj = none %}
-                                                              {% endif %}
-                                                              {% if day_date_obj and day_date_obj >= bar_start and day_date_obj <= bar_end %}essages %}
+      {% for category, message in messages %}
         <div class="alert alert-{{ category }} alert-dismissible fade show mt-2" role="alert">
           {{ message }}
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
