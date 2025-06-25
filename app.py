@@ -832,7 +832,8 @@ def inject_common_variables():
         'now': datetime.now(),
         'hasattr': hasattr,  # Add hasattr function to be available in templates
         'has_permission': has_permission,  # Add permission checking helper
-        'Role': Role  # Add Role class to template context so it can be used in templates
+        'Role': Role,  # Add Role class to template context so it can be used in templates
+        'safe_date': safe_date  # Add safe_date function for templates
     }
 
 def url_for_safe(endpoint, **values):
@@ -1270,7 +1271,25 @@ def audits_page():
         
         return weeks
 
-    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility, get_calendar_weeks=get_calendar_weeks)
+    # Get monthly completions for calendar view
+    from calendar import monthrange
+    month_start = date(today.year, today.month, 1)
+    month_end = date(today.year, today.month, monthrange(today.year, today.month)[1])
+    
+    monthly_completions = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.date >= month_start,
+        AuditTaskCompletion.date <= month_end,
+        AuditTaskCompletion.completed == True
+    ).all()
+    
+    # Build month_completions: {(task_id, machine_id, date_string): completion}
+    month_completions = {}
+    for completion in monthly_completions:
+        date_str = completion.date.strftime('%Y-%m-%d')
+        key = (completion.audit_task_id, completion.machine_id, date_str)
+        month_completions[key] = completion
+
+    return render_template('audits.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility, get_calendar_weeks=get_calendar_weeks, month_completions=month_completions)
 
 @app.route('/audit-history', methods=['GET'])
 @login_required
@@ -1451,16 +1470,17 @@ def audit_history_page():
     cal = calendar.Calendar(firstweekday=6)  # Sunday start
     month_weeks = list(cal.monthdayscalendar(year, month))
 
-    # --- Build machine_data: {machine_id: {date: [completions]}} ---
+    # --- Build machine_data: {machine_id: {date_string: [completions]}} ---
     machine_data = {}
     for completion in completions:
         m_id = completion.machine_id
-        d = completion.date
-        if m_id not in machine_data:
+        d = completion.date.strftime('%Y-%m-%d') if completion.date else None
+        if d and m_id not in machine_data:
             machine_data[m_id] = {}
-        if d not in machine_data[m_id]:
+        if d and d not in machine_data[m_id]:
             machine_data[m_id][d] = []
-        machine_data[m_id][d].append(completion)
+        if d:
+            machine_data[m_id][d].append(completion)
 
     # --- Build audit_tasks and unique_tasks for legend ---
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
@@ -1626,36 +1646,33 @@ def audit_history_print_view():
     # Get the machines
     machines = machines_query.order_by(Machine.name).all()
     
-    # Get audit task completions for the time period
-    start_datetime = datetime.combine(start_date, datetime.min.time())
-    end_datetime = datetime.combine(end_date, datetime.max.time())
-    
     # Get machine IDs
     machine_ids = [m.id for m in machines]
     
-    # Get audit task completions
+    # Get audit task completions for the time period
     completions_query = AuditTaskCompletion.query.filter(
         AuditTaskCompletion.machine_id.in_(machine_ids),
-        AuditTaskCompletion.created_at.between(start_datetime, end_datetime),
+        AuditTaskCompletion.date.between(start_date, end_date),
         AuditTaskCompletion.completed == True
-    ).order_by(AuditTaskCompletion.created_at)
+    ).order_by(AuditTaskCompletion.date)
     
     completions = completions_query.all()
     
     # Organize data by machine and date
     machine_data = {}
     for completion in completions:
-        # Get the date string from the completion date
-        date_str = completion.created_at.date().strftime('%Y-%m-%d');
+        # Get the date string from the completion date (use the same field as main route)
+        date_str = completion.date.strftime('%Y-%m-%d') if completion.date else None
         
         # Initialize machine entry if not exists
-        if completion.machine_id not in machine_data:
-            machine_data[completion.machine_id] = {};
+        if date_str and completion.machine_id not in machine_data:
+            machine_data[completion.machine_id] = {}
         # Initialize date entry if not exists
-        if date_str not in machine_data[completion.machine_id]:
-            machine_data[completion.machine_id][date_str] = [];
+        if date_str and date_str not in machine_data[completion.machine_id]:
+            machine_data[completion.machine_id][date_str] = []
         # Add completion to the appropriate machine/date
-        machine_data[completion.machine_id][date_str].append(completion);
+        if date_str:
+            machine_data[completion.machine_id][date_str].append(completion)
 
     # Get all audit tasks for reference
     audit_tasks = {task.id: task for task in AuditTask.query.all()}

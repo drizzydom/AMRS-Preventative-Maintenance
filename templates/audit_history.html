@@ -180,7 +180,7 @@
                                                     {% set day_obj = none %}
                                                 {% endif %}
                                             {% endif %}
-                                            <td class="calendar-day {% if day_num == 0 %}empty-day{% endif %} {% if day_obj and day_obj == today or (day_num == today.day and current_month == today.month and current_year == today.year) %}today{% endif %}">
+                                            <td class="calendar-day {% if day_num == 0 %}empty-day{% endif %} {% if day_obj and day_obj == today %}today{% endif %}">
                                                 {% if day_num != 0 %}
                                                 <div class="date-number">{{ day_num }}</div>
                                                 {% if day_obj %}
@@ -279,7 +279,7 @@
                     <!-- Certification Footer -->
                     <div class="certification-footer">
                         This document certifies that all recorded maintenance tasks have been performed according to 
-                        Accurate Machine Repair Preventative Maintenance standards and protocols. Report ID: {{ '%Y%m%d%H%M%S'|format_datetime }}
+                        Accurate Machine Repair Preventative Maintenance standards and protocols. Report ID: {{ datetime.now().strftime('%Y%m%d%H%M%S') }}
                     </div>
                 </div>
                 {% endfor %}
@@ -330,7 +330,7 @@
                                                         {% set day_obj = none %}
                                                     {% endif %}
                                                 {% endif %}
-                                                <td class="calendar-day {% if day_num == 0 %}empty-day{% endif %} {% if day_obj and day_obj == today or (day_num == today.day and current_month == today.month and current_year == today.year) %}today{% endif %}">
+                                                <td class="calendar-day {% if day_num == 0 %}empty-day{% endif %} {% if day_obj and day_obj == today %}today{% endif %}">
                                                     {% if day_num != 0 %}
                                                     <div class="date-number">{{ day_num }}</div>
                                                     {% if day_obj %}
