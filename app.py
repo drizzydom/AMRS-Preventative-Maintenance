@@ -1485,6 +1485,12 @@ def audit_history_page():
         
         return weeks
 
+    # Determine which machines to display (machines with audit data)
+    display_machines = []
+    for machine in available_machines:
+        if machine.id in machine_data:
+            display_machines.append(machine)
+    
     return render_template('audit_history.html',
         completions=completions,
         today=today,
@@ -1504,6 +1510,7 @@ def audit_history_page():
         selected_month=selected_month,
         all_tasks_per_machine=all_tasks_per_machine,
         interval_bars=interval_bars,
+        display_machines=display_machines,  # <-- Add the missing display_machines variable
         get_calendar_weeks=get_calendar_weeks  # <-- Pass the function to the template
     )
 
