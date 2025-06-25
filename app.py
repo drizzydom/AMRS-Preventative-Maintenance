@@ -6,6 +6,7 @@ import string
 import logging
 import signal
 import argparse
+import calendar
 from datetime import datetime, timedelta, date
 from functools import wraps
 import traceback
@@ -1385,7 +1386,30 @@ def audit_history_page():
         else:
             completions = []
             machine_data = {}
-            return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
+            return render_template('audit_history.html', 
+                completions=completions, 
+                month=month, 
+                year=year, 
+                current_month=month,
+                current_year=year,
+                month_weeks=[], 
+                machine_data=machine_data, 
+                audit_tasks={}, 
+                unique_tasks=[], 
+                machines={}, 
+                users={}, 
+                sites=sites, 
+                selected_site=site_id, 
+                selected_machine=selected_machine, 
+                available_months=available_months, 
+                available_machines=available_machines, 
+                selected_month=selected_month,
+                all_tasks_per_machine={},
+                interval_bars={},
+                display_machines=[],
+                get_calendar_weeks=lambda start, end: [],
+                today=today
+            )
     else:
         if not current_user.is_admin and sites:
             site_ids = [site.id for site in sites]
@@ -1396,7 +1420,30 @@ def audit_history_page():
             else:
                 completions = []
                 machine_data = {}
-                return render_template('audit_history.html', completions=completions, month=month, year=year, month_weeks=[], machine_data=machine_data, audit_tasks={}, unique_tasks=[], machines={}, users={}, sites=sites, selected_site=site_id, selected_machine=selected_machine, available_months=available_months, available_machines=available_machines, selected_month=selected_month)
+                return render_template('audit_history.html', 
+                    completions=completions, 
+                    month=month, 
+                    year=year, 
+                    current_month=month,
+                    current_year=year,
+                    month_weeks=[], 
+                    machine_data=machine_data, 
+                    audit_tasks={}, 
+                    unique_tasks=[], 
+                    machines={}, 
+                    users={}, 
+                    sites=sites, 
+                    selected_site=site_id, 
+                    selected_machine=selected_machine, 
+                    available_months=available_months, 
+                    available_machines=available_machines, 
+                    selected_month=selected_month,
+                    all_tasks_per_machine={},
+                    interval_bars={},
+                    display_machines=[],
+                    get_calendar_weeks=lambda start, end: [],
+                    today=today
+                )
     completions = query.all()
 
     # --- Build calendar weeks for the month ---
@@ -1613,12 +1660,39 @@ def audit_history_print_view():
     # Get all audit tasks for reference
     audit_tasks = {task.id: task for task in AuditTask.query.all()}
     
+    # Extract month and year from date range for template compatibility
+    month = start_date.month
+    year = start_date.year
+    
+    # Build calendar weeks for the month
+    import calendar
+    cal = calendar.Calendar(firstweekday=6)  # Sunday start
+    month_weeks = list(cal.monthdayscalendar(year, month))
+    
+    # Build unique_tasks for legend
+    unique_tasks = [audit_tasks[tid] for tid in {completion.audit_task_id for completion in completions if completion.audit_task_id in audit_tasks}]
+    
+    # Get sites for template
+    sites = available_sites
+    
+    # Set selected values for template
+    selected_machine = machine_id if machine_id else ''
+    selected_month = f"{year:04d}-{month:02d}"
+    
+    # Generate available months (simplified for print view)
+    available_months = [{'value': selected_month, 'display': f"{calendar.month_name[month]} {year}"}]
+    
+    # Set available machines and display machines
+    available_machines = machines
+    display_machines = [machine for machine in machines if machine.id in machine_data]
+    
     # Build all_tasks_per_machine: {machine_id: [AuditTask, ...]}
     all_tasks_per_machine = {}
     for machine in machines:
         all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
 
     # Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}}
+    from collections import defaultdict
     interval_bars = defaultdict(lambda: defaultdict(list))
     for machine in machines:
         for task in all_tasks_per_machine[machine.id]:
@@ -1674,8 +1748,8 @@ def audit_history_print_view():
         selected_month=selected_month,
         all_tasks_per_machine=all_tasks_per_machine,
         interval_bars=interval_bars,
-        display_machines=display_machines,  # <-- Add the missing display_machines variable
-        get_calendar_weeks=get_calendar_weeks  # <-- Pass the function to the template
+        display_machines=display_machines,
+        get_calendar_weeks=get_calendar_weeks
     )
 
 @app.route('/admin/users', methods=['GET', 'POST'])
