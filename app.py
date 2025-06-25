@@ -1054,7 +1054,7 @@ def admin_audit_history():
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
-    completions = AuditTaskCompletion.query.order_by(AuditTaskCompletion.completed_at.desc()).all()
+    completions = AuditTaskCompletion.query.filter_by(completed=True).order_by(AuditTaskCompletion.completed_at.desc()).all()
     audit_tasks = {t.id: t for t in AuditTask.query.all()}
     machines = {m.id: m for m in Machine.query.all()}
     users = {u.id: u for u in User.query.all()}
@@ -1374,7 +1374,8 @@ def audit_history_page():
     # Query completions for the selected month
     query = AuditTaskCompletion.query.filter(
         AuditTaskCompletion.date >= first_day,
-        AuditTaskCompletion.date <= last_day
+        AuditTaskCompletion.date <= last_day,
+        AuditTaskCompletion.completed == True
     )
     if site_id:
         site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
@@ -1579,7 +1580,8 @@ def audit_history_print_view():
     # Get audit task completions
     completions_query = AuditTaskCompletion.query.filter(
         AuditTaskCompletion.machine_id.in_(machine_ids),
-        AuditTaskCompletion.created_at.between(start_datetime, end_datetime)
+        AuditTaskCompletion.created_at.between(start_datetime, end_datetime),
+        AuditTaskCompletion.completed == True
     ).order_by(AuditTaskCompletion.created_at)
     
     completions = completions_query.all()
