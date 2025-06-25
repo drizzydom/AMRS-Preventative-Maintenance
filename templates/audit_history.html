@@ -185,8 +185,15 @@
                                                 <div class="date-number">{{ day_num }}</div>
                                                 {% if day_obj %}
                                                     {% set day_date = day_obj.strftime('%Y-%m-%d') %}
+                                                {% elif day_num > 0 %}
+                                                    {% set safe_day_date = safe_date(current_year, current_month, day_num) %}
+                                                    {% if safe_day_date %}
+                                                        {% set day_date = safe_day_date.strftime('%Y-%m-%d') %}
+                                                    {% else %}
+                                                        {% set day_date = '' %}
+                                                    {% endif %}
                                                 {% else %}
-                                                    {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day_num) %}
+                                                    {% set day_date = '' %}
                                                 {% endif %}
                                                 <div class="task-markers">
                                                     {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
@@ -328,8 +335,15 @@
                                                     <div class="date-number">{{ day_num }}</div>
                                                     {% if day_obj %}
                                                         {% set day_date = day_obj.strftime('%Y-%m-%d') %}
+                                                    {% elif day_num > 0 %}
+                                                        {% set safe_day_date = safe_date(current_year, current_month, day_num) %}
+                                                        {% if safe_day_date %}
+                                                            {% set day_date = safe_day_date.strftime('%Y-%m-%d') %}
+                                                        {% else %}
+                                                            {% set day_date = '' %}
+                                                        {% endif %}
                                                     {% else %}
-                                                        {% set day_date = '%04d-%02d-%02d'|format(current_year, current_month, day_num) %}
+                                                        {% set day_date = '' %}
                                                     {% endif %}
                                                     <div class="task-markers">
                                                         {% if machine.id in machine_data and day_date in machine_data[machine.id] %}
@@ -355,8 +369,8 @@
                                                             {% for bar in interval_bars[machine.id][task.id] %}
                                                               {% set bar_start = bar[0] %}
                                                               {% set bar_end = bar[1] %}
-                                                              {% set day_date_obj = datetime(current_year, current_month, day_num).date() %}
-                                                              {% if day_date_obj >= bar_start and day_date_obj <= bar_end %}
+                                                              {% set day_date_obj = safe_date(current_year, current_month, day_num) %}
+                                                              {% if day_date_obj and day_date_obj >= bar_start and day_date_obj <= bar_end %}
                                                                 <div class="interval-bar category-{{ task.category|default('general')|lower|replace(' ', '-') }}" title="{{ task.name }} interval"></div>
                                                               {% endif %}
                                                             {% endfor %}
