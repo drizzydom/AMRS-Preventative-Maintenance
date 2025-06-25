@@ -1738,7 +1738,8 @@ def audit_history_print_view():
         machine_data=machine_data,
         audit_tasks=audit_tasks,
         unique_tasks=unique_tasks,
-        machines=machines_dict,
+        machines=machines,  # Pass the list, not the dict
+        machines_dict=machines_dict,  # Also pass the dict for lookup
         users=users,
         sites=sites,
         selected_site=site_id,
@@ -1749,7 +1750,12 @@ def audit_history_print_view():
         all_tasks_per_machine=all_tasks_per_machine,
         interval_bars=interval_bars,
         display_machines=display_machines,
-        get_calendar_weeks=get_calendar_weeks
+        get_calendar_weeks=get_calendar_weeks,
+        start_date=start_date,
+        end_date=end_date,
+        current_user=current_user,
+        datetime=datetime,
+        timedelta=timedelta
     )
 
 @app.route('/admin/users', methods=['GET', 'POST'])
