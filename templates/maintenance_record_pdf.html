@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maintenance Record Print Preview</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            color: #333;
+            font-size: 9pt;
+            max-width: 100%;
+        }
+        
+        /* Header & Print Layout */
+        .print-header {
+            margin-bottom: 15px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            text-align: center;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+        
+        .print-header .letterhead-logo {
+            display: block;
+            margin: 0 auto 8px auto;
+            height: 72px;
+            max-width: 260px;
+            object-fit: contain;
+        }
+        
+        .company-info {
+            margin-bottom: 5px;
+        }
+        
+        .company-info h1 {
+            font-size: 18pt;
+            margin: 0;
+        }
+        
+        .company-info p {
+            font-size: 12pt;
+            margin: 5px 0 0;
+        }
+        
+        .report-title {
+            margin-bottom: 10px;
+        }
+        
+        .report-title h2 {
+            font-size: 16pt;
+            margin: 0;
+        }
+        
+        .report-id {
+            font-size: 9pt;
+            color: #666;
+        }
+        
+        .report-meta {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .meta-table {
+            border-collapse: collapse;
+        }
+        
+        .meta-table th {
+            text-align: left;
+            padding-right: 15px;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+            width: 100%;
+            position: relative;
+            padding-bottom: 10px;
+        }
+        
+        .section-header {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+        }
+        
+        .detail-row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        
+        .detail-column {
+            flex: 1;
+            min-width: 200px;
+            margin-right: 20px;
+        }
+        
+        .detail-field {
+            margin-bottom: 5px;
+        }
+        
+        .detail-label {
+            font-weight: bold;
+            font-size: 10pt;
+        }
+        
+        .detail-value {
+            font-size: 10pt;
+        }
+        
+        .notes-box {
+            border: 1px solid #ccc;
+            padding: 8px;
+            margin-top: 5px;
+            background-color: #f9f9f9;
+            min-height: 60px;
+        }
+        
+        @media print {
+            body {
+                padding: 0;
+                font-size: 9pt;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+        }
+        
+        /* Custom styling for maintenance record */
+        .maintenance-details {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 9pt;
+            margin-top: 5px;
+        }
+        
+        .status-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+            font-size: 8pt;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header with Company Info -->
+    <div class="print-header">
+        {% if company_info.logo_url %}
+        <img src="{{ company_info.logo_url }}" alt="Company Logo" class="letterhead-logo">
+        {% endif %}
+        
+        <div class="company-info">
+            <h1>{{ company_info.name }}</h1>
+            {% if company_info.address %}
+            <p>{{ company_info.address }}</p>
+            {% endif %}
+            <p>
+                {% if company_info.phone %}{{ company_info.phone }}{% endif %}
+                {% if company_info.phone and company_info.email %} | {% endif %}
+                {% if company_info.email %}{{ company_info.email }}{% endif %}
+            </p>
+        </div>
+    </div>
+    
+    <!-- Report Title -->
+    <div class="report-title">
+        <h2>Maintenance Record</h2>
+        <div class="report-id">Work Order #: {{ record.id }}</div>
+        <div class="report-id">Generated on: {{ print_date }}</div>
+    </div>
+    
+    <!-- Maintenance Information -->
+    <div class="section">
+        <div class="section-header">Maintenance Information</div>
+        
+        <div class="detail-row">
+            <div class="detail-column">
+                <div class="detail-field">
+                    <div class="detail-label">Date:</div>
+                    <div class="detail-value">{{ record.date.strftime('%A, %B %d, %Y') }}</div>
+                </div>
+                <div class="detail-field">
+                    <div class="detail-label">Maintenance Type:</div>
+                    <div class="detail-value">{{ record.maintenance_type.title() if record.maintenance_type else 'N/A' }}</div>
+                </div>
+                <div class="detail-field">
+                    <div class="detail-label">Status:</div>
+                    <div class="status-badge status-{{ record.status if record.status else 'completed' }}">
+                        {{ record.status.title() if record.status else 'Completed' }}
+                    </div>
+                </div>
+            </div>
+            <div class="detail-column">
+                <div class="detail-field">
+                    <div class="detail-label">Performed By:</div>
+                    <div class="detail-value">
+                        {{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else 'N/A')) }}
+                    </div>
+                </div>
+                {% if record.client_id %}
+                <div class="detail-field">
+                    <div class="detail-label">Client Reference:</div>
+                    <div class="detail-value font-monospace">{{ record.client_id }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Machine Information -->
+    {% if record.machine %}
+    <div class="section">
+        <div class="section-header">Machine Information</div>
+        
+        <div class="detail-row">
+            <div class="detail-column">
+                <div class="detail-field">
+                    <div class="detail-label">Machine:</div>
+                    <div class="detail-value">{{ record.machine.name }}</div>
+                </div>
+                {% if record.machine.machine_number %}
+                <div class="detail-field">
+                    <div class="detail-label">Machine Number:</div>
+                    <div class="detail-value">{{ record.machine.machine_number }}</div>
+                </div>
+                {% endif %}
+                {% if record.machine.serial_number %}
+                <div class="detail-field">
+                    <div class="detail-label">Serial Number:</div>
+                    <div class="detail-value">{{ record.machine.serial_number }}</div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="detail-column">
+                {% if record.machine.model %}
+                <div class="detail-field">
+                    <div class="detail-label">Model:</div>
+                    <div class="detail-value">{{ record.machine.model }}</div>
+                </div>
+                {% endif %}
+                {% if record.machine.site %}
+                <div class="detail-field">
+                    <div class="detail-label">Site:</div>
+                    <div class="detail-value">{{ record.machine.site.name }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Part Information -->
+    {% if record.part %}
+    <div class="section">
+        <div class="section-header">Part Information</div>
+        
+        <div class="detail-row">
+            <div class="detail-column">
+                <div class="detail-field">
+                    <div class="detail-label">Part:</div>
+                    <div class="detail-value">{{ record.part.name }}</div>
+                </div>
+                {% if record.part.part_number %}
+                <div class="detail-field">
+                    <div class="detail-label">Part Number:</div>
+                    <div class="detail-value">{{ record.part.part_number }}</div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="detail-column">
+                {% if record.part.manufacturer %}
+                <div class="detail-field">
+                    <div class="detail-label">Manufacturer:</div>
+                    <div class="detail-value">{{ record.part.manufacturer }}</div>
+                </div>
+                {% endif %}
+                {% if record.part.maintenance_frequency and record.part.maintenance_unit %}
+                <div class="detail-field">
+                    <div class="detail-label">Maintenance Frequency:</div>
+                    <div class="detail-value">Every {{ record.part.maintenance_frequency }} {{ record.part.maintenance_unit }}{{ 's' if record.part.maintenance_frequency != 1 else '' }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Work Description -->
+    <div class="section">
+        <div class="section-header">Work Description</div>
+        
+        <div class="detail-field">
+            <div class="notes-box">
+                {{ record.description or 'No description provided.' }}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notes -->
+    {% if record.notes or record.comments %}
+    <div class="section">
+        <div class="section-header">Notes</div>
+        
+        <div class="detail-field">
+            <div class="notes-box">
+                {{ record.notes or record.comments }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Signature Section -->
+    <div class="section">
+        <div class="section-header">Verification</div>
+        
+        <div class="detail-row" style="margin-top: 20px;">
+            <div class="detail-column">
+                <div class="detail-field">
+                    <div class="detail-label">Technician Signature:</div>
+                    <div style="border-bottom: 1px solid #000; height: 40px;"></div>
+                    <div style="margin-top: 5px;">Date: _________________</div>
+                </div>
+            </div>
+            <div class="detail-column">
+                <div class="detail-field">
+                    <div class="detail-label">Customer Approval:</div>
+                    <div style="border-bottom: 1px solid #000; height: 40px;"></div>
+                    <div style="margin-top: 5px;">Date: _________________</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <p>Generated from Maintenance Tracker | Record ID: {{ record.id }} | {{ print_date }}</p>
+    </div>
+</body>
+</html>
