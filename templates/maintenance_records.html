@@ -50,17 +50,26 @@
           <th>Performed By</th>
           <th class="hide-sm">Description</th>
           <th class="hide-sm">Notes</th>
+          <th class="text-center">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for record in records %}
-        <tr>
+        <tr class="clickable-row" data-href="{{ url_for('maintenance_record_detail', record_id=record.id) }}" style="cursor: pointer;" title="Click to view details">
           <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
           <td>{{ record.machine.name if record.machine else '' }}{% if record.machine and record.machine.machine_number %} ({{ record.machine.machine_number }}){% elif record.machine and record.machine.serial_number %} (SN: {{ record.machine.serial_number }}){% endif %}</td>
           <td>{{ record.part.name if record.part else '' }}</td>
           <td>{{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else '')) }}</td>
           <td class="hide-sm">{{ record.description or '' }}</td>
           <td class="hide-sm">{{ record.notes or record.comments or '' }}</td>
+          <td class="text-center">
+            <a href="{{ url_for('maintenance_record_detail', record_id=record.id) }}" class="btn btn-sm btn-outline-primary" title="View Details" onclick="event.stopPropagation();">
+              <i class="fas fa-eye"></i>
+            </a>
+            <a href="{{ url_for('maintenance_record_print', record_id=record.id) }}" class="btn btn-sm btn-outline-secondary ms-1" title="Print Preview" onclick="event.stopPropagation();" target="_blank">
+              <i class="fas fa-print"></i>
+            </a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -70,4 +79,28 @@
     <div class="alert alert-info mt-4">No maintenance records found for this part.</div>
   {% endif %}
 </div>
+
+<script>
+// Make table rows clickable
+document.addEventListener('DOMContentLoaded', function() {
+    const clickableRows = document.querySelectorAll('.clickable-row');
+    clickableRows.forEach(function(row) {
+        row.addEventListener('click', function() {
+            const href = this.getAttribute('data-href');
+            if (href) {
+                window.location.href = href;
+            }
+        });
+        
+        // Add hover effect
+        row.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#f8f9fa';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '';
+        });
+    });
+});
+</script>
 {% endblock %}
