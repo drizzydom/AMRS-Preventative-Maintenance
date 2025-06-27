@@ -3586,6 +3586,74 @@ def maintenance_records_page():
         selected_part=part_id
     )
 
+@app.route('/maintenance-record/<int:record_id>')
+@login_required
+def maintenance_record_detail(record_id):
+    """View details of a specific maintenance record"""
+    try:
+        # Get the maintenance record
+        record = MaintenanceRecord.query.get_or_404(record_id)
+        
+        # Check if user has access to this record's site
+        if not user_can_see_all_sites(current_user):
+            if record.machine and record.machine.site not in current_user.sites:
+                flash('You do not have access to this maintenance record.', 'danger')
+                return redirect(url_for('maintenance_records_page'))
+        
+        return render_template('maintenance_record_detail.html', record=record)
+        
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_record_detail: {e}")
+        flash('An error occurred while loading the maintenance record.', 'danger')
+        return redirect(url_for('maintenance_records_page'))
+
+@app.route('/maintenance-record/print/<int:record_id>')
+@login_required
+def maintenance_record_print(record_id):
+    """Generate a printable view for a maintenance record"""
+    try:
+        # Get the maintenance record
+        record = MaintenanceRecord.query.get_or_404(record_id)
+        
+        # Check if user has access to this record's site
+        if not user_can_see_all_sites(current_user):
+            if record.machine and record.machine.site not in current_user.sites:
+                flash('You do not have access to this maintenance record.', 'danger')
+                return redirect(url_for('maintenance_records_page'))
+        
+        # Get any company information from site settings
+        company_info = {}
+        if record.machine and record.machine.site:
+            site = record.machine.site
+            company_info = {
+                'name': site.company_name or "Maintenance Tracker",
+                'address': site.address or "",
+                'phone': site.phone or "",
+                'email': site.email or "",
+                'logo_url': site.logo_url or url_for('static', filename='img/logo.png')
+            }
+        else:
+            # Default company info if no site is associated
+            company_info = {
+                'name': "Maintenance Tracker",
+                'address': "",
+                'phone': "",
+                'email': "",
+                'logo_url': url_for('static', filename='img/logo.png')
+            }
+        
+        return render_template(
+            'maintenance_record_pdf.html',
+            record=record,
+            company_info=company_info,
+            print_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_record_print: {e}")
+        flash('An error occurred while generating the print view.', 'danger')
+        return redirect(url_for('maintenance_record_detail', record_id=record_id))
+
 @app.route('/emergency-maintenance-request', methods=['POST'])
 @login_required
 def emergency_maintenance_request():
