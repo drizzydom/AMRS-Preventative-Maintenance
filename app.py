@@ -3626,11 +3626,11 @@ def maintenance_record_print(record_id):
         if record.machine and record.machine.site:
             site = record.machine.site
             company_info = {
-                'name': site.company_name or "Maintenance Tracker",
-                'address': site.address or "",
-                'phone': site.phone or "",
-                'email': site.email or "",
-                'logo_url': site.logo_url or url_for('static', filename='img/logo.png')
+                'name': site.name or "Maintenance Tracker",
+                'address': site.location or "",
+                'phone': "",  # Site model doesn't have phone field
+                'email': site.contact_email or "",
+                'logo_url': url_for('static', filename='img/logo.png')  # Use default logo
             }
         else:
             # Default company info if no site is associated
