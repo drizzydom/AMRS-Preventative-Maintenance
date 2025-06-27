@@ -110,7 +110,7 @@
             <div class="col-12">
               <h6 class="text-muted mb-2">Work Description</h6>
               <div class="bg-light p-3 rounded">
-                {{ record.description | nl2br | safe }}
+                <pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">{{ record.description }}</pre>
               </div>
             </div>
           </div>
@@ -121,7 +121,7 @@
             <div class="col-12">
               <h6 class="text-muted mb-2">Notes & Comments</h6>
               <div class="bg-light p-3 rounded">
-                {{ (record.notes or record.comments) | nl2br | safe }}
+                <pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">{{ record.notes or record.comments }}</pre>
               </div>
             </div>
           </div>
