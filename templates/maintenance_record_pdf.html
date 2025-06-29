@@ -19,7 +19,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             border-bottom: 2px solid #000;
             padding-bottom: 8px;
         }
@@ -30,21 +30,21 @@
         }
         
         .letterhead-logo {
-            height: 50px;
-            max-width: 120px;
+            height: 45px;
+            max-width: 100px;
             object-fit: contain;
             margin-right: 15px;
         }
         
         .company-info h1 {
-            font-size: 16pt;
+            font-size: 14pt;
             margin: 0;
             line-height: 1.1;
         }
         
         .company-info p {
-            font-size: 9pt;
-            margin: 2px 0;
+            font-size: 8pt;
+            margin: 1px 0;
             color: #666;
         }
         
@@ -53,48 +53,53 @@
         }
         
         .work-order-title {
-            font-size: 14pt;
+            font-size: 13pt;
             font-weight: bold;
             margin: 0;
         }
         
         .work-order-meta {
-            font-size: 9pt;
+            font-size: 8pt;
             color: #666;
-            margin: 2px 0;
+            margin: 1px 0;
         }
         
-        /* Consolidated Information Grid */
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 15px;
+        /* Vertical Stack Layout for Better Portrait Use */
+        .info-stack {
+            margin-bottom: 12px;
         }
         
         .info-section {
             border: 1px solid #ddd;
-            padding: 10px;
+            padding: 8px;
+            margin-bottom: 8px;
             background-color: #f9f9f9;
         }
         
         .section-title {
-            font-size: 11pt;
+            font-size: 10pt;
             font-weight: bold;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             color: #000;
             border-bottom: 1px solid #ccc;
-            padding-bottom: 3px;
+            padding-bottom: 2px;
+        }
+        
+        /* Two-column layout within each section */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
         }
         
         .info-row {
             display: flex;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
         
         .info-label {
             font-weight: bold;
-            min-width: 90px;
+            min-width: 80px;
             font-size: 9pt;
         }
         
@@ -121,51 +126,51 @@
             color: #856404;
         }
         
-        /* Work Description - Full Width */
+        /* Work Description - Vertical Stack */
         .work-section {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         .work-title {
-            font-size: 11pt;
+            font-size: 10pt;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             border-bottom: 1px solid #000;
-            padding-bottom: 3px;
+            padding-bottom: 2px;
         }
         
         .work-content {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 6px;
             background-color: #f9f9f9;
-            min-height: 40px;
+            min-height: 35px;
             font-size: 9pt;
             line-height: 1.4;
         }
         
-        /* Signature Section - Compact */
+        /* Signature Section - Vertical Stack for Portrait */
         .signature-section {
-            display: flex;
-            gap: 30px;
-            margin-top: 20px;
-            margin-bottom: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+            margin-bottom: 10px;
         }
         
         .signature-box {
-            flex: 1;
             text-align: center;
         }
         
         .signature-label {
             font-weight: bold;
             font-size: 9pt;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .signature-line {
             border-bottom: 1px solid #000;
-            height: 25px;
-            margin-bottom: 5px;
+            height: 22px;
+            margin-bottom: 4px;
         }
         
         .signature-date {
@@ -175,8 +180,8 @@
         
         .footer {
             border-top: 1px solid #ccc;
-            padding-top: 8px;
-            font-size: 8pt;
+            padding-top: 6px;
+            font-size: 7pt;
             color: #666;
             text-align: center;
         }
@@ -191,11 +196,15 @@
                 display: none !important;
             }
             
-            .info-grid {
+            .info-section {
                 page-break-inside: avoid;
             }
             
             .work-section {
+                page-break-inside: avoid;
+            }
+            
+            .signature-section {
                 page-break-inside: avoid;
             }
         }
@@ -225,97 +234,112 @@
         </div>
     </div>
 
-    <!-- Information Grid -->
-    <div class="info-grid">
-        <!-- Maintenance Details -->
+    <!-- Vertical Information Stack -->
+    <div class="info-stack">
+        <!-- Maintenance Details Section -->
         <div class="info-section">
             <div class="section-title">Maintenance Details</div>
-            <div class="info-row">
-                <div class="info-label">Date:</div>
-                <div class="info-value">{{ record.date.strftime('%B %d, %Y') }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Type:</div>
-                <div class="info-value">{{ record.maintenance_type.title() if record.maintenance_type else 'Standard' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Status:</div>
-                <div class="info-value">
-                    <span class="status-badge status-{{ record.status if record.status else 'completed' }}">
-                        {{ record.status.title() if record.status else 'Completed' }}
-                    </span>
+            <div class="info-grid">
+                <div>
+                    <div class="info-row">
+                        <div class="info-label">Date:</div>
+                        <div class="info-value">{{ record.date.strftime('%B %d, %Y') }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Type:</div>
+                        <div class="info-value">{{ record.maintenance_type.title() if record.maintenance_type else 'Standard' }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Status:</div>
+                        <div class="info-value">
+                            <span class="status-badge status-{{ record.status if record.status else 'completed' }}">
+                                {{ record.status.title() if record.status else 'Completed' }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="info-row">
+                        <div class="info-label">Technician:</div>
+                        <div class="info-value">
+                            {{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else 'N/A')) }}
+                        </div>
+                    </div>
+                    {% if record.client_id %}
+                    <div class="info-row">
+                        <div class="info-label">Client Ref:</div>
+                        <div class="info-value">{{ record.client_id }}</div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            <div class="info-row">
-                <div class="info-label">Technician:</div>
-                <div class="info-value">
-                    {{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else 'N/A')) }}
-                </div>
-            </div>
-            {% if record.client_id %}
-            <div class="info-row">
-                <div class="info-label">Client Ref:</div>
-                <div class="info-value">{{ record.client_id }}</div>
-            </div>
-            {% endif %}
         </div>
 
-        <!-- Equipment Information -->
+        <!-- Equipment Information Section -->
         <div class="info-section">
             <div class="section-title">Equipment Information</div>
-            {% if record.machine %}
-            <div class="info-row">
-                <div class="info-label">Machine:</div>
-                <div class="info-value">{{ record.machine.name }}</div>
+            <div class="info-grid">
+                <div>
+                    {% if record.machine %}
+                    <div class="info-row">
+                        <div class="info-label">Machine:</div>
+                        <div class="info-value">{{ record.machine.name }}</div>
+                    </div>
+                    {% if record.machine.model %}
+                    <div class="info-row">
+                        <div class="info-label">Model:</div>
+                        <div class="info-value">{{ record.machine.model }}</div>
+                    </div>
+                    {% endif %}
+                    {% if record.machine.machine_number %}
+                    <div class="info-row">
+                        <div class="info-label">Machine #:</div>
+                        <div class="info-value">{{ record.machine.machine_number }}</div>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="info-row">
+                        <div class="info-label">Machine:</div>
+                        <div class="info-value">Not specified</div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div>
+                    {% if record.machine %}
+                    {% if record.machine.serial_number %}
+                    <div class="info-row">
+                        <div class="info-label">Serial #:</div>
+                        <div class="info-value">{{ record.machine.serial_number }}</div>
+                    </div>
+                    {% endif %}
+                    {% if record.machine.site %}
+                    <div class="info-row">
+                        <div class="info-label">Location:</div>
+                        <div class="info-value">{{ record.machine.site.name }}</div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                    
+                    {% if record.part %}
+                    <div class="info-row">
+                        <div class="info-label">Part:</div>
+                        <div class="info-value">{{ record.part.name }}</div>
+                    </div>
+                    {% if record.part.part_number %}
+                    <div class="info-row">
+                        <div class="info-label">Part #:</div>
+                        <div class="info-value">{{ record.part.part_number }}</div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                </div>
             </div>
-            {% if record.machine.model %}
-            <div class="info-row">
-                <div class="info-label">Model:</div>
-                <div class="info-value">{{ record.machine.model }}</div>
-            </div>
-            {% endif %}
-            {% if record.machine.machine_number %}
-            <div class="info-row">
-                <div class="info-label">Machine #:</div>
-                <div class="info-value">{{ record.machine.machine_number }}</div>
-            </div>
-            {% endif %}
-            {% if record.machine.serial_number %}
-            <div class="info-row">
-                <div class="info-label">Serial #:</div>
-                <div class="info-value">{{ record.machine.serial_number }}</div>
-            </div>
-            {% endif %}
-            {% if record.machine.site %}
-            <div class="info-row">
-                <div class="info-label">Location:</div>
-                <div class="info-value">{{ record.machine.site.name }}</div>
-            </div>
-            {% endif %}
-            {% else %}
-            <div class="info-row">
-                <div class="info-label">Machine:</div>
-                <div class="info-value">Not specified</div>
-            </div>
-            {% endif %}
             
-            {% if record.part %}
-            <div class="info-row">
-                <div class="info-label">Part:</div>
-                <div class="info-value">{{ record.part.name }}</div>
-            </div>
-            {% if record.part.part_number %}
-            <div class="info-row">
-                <div class="info-label">Part #:</div>
-                <div class="info-value">{{ record.part.part_number }}</div>
-            </div>
-            {% endif %}
-            {% if record.part.maintenance_frequency and record.part.maintenance_unit %}
-            <div class="info-row">
+            {% if record.part and record.part.maintenance_frequency and record.part.maintenance_unit %}
+            <div class="info-row" style="margin-top: 4px;">
                 <div class="info-label">Frequency:</div>
                 <div class="info-value">Every {{ record.part.maintenance_frequency }} {{ record.part.maintenance_unit }}{{ 's' if record.part.maintenance_frequency != 1 else '' }}</div>
             </div>
-            {% endif %}
             {% endif %}
         </div>
     </div>
