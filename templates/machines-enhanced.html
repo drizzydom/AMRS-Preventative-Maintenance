@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Enhanced Machines - Maintenance Tracker{% endblock %}
+
+{% block header_title %}{{ title }}{% endblock %}
+
+{% block header_actions %}
+{% if can_create %}
+<a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMachineModal">
+    <i class="fas fa-plus"></i> Add Machine
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Machines</h5>
+                {% if site_id %}
+                <a href="{{ url_for('manage_machines') }}" class="btn btn-sm btn-secondary">
+                    <i class="fas fa-list"></i> View All Machines
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if machines %}
+                
+                <!-- Quick filters for better data management -->
+                <div class="table-quick-filters">
+                    <span class="text-muted small">Quick Filter:</span>
+                    <button class="quick-filter-btn active" data-filter="all">All</button>
+                    <button class="quick-filter-btn" data-filter="maintenance-due">Due Soon</button>
+                    <button class="quick-filter-btn" data-filter="overdue">Overdue</button>
+                    <button class="quick-filter-btn" data-filter="recent">Recently Serviced</button>
+                </div>
+                
+                <!-- Enhanced scrollable container with indicators -->
+                <div class="table-responsive horizontal-scrollable table-sticky-actions">
+                    <div class="table-scroll-hint d-lg-none">
+                        <i class="fas fa-arrows-alt-h"></i> Scroll for more info
+                    </div>
+                    
+                    <table class="table table-striped table-hover table-enhanced-compact">
+                        <thead>
+                            <tr>
+                                <th class="col-name col-priority-1">Machine Details</th>
+                                <th class="col-details col-priority-2">Specifications</th>
+                                <th class="col-status col-priority-1">Status & Location</th>
+                                <th class="col-number col-priority-3">Parts Count</th>
+                                <th class="col-actions col-priority-1">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for machine in machines %}
+                            <tr data-machine-status="{{ machine.maintenance_status|default('ok') }}">
+                                <!-- Machine Details Column -->
+                                <td class="col-priority-1">
+                                    <div class="machine-compact">
+                                        <div class="machine-name">{{ machine.name }}</div>
+                                        {% if machine.machine_number %}
+                                        <div class="machine-details">
+                                            <span class="machine-number"># {{ machine.machine_number }}</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if machine.serial_number %}
+                                        <div class="machine-details">
+                                            <small class="text-muted">SN: {{ machine.serial_number }}</small>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                
+                                <!-- Specifications Column -->
+                                <td class="col-priority-2">
+                                    <div class="cell-multi-line">
+                                        {% if machine.model %}
+                                        <div class="cell-secondary">
+                                            <i class="fas fa-cog icon" title="Model"></i>{{ machine.model }}
+                                        </div>
+                                        {% endif %}
+                                        {% if machine.manufacturer %}
+                                        <div class="cell-tertiary">
+                                            <i class="fas fa-industry icon" title="Manufacturer"></i>{{ machine.manufacturer }}
+                                        </div>
+                                        {% endif %}
+                                        {% if machine.year %}
+                                        <div class="cell-tertiary">
+                                            <i class="fas fa-calendar icon" title="Year"></i>{{ machine.year }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                
+                                <!-- Status & Location Column -->
+                                <td class="col-priority-1">
+                                    <div class="status-group">
+                                        <div class="status-primary">{{ machine.site.name }}</div>
+                                        {% set status = machine.maintenance_status|default('ok') %}
+                                        {% if status == 'overdue' %}
+                                        <span class="badge bg-danger status-badge">Overdue</span>
+                                        {% elif status == 'due_soon' %}
+                                        <span class="badge bg-warning status-badge">Due Soon</span>
+                                        {% else %}
+                                        <span class="badge bg-success status-badge">OK</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if machine.location %}
+                                    <div class="cell-tertiary mt-1">
+                                        <i class="fas fa-map-marker-alt icon"></i>{{ machine.location }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                
+                                <!-- Parts Count Column -->
+                                <td class="col-priority-3 text-center">
+                                    <span class="badge bg-info">{{ machine.parts|length }}</span>
+                                    {% if machine.parts|length > 0 %}
+                                    <div class="cell-tertiary">parts</div>
+                                    {% endif %}
+                                </td>
+                                
+                                <!-- Actions Column -->
+                                <td class="col-priority-1">
+                                    <div class="actions-compact">
+                                        <a href="{{ url_for('manage_parts') }}?machine_id={{ machine.id }}" 
+                                           class="btn btn-outline-primary btn-sm" 
+                                           title="View Parts">
+                                            <i class="fas fa-list"></i>
+                                        </a>
+                                        {% if can_edit %}
+                                        <a href="{{ url_for('edit_machine', machine_id=machine.id) }}" 
+                                           class="btn btn-outline-secondary btn-sm"
+                                           title="Edit Machine">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        {% endif %}
+                                        {% if can_delete %}
+                                        <div class="action-dropdown dropdown">
+                                            <button class="btn btn-outline-danger btn-sm dropdown-toggle" 
+                                                    type="button" 
+                                                    data-bs-toggle="dropdown" 
+                                                    aria-expanded="false"
+                                                    title="More Actions">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="{{ url_for('machine_history', machine_id=machine.id) }}">
+                                                    <i class="fas fa-history"></i> View History
+                                                </a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><button type="button" class="dropdown-item text-danger" 
+                                                            data-bs-toggle="modal" 
+                                                            data-bs-target="#deleteMachineModal" 
+                                                            data-machine-id="{{ machine.id }}"
+                                                            data-machine-name="{{ machine.name }}">
+                                                    <i class="fas fa-trash-alt"></i> Delete
+                                                </button></li>
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% else %}
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle"></i>
+                    No machines found. {% if can_create %}Use the "Add Machine" button to create one.{% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Machine Modal (existing modal code) -->
+<!-- ... existing modal code ... -->
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Quick filter functionality
+    const filterButtons = document.querySelectorAll('.quick-filter-btn');
+    const tableRows = document.querySelectorAll('tbody tr[data-machine-status]');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Update active button
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            const filterValue = this.dataset.filter;
+            
+            // Filter table rows
+            tableRows.forEach(row => {
+                const status = row.dataset.machineStatus;
+                let show = false;
+                
+                switch(filterValue) {
+                    case 'all':
+                        show = true;
+                        break;
+                    case 'maintenance-due':
+                        show = status === 'due_soon';
+                        break;
+                    case 'overdue':
+                        show = status === 'overdue';
+                        break;
+                    case 'recent':
+                        show = status === 'ok';
+                        break;
+                }
+                
+                row.style.display = show ? '' : 'none';
+            });
+        });
+    });
+    
+    // Initialize tooltips for truncated content
+    const tooltipElements = document.querySelectorAll('[title]');
+    tooltipElements.forEach(el => {
+        new bootstrap.Tooltip(el, {
+            placement: 'top',
+            trigger: 'hover'
+        });
+    });
+});
+</script>
+{% endblock %}
