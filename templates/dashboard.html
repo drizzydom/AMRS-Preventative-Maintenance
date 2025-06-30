@@ -42,6 +42,38 @@
     <div class="d-none" id="single-site-identifier" data-site-id="{{ sites[0].id if sites }}"></div>
     {% endif %}
 
+    <!-- Decommissioned Machines Toggle - Only show if there are decommissioned machines -->
+    {% if decommissioned_count > 0 %}
+    <div class="card mb-3 border-info">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-eye me-2 text-info"></i>
+                    <span class="fw-semibold text-dark me-3">Machine Visibility:</span>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showDecommissioned" 
+                               {% if show_decommissioned %}checked{% endif %}
+                               onchange="toggleDecommissioned()">
+                        <label class="form-check-label text-dark" for="showDecommissioned">
+                            Show {{ decommissioned_count }} decommissioned machine{{ 's' if decommissioned_count != 1 else '' }}
+                        </label>
+                    </div>
+                </div>
+                <small class="badge bg-light text-dark border">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <span id="machine-visibility-status">
+                        {% if show_decommissioned %}
+                            Showing all machines (including decommissioned)
+                        {% else %}
+                            Showing active machines only
+                        {% endif %}
+                    </span>
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Status counters -->
     <div class="row g-2 mb-4">
         <div class="col-lg-3 col-md-6 mb-4">
@@ -135,6 +167,7 @@
                             <tbody>
                                 {% for site in sites %}
                                     {% for machine in site.machines %}
+                                        {% if not machine.decommissioned %}
                                         {% for part in machine.parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
                                             {% if days_until < 0 %}
@@ -155,6 +188,7 @@
                                                 </tr>
                                             {% endif %}
                                         {% endfor %}
+                                        {% endif %}
                                     {% endfor %}
                                 {% endfor %}
                             </tbody>
@@ -164,6 +198,7 @@
                     <div class="d-block d-md-none px-2 py-2">
                         {% for site in sites %}
                             {% for machine in site.machines %}
+                                {% if not machine.decommissioned %}
                                 {% for part in machine.parts %}
                                     {% set days_until = (part.next_maintenance - now).days %}
                                     {% if days_until < 0 %}
@@ -184,6 +219,7 @@
                                     </div>
                                     {% endif %}
                                 {% endfor %}
+                                {% endif %}
                             {% endfor %}
                         {% endfor %}
                     </div>
@@ -219,6 +255,7 @@
                             <tbody>
                                 {% for site in sites %}
                                     {% for machine in site.machines %}
+                                        {% if not machine.decommissioned %}
                                         {% for part in machine.parts %}
                                             {% set days_until = (part.next_maintenance - now).days %}
                                             {% if days_until >= 0 and days_until <= site.notification_threshold %}
@@ -238,6 +275,7 @@
                                                 </tr>
                                             {% endif %}
                                         {% endfor %}
+                                        {% endif %}
                                     {% endfor %}
                                 {% endfor %}
                             </tbody>
@@ -247,6 +285,7 @@
                     <div class="d-block d-md-none px-2 py-2">
                         {% for site in sites %}
                             {% for machine in site.machines %}
+                                {% if not machine.decommissioned %}
                                 {% for part in machine.parts %}
                                     {% set days_until = (part.next_maintenance - now).days %}
                                     {% if days_until >= 0 and days_until <= site.notification_threshold %}
@@ -267,6 +306,7 @@
                                     </div>
                                     {% endif %}
                                 {% endfor %}
+                                {% endif %}
                             {% endfor %}
                         {% endfor %}
                     </div>
@@ -343,6 +383,8 @@
                                 </thead>
                                 <tbody>
                                   {% for machine in site.machines %}
+                                  {# Only show decommissioned machines if toggle is enabled #}
+                                  {% if not machine.decommissioned or show_decommissioned %}
                                   {% set overdue_parts = [] %}
                                   {% set due_soon_parts = [] %}
                                   {% set ok_parts = [] %}
@@ -359,25 +401,36 @@
                                   {% endfor %}
                                   
                                   {% set machine_status = "ok" %}
-                                  {% if overdue_parts|length > 0 %}
+                                  {% if machine.decommissioned %}
+                                      {% set machine_status = "decommissioned" %}
+                                  {% elif overdue_parts|length > 0 %}
                                       {% set machine_status = "overdue" %}
                                   {% elif due_soon_parts|length > 0 %}
                                       {% set machine_status = "due_soon" %}
                                   {% endif %}
                                   
-                                  <tr class="machine-row machine-status-{{ machine_status }}">
-                                      <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
+                                  <tr class="machine-row machine-status-{{ machine_status }}{% if machine.decommissioned %} machine-decommissioned{% endif %}">
+                                      <td>
+                                          {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}
+                                          {% if machine.decommissioned %}
+                                              <span class="badge bg-secondary ms-2">
+                                                  <i class="fas fa-power-off"></i> Decommissioned
+                                              </span>
+                                          {% endif %}
+                                      </td>
                                       <td>{{ machine.model }}</td>
                                       <td>
-                                          {% if overdue_parts|length > 0 %}
+                                          {% if machine.decommissioned %}
+                                              <span class="badge bg-secondary">Decommissioned</span>
+                                          {% elif overdue_parts|length > 0 %}
                                               <span class="badge bg-danger">{{ overdue_parts|length }} Overdue</span>
                                           {% endif %}
                                           
-                                          {% if due_soon_parts|length > 0 %}
+                                          {% if not machine.decommissioned and due_soon_parts|length > 0 %}
                                               <span class="badge bg-warning ms-1">{{ due_soon_parts|length }} Due Soon</span>
                                           {% endif %}
                                           
-                                          {% if overdue_parts|length == 0 and due_soon_parts|length == 0 %}
+                                          {% if not machine.decommissioned and overdue_parts|length == 0 and due_soon_parts|length == 0 %}
                                               <span class="badge bg-success">All OK</span>
                                           {% endif %}
                                       </td>
@@ -442,6 +495,7 @@
                                           </div>
                                       </td>
                                   </tr>
+                                  {% endif %}{# End conditional for decommissioned machines #}
                                   {% endfor %}
                                 </tbody>
                               </table>
@@ -572,6 +626,17 @@
 
 /* Remove the old stats-card styling that conflicts with unified-ui.css */
 /* Only keep necessary mobile styles */
+
+/* Decommissioned machine styling */
+.machine-decommissioned {
+    background-color: #f8f9fa !important;
+    opacity: 0.7;
+}
+
+.machine-decommissioned td {
+    color: #6c757d;
+}
+
 @media (max-width: 767.98px) {
     .site-title {
         font-size: 1.1rem;
@@ -591,5 +656,44 @@
 <!-- Remove the inline script to avoid conflict with dashboard.js -->
 <!-- Load dashboard.js with defer attribute to ensure DOM is ready -->
 <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+
+<script>
+    function toggleDecommissioned() {
+        const checkbox = document.getElementById('showDecommissioned');
+        const statusElement = document.getElementById('machine-visibility-status');
+        const currentUrl = new URL(window.location);
+        
+        // Update status text immediately for better UX
+        if (checkbox.checked) {
+            if (statusElement) {
+                statusElement.textContent = 'Showing all machines (including decommissioned)';
+            }
+            currentUrl.searchParams.set('show_decommissioned', 'true');
+        } else {
+            if (statusElement) {
+                statusElement.textContent = 'Showing active machines only';
+            }
+            currentUrl.searchParams.delete('show_decommissioned');
+        }
+        
+        // Navigate to the new URL
+        window.location.href = currentUrl.toString();
+    }
+
+    // Ensure toggle state is correct on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkbox = document.getElementById('showDecommissioned');
+        const statusElement = document.getElementById('machine-visibility-status');
+        
+        if (checkbox && statusElement) {
+            // Update status text based on current checkbox state
+            if (checkbox.checked) {
+                statusElement.textContent = 'Showing all machines (including decommissioned)';
+            } else {
+                statusElement.textContent = 'Showing active machines only';
+            }
+        }
+    });
+</script>
 
 {% endblock %}

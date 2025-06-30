@@ -911,6 +911,9 @@ def index():
 @login_required
 def dashboard():
     try:
+        # Check if user wants to see decommissioned machines
+        show_decommissioned = request.args.get('show_decommissioned', 'false').lower() == 'true'
+        
         # Get upcoming and overdue maintenance across all sites the user has access to
         if user_can_see_all_sites(current_user):
             # User can see all sites, eager load machines and parts
@@ -927,7 +930,9 @@ def dashboard():
                                       ok_count=0, 
                                       total_parts=0,
                                       no_sites=True,  # Flag to show special message in template
-                                      now=datetime.now())
+                                      now=datetime.now(),
+                                      show_decommissioned=show_decommissioned,
+                                      decommissioned_count=0)
             
             # User can only see their assigned sites, eager load as well
             sites = (
@@ -936,14 +941,27 @@ def dashboard():
                 .all()
             )
         
-        # Get all active (non-decommissioned) machines across accessible sites
-        machines = []
+        # Get count of decommissioned machines for the toggle
         site_ids = [site.id for site in sites]
+        decommissioned_count = 0
         if site_ids:
-            machines = Machine.query.filter(
+            decommissioned_count = Machine.query.filter(
                 Machine.site_id.in_(site_ids),
-                Machine.decommissioned == False
-            ).all()
+                Machine.decommissioned == True
+            ).count()
+        
+        # Get machines based on decommissioned toggle
+        machines = []
+        if site_ids:
+            if show_decommissioned:
+                # Show all machines (including decommissioned)
+                machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            else:
+                # Show only active (non-decommissioned) machines
+                machines = Machine.query.filter(
+                    Machine.site_id.in_(site_ids),
+                    Machine.decommissioned == False
+                ).all()
         
         # Get all parts that need maintenance soon or are overdue
         parts = []
@@ -982,7 +1000,9 @@ def dashboard():
                               due_soon_count=due_soon_count, 
                               ok_count=ok_count, 
                               total_parts=total_parts, 
-                              now=now)
+                              now=now,
+                              show_decommissioned=show_decommissioned,
+                              decommissioned_count=decommissioned_count)
     except Exception as e:
         app.logger.error(f"Dashboard error: {str(e)}")
         # Instead of redirecting, show a minimal dashboard with an error message
@@ -994,7 +1014,9 @@ def dashboard():
                               ok_count=0, 
                               total_parts=0,
                               error=True,  # Flag to show error message in template
-                              now=datetime.now())
+                              now=datetime.now(),
+                              show_decommissioned=False,
+                              decommissioned_count=0)
 
 @app.route('/admin')
 @login_required
@@ -3563,6 +3585,74 @@ def maintenance_records_page():
         selected_machine=machine_id,
         selected_part=part_id
     )
+
+@app.route('/maintenance-record/<int:record_id>')
+@login_required
+def maintenance_record_detail(record_id):
+    """View details of a specific maintenance record"""
+    try:
+        # Get the maintenance record
+        record = MaintenanceRecord.query.get_or_404(record_id)
+        
+        # Check if user has access to this record's site
+        if not user_can_see_all_sites(current_user):
+            if record.machine and record.machine.site not in current_user.sites:
+                flash('You do not have access to this maintenance record.', 'danger')
+                return redirect(url_for('maintenance_records_page'))
+        
+        return render_template('maintenance_record_detail.html', record=record)
+        
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_record_detail: {e}")
+        flash('An error occurred while loading the maintenance record.', 'danger')
+        return redirect(url_for('maintenance_records_page'))
+
+@app.route('/maintenance-record/print/<int:record_id>')
+@login_required
+def maintenance_record_print(record_id):
+    """Generate a printable view for a maintenance record"""
+    try:
+        # Get the maintenance record
+        record = MaintenanceRecord.query.get_or_404(record_id)
+        
+        # Check if user has access to this record's site
+        if not user_can_see_all_sites(current_user):
+            if record.machine and record.machine.site not in current_user.sites:
+                flash('You do not have access to this maintenance record.', 'danger')
+                return redirect(url_for('maintenance_records_page'))
+        
+        # Get any company information from site settings
+        company_info = {}
+        if record.machine and record.machine.site:
+            site = record.machine.site
+            company_info = {
+                'name': site.name or "Maintenance Tracker",
+                'address': site.location or "",
+                'phone': "",  # Site model doesn't have phone field
+                'email': site.contact_email or "",
+                'logo_url': url_for('static', filename='img/logo.png')  # Use default logo
+            }
+        else:
+            # Default company info if no site is associated
+            company_info = {
+                'name': "Maintenance Tracker",
+                'address': "",
+                'phone': "",
+                'email': "",
+                'logo_url': url_for('static', filename='img/logo.png')
+            }
+        
+        return render_template(
+            'maintenance_record_pdf.html',
+            record=record,
+            company_info=company_info,
+            print_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_record_print: {e}")
+        flash('An error occurred while generating the print view.', 'danger')
+        return redirect(url_for('maintenance_record_detail', record_id=record_id))
 
 @app.route('/emergency-maintenance-request', methods=['POST'])
 @login_required

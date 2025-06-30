@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Maintenance Record Details{% endblock %}
+{% block header_title %}Maintenance Record Details{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-lg-8 col-md-12">
+      <div class="card">
+        <div class="card-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center">
+          <h5 class="mb-2 mb-sm-0">Maintenance Record #{{ record.id }}</h5>
+          <div class="d-flex flex-column flex-sm-row gap-2">
+            <a href="{{ url_for('maintenance_record_print', record_id=record.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">
+              <i class="fas fa-print"></i> Print Preview
+            </a>
+            <a href="{{ url_for('maintenance_records_page') }}" class="btn btn-outline-primary btn-sm">
+              <i class="fas fa-arrow-left"></i> Back to Records
+            </a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-lg-6 mb-4">
+              <h6 class="text-muted mb-3">Basic Information</h6>
+              <div class="info-section">
+                <div class="info-row">
+                  <span class="info-label">Date:</span>
+                  <span class="info-value">{{ record.date.strftime('%A, %B %d, %Y') if record.date else 'N/A' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Time:</span>
+                  <span class="info-value">{{ record.date.strftime('%I:%M %p') if record.date else 'N/A' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Performed By:</span>
+                  <span class="info-value">{{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else 'Unknown')) }}</span>
+                </div>
+                {% if record.maintenance_type %}
+                <div class="info-row">
+                  <span class="info-label">Type:</span>
+                  <span class="info-value">
+                    <span class="badge bg-{{ 'warning' if record.maintenance_type == 'preventive' else 'danger' if record.maintenance_type == 'corrective' else 'info' }}">
+                      {{ record.maintenance_type.title() }}
+                    </span>
+                  </span>
+                </div>
+                {% endif %}
+                {% if record.status %}
+                <div class="info-row">
+                  <span class="info-label">Status:</span>
+                  <span class="info-value">
+                    <span class="badge bg-{{ 'success' if record.status == 'completed' else 'warning' if record.status == 'in_progress' else 'secondary' }}">
+                      {{ record.status.replace('_', ' ').title() }}
+                    </span>
+                  </span>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+              <h6 class="text-muted mb-3">Equipment Information</h6>
+              <div class="info-section">
+                {% if record.machine %}
+                <div class="info-row">
+                  <span class="info-label">Machine:</span>
+                  <span class="info-value">{{ record.machine.name }}</span>
+                </div>
+                {% if record.machine.machine_number %}
+                <div class="info-row">
+                  <span class="info-label">Machine #:</span>
+                  <span class="info-value">{{ record.machine.machine_number }}</span>
+                </div>
+                {% endif %}
+                {% if record.machine.serial_number %}
+                <div class="info-row">
+                  <span class="info-label">Serial #:</span>
+                  <span class="info-value">{{ record.machine.serial_number }}</span>
+                </div>
+                {% endif %}
+                {% if record.machine.model %}
+                <div class="info-row">
+                  <span class="info-label">Model:</span>
+                  <span class="info-value">{{ record.machine.model }}</span>
+                </div>
+                {% endif %}
+                {% if record.machine.site %}
+                <div class="info-row">
+                  <span class="info-label">Site:</span>
+                  <span class="info-value">{{ record.machine.site.name }}</span>
+                </div>
+                {% endif %}
+                {% endif %}
+                {% if record.part %}
+                <div class="info-row">
+                  <span class="info-label">Part:</span>
+                  <span class="info-value">{{ record.part.name }}</span>
+                </div>
+                {% if record.part.description %}
+                <div class="info-row">
+                  <span class="info-label">Part Description:</span>
+                  <span class="info-value">{{ record.part.description }}</span>
+                </div>
+                {% endif %}
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          
+          {% if record.description %}
+          <div class="row mt-4">
+            <div class="col-12">
+              <h6 class="text-muted mb-3">Work Description</h6>
+              <div class="text-content">{{ record.description }}</div>
+            </div>
+          </div>
+          {% endif %}
+          
+          {% if record.notes or record.comments %}
+          <div class="row mt-4">
+            <div class="col-12">
+              <h6 class="text-muted mb-3">Notes & Comments</h6>
+              <div class="text-content">{{ record.notes or record.comments }}</div>
+            </div>
+          </div>
+          {% endif %}
+          
+          {% if record.created_at or record.updated_at %}
+          <div class="row mt-4">
+            <div class="col-12">
+              <h6 class="text-muted mb-2">Record Information</h6>
+              <small class="text-muted">
+                {% if record.created_at %}
+                  Created: {{ record.created_at.strftime('%Y-%m-%d %I:%M %p') }}
+                {% endif %}
+                {% if record.updated_at and record.updated_at != record.created_at %}
+                  {% if record.created_at %} | {% endif %}
+                  Last Updated: {{ record.updated_at.strftime('%Y-%m-%d %I:%M %p') }}
+                {% endif %}
+              </small>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-lg-4 col-md-12 mt-4 mt-lg-0">
+      <!-- Quick Actions Card -->
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">Quick Actions</h6>
+        </div>
+        <div class="card-body">
+          <div class="d-grid gap-2">
+            <a href="{{ url_for('maintenance_record_print', record_id=record.id) }}" class="btn btn-outline-primary" target="_blank">
+              <i class="fas fa-print"></i> Print Record
+            </a>
+            {% if record.machine %}
+            <a href="{{ url_for('maintenance_records_page', machine_id=record.machine.id) }}" class="btn btn-outline-info">
+              <i class="fas fa-cogs"></i> View Machine Records
+            </a>
+            {% endif %}
+            {% if record.part %}
+            <a href="{{ url_for('maintenance_records_page', part_id=record.part.id) }}" class="btn btn-outline-success">
+              <i class="fas fa-cog"></i> View Part Records
+            </a>
+            {% endif %}
+            {% if record.machine and record.machine.site %}
+            <a href="{{ url_for('maintenance_records_page', site_id=record.machine.site.id) }}" class="btn btn-outline-warning">
+              <i class="fas fa-building"></i> View Site Records
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      
+      <!-- Related Information -->
+      {% if record.part and record.part.maintenance_frequency %}
+      <div class="card mt-3">
+        <div class="card-header">
+          <h6 class="mb-0">Maintenance Schedule</h6>
+        </div>
+        <div class="card-body">
+          <p><strong>Frequency:</strong> Every {{ record.part.maintenance_frequency }} {{ record.part.maintenance_unit }}(s)</p>
+          {% if record.part.last_maintenance %}
+          <p><strong>Last Maintenance:</strong> {{ record.part.last_maintenance.strftime('%Y-%m-%d') }}</p>
+          {% endif %}
+          {% if record.part.next_maintenance %}
+          <p><strong>Next Due:</strong> {{ record.part.next_maintenance.strftime('%Y-%m-%d') }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+.card {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  border: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.info-section {
+  background-color: #f8f9fa;
+  border-radius: 0.375rem;
+  padding: 1rem;
+}
+
+.info-row {
+  display: flex;
+  margin-bottom: 0.75rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  font-weight: 600;
+  color: #495057;
+  min-width: 120px;
+  flex-shrink: 0;
+  margin-right: 1rem;
+  line-height: 1.5;
+}
+
+.info-value {
+  color: #212529;
+  flex: 1;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.5;
+}
+
+.text-content {
+  background-color: #f8f9fa;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  border: 1px solid #dee2e6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  font-family: inherit;
+  margin: 0;
+  line-height: 1.6;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.badge {
+  white-space: nowrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .info-row {
+    flex-direction: column;
+  }
+  
+  .info-label {
+    min-width: auto;
+    margin-right: 0;
+    margin-bottom: 0.25rem;
+  }
+  
+  .col-lg-6 {
+    margin-bottom: 2rem !important;
+  }
+}
+
+/* Ensure text doesn't overflow containers */
+* {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.container-fluid, .row, .col-md-8, .col-md-4 {
+  overflow-x: hidden;
+}
+</style>
+{% endblock %}

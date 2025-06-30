@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maintenance Record Print Preview</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            font-size: 11pt;
+            line-height: 1.4;
+            max-width: 100%;
+        }
+        
+        /* Compact Header */
+        .print-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 12px;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+        
+        .letterhead-logo {
+            height: 55px;
+            max-width: 120px;
+            object-fit: contain;
+            margin-right: 20px;
+        }
+        
+        .company-info h1 {
+            font-size: 16pt;
+            margin: 0;
+            line-height: 1.2;
+        }
+        
+        .company-info p {
+            font-size: 9pt;
+            margin: 2px 0;
+            color: #666;
+        }
+        
+        .header-right {
+            text-align: right;
+        }
+        
+        .work-order-title {
+            font-size: 15pt;
+            font-weight: bold;
+            margin: 0;
+        }
+        
+        .work-order-meta {
+            font-size: 9pt;
+            color: #666;
+            margin: 2px 0;
+        }
+        
+        /* Vertical Stack Layout for Better Portrait Use */
+        .info-stack {
+            margin-bottom: 16px;
+        }
+        
+        .info-section {
+            border: 1px solid #ddd;
+            padding: 12px;
+            margin-bottom: 12px;
+            background-color: #f9f9f9;
+        }
+        
+        .section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #000;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 3px;
+        }
+        
+        /* Two-column layout within each section */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        .info-row {
+            display: flex;
+            margin-bottom: 5px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            min-width: 90px;
+            font-size: 10pt;
+        }
+        
+        .info-value {
+            font-size: 10pt;
+            flex: 1;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 9pt;
+        }
+        
+        .status-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        /* Work Description - Vertical Stack */
+        .work-section {
+            margin-bottom: 14px;
+        }
+        
+        .work-title {
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 3px;
+        }
+        
+        .work-content {
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #f9f9f9;
+            min-height: 45px;
+            font-size: 10pt;
+            line-height: 1.5;
+        }
+        
+        /* Signature Section - Vertical Stack for Portrait */
+        .signature-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .signature-box {
+            text-align: center;
+        }
+        
+        .signature-label {
+            font-weight: bold;
+            font-size: 10pt;
+            margin-bottom: 20px;
+        }
+        
+        .signature-line {
+            border-bottom: 1px solid #000;
+            height: 40px;
+            margin-bottom: 10px;
+        }
+        
+        .signature-date {
+            font-size: 9pt;
+            color: #666;
+        }
+        
+        .footer {
+            border-top: 1px solid #ccc;
+            padding-top: 8px;
+            font-size: 8pt;
+            color: #666;
+            text-align: center;
+        }
+        
+        @media print {
+            body {
+                padding: 15px;
+                font-size: 10pt;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .info-section {
+                page-break-inside: avoid;
+            }
+            
+            .work-section {
+                page-break-inside: avoid;
+            }
+            
+            .signature-section {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Compact Header -->
+    <div class="print-header">
+        <div class="header-left">
+            {% if company_info.logo_url %}
+            <img src="{{ company_info.logo_url }}" alt="Company Logo" class="letterhead-logo">
+            {% endif %}
+            <div class="company-info">
+                <h1>{{ company_info.name }}</h1>
+                {% if company_info.address %}<p>{{ company_info.address }}</p>{% endif %}
+                <p>
+                    {% if company_info.phone %}{{ company_info.phone }}{% endif %}
+                    {% if company_info.phone and company_info.email %} | {% endif %}
+                    {% if company_info.email %}{{ company_info.email }}{% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="work-order-title">MAINTENANCE RECORD</div>
+            <div class="work-order-meta">Work Order #: {{ record.id }}</div>
+            <div class="work-order-meta">{{ print_date }}</div>
+        </div>
+    </div>
+
+    <!-- Vertical Information Stack -->
+    <div class="info-stack">
+        <!-- Maintenance Details Section -->
+        <div class="info-section">
+            <div class="section-title">Maintenance Details</div>
+            <div class="info-grid">
+                <div>
+                    <div class="info-row">
+                        <div class="info-label">Date:</div>
+                        <div class="info-value">{{ record.date.strftime('%B %d, %Y') }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Type:</div>
+                        <div class="info-value">{{ record.maintenance_type.title() if record.maintenance_type else 'Standard' }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Status:</div>
+                        <div class="info-value">
+                            <span class="status-badge status-{{ record.status if record.status else 'completed' }}">
+                                {{ record.status.title() if record.status else 'Completed' }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="info-row">
+                        <div class="info-label">Technician:</div>
+                        <div class="info-value">
+                            {{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else 'N/A')) }}
+                        </div>
+                    </div>
+                    {% if record.client_id %}
+                    <div class="info-row">
+                        <div class="info-label">Client Ref:</div>
+                        <div class="info-value">{{ record.client_id }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Equipment Information Section -->
+        <div class="info-section">
+            <div class="section-title">Equipment Information</div>
+            <div class="info-grid">
+                <div>
+                    {% if record.machine %}
+                    <div class="info-row">
+                        <div class="info-label">Machine:</div>
+                        <div class="info-value">{{ record.machine.name }}</div>
+                    </div>
+                    {% if record.machine.model %}
+                    <div class="info-row">
+                        <div class="info-label">Model:</div>
+                        <div class="info-value">{{ record.machine.model }}</div>
+                    </div>
+                    {% endif %}
+                    {% if record.machine.machine_number %}
+                    <div class="info-row">
+                        <div class="info-label">Machine #:</div>
+                        <div class="info-value">{{ record.machine.machine_number }}</div>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="info-row">
+                        <div class="info-label">Machine:</div>
+                        <div class="info-value">Not specified</div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div>
+                    {% if record.machine %}
+                    {% if record.machine.serial_number %}
+                    <div class="info-row">
+                        <div class="info-label">Serial #:</div>
+                        <div class="info-value">{{ record.machine.serial_number }}</div>
+                    </div>
+                    {% endif %}
+                    {% if record.machine.site %}
+                    <div class="info-row">
+                        <div class="info-label">Location:</div>
+                        <div class="info-value">{{ record.machine.site.name }}</div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                    
+                    {% if record.part %}
+                    <div class="info-row">
+                        <div class="info-label">Part:</div>
+                        <div class="info-value">{{ record.part.name }}</div>
+                    </div>
+                    {% if record.part.part_number %}
+                    <div class="info-row">
+                        <div class="info-label">Part #:</div>
+                        <div class="info-value">{{ record.part.part_number }}</div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if record.part and record.part.maintenance_frequency and record.part.maintenance_unit %}
+            <div class="info-row" style="margin-top: 4px;">
+                <div class="info-label">Frequency:</div>
+                <div class="info-value">Every {{ record.part.maintenance_frequency }} {{ record.part.maintenance_unit }}{{ 's' if record.part.maintenance_frequency != 1 else '' }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Work Description -->
+    <div class="work-section">
+        <div class="work-title">Work Description</div>
+        <div class="work-content">
+            {{ record.description or 'No description provided.' }}
+        </div>
+    </div>
+
+    <!-- Notes (if any) -->
+    {% if record.notes or record.comments %}
+    <div class="work-section">
+        <div class="work-title">Additional Notes</div>
+        <div class="work-content">
+            {{ record.notes or record.comments }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div class="signature-box">
+            <div class="signature-label">Technician Signature</div>
+            <div class="signature-line"></div>
+            <div class="signature-date">Date: _______________</div>
+        </div>
+        <div class="signature-box">
+            <div class="signature-label">Customer Approval</div>
+            <div class="signature-line"></div>
+            <div class="signature-date">Date: _______________</div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Generated from Maintenance Tracker | Record ID: {{ record.id }} | {{ print_date }}</p>
+    </div>
+</body>
+</html>

@@ -23,7 +23,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">`
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
+    
+    <!-- Enhanced mouse navigation and table improvements -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/horizontal-scroll-enhancements.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/compact-table-layouts.css') }}">
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
@@ -594,6 +598,9 @@
     
     <!-- Main application scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
+    <!-- Enhanced horizontal scrolling support for mouse users -->
+    <script src="{{ url_for('static', filename='js/horizontal-scroll-support.js') }}"></script>
     
     <!-- Remove preload class after page load to enable animations -->
     <script>
