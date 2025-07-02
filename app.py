@@ -4103,9 +4103,14 @@ def bulk_import():
         """Find existing maintenance record or create new one with smart duplicate detection"""
         from datetime import datetime, timedelta
         
+        # Add debug logging
+        app.logger.debug(f"Processing maintenance for machine '{machine.name}' (ID: {machine.id}), part '{part.name}' (ID: {part.id})")
+        
         # Parse the maintenance date
         date_obj = None
         date_str = maintenance_data.get('date', '')
+        
+        app.logger.debug(f"Original date string: '{date_str}'")
         
         if date_str:
             try:
@@ -4139,59 +4144,73 @@ def bulk_import():
                 app.logger.warning(f"Could not parse maintenance date '{date_str}', using 30 days ago as fallback")
             date_obj = datetime.now() - timedelta(days=30)
         
+        app.logger.debug(f"Parsed date: {date_obj}")
+        
         maintenance_type = maintenance_data.get('maintenance_type', 'Scheduled')
         description = maintenance_data.get('description', '').strip()
         performed_by = maintenance_data.get('performed_by', current_user.username)
         
+        app.logger.debug(f"Maintenance type: '{maintenance_type}', Description: '{description[:50]}...'")
+        
         # Look for existing maintenance records that might be duplicates
-        # Check for records on the same day with similar description
+        # Only check for exact duplicates: same part, same date, same type, AND same description
+        # This ensures that different maintenance activities on the same date are treated as separate records
         date_start = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
         date_end = date_start + timedelta(days=1)
         
-        existing = MaintenanceRecord.query.filter(
+        app.logger.debug(f"Checking for existing maintenance records between {date_start} and {date_end}")
+        
+        # First check if there's any record for this part on this date
+        existing_on_date = MaintenanceRecord.query.filter(
             MaintenanceRecord.machine_id == machine.id,
             MaintenanceRecord.part_id == part.id,
             MaintenanceRecord.date >= date_start,
-            MaintenanceRecord.date < date_end,
-            MaintenanceRecord.maintenance_type == maintenance_type
-        ).first()
+            MaintenanceRecord.date < date_end
+        ).all()
         
-        # If we found a record on the same day with same type, check if it's likely the same
+        app.logger.debug(f"Found {len(existing_on_date)} existing maintenance records for this part on this date")
+        
+        # Check for exact duplicates by comparing description and maintenance type
+        existing = None
+        if existing_on_date:
+            for record in existing_on_date:
+                existing_desc = record.description.strip().lower() if record.description else ''
+                new_desc = description.lower()
+                existing_type = record.maintenance_type.strip().lower() if record.maintenance_type else ''
+                new_type = maintenance_type.lower()
+                
+                # Only consider it a duplicate if BOTH description AND maintenance type match exactly
+                # This allows different maintenance activities on the same date to be separate records
+                if existing_desc == new_desc and existing_type == new_type:
+                    existing = record
+                    app.logger.debug(f"Found exact duplicate: ID {existing.id}, matching description and type")
+                    break
+        
+        if not existing:
+            app.logger.debug("No exact duplicate found - creating new maintenance record")
+        
+        # Only update if we found an exact duplicate (same description AND maintenance type)
         if existing:
-            # If descriptions are very similar or one is empty, consider it a duplicate
-            existing_desc = existing.description.strip().lower()
-            new_desc = description.lower()
+            app.logger.debug(f"Found exact duplicate maintenance record: ID {existing.id}, Date: {existing.date}, Type: '{existing.maintenance_type}', Description: '{existing.description[:50]}...'")
             
-            # Check for similarity (either exact match, one contains the other, or both are short)
-            is_duplicate = (
-                existing_desc == new_desc or
-                (len(existing_desc) < 20 and len(new_desc) < 20) or
-                (existing_desc and new_desc and (existing_desc in new_desc or new_desc in existing_desc))
-            )
+            # Update existing record with any new/better data
+            updated = False
             
-            if is_duplicate:
-                # Update existing record with any new/better data
-                updated = False
-                
-                # Update description if new one is more detailed
-                if len(description) > len(existing.description):
-                    existing.description = description
-                    updated = True
-                
-                # Update performed_by if it was generic
-                if existing.performed_by in ['System Import', 'Unknown'] and performed_by not in ['System Import', 'Unknown']:
-                    existing.performed_by = performed_by
-                    updated = True
-                
-                # Update notes if we have additional information
-                new_notes = maintenance_data.get('notes', '').strip()
-                if new_notes and new_notes not in existing.notes:
-                    existing.notes = f"{existing.notes}\n{new_notes}".strip()
-                    updated = True
-                
-                return existing, "Updated existing maintenance record" if updated else "Found existing maintenance record"
+            # Update performed_by if it was generic
+            if existing.performed_by in ['System Import', 'Unknown'] and performed_by not in ['System Import', 'Unknown']:
+                existing.performed_by = performed_by
+                updated = True
+            
+            # Update notes if we have additional information
+            new_notes = maintenance_data.get('notes', '').strip()
+            if new_notes and (not existing.notes or new_notes not in existing.notes):
+                existing.notes = f"{existing.notes}\n{new_notes}".strip() if existing.notes else new_notes
+                updated = True
+            
+            return existing, "Updated existing maintenance record" if updated else "Found existing maintenance record"
         
         # Create new maintenance record
+        app.logger.debug(f"Creating new maintenance record for machine {machine.id}, part {part.id}, date {date_obj}")
         maintenance = MaintenanceRecord(
             machine_id=machine.id,
             part_id=part.id,
@@ -4238,7 +4257,12 @@ def bulk_import():
                         continue
                     
                     # Create a description from available fields
-                    description_parts = [maintenance_done, maintenance_type, required_materials, f"Qty: {qty}"]
+                    description_parts = [maintenance_done, maintenance_type]
+                    if required_materials:
+                        description_parts.append(f"Materials: {required_materials}")
+                    if qty:
+                        description_parts.append(f"Qty: {qty}")
+                    
                     description = ' - '.join([part for part in description_parts if part]).strip(' -');
                     
                     # Parse frequency to get numeric value and unit
