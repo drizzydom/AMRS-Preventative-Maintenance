@@ -138,6 +138,33 @@
         </div>
     </div>
 
+    <!-- Machine Maintenance Summary (NEW) -->
+    {% if machines %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-industry me-2"></i>Machine Maintenance Status
+        </div>
+        <div class="card-body py-2">
+            <ul class="list-group">
+                {% for machine in machines %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>
+                        <strong>{{ machine.name }}</strong>
+                        {% if machine.model %}<small class="text-muted">({{ machine.model }})</small>{% endif %}
+                    </span>
+                    <span>
+                        <span class="badge bg-danger me-1">Overdue: {{ machine_part_status[machine.id].overdue }}</span>
+                        <span class="badge bg-warning text-dark me-1">Due Soon: {{ machine_part_status[machine.id].due_soon }}</span>
+                        <span class="badge bg-success">OK: {{ machine_part_status[machine.id].ok }}</span>
+                        <span class="badge bg-secondary ms-2">Total: {{ machine_part_status[machine.id].total }}</span>
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Maintenance Panels -->
     <div class="row g-2">
         <!-- Overdue Parts Panel -->
