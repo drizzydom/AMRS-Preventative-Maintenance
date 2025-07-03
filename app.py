@@ -911,17 +911,11 @@ def index():
 @login_required
 def dashboard():
     try:
-        # Check if user wants to see decommissioned machines
         show_decommissioned = request.args.get('show_decommissioned', 'false').lower() == 'true'
-        
-        # Get upcoming and overdue maintenance across all sites the user has access to
         if user_can_see_all_sites(current_user):
-            # User can see all sites, eager load machines and parts
             sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
         else:
-            # Check if user has any site assignments first
             if not hasattr(current_user, 'sites') or not current_user.sites:
-                # Handle case where user has no site assignments
                 app.logger.warning(f"User {current_user.username} (ID: {current_user.id}) has no site assignments")
                 return render_template('dashboard.html', 
                                       sites=[], 
@@ -933,15 +927,11 @@ def dashboard():
                                       now=datetime.now(),
                                       show_decommissioned=show_decommissioned,
                                       decommissioned_count=0)
-            
-            # User can only see their assigned sites, eager load as well
             sites = (
                 Site.query.options(joinedload(Site.machines).joinedload(Machine.parts))
                 .filter(Site.id.in_([site.id for site in current_user.sites]))
                 .all()
             )
-        
-        # Get count of decommissioned machines for the toggle
         site_ids = [site.id for site in sites]
         decommissioned_count = 0
         if site_ids:
@@ -949,28 +939,19 @@ def dashboard():
                 Machine.site_id.in_(site_ids),
                 Machine.decommissioned == True
             ).count()
-        
-        # Get machines based on decommissioned toggle
         machines = []
         if site_ids:
             if show_decommissioned:
-                # Show all machines (including decommissioned)
                 machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
             else:
-                # Show only active (non-decommissioned) machines
                 machines = Machine.query.filter(
                     Machine.site_id.in_(site_ids),
                     Machine.decommissioned == False
                 ).all()
-        
-        # Get all parts that need maintenance soon or are overdue
         parts = []
         machine_ids = [machine.id for machine in machines]
         if machine_ids:
-            # Get all parts for these machines
             parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
-        
-        # --- NEW: Summarize part status per machine ---
         now = datetime.now()
         machine_part_status = {}
         for machine in machines:
@@ -994,31 +975,41 @@ def dashboard():
                 'ok': ok,
                 'total': len(m_parts)
             }
-        # --- END NEW ---
-
+        # --- NEW: Limit Overdue/Due Soon Parts to 3 Most Relevant per Site ---
+        site_part_highlights = {}
+        for site in sites:
+            overdue_parts = []
+            due_soon_parts = []
+            for machine in site.machines:
+                if not show_decommissioned and machine.decommissioned:
+                    continue
+                for part in machine.parts:
+                    days_until = (part.next_maintenance - now).days if part.next_maintenance else None
+                    if days_until is not None:
+                        if days_until < 0:
+                            overdue_parts.append((part, machine, site, days_until))
+                        elif days_until <= (site.notification_threshold or 30):
+                            due_soon_parts.append((part, machine, site, days_until))
+            # Sort and limit
+            overdue_parts = sorted(overdue_parts, key=lambda x: x[3])[:3]  # Most overdue first
+            due_soon_parts = sorted(due_soon_parts, key=lambda x: x[3])[:3]  # Soonest due first
+            site_part_highlights[site.id] = {
+                'overdue': overdue_parts,
+                'due_soon': due_soon_parts
+            }
+        # For all sites view, aggregate top 3 overall
+        all_overdue = []
+        all_due_soon = []
+        for site in sites:
+            all_overdue.extend(site_part_highlights[site.id]['overdue'])
+            all_due_soon.extend(site_part_highlights[site.id]['due_soon'])
+        all_overdue = sorted(all_overdue, key=lambda x: x[3])[:3]
+        all_due_soon = sorted(all_due_soon, key=lambda x: x[3])[:3]
         # Get statistics
-        stats = {
-            'sites_count': len(sites),
-            'machines_count': len(machines),
-            'parts_count': len(parts),
-            'overdue_count': 0,
-            'due_soon_count': 0
-        }
-        
-        # Process parts for maintenance status
-        overdue_count = 0
-        due_soon_count = 0
-        ok_count = 0
-        for part in parts:
-            days_until = (part.next_maintenance - now).days
-            if days_until < 0:
-                overdue_count += 1
-            elif days_until <= 30:
-                due_soon_count += 1
-            else:
-                ok_count += 1
+        overdue_count = sum(1 for part in parts if (part.next_maintenance - now).days < 0)
+        due_soon_count = sum(1 for part in parts if 0 <= (part.next_maintenance - now).days <= 30)
+        ok_count = sum(1 for part in parts if (part.next_maintenance - now).days > 30)
         total_parts = len(parts)
-        
         return render_template('dashboard.html', 
                               sites=sites, 
                               overdue_count=overdue_count, 
@@ -1028,10 +1019,12 @@ def dashboard():
                               now=now,
                               show_decommissioned=show_decommissioned,
                               decommissioned_count=decommissioned_count,
-                              machine_part_status=machine_part_status)  # <-- Pass to template
+                              machine_part_status=machine_part_status,
+                              site_part_highlights=site_part_highlights,
+                              all_overdue=all_overdue,
+                              all_due_soon=all_due_soon)
     except Exception as e:
         app.logger.error(f"Dashboard error: {str(e)}")
-        # Instead of redirecting, show a minimal dashboard with an error message
         flash(f'Error loading dashboard data: {str(e)}', 'error')
         return render_template('dashboard.html', 
                               sites=[], 
@@ -1771,7 +1764,7 @@ def audit_history_print_view():
                     get_calendar_weeks=lambda start, end: [],
                     today=today
                 )
-    completions = query.all()
+    completions = completions_query.all()
 
     print(f"[DEBUG] Print view - Date range: {start_date} to {end_date}")
     print(f"[DEBUG] Print view - Site filter: {site_id}, Machine filter: {machine_id}")
@@ -3090,12 +3083,12 @@ def manage_machines():
                 flash('You do not have access to this site.', 'danger')
                 return redirect(url_for('manage_machines'))
                 
-            # Filter machines by selected site
+            # Filter machines by the selected site
             machines_query = Machine.query.filter_by(site_id=site_id)
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
             # Show machines from all sites user has access to
-            machines_query = Machine.query.filter(Machine.site_id.in_(site_ids)) if site_ids else Machine.query.filter(False)
+            machines_query = Machine.query.filter(Part.machine_id.in_(machine_ids)) if machine_ids else Machine.query.filter(False)
             title = "Machines"
         
         # Apply decommissioned filter
@@ -3413,7 +3406,7 @@ def import_excel_route():
             return redirect(url_for('admin_excel_import'))
             
     # GET request - redirect to the Excel import page
-    return redirect(url_for('admin_excel_import'))
+    return render_template('admin/excel_import.html') if os.path.exists(os.path.join('templates', 'admin', 'excel_import.html')) else "<h1>Excel Import Page</h1>"
 
 @app.route('/part/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
@@ -3758,6 +3751,8 @@ def delete_audit_task(audit_task_id):
         # Get the audit task
         audit_task = AuditTask.query.get_or_404(audit_task_id)
         
+
+        
         # Check if the user has access to this site
         if not current_user.is_admin:
             user_site_ids = [site.id for site in current_user.sites]
@@ -3796,7 +3791,7 @@ def bulk_import():
 
     # Get sites for the dropdown
     if current_user.is_admin:
-        sites = Site.query.all()
+        sites = Site.query.order_by(Site.name).all()
     else:
         sites = current_user.sites
 
