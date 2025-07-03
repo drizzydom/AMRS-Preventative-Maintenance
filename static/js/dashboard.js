@@ -416,29 +416,29 @@ function setupPartToggles() {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            
             const targetId = this.getAttribute('data-target');
             if (!targetId) return;
-            
             const targetRow = document.querySelector(targetId);
             if (!targetRow) return;
-            
             // Use Bootstrap's collapse functionality
-            const bsCollapse = new bootstrap.Collapse(targetRow, {
-                toggle: true
-            });
-            
+            let bsCollapse = bootstrap.Collapse.getInstance(targetRow);
+            if (!bsCollapse) {
+                bsCollapse = new bootstrap.Collapse(targetRow, { toggle: false });
+            }
+            if (targetRow.classList.contains('show')) {
+                bsCollapse.hide();
+            } else {
+                bsCollapse.show();
+            }
             // Update the button state based on the row's visibility
-            // We need to use an event listener because Bootstrap toggle is asynchronous
             targetRow.addEventListener('shown.bs.collapse', () => {
                 this.setAttribute('aria-expanded', 'true');
                 this.classList.add('active');
-            });
-            
+            }, { once: true });
             targetRow.addEventListener('hidden.bs.collapse', () => {
                 this.setAttribute('aria-expanded', 'false');
                 this.classList.remove('active');
-            });
+            }, { once: true });
         });
     });
 }
