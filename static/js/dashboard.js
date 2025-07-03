@@ -397,17 +397,25 @@ function showAllParts() {
 function updateToggleButtonText(isShowing) {
     const toggleText = document.getElementById('toggleAllText');
     const toggleBtn = document.getElementById('toggleAllMachineParts');
-    
     if (toggleText) {
         toggleText.textContent = isShowing ? 'Hide All Parts' : 'Show All Parts';
     }
-    
     if (toggleBtn) {
         const icon = toggleBtn.querySelector('i');
         if (icon) {
             icon.className = isShowing ? 'fas fa-eye-slash me-1' : 'fas fa-eye me-1';
         }
     }
+    // Also update all individual toggle buttons' aria-expanded and .active state
+    document.querySelectorAll('.toggle-parts-btn').forEach(function(btn) {
+        const targetId = btn.getAttribute('data-target');
+        const targetRow = document.querySelector(targetId);
+        if (targetRow) {
+            const expanded = targetRow.classList.contains('show');
+            btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            btn.classList.toggle('active', expanded);
+        }
+    });
 }
 
 // Set up individual part toggle buttons
@@ -434,11 +442,24 @@ function setupPartToggles() {
             targetRow.addEventListener('shown.bs.collapse', () => {
                 this.setAttribute('aria-expanded', 'true');
                 this.classList.add('active');
+                updateToggleButtonText(areAllPartsShowing());
             }, { once: true });
             targetRow.addEventListener('hidden.bs.collapse', () => {
                 this.setAttribute('aria-expanded', 'false');
                 this.classList.remove('active');
+                updateToggleButtonText(areAllPartsShowing());
             }, { once: true });
+        });
+    });
+    // Add click handler for machine history buttons to redirect to maintenance records with filter
+    document.querySelectorAll('.btn-machine-history').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const machineId = this.getAttribute('data-machine-id');
+            if (machineId) {
+                // Redirect to maintenance records with machine filter
+                window.location.href = '/maintenance/records?machine_id=' + encodeURIComponent(machineId);
+            }
         });
     });
 }

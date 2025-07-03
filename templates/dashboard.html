@@ -179,6 +179,11 @@
                     <span class="badge bg-danger">{{ overdue_count }}</span>
                 </div>
                 <div class="card-body p-0">
+                    {% if highlights|length > 3 %}
+                    <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
+                        Only the 3 most relevant overdue parts are shown here. Additional overdue maintenance items are listed below under the machines.
+                    </div>
+                    {% endif %}
                     <div class="table-responsive d-none d-md-block">
                         <table class="table table-hover align-middle">
                             <thead>
@@ -249,6 +254,11 @@
                     <span class="badge bg-warning text-dark">{{ due_soon_count }}</span>
                 </div>
                 <div class="card-body p-0">
+                    {% if highlights|length > 3 %}
+                    <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
+                        Only the 3 most relevant due soon parts are shown here. Additional due soon maintenance items are listed below under the machines.
+                    </div>
+                    {% endif %}
                     <div class="table-responsive d-none d-md-block">
                         <table class="table table-hover align-middle">
                             <thead>
@@ -434,7 +444,7 @@
                                                   <i class="fas fa-list"></i>
                                               </button>
                                               
-                                              <a href="{{ url_for('machine_history', machine_id=machine.id) }}" class="btn btn-sm btn-outline-info btn-icon" aria-label="History">
+                                              <a href="{{ url_for('maintenance_records_page') }}?machine_id={{ machine.id }}" class="btn btn-sm btn-outline-info btn-icon btn-machine-history" data-machine-id="{{ machine.id }}" aria-label="History">
                                                   <i class="fas fa-history"></i>
                                               </a>
                                           </div>
