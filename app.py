@@ -1106,10 +1106,25 @@ def dashboard():
 def maintenance_records_redirect():
     """Redirect /maintenance/records to /api/maintenance/records, preserving query parameters."""
     query_string = request.query_string.decode('utf-8')
-    target = '/api/maintenance/records'
     if query_string:
-        target += '?' + query_string
-    return redirect(target)
+        return redirect(f'/api/maintenance/records?{query_string}')
+    return redirect('/api/maintenance/records')
+
+@app.route('/sites')
+@login_required
+def manage_sites():
+    """Sites management page."""
+    try:
+        # Check if user has permission to view sites
+        if not current_user.is_admin:
+            flash('You do not have permission to manage sites.', 'error')
+            return redirect(url_for('dashboard'))
+        
+        return render_template('sites.html', can_create=current_user.is_admin)
+    except Exception as e:
+        app.logger.error(f"Error in manage_sites view: {e}")
+        flash('An error occurred while loading the sites page.', 'error')
+        return redirect(url_for('dashboard'))
 
 
 
