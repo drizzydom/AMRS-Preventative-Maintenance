@@ -916,6 +916,64 @@ def index():
         return redirect(url_for('dashboard'))
     return render_template('login.html')
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handle user login."""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username and password:
+            user = User.query.filter_by(username=username).first()
+            
+            if user and check_password_hash(user.password_hash, password):
+                login_user(user, remember=request.form.get('remember'))
+                next_page = request.args.get('next')
+                if next_page:
+                    return redirect(next_page)
+                return redirect(url_for('dashboard'))
+            else:
+                flash('Invalid username or password', 'error')
+        else:
+            flash('Please enter both username and password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Handle user logout."""
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('index'))
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    """Handle password reset requests."""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if email:
+            user = User.query.filter_by(email=email).first()
+            if user:
+                # TODO: Implement actual password reset functionality with email
+                # For now, just show a success message
+                flash('If an account with that email exists, a password reset link has been sent.', 'success')
+                return redirect(url_for('login'))
+            else:
+                # Don't reveal whether the email exists for security reasons
+                flash('If an account with that email exists, a password reset link has been sent.', 'success')
+                return redirect(url_for('login'))
+        else:
+            flash('Please enter your email address', 'error')
+    
+    return render_template('forgot_password.html')
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
