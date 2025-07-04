@@ -440,7 +440,7 @@
                         {# Sites Management - requires sites.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
+                            <a href="{{ safe_url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-building"></i>
                                 <span class="sidebar-link-text">Sites</span>
                             </a>
@@ -450,7 +450,7 @@
                         {# Machines Management - requires machines.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'machines.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                            <a href="{{ safe_url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-industry"></i>
                                 <span class="sidebar-link-text">Machines</span>
                             </a>
@@ -460,7 +460,7 @@
                         {# Parts Management - requires parts.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'parts.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                            <a href="{{ safe_url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-cogs"></i>
                                 <span class="sidebar-link-text">Parts</span>
                             </a>
@@ -488,7 +488,7 @@
                         {# Admin Panel - requires admin role #}
                         {% if current_user.is_admin %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                            <a href="{{ safe_url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-user-shield"></i>
                                 <span class="sidebar-link-text">Admin</span>
                             </a>
