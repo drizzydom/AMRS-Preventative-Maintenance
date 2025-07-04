@@ -438,17 +438,10 @@ function setupPartToggles() {
             } else {
                 bsCollapse.show();
             }
-            // Update the button state based on the row's visibility
-            targetRow.addEventListener('shown.bs.collapse', () => {
-                this.setAttribute('aria-expanded', 'true');
-                this.classList.add('active');
+            // Always update global toggle button after any toggle
+            setTimeout(function() {
                 updateToggleButtonText(areAllPartsShowing());
-            }, { once: true });
-            targetRow.addEventListener('hidden.bs.collapse', () => {
-                this.setAttribute('aria-expanded', 'false');
-                this.classList.remove('active');
-                updateToggleButtonText(areAllPartsShowing());
-            }, { once: true });
+            }, 350); // Wait for collapse animation
         });
     });
     // Add click handler for machine history buttons to redirect to maintenance records with filter
