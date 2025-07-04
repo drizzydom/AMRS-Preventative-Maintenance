@@ -815,7 +815,7 @@ def inject_common_variables():
         is_auth = getattr(current_user, 'is_authenticated', False)
     except Exception:
         is_auth = False
-    
+
     def has_permission(permission_name):
         """Check if current user has a specific permission"""
         if not current_user.is_authenticated:
@@ -825,7 +825,15 @@ def inject_common_variables():
         if hasattr(current_user, 'role') and current_user.role and current_user.role.permissions:
             return permission_name in current_user.role.permissions.split(',')
         return False
-    
+
+    # Define a safe_date function for templates (used in audit_history.html)
+    def safe_date(year, month, day):
+        """Return a valid date object, or None if invalid."""
+        try:
+            return datetime(year, month, day)
+        except Exception:
+            return None
+
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
@@ -1034,6 +1042,16 @@ def dashboard():
     except Exception as e:
         app.logger.error(f"Error in dashboard view: {e}")
         return render_template('dashboard.html', error=True)
+
+@app.route('/maintenance/records')
+@login_required
+def maintenance_records_redirect():
+    """Redirect /maintenance/records to /api/maintenance/records, preserving query parameters."""
+    query_string = request.query_string.decode('utf-8')
+    target = '/api/maintenance/records'
+    if query_string:
+        target += '?' + query_string
+    return redirect(target)
 
 
 
