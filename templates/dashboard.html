@@ -179,7 +179,9 @@
                     <span class="badge bg-danger">{{ overdue_count }}</span>
                 </div>
                 <div class="card-body p-0">
-                    {% if highlights|length > 3 %}
+                    {% set highlights = all_overdue if sites|length > 1 else site_part_highlights[sites[0].id]['overdue'] %}
+                    {% set total_overdue = all_overdue_total if sites|length > 1 else site_part_totals[sites[0].id]['overdue'] %}
+                    {% if total_overdue > 3 %}
                     <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
                         Only the 3 most relevant overdue parts are shown here. Additional overdue maintenance items are listed below under the machines.
                     </div>
@@ -198,7 +200,6 @@
                             </thead>
                             <tbody>
                                 {# Show top 3 most relevant overdue parts for the current filter #}
-                                {% set highlights = all_overdue if sites|length > 1 else site_part_highlights[sites[0].id]['overdue'] %}
                                 {% for part, machine, site, days_until in highlights %}
                                 <tr data-site-id="{{ site.id }}">
                                     <td>{{ part.name }}</td>
@@ -254,7 +255,9 @@
                     <span class="badge bg-warning text-dark">{{ due_soon_count }}</span>
                 </div>
                 <div class="card-body p-0">
-                    {% if highlights|length > 3 %}
+                    {% set highlights = all_due_soon if sites|length > 1 else site_part_highlights[sites[0].id]['due_soon'] %}
+                    {% set total_due_soon = all_due_soon_total if sites|length > 1 else site_part_totals[sites[0].id]['due_soon'] %}
+                    {% if total_due_soon > 3 %}
                     <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
                         Only the 3 most relevant due soon parts are shown here. Additional due soon maintenance items are listed below under the machines.
                     </div>
@@ -273,7 +276,6 @@
                             </thead>
                             <tbody>
                                 {# Show top 3 most relevant due soon parts for the current filter #}
-                                {% set highlights = all_due_soon if sites|length > 1 else site_part_highlights[sites[0].id]['due_soon'] %}
                                 {% for part, machine, site, days_until in highlights %}
                                 <tr data-site-id="{{ site.id }}">
                                     <td>{{ part.name }}</td>
