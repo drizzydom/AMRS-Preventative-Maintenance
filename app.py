@@ -1049,6 +1049,27 @@ def dashboard():
             all_due_soon_total += site_part_totals[site.id]['due_soon']
         all_overdue = sorted(all_overdue, key=lambda x: x[3])[:3]
         all_due_soon = sorted(all_due_soon, key=lambda x: x[3])[:3]
+        
+        # Calculate overall counts for status counters
+        overdue_count = all_overdue_total
+        due_soon_count = all_due_soon_total
+        ok_count = 0
+        total_parts = len(parts)
+        
+        # Calculate OK count (parts that are not overdue or due soon)
+        for part in parts:
+            days_until = (part.next_maintenance - now).days if part.next_maintenance else None
+            if days_until is None:
+                ok_count += 1
+            elif days_until >= 0:
+                # Find the part's machine's site for notification threshold
+                part_machine = next((m for m in machines if m.id == part.machine_id), None)
+                if part_machine:
+                    part_site = next((s for s in sites if s.id == part_machine.site_id), None)
+                    threshold = part_site.notification_threshold if part_site else 30
+                    if days_until > threshold:
+                        ok_count += 1
+        
         return render_template(
             'dashboard.html',
             sites=sites,
@@ -1064,10 +1085,23 @@ def dashboard():
             all_due_soon=all_due_soon,
             all_overdue_total=all_overdue_total,
             all_due_soon_total=all_due_soon_total,
+            overdue_count=overdue_count,
+            due_soon_count=due_soon_count,
+            ok_count=ok_count,
+            total_parts=total_parts,
             )
     except Exception as e:
         app.logger.error(f"Error in dashboard view: {e}")
-        return render_template('dashboard.html', error=True)
+        return render_template('dashboard.html', 
+                             error=True,
+                             sites=[],
+                             overdue_count=0,
+                             due_soon_count=0,
+                             ok_count=0,
+                             total_parts=0,
+                             now=datetime.now(),
+                             show_decommissioned=False,
+                             decommissioned_count=0)
 
 @app.route('/maintenance/records')
 @login_required
