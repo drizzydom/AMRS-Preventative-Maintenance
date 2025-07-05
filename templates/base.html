@@ -431,7 +431,7 @@
                         
                         <!-- Regular sidebar navigation items -->
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                            <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-tachometer-alt"></i>
                                 <span class="sidebar-link-text">Dashboard</span>
                             </a>
@@ -440,7 +440,7 @@
                         {# Sites Management - requires sites.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
+                            <a href="{{ url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-building"></i>
                                 <span class="sidebar-link-text">Sites</span>
                             </a>
@@ -450,7 +450,7 @@
                         {# Machines Management - requires machines.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'machines.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                            <a href="{{ url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-industry"></i>
                                 <span class="sidebar-link-text">Machines</span>
                             </a>
@@ -460,7 +460,7 @@
                         {# Parts Management - requires parts.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'parts.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                            <a href="{{ url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-cogs"></i>
                                 <span class="sidebar-link-text">Parts</span>
                             </a>
@@ -470,7 +470,7 @@
                         {# Record Maintenance - requires maintenance.record permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.record' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('maintenance_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                            <a href="{{ url_for('maintenance_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-tools"></i>
                                 <span class="sidebar-link-text">Record Maintenance</span>
                             </a>
@@ -479,7 +479,7 @@
 
                         {# User Profile - always available to authenticated users #}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
+                            <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-user"></i>
                                 <span class="sidebar-link-text">User Profile</span>
                             </a>
@@ -488,7 +488,7 @@
                         {# Admin Panel - requires admin role #}
                         {% if current_user.is_admin %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                            <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-user-shield"></i>
                                 <span class="sidebar-link-text">Admin</span>
                             </a>
@@ -498,13 +498,13 @@
                         {# Audits - requires audits.access permission #}
                         {% if current_user.is_authenticated and (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'audits.access' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('audits_page') }}" class="sidebar-link {% if request.endpoint == 'audits_page' %}active{% endif %}">
+                            <a href="{{ url_for('audits_page') }}" class="sidebar-link {% if request.endpoint == 'audits_page' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-clipboard-check"></i>
                                 <span class="sidebar-link-text">Audits</span>
                             </a>
                         </li>
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('audit_history_page') }}" class="sidebar-link {% if request.endpoint == 'audit_history_page' %}active{% endif %}">
+                            <a href="{{ url_for('audit_history_page') }}" class="sidebar-link {% if request.endpoint == 'audit_history_page' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-history"></i>
                                 <span class="sidebar-link-text">Audit History</span>
                             </a>
@@ -514,7 +514,7 @@
                         {# Maintenance Records - requires maintenance.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ safe_url_for('maintenance_records_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_records_page' %}active{% endif %}">
+                            <a href="{{ url_for('maintenance_records_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_records_page' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-history"></i>
                                 <span class="sidebar-link-text">Maintenance Records</span>
                             </a>

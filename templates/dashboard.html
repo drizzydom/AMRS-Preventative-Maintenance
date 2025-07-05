@@ -513,7 +513,7 @@
     </div>
     {% else %}
     <div class="alert alert-info">
-        <i class="fas fa-info-circle me-2"></i> No sites available. {% if is_admin %}<a href="{{ safe_url_for('manage_sites') }}">Add a site</a>{% endif %}
+        <i class="fas fa-info-circle me-2"></i> No sites available. {% if is_admin %}<a href="{{ url_for('manage_sites') }}">Add a site</a>{% endif %}
     </div>
     {% endif %}
     {% endif %}

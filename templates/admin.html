@@ -14,7 +14,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Users</h5>
                     <h2 class="display-4">{{ user_count }}</h2>
-                    <a href="{{ url_for_safe('manage_users') }}" class="btn btn-primary">Manage Users</a>
+                    <a href="{{ url_for('manage_users') }}" class="btn btn-primary">Manage Users</a>
                 </div>
             </div>
         </div>
@@ -23,7 +23,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Sites</h5>
                     <h2 class="display-4">{{ site_count }}</h2>
-                    <a href="{{ url_for_safe('manage_sites') }}" class="btn btn-primary">Manage Sites</a>
+                    <a href="{{ url_for('manage_sites') }}" class="btn btn-primary">Manage Sites</a>
                 </div>
             </div>
         </div>
@@ -32,7 +32,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Machines</h5>
                     <h2 class="display-4">{{ machine_count }}</h2>
-                    <a href="{{ url_for_safe('manage_machines') }}" class="btn btn-primary">Manage Machines</a>
+                    <a href="{{ url_for('manage_machines') }}" class="btn btn-primary">Manage Machines</a>
                 </div>
             </div>
         </div>
@@ -41,7 +41,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Parts</h5>
                     <h2 class="display-4">{{ part_count }}</h2>
-                    <a href="{{ url_for_safe('manage_parts') }}" class="btn btn-primary">Manage Parts</a>
+                    <a href="{{ url_for('manage_parts') }}" class="btn btn-primary">Manage Parts</a>
                 </div>
             </div>
         </div>
@@ -59,23 +59,23 @@
                     <div class="admin-actions mb-4">
                         <div class="row g-3">
                             <div class="col-md-6 col-xl-3">
-                                <a href="{{ url_for_safe('manage_users') }}" class="btn btn-lg btn-outline-primary">
+                                <a href="{{ url_for('manage_users') }}" class="btn btn-lg btn-outline-primary">
                                     <i class="fas fa-users me-2"></i> User Management
                                 </a>
                             </div>
                             <div class="col-md-6 col-xl-3">
-                                <a href="{{ url_for_safe('manage_roles') }}" class="btn btn-lg btn-outline-primary">
+                                <a href="{{ url_for('manage_roles') }}" class="btn btn-lg btn-outline-primary">
                                     <i class="fas fa-user-shield me-2"></i> Roles & Permissions
                                 </a>
                             </div>
                             
                             <div class="col-md-6 col-xl-3">
-                                <a href="{{ url_for_safe('debug_info') }}" target="_blank" class="btn btn-lg btn-outline-secondary">
+                                <a href="{{ url_for('debug_info') }}" target="_blank" class="btn btn-lg btn-outline-secondary">
                                     <i class="fas fa-bug me-2"></i> System Info
                                 </a>
                             </div>
                             <div class="col-md-6 col-xl-3">
-                                <a href="{{ url_for_safe('test_email') }}" class="btn btn-lg btn-outline-info">
+                                <a href="{{ url_for('test_email') }}" class="btn btn-lg btn-outline-info">
                                     <i class="fas fa-envelope me-2"></i> Test Email
                                 </a>
                             </div>
