@@ -836,8 +836,6 @@ def inject_common_variables():
 
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
-        'url_for_safe': url_for_safe,
-        'safe_url_for': url_for_safe,  # Add alias for clearer naming
         'datetime': datetime,
         'now': datetime.now(),
         'hasattr': hasattr,  # Add hasattr function to be available in templates
@@ -845,47 +843,6 @@ def inject_common_variables():
         'Role': Role,  # Add Role class to template context so it can be used in templates
         'safe_date': safe_date  # Add safe_date function for templates
     }
-
-def url_for_safe(endpoint, **values):
-    """A safe wrapper for url_for that won't raise exceptions."""
-    try:
-        return url_for(endpoint, **values)
-    except Exception as e:
-        app.logger.warning(f"URL building error for endpoint '{endpoint}': {e}")
-        
-        # Simple fallbacks for common routes
-        if endpoint == 'manage_machines':
-            return '/machines'
-        elif endpoint == 'manage_sites':
-            return '/sites'  
-        elif endpoint == 'manage_parts':
-            return '/parts'
-        elif endpoint == 'manage_users':
-            return '/admin/users'
-        elif endpoint == 'manage_roles':  # Add fallback for 'manage_roles'
-            return '/admin/roles'
-        elif endpoint == 'admin_roles':  # Add fallback for 'admin_roles' as well
-            return '/admin/roles'
-        elif endpoint == 'user_profile':
-            return '/profile'
-        elif endpoint == 'audits_page':
-            return '/audits'
-        elif endpoint == 'audit_history_page':
-            return '/audit_history'
-        elif endpoint == 'maintenance_page':
-            return '/maintenance'
-        elif endpoint == 'maintenance_records_page':
-            return '/maintenance/records'
-        elif endpoint == 'update_maintenance' and 'part_id' in values:
-            return f'/update-maintenance/{values["part_id"]}'
-        elif endpoint == 'machine_history' and 'machine_id' in values:
-            return f'/machine-history/{values["machine_id"]}'
-        elif endpoint == 'admin_dashboard':
-            return '/admin'
-        elif endpoint.startswith('admin_'):
-            return '/admin'
-        else:
-            return '/dashboard'
 
 def get_all_permissions():
     """Return a dictionary of all available permissions."""
