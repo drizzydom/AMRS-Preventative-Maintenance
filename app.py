@@ -837,6 +837,7 @@ def inject_common_variables():
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
+        'safe_url_for': url_for_safe,  # Add alias for clearer naming
         'datetime': datetime,
         'now': datetime.now(),
         'hasattr': hasattr,  # Add hasattr function to be available in templates
@@ -1103,7 +1104,7 @@ def dashboard():
 
 @app.route('/maintenance/records')
 @login_required
-def maintenance_records_redirect():
+def maintenance_records_page():
     """Redirect /maintenance/records to /api/maintenance/records, preserving query parameters."""
     query_string = request.query_string.decode('utf-8')
     if query_string:
@@ -1125,6 +1126,81 @@ def manage_sites():
         app.logger.error(f"Error in manage_sites view: {e}")
         flash('An error occurred while loading the sites page.', 'error')
         return redirect(url_for('dashboard'))
+
+@app.route('/machines')
+@login_required
+def manage_machines():
+    """Machines management page."""
+    try:
+        # Check if user has permission to view machines
+        if not current_user.is_admin:
+            flash('You do not have permission to manage machines.', 'error')
+            return redirect(url_for('dashboard'))
+        
+        # For now, redirect to dashboard as we don't have a machines template yet
+        flash('Machine management page is coming soon.', 'info')
+        return redirect(url_for('dashboard'))
+    except Exception as e:
+        app.logger.error(f"Error in manage_machines view: {e}")
+        flash('An error occurred while loading the machines page.', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/parts')
+@login_required
+def manage_parts():
+    """Parts management page."""
+    try:
+        # Check if user has permission to view parts
+        if not current_user.is_admin:
+            flash('You do not have permission to manage parts.', 'error')
+            return redirect(url_for('dashboard'))
+        
+        # For now, redirect to dashboard as we don't have a parts template yet
+        flash('Parts management page is coming soon.', 'info')
+        return redirect(url_for('dashboard'))
+    except Exception as e:
+        app.logger.error(f"Error in manage_parts view: {e}")
+        flash('An error occurred while loading the parts page.', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/admin')
+@login_required
+def admin():
+    """Admin dashboard page."""
+    try:
+        # Check if user has admin privileges
+        if not current_user.is_admin:
+            flash('You do not have permission to access the admin area.', 'error')
+            return redirect(url_for('dashboard'))
+        
+        # For now, redirect to dashboard as we don't have an admin template yet
+        flash('Admin dashboard is coming soon.', 'info')
+        return redirect(url_for('dashboard'))
+    except Exception as e:
+        app.logger.error(f"Error in admin view: {e}")
+        flash('An error occurred while loading the admin page.', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/maintenance')
+@login_required
+def maintenance_page():
+    """Maintenance page for recording maintenance activities."""
+    try:
+        # Check if user has permission to record maintenance
+        # For now, just check if user is admin or authenticated
+        if not current_user.is_authenticated:
+            flash('You must be logged in to access the maintenance page.', 'error')
+            return redirect(url_for('index'))
+        
+        # For now, redirect to dashboard as we don't have a maintenance template yet
+        flash('Maintenance page is coming soon.', 'info')
+        return redirect(url_for('dashboard'))
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_page view: {e}")
+        flash('An error occurred while loading the maintenance page.', 'error')
+        return redirect(url_for('dashboard'))
+
+# ...existing code...
 
 
 
