@@ -13,8 +13,10 @@
 {% endblock %}
 
 {% block content %}
-<!-- Bare minimum card with no extra containers -->
-<div class="card">
+<div class="row g-2">
+    <div class="col-12">
+        <!-- Bare minimum card with no extra containers -->
+        <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0">Parts</h5>
         {% if machine_id %}
@@ -171,6 +173,8 @@
                 </form>
             </div>
         </div>
+    </div>
+</div>
     </div>
 </div>
 {% endblock %}
