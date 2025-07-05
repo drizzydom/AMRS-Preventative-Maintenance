@@ -866,6 +866,16 @@ def url_for_safe(endpoint, **values):
             return '/admin/roles'
         elif endpoint == 'admin_roles':  # Add fallback for 'admin_roles' as well
             return '/admin/roles'
+        elif endpoint == 'user_profile':
+            return '/profile'
+        elif endpoint == 'audits_page':
+            return '/audits'
+        elif endpoint == 'audit_history_page':
+            return '/audit_history'
+        elif endpoint == 'maintenance_page':
+            return '/maintenance'
+        elif endpoint == 'maintenance_records_page':
+            return '/maintenance/records'
         elif endpoint == 'update_maintenance' and 'part_id' in values:
             return f'/update-maintenance/{values["part_id"]}'
         elif endpoint == 'machine_history' and 'machine_id' in values:
@@ -1181,23 +1191,42 @@ def admin():
         flash('An error occurred while loading the admin page.', 'error')
         return redirect(url_for('dashboard'))
 
-@app.route('/maintenance')
+@app.route('/profile')
 @login_required
-def maintenance_page():
-    """Maintenance page for recording maintenance activities."""
+def user_profile():
+    """User profile page."""
     try:
-        # Check if user has permission to record maintenance
-        # For now, just check if user is admin or authenticated
-        if not current_user.is_authenticated:
-            flash('You must be logged in to access the maintenance page.', 'error')
-            return redirect(url_for('index'))
-        
-        # For now, redirect to dashboard as we don't have a maintenance template yet
-        flash('Maintenance page is coming soon.', 'info')
+        # Use the existing profile template
+        return render_template('profile.html')
+    except Exception as e:
+        app.logger.error(f"Error in user_profile view: {e}")
+        flash('An error occurred while loading your profile.', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/audits')
+@login_required
+def audits_page():
+    """Audits page."""
+    try:
+        # For now, show a coming soon message
+        flash('Audits page is coming soon.', 'info')
         return redirect(url_for('dashboard'))
     except Exception as e:
-        app.logger.error(f"Error in maintenance_page view: {e}")
-        flash('An error occurred while loading the maintenance page.', 'error')
+        app.logger.error(f"Error in audits_page view: {e}")
+        flash('An error occurred while loading the audits page.', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/audit_history')
+@login_required
+def audit_history_page():
+    """Audit history page."""
+    try:
+        # For now, show a coming soon message
+        flash('Audit history page is coming soon.', 'info')
+        return redirect(url_for('dashboard'))
+    except Exception as e:
+        app.logger.error(f"Error in audit_history_page view: {e}")
+        flash('An error occurred while loading the audit history page.', 'error')
         return redirect(url_for('dashboard'))
 
 # ...existing code...
