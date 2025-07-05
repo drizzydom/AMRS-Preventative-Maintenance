@@ -1148,6 +1148,55 @@ def admin():
         flash('An error occurred while loading the admin page.', 'error')
         return redirect(url_for('dashboard'))
 
+@app.route('/admin/users')
+@login_required  
+def manage_users():
+    """Manage users page"""
+    try:
+        from models import User, Role
+        users = User.query.all()
+        roles = Role.query.all()
+        return render_template('admin/users.html', users=users, roles=roles)
+    except Exception as e:
+        app.logger.error(f"Error in manage_users view: {e}")
+        flash('An error occurred while loading the users management page.', 'error')
+        return redirect(url_for('admin'))
+
+@app.route('/admin/roles')
+@login_required
+def manage_roles():
+    """Manage roles page"""
+    try:
+        from models import Role
+        roles = Role.query.all()
+        return render_template('admin/roles.html', roles=roles)
+    except Exception as e:
+        app.logger.error(f"Error in manage_roles view: {e}")
+        flash('An error occurred while loading the roles management page.', 'error')
+        return redirect(url_for('admin'))
+
+@app.route('/debug_info')
+@login_required
+def debug_info():
+    """Debug info page"""
+    try:
+        return render_template('admin/debug_info.html')
+    except Exception as e:
+        app.logger.error(f"Error in debug_info view: {e}")
+        flash('An error occurred while loading the debug info page.', 'error')
+        return redirect(url_for('admin'))
+
+@app.route('/test_email')
+@login_required  
+def test_email():
+    """Test email page"""
+    try:
+        return render_template('admin/test_email.html')
+    except Exception as e:
+        app.logger.error(f"Error in test_email view: {e}")
+        flash('An error occurred while loading the test email page.', 'error')
+        return redirect(url_for('admin'))
+
 @app.route('/profile')
 @login_required
 def user_profile():
@@ -1186,7 +1235,18 @@ def audit_history_page():
         flash('An error occurred while loading the audit history page.', 'error')
         return redirect(url_for('dashboard'))
 
-# ...existing code...
+@app.route('/maintenance')
+@login_required
+def maintenance_page():
+    """Maintenance page for recording maintenance activities"""
+    try:
+        from models import Site
+        sites = Site.query.order_by(Site.name).all()
+        return render_template('maintenance.html', sites=sites)
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_page view: {e}")
+        flash('An error occurred while loading the maintenance page.', 'error')
+        return redirect(url_for('dashboard'))
 
 
 
