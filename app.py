@@ -947,8 +947,10 @@ def forgot_password():
 def dashboard():
     try:
         show_decommissioned = request.args.get('show_decommissioned', 'false').lower() == 'true'
+        site_filter = request.args.get('site_filter', 'all')  # Get the selected site filter
+        
         if user_can_see_all_sites(current_user):
-            sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
+            all_sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
         else:
             if not hasattr(current_user, 'sites') or not current_user.sites:
                 app.logger.warning(f"User {current_user.username} (ID: {current_user.id}) has no site assignments")
@@ -961,12 +963,19 @@ def dashboard():
                                       no_sites=True,  # Flag to show special message in template
                                       now=datetime.now(),
                                       show_decommissioned=show_decommissioned,
-                                      decommissioned_count=0)
-            sites = (
+                                      decommissioned_count=0,
+                                      site_filter=site_filter)
+            all_sites = (
                 Site.query.options(joinedload(Site.machines).joinedload(Machine.parts))
                 .filter(Site.id.in_([site.id for site in current_user.sites]))
                 .all()
             )
+        
+        # Apply site filter if a specific site is selected
+        if site_filter != 'all' and site_filter.isdigit():
+            sites = [site for site in all_sites if str(site.id) == site_filter]
+        else:
+            sites = all_sites
         site_ids = [site.id for site in sites]
         decommissioned_count = 0
         if site_ids:
@@ -1073,6 +1082,8 @@ def dashboard():
         return render_template(
             'dashboard.html',
             sites=sites,
+            all_sites=all_sites,  # Pass all available sites for the dropdown
+            site_filter=site_filter,  # Pass current filter selection
             machines=machines,
             parts=parts,
             machine_part_status=machine_part_status,
@@ -1095,6 +1106,8 @@ def dashboard():
         return render_template('dashboard.html', 
                              error=True,
                              sites=[],
+                             all_sites=[],
+                             site_filter='all',
                              overdue_count=0,
                              due_soon_count=0,
                              ok_count=0,

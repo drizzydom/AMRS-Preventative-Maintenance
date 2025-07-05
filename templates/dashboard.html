@@ -20,26 +20,34 @@
     </div>
     {% else %}
     <!-- Site Filter Dropdown - Only show if user has access to multiple sites -->
-    {% if sites|length > 1 %}
+    {% if all_sites|length > 1 %}
     <div class="card mb-3">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <label for="site-filter" class="form-label mb-0 me-2"><i class="fas fa-filter me-1"></i> Filter by Site:</label>
-                    <select class="form-select form-select-sm d-inline-block w-auto" id="site-filter">
-                        <option value="all" selected>All Sites</option>
-                        {% for site in sites %}
-                        <option value="{{ site.id }}">{{ site.name }}</option>
+                    <select class="form-select form-select-sm d-inline-block w-auto" id="site-filter" onchange="filterBySite()">
+                        <option value="all" {% if site_filter == 'all' %}selected{% endif %}>All Sites</option>
+                        {% for site in all_sites %}
+                        <option value="{{ site.id }}" {% if site_filter == site.id|string %}selected{% endif %}>{{ site.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <small class="text-muted">Currently showing: <span id="current-filter">All Sites</span></small>
+                <small class="text-muted">Currently showing: <span id="current-filter">
+                    {% if site_filter == 'all' %}
+                        All Sites
+                    {% else %}
+                        {% for site in all_sites %}
+                            {% if site_filter == site.id|string %}{{ site.name }}{% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </span></small>
             </div>
         </div>
     </div>
     {% else %}
     <!-- Single site users don't need a filter dropdown -->
-    <div class="d-none" id="single-site-identifier" data-site-id="{{ sites[0].id if sites }}"></div>
+    <div class="d-none" id="single-site-identifier" data-site-id="{{ all_sites[0].id if all_sites }}"></div>
     {% endif %}
 
     <!-- Decommissioned Machines Toggle - Only show if there are decommissioned machines -->
@@ -152,18 +160,14 @@
                     <span class="badge bg-danger">{{ overdue_count }}</span>
                 </div>
                 <div class="card-body p-0">
-                    {% if sites|length > 1 %}
-                        {# Multiple sites - show combined top 3 from all sites #}
+                    {% if all_sites|length > 1 and site_filter == 'all' %}
+                        {# Multiple sites and "All Sites" selected - show combined top 3 from all sites #}
                         {% set highlights = all_overdue %}
                         {% set total_overdue = all_overdue_total %}
-                    {% elif sites|length == 1 %}
-                        {# Single site - show top 3 from this site only #}
-                        {% set highlights = site_part_highlights[sites[0].id]['overdue'] if site_part_highlights and sites[0].id in site_part_highlights else [] %}
-                        {% set total_overdue = site_part_totals[sites[0].id]['overdue'] if site_part_totals and sites[0].id in site_part_totals else 0 %}
                     {% else %}
-                        {# No sites #}
-                        {% set highlights = [] %}
-                        {% set total_overdue = 0 %}
+                        {# Single site or specific site selected - show top 3 from this site only #}
+                        {% set highlights = site_part_highlights[sites[0].id]['overdue'] if site_part_highlights and sites and sites[0].id in site_part_highlights else [] %}
+                        {% set total_overdue = site_part_totals[sites[0].id]['overdue'] if site_part_totals and sites and sites[0].id in site_part_totals else 0 %}
                     {% endif %}
                     {% if total_overdue > 3 %}
                     <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
@@ -239,18 +243,14 @@
                     <span class="badge bg-warning text-dark">{{ due_soon_count }}</span>
                 </div>
                 <div class="card-body p-0">
-                    {% if sites|length > 1 %}
-                        {# Multiple sites - show combined top 3 from all sites #}
+                    {% if all_sites|length > 1 and site_filter == 'all' %}
+                        {# Multiple sites and "All Sites" selected - show combined top 3 from all sites #}
                         {% set highlights = all_due_soon %}
                         {% set total_due_soon = all_due_soon_total %}
-                    {% elif sites|length == 1 %}
-                        {# Single site - show top 3 from this site only #}
-                        {% set highlights = site_part_highlights[sites[0].id]['due_soon'] if site_part_highlights and sites[0].id in site_part_highlights else [] %}
-                        {% set total_due_soon = site_part_totals[sites[0].id]['due_soon'] if site_part_totals and sites[0].id in site_part_totals else 0 %}
                     {% else %}
-                        {# No sites #}
-                        {% set highlights = [] %}
-                        {% set total_due_soon = 0 %}
+                        {# Single site or specific site selected - show top 3 from this site only #}
+                        {% set highlights = site_part_highlights[sites[0].id]['due_soon'] if site_part_highlights and sites and sites[0].id in site_part_highlights else [] %}
+                        {% set total_due_soon = site_part_totals[sites[0].id]['due_soon'] if site_part_totals and sites and sites[0].id in site_part_totals else 0 %}
                     {% endif %}
                     {% if total_due_soon > 3 %}
                     <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
@@ -673,6 +673,20 @@
                 statusElement.textContent = 'Showing active machines only';
             }
             currentUrl.searchParams.delete('show_decommissioned');
+        }
+        
+        // Navigate to the new URL
+        window.location.href = currentUrl.toString();
+    }
+
+    function filterBySite() {
+        const dropdown = document.getElementById('site-filter');
+        const currentUrl = new URL(window.location);
+        
+        if (dropdown.value === 'all') {
+            currentUrl.searchParams.delete('site_filter');
+        } else {
+            currentUrl.searchParams.set('site_filter', dropdown.value);
         }
         
         // Navigate to the new URL
