@@ -138,33 +138,6 @@
         </div>
     </div>
 
-    <!-- Machine Maintenance Summary (NEW) -->
-    {% if machines %}
-    <div class="card mb-4">
-        <div class="card-header">
-            <i class="fas fa-industry me-2"></i>Machine Maintenance Status
-        </div>
-        <div class="card-body py-2">
-            <ul class="list-group">
-                {% for machine in machines %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>
-                        <strong>{{ machine.name }}</strong>
-                        {% if machine.model %}<small class="text-muted">({{ machine.model }})</small>{% endif %}
-                    </span>
-                    <span>
-                        <span class="badge bg-danger me-1">Overdue: {{ machine_part_status[machine.id].overdue }}</span>
-                        <span class="badge bg-warning text-dark me-1">Due Soon: {{ machine_part_status[machine.id].due_soon }}</span>
-                        <span class="badge bg-success">OK: {{ machine_part_status[machine.id].ok }}</span>
-                        <span class="badge bg-secondary ms-2">Total: {{ machine_part_status[machine.id].total }}</span>
-                    </span>
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Maintenance Panels -->
     <div class="row g-2">
         <!-- Overdue Parts Panel -->
@@ -179,8 +152,19 @@
                     <span class="badge bg-danger">{{ overdue_count }}</span>
                 </div>
                 <div class="card-body p-0">
-                    {% set highlights = all_overdue if sites|length > 1 else site_part_highlights[sites[0].id]['overdue'] %}
-                    {% set total_overdue = all_overdue_total if sites|length > 1 else site_part_totals[sites[0].id]['overdue'] %}
+                    {% if sites|length > 1 %}
+                        {# Multiple sites - show combined top 3 from all sites #}
+                        {% set highlights = all_overdue %}
+                        {% set total_overdue = all_overdue_total %}
+                    {% elif sites|length == 1 %}
+                        {# Single site - show top 3 from this site only #}
+                        {% set highlights = site_part_highlights[sites[0].id]['overdue'] if site_part_highlights and sites[0].id in site_part_highlights else [] %}
+                        {% set total_overdue = site_part_totals[sites[0].id]['overdue'] if site_part_totals and sites[0].id in site_part_totals else 0 %}
+                    {% else %}
+                        {# No sites #}
+                        {% set highlights = [] %}
+                        {% set total_overdue = 0 %}
+                    {% endif %}
                     {% if total_overdue > 3 %}
                     <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
                         Only the 3 most relevant overdue parts are shown here. Additional overdue maintenance items are listed below under the machines.
@@ -255,8 +239,19 @@
                     <span class="badge bg-warning text-dark">{{ due_soon_count }}</span>
                 </div>
                 <div class="card-body p-0">
-                    {% set highlights = all_due_soon if sites|length > 1 else site_part_highlights[sites[0].id]['due_soon'] %}
-                    {% set total_due_soon = all_due_soon_total if sites|length > 1 else site_part_totals[sites[0].id]['due_soon'] %}
+                    {% if sites|length > 1 %}
+                        {# Multiple sites - show combined top 3 from all sites #}
+                        {% set highlights = all_due_soon %}
+                        {% set total_due_soon = all_due_soon_total %}
+                    {% elif sites|length == 1 %}
+                        {# Single site - show top 3 from this site only #}
+                        {% set highlights = site_part_highlights[sites[0].id]['due_soon'] if site_part_highlights and sites[0].id in site_part_highlights else [] %}
+                        {% set total_due_soon = site_part_totals[sites[0].id]['due_soon'] if site_part_totals and sites[0].id in site_part_totals else 0 %}
+                    {% else %}
+                        {# No sites #}
+                        {% set highlights = [] %}
+                        {% set total_due_soon = 0 %}
+                    {% endif %}
                     {% if total_due_soon > 3 %}
                     <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
                         Only the 3 most relevant due soon parts are shown here. Additional due soon maintenance items are listed below under the machines.
