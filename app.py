@@ -895,16 +895,20 @@ def login():
         password = request.form.get('password')
         
         if username and password:
-            user = User.query.filter_by(username=username).first()
-            
-            if user and check_password_hash(user.password_hash, password):
-                login_user(user, remember=request.form.get('remember'))
-                next_page = request.args.get('next')
-                if next_page:
-                    return redirect(next_page)
-                return redirect(url_for('dashboard'))
-            else:
-                flash('Invalid username or password', 'error')
+            try:
+                user = User.query.filter_by(username=username).first()
+                
+                if user and check_password_hash(user.password_hash, password):
+                    login_user(user, remember=request.form.get('remember'))
+                    next_page = request.args.get('next')
+                    if next_page:
+                        return redirect(next_page)
+                    return redirect(url_for('dashboard'))
+                else:
+                    flash('Invalid username or password', 'error')
+            except Exception as e:
+                app.logger.error(f"Login error: {e}")
+                flash('An error occurred during login. Please try again.', 'error')
         else:
             flash('Please enter both username and password', 'error')
     
@@ -1383,15 +1387,6 @@ def bulk_import():
         app.logger.error(f"Error in bulk_import view: {e}")
         flash('An error occurred while loading the bulk import page.', 'error')
         return redirect(url_for('dashboard'))
-
-# Fix context processor to avoid user undefined error
-@app.context_processor
-def inject_user():
-    """Inject user context for all templates."""
-    return dict(
-        user=current_user if current_user.is_authenticated else None,
-        now=datetime.now()
-    )
 
 
 

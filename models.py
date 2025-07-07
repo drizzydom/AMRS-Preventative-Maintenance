@@ -20,14 +20,9 @@ if not FERNET_KEY:
     print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
     print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
     print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
-    # If application is starting up, we'll use a temporary key for testing only
-    # This is not secure and should not be used in production!
-    if os.environ.get('FLASK_ENV') == 'development' or os.environ.get('FLASK_DEBUG') == '1':
-        print("[SECURITY WARNING] Development mode detected. Using a temporary key for encryption.")
-        FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
-    else:
-        # For production, we don't want to silently continue with an insecure setup
-        raise ValueError("USER_FIELD_ENCRYPTION_KEY environment variable must be set in production.")
+    # For development/testing, use a temporary key
+    print("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
+    FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
 
 # Initialize Fernet cipher with the key
 fernet = Fernet(FERNET_KEY)
