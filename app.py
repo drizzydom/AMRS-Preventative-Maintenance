@@ -914,10 +914,13 @@ def dashboard():
         # Check if user wants to see decommissioned machines
         show_decommissioned = request.args.get('show_decommissioned', 'false').lower() == 'true'
         
+        # Get site filter parameter
+        site_filter = request.args.get('site_filter', 'all')
+        
         # Get upcoming and overdue maintenance across all sites the user has access to
         if user_can_see_all_sites(current_user):
             # User can see all sites, eager load machines and parts
-            sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
+            all_sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
         else:
             # Check if user has any site assignments first
             if not hasattr(current_user, 'sites') or not current_user.sites:
@@ -925,6 +928,14 @@ def dashboard():
                 app.logger.warning(f"User {current_user.username} (ID: {current_user.id}) has no site assignments")
                 return render_template('dashboard.html', 
                                       sites=[], 
+                                      all_sites=[],
+                                      site_filter='all',
+                                      site_part_highlights={},
+                                      site_part_totals={},
+                                      all_overdue=[],
+                                      all_due_soon=[],
+                                      all_overdue_total=0,
+                                      all_due_soon_total=0,
                                       overdue_count=0, 
                                       due_soon_count=0, 
                                       ok_count=0, 
@@ -935,11 +946,22 @@ def dashboard():
                                       decommissioned_count=0)
             
             # User can only see their assigned sites, eager load as well
-            sites = (
+            all_sites = (
                 Site.query.options(joinedload(Site.machines).joinedload(Machine.parts))
                 .filter(Site.id.in_([site.id for site in current_user.sites]))
                 .all()
             )
+        
+        # Filter sites based on site_filter parameter
+        if site_filter == 'all' or not site_filter:
+            sites = all_sites
+        else:
+            try:
+                site_id = int(site_filter)
+                sites = [site for site in all_sites if site.id == site_id]
+            except (ValueError, TypeError):
+                sites = all_sites
+                site_filter = 'all'
         
         # Get count of decommissioned machines for the toggle
         site_ids = [site.id for site in sites]
@@ -970,32 +992,84 @@ def dashboard():
             # Get all parts for these machines
             parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
         
-        # Get statistics
-        stats = {
-            'sites_count': len(sites),
-            'machines_count': len(machines),
-            'parts_count': len(parts),
-            'overdue_count': 0,
-            'due_soon_count': 0
-        }
-        
         # Process parts for maintenance status
         now = datetime.now()
         overdue_count = 0
         due_soon_count = 0
         ok_count = 0
-        for part in parts:
-            days_until = (part.next_maintenance - now).days
-            if days_until < 0:
-                overdue_count += 1
-            elif days_until <= 30:
-                due_soon_count += 1
-            else:
-                ok_count += 1
+        all_overdue = []
+        all_due_soon = []
+        site_part_highlights = {}
+        site_part_totals = {}
+        
+        # Process each site for the template
+        for site in all_sites:
+            site_overdue = []
+            site_due_soon = []
+            
+            for machine in site.machines:
+                if show_decommissioned or not machine.decommissioned:
+                    for part in machine.parts:
+                        if part.next_maintenance:
+                            days_until = (part.next_maintenance - now).days
+                            if days_until < 0:
+                                site_overdue.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                                if site in sites:  # Only count for displayed sites
+                                    overdue_count += 1
+                                all_overdue.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                            elif days_until <= 30:
+                                site_due_soon.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                                if site in sites:  # Only count for displayed sites
+                                    due_soon_count += 1
+                                all_due_soon.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                            else:
+                                if site in sites:  # Only count for displayed sites
+                                    ok_count += 1
+            
+            # Store site-specific data
+            site_part_highlights[site.id] = {
+                'overdue': site_overdue[:5],  # Limit to top 5 for highlights
+                'due_soon': site_due_soon[:5]
+            }
+            site_part_totals[site.id] = {
+                'overdue': len(site_overdue),
+                'due_soon': len(site_due_soon)
+            }
+        
         total_parts = len(parts)
+        all_overdue_total = len(all_overdue)
+        all_due_soon_total = len(all_due_soon)
         
         return render_template('dashboard.html', 
-                              sites=sites, 
+                              sites=sites,
+                              all_sites=all_sites,
+                              site_filter=site_filter,
+                              site_part_highlights=site_part_highlights,
+                              site_part_totals=site_part_totals,
+                              all_overdue=all_overdue[:10],  # Limit to top 10 for performance
+                              all_due_soon=all_due_soon[:10],
+                              all_overdue_total=all_overdue_total,
+                              all_due_soon_total=all_due_soon_total,
                               overdue_count=overdue_count, 
                               due_soon_count=due_soon_count, 
                               ok_count=ok_count, 
@@ -1008,7 +1082,15 @@ def dashboard():
         # Instead of redirecting, show a minimal dashboard with an error message
         flash(f'Error loading dashboard data: {str(e)}', 'error')
         return render_template('dashboard.html', 
-                              sites=[], 
+                              sites=[],
+                              all_sites=[],
+                              site_filter='all',
+                              site_part_highlights={},
+                              site_part_totals={},
+                              all_overdue=[],
+                              all_due_soon=[],
+                              all_overdue_total=0,
+                              all_due_soon_total=0,
                               overdue_count=0, 
                               due_soon_count=0, 
                               ok_count=0, 
@@ -2621,11 +2703,31 @@ def user_profile():
         # Get user's sites for notification preferences display
         user_sites = user.sites if hasattr(user, 'sites') else []
         
-        return render_template('profile.html', user=user, notification_prefs=notification_prefs, user_sites=user_sites)
+        return render_template('user_profile.html', user=user, notification_prefs=notification_prefs, user_sites=user_sites)
     except Exception as e:
         app.logger.error(f"Error in user_profile: {e}")
         flash('An error occurred while loading your profile.', 'danger')
         return redirect(url_for('dashboard'))
+
+@app.route('/profile/update', methods=['POST'])
+@login_required
+def update_profile():
+    """Update user profile."""
+    try:
+        # Handle profile updates
+        user = current_user
+        if request.form.get('email'):
+            user.email = request.form.get('email')
+        if request.form.get('full_name'):
+            user.full_name = request.form.get('full_name')
+        
+        db.session.commit()
+        flash('Profile updated successfully.', 'success')
+        return redirect(url_for('user_profile'))
+    except Exception as e:
+        app.logger.error(f"Error updating profile: {e}")
+        flash('An error occurred while updating your profile.', 'error')
+        return redirect(url_for('user_profile'))
 
 @app.route('/update_notification_preferences', methods=['POST'])
 @login_required
