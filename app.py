@@ -1016,7 +1016,6 @@ def dashboard():
                                 if isinstance(part.next_maintenance, str):
                                     # Try to parse string to datetime
                                     try:
-                                        from datetime import datetime
                                         part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
                                     except ValueError:
                                         try:
