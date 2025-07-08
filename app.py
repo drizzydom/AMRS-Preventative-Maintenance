@@ -1014,7 +1014,17 @@ def dashboard():
                             try:
                                 # Ensure next_maintenance is a datetime object
                                 if isinstance(part.next_maintenance, str):
-                                    continue  # Skip invalid date strings
+                                    # Try to parse string to datetime
+                                    try:
+                                        from datetime import datetime
+                                        part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
+                                    except ValueError:
+                                        try:
+                                            part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d')
+                                        except ValueError:
+                                            app.logger.warning(f"Invalid date format for part {part.id}: {part.next_maintenance}")
+                                            continue  # Skip invalid date strings
+                                
                                 days_until = (part.next_maintenance - now).days
                                 if days_until < 0:
                                     site_overdue.append({
@@ -1755,7 +1765,7 @@ def audit_history_print_view():
             start_date = date(year, month, 1)
             end_date = date(year, month, monthrange(year, month)[1])
             print(f"[DEBUG] Print view - Parsed month_year '{month_year}' to year={year}, month={month}")
-        except Exception as e:
+        except Exception:
             print(f"[DEBUG] Print view - Failed to parse month_year '{month_year}': {e}")
             start_date = today.replace(day=1)
             end_date = date(today.year, today.month, monthrange(today.year, today.month)[1])
@@ -1847,8 +1857,8 @@ def audit_history_print_view():
                 today=today
             )
     else:
-        if not current_user.is_admin and available_sites:
-            site_ids = [site.id for site in available_sites]
+        if not current_user.is_admin and sites:
+            site_ids = [site.id for site in sites]
             site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
             task_ids = [task.id for task in site_audit_tasks]
             if task_ids:
@@ -1856,11 +1866,6 @@ def audit_history_print_view():
             else:
                 completions = []
                 machine_data = {}
-                # Initialize missing variables
-                available_months = []
-                available_machines = []
-                selected_machine = None
-                selected_month = None
                 return render_template('audit_history.html', 
                     completions=completions, 
                     month=month, 
@@ -1873,7 +1878,7 @@ def audit_history_print_view():
                     unique_tasks=[], 
                     machines={}, 
                     users={}, 
-                    sites=available_sites, 
+                    sites=sites, 
                     selected_site=site_id, 
                     selected_machine=selected_machine, 
                     available_months=available_months, 
@@ -1885,9 +1890,7 @@ def audit_history_print_view():
                     get_calendar_weeks=lambda start, end: [],
                     today=today
                 )
-    
-    # Execute the query if it was defined
-    completions = completions_query.all() if 'completions_query' in locals() else []
+    completions = query.all()
 
     print(f"[DEBUG] Print view - Date range: {start_date} to {end_date}")
     print(f"[DEBUG] Print view - Site filter: {site_id}, Machine filter: {machine_id}")
@@ -1982,12 +1985,6 @@ def audit_history_print_view():
         
         return weeks
 
-    # Determine which machines to display (machines with audit data)
-    display_machines = []
-    for machine in available_machines:
-        if machine.id in machine_data:
-            display_machines.append(machine)
-    
     return render_template('audit_history_pdf.html',
         completions=completions,
         today=today,
@@ -2254,6 +2251,12 @@ def admin_roles():
     roles = Role.query.all()
     all_permissions = get_all_permissions()
     return render_template('admin/roles.html', roles=roles, all_permissions=all_permissions)
+
+@app.route('/manage/roles')
+@login_required
+def manage_roles():
+    """Redirect to admin roles page for compatibility."""
+    return redirect(url_for('admin_roles'))
 
 @app.route('/machines/delete/<int:machine_id>', methods=['POST'])
 @login_required
@@ -2752,12 +2755,12 @@ def user_profile():
                 return redirect(url_for('user_profile'))
 
         # Fetch notification preferences for GET request
-        notification_prefs = user.get_notification_preferences() if hasattr(user, 'get_notification_preferences') else {}
+        notification_preferences = user.get_notification_preferences() if hasattr(user, 'get_notification_preferences') else {}
         
         # Get user's sites for notification preferences display
         user_sites = user.sites if hasattr(user, 'sites') else []
         
-        return render_template('user_profile.html', user=user, notification_prefs=notification_prefs, user_sites=user_sites)
+        return render_template('user_profile.html', user=user, notification_preferences=notification_preferences, user_sites=user_sites)
     except Exception as e:
         app.logger.error(f"Error in user_profile: {e}")
         flash('An error occurred while loading your profile.', 'danger')
@@ -3240,9 +3243,9 @@ def manage_sites():
     users = User.query.all() if current_user.is_admin else None
     
     # Define permissions for UI controls
-    can_create = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.create' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))
-    can_edit = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.edit' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) 
-    can_delete = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.delete' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))
+    can_create = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.create' in getattr(current_user.role, 'permissions', ''))
+    can_edit = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.edit' in getattr(current_user.role, 'permissions', '')) 
+    can_delete = current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.delete' in getattr(current_user.role, 'permissions', ''))
     
     return render_template('sites.html', 
                           sites=sites,
@@ -3336,7 +3339,7 @@ def manage_machines():
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
             # Show machines from all sites user has access to
-            machines_query = Machine.query.filter(Machine.site_id.in_(site_ids)) if site_ids else Machine.query.filter(False)
+            machines_query = Machine.query.filter(Part.machine_id.in_(machine_ids)) if machine_ids else Machine.query.filter(False)
             title = "Machines"
         
         # Apply decommissioned filter
@@ -3654,7 +3657,7 @@ def import_excel_route():
             return redirect(url_for('admin_excel_import'))
             
     # GET request - redirect to the Excel import page
-    return redirect(url_for('admin_excel_import'))
+    return render_template('admin/excel_import.html') if os.path.exists(os.path.join('templates', 'admin', 'excel_import.html')) else "<h1>Excel Import Page</h1>"
 
 @app.route('/part/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
@@ -5121,7 +5124,6 @@ def update_part_maintenance_dates(part):
 
 def safe_date(year, month, day):
     """Safely create a date object, returning None if the date is invalid."""
-    from datetime import date
     try:
         return date(year, month, day)
     except ValueError:

@@ -188,13 +188,13 @@
                             </thead>
                             <tbody>
                                 {# Show top 3 most relevant overdue parts for the current filter #}
-                                {% for part, machine, site, days_until in highlights %}
-                                <tr data-site-id="{{ site.id }}">
-                                    <td>{{ part.name }}</td>
-                                    <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
-                                    <td>{{ site.name }}</td>
-                                    <td><span class="text-danger fw-bold">{{ -days_until }} days</span></td>
-                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
+                                {% for item in highlights %}
+                                <tr data-site-id="{{ item.site.id }}">
+                                    <td>{{ item.part.name }}</td>
+                                    <td>{{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</td>
+                                    <td>{{ item.site.name }}</td>
+                                    <td><span class="text-danger fw-bold">{{ -item.days_until }} days</span></td>
+                                    <td>{{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                     <td>
                                         {% if has_permission('maintenance.record') %}
                                         <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
@@ -209,13 +209,13 @@
                     </div>
                     <!-- Mobile card-list version -->
                     <div class="d-block d-md-none px-2 py-2">
-                        {% for part, machine, site, days_until in highlights %}
-                        <div class="mobile-table-card mb-2" data-site-id="{{ site.id }}">
-                            <div class="fw-bold">{{ part.name }}</div>
-                            <div><span class="text-muted">Machine:</span> {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</div>
-                            <div><span class="text-muted">Site:</span> {{ site.name }}</div>
-                            <div><span class="text-danger fw-bold">Overdue: {{ -days_until }} days</span></div>
-                            <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                        {% for item in highlights %}
+                        <div class="mobile-table-card mb-2" data-site-id="{{ item.site.id }}">
+                            <div class="fw-bold">{{ item.part.name }}</div>
+                            <div><span class="text-muted">Machine:</span> {{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</div>
+                            <div><span class="text-muted">Site:</span> {{ item.site.name }}</div>
+                            <div><span class="text-danger fw-bold">Overdue: {{ -item.days_until }} days</span></div>
+                            <div><span class="text-muted">Next Maintenance:</span> {{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                             <div class="mt-2">
                                 {% if has_permission('maintenance.record') %}
                                 <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
@@ -271,13 +271,13 @@
                             </thead>
                             <tbody>
                                 {# Show top 3 most relevant due soon parts for the current filter #}
-                                {% for part, machine, site, days_until in highlights %}
-                                <tr data-site-id="{{ site.id }}">
-                                    <td>{{ part.name }}</td>
-                                    <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
-                                    <td>{{ site.name }}</td>
-                                    <td><span class="text-warning fw-bold">{{ days_until }} days</span></td>
-                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
+                                {% for item in highlights %}
+                                <tr data-site-id="{{ item.site.id }}">
+                                    <td>{{ item.part.name }}</td>
+                                    <td>{{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</td>
+                                    <td>{{ item.site.name }}</td>
+                                    <td><span class="text-warning fw-bold">{{ item.days_until }} days</span></td>
+                                    <td>{{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</td>
                                     <td>
                                         {% if has_permission('maintenance.record') %}
                                         <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
@@ -292,13 +292,13 @@
                     </div>
                     <!-- Mobile card-list version -->
                     <div class="d-block d-md-none px-2 py-2">
-                        {% for part, machine, site, days_until in highlights %}
-                        <div class="mobile-table-card mb-2" data-site-id="{{ site.id }}">
-                            <div class="fw-bold">{{ part.name }}</div>
-                            <div><span class="text-muted">Machine:</span> {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</div>
-                            <div><span class="text-muted">Site:</span> {{ site.name }}</div>
-                            <div><span class="text-warning fw-bold">Due In: {{ days_until }} days</span></div>
-                            <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                        {% for item in highlights %}
+                        <div class="mobile-table-card mb-2" data-site-id="{{ item.site.id }}">
+                            <div class="fw-bold">{{ item.part.name }}</div>
+                            <div><span class="text-muted">Machine:</span> {{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</div>
+                            <div><span class="text-muted">Site:</span> {{ item.site.name }}</div>
+                            <div><span class="text-warning fw-bold">Due In: {{ item.days_until }} days</span></div>
+                            <div><span class="text-muted">Next Maintenance:</span> {{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</div>
                             <div class="mt-2">
                                 {% if has_permission('maintenance.record') %}
                                 <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
