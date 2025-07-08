@@ -1,7 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 from sqlalchemy.types import JSON as SA_JSON
@@ -80,6 +80,10 @@ class User(UserMixin, db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     reset_token = db.Column(db.String(100), default=None)
     reset_token_expiration = db.Column(db.DateTime, default=None)
+    # Remember me token fields for persistent authentication
+    remember_token = db.Column(db.String(100), default=None)
+    remember_token_expiration = db.Column(db.DateTime, default=None)
+    remember_enabled = db.Column(db.Boolean, default=False)  # User preference for remember me
     notification_preferences = db.Column(
         PG_JSON().with_variant(SA_JSON(), 'sqlite'),
         nullable=True,
@@ -153,6 +157,50 @@ class User(UserMixin, db.Model):
     def set_notification_preferences(self, prefs):
         self.notification_preferences = prefs
         db.session.commit()
+    
+    def generate_remember_token(self):
+        """Generate a new remember token for persistent authentication"""
+        import secrets
+        token = secrets.token_urlsafe(32)
+        self.remember_token = token
+        # Set token expiration to 30 days from now
+        self.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
+        return token
+    
+    def verify_remember_token(self, token):
+        """Verify if the provided remember token is valid and not expired"""
+        if not self.remember_token or not self.remember_token_expiration:
+            return False
+        
+        # Check if token matches and hasn't expired
+        if self.remember_token == token and datetime.utcnow() < self.remember_token_expiration:
+            return True
+        
+        return False
+    
+    def clear_remember_token(self):
+        """Clear the remember token (for logout or security purposes)"""
+        self.remember_token = None
+        self.remember_token_expiration = None
+    
+    def set_remember_preference(self, enabled):
+        """Set user's preference for remember me functionality"""
+        self.remember_enabled = enabled
+        if not enabled:
+            # If user disables remember me, clear any existing tokens
+            self.clear_remember_token()
+    
+    @classmethod
+    def find_by_remember_token(cls, token):
+        """Find a user by their remember token if it's valid"""
+        if not token:
+            return None
+            
+        user = cls.query.filter_by(remember_token=token).first()
+        if user and user.verify_remember_token(token):
+            return user
+        
+        return None
     
     def __repr__(self):
         return f'<User {self.username}>'
