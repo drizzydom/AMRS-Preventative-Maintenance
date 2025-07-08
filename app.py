@@ -1011,40 +1011,48 @@ def dashboard():
                 if show_decommissioned or not machine.decommissioned:
                     for part in machine.parts:
                         if part.next_maintenance:
-                            days_until = (part.next_maintenance - now).days
-                            if days_until < 0:
-                                site_overdue.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                                if site in sites:  # Only count for displayed sites
-                                    overdue_count += 1
-                                all_overdue.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                            elif days_until <= 30:
-                                site_due_soon.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                                if site in sites:  # Only count for displayed sites
-                                    due_soon_count += 1
-                                all_due_soon.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                            else:
-                                if site in sites:  # Only count for displayed sites
-                                    ok_count += 1
+                            try:
+                                # Ensure next_maintenance is a datetime object
+                                if isinstance(part.next_maintenance, str):
+                                    continue  # Skip invalid date strings
+                                days_until = (part.next_maintenance - now).days
+                                if days_until < 0:
+                                    site_overdue.append({
+                                        'part': part,
+                                        'machine': machine,
+                                        'site': site,
+                                        'days_until': days_until
+                                    })
+                                    if site in sites:  # Only count for displayed sites
+                                        overdue_count += 1
+                                    all_overdue.append({
+                                        'part': part,
+                                        'machine': machine,
+                                        'site': site,
+                                        'days_until': days_until
+                                    })
+                                elif days_until <= 30:
+                                    site_due_soon.append({
+                                        'part': part,
+                                        'machine': machine,
+                                        'site': site,
+                                        'days_until': days_until
+                                    })
+                                    if site in sites:  # Only count for displayed sites
+                                        due_soon_count += 1
+                                    all_due_soon.append({
+                                        'part': part,
+                                        'machine': machine,
+                                        'site': site,
+                                        'days_until': days_until
+                                    })
+                                else:
+                                    if site in sites:  # Only count for displayed sites
+                                        ok_count += 1
+                            except (TypeError, AttributeError) as e:
+                                # Skip parts with invalid maintenance dates
+                                app.logger.warning(f"Invalid maintenance date for part {part.id}: {e}")
+                                continue
             
             # Store site-specific data
             site_part_highlights[site.id] = {
@@ -1839,8 +1847,8 @@ def audit_history_print_view():
                 today=today
             )
     else:
-        if not current_user.is_admin and sites:
-            site_ids = [site.id for site in sites]
+        if not current_user.is_admin and available_sites:
+            site_ids = [site.id for site in available_sites]
             site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
             task_ids = [task.id for task in site_audit_tasks]
             if task_ids:
@@ -1848,6 +1856,11 @@ def audit_history_print_view():
             else:
                 completions = []
                 machine_data = {}
+                # Initialize missing variables
+                available_months = []
+                available_machines = []
+                selected_machine = None
+                selected_month = None
                 return render_template('audit_history.html', 
                     completions=completions, 
                     month=month, 
@@ -1860,7 +1873,7 @@ def audit_history_print_view():
                     unique_tasks=[], 
                     machines={}, 
                     users={}, 
-                    sites=sites, 
+                    sites=available_sites, 
                     selected_site=site_id, 
                     selected_machine=selected_machine, 
                     available_months=available_months, 
@@ -1872,7 +1885,9 @@ def audit_history_print_view():
                     get_calendar_weeks=lambda start, end: [],
                     today=today
                 )
-    completions = query.all()
+    
+    # Execute the query if it was defined
+    completions = completions_query.all() if 'completions_query' in locals() else []
 
     print(f"[DEBUG] Print view - Date range: {start_date} to {end_date}")
     print(f"[DEBUG] Print view - Site filter: {site_id}, Machine filter: {machine_id}")
@@ -2767,6 +2782,46 @@ def update_profile():
         app.logger.error(f"Error updating profile: {e}")
         flash('An error occurred while updating your profile.', 'error')
         return redirect(url_for('user_profile'))
+
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    """Handle password change requests."""
+    try:
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validate inputs
+        if not current_password or not new_password or not confirm_password:
+            flash('All password fields are required.', 'danger')
+            return redirect(url_for('user_profile'))
+        
+        # Check current password
+        if not current_user.password_hash or not check_password_hash(current_user.password_hash, current_password):
+            flash('Current password is incorrect.', 'danger')
+            return redirect(url_for('user_profile'))
+        
+        # Validate new password
+        if len(new_password) < 8:
+            flash('New password must be at least 8 characters long.', 'danger')
+            return redirect(url_for('user_profile'))
+        
+        if new_password != confirm_password:
+            flash('New passwords do not match.', 'danger')
+            return redirect(url_for('user_profile'))
+        
+        # Update password
+        current_user.password_hash = generate_password_hash(new_password)
+        db.session.commit()
+        flash('Password updated successfully!', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error changing password: {e}")
+        flash('An error occurred while changing your password.', 'error')
+    
+    return redirect(url_for('user_profile'))
 
 @app.route('/update_notification_preferences', methods=['POST'])
 @login_required
