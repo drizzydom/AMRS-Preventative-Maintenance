@@ -29,7 +29,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="post" action="{{ url_for('maintenance_page') }}">
+                <form method="post" action="{{ url_for('maintenance_page') }}" enctype="multipart/form-data">
                     <div class="row">
                         <div class="col-md-3 mb-3">
                             <label for="site_id" class="form-label">Site <span class="text-danger">*</span></label>
@@ -86,6 +86,11 @@
                     <div class="mb-3">
                         <label for="notes" class="form-label">Notes</label>
                         <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Additional notes (optional)"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="maintenance_files" class="form-label">Attach Files (Images or PDFs)</label>
+                        <input class="form-control" type="file" id="maintenance_files" name="maintenance_files" accept="image/*,application/pdf" multiple>
+                        <div class="form-text">You may upload multiple images (JPG, PNG, WebP) or PDFs. Max 5MB per file.</div>
                     </div>
                     <div class="text-end">
                         <button type="submit" class="btn btn-success">
