@@ -53,6 +53,33 @@ def fix_audit_completions_timestamps(engine):
                 """
             ))
             
+def create_maintenance_files_table(engine):
+    inspector = inspect(engine)
+    if 'maintenance_files' not in inspector.get_table_names():
+        with engine.connect() as conn:
+            trans = conn.begin()
+            try:
+                conn.execute(text('''
+                    CREATE TABLE maintenance_files (
+                        id SERIAL PRIMARY KEY,
+                        maintenance_record_id INTEGER NOT NULL REFERENCES maintenance_records(id) ON DELETE CASCADE,
+                        filename VARCHAR(255) NOT NULL,
+                        filepath VARCHAR(512) NOT NULL,
+                        filetype VARCHAR(50) NOT NULL,
+                        filesize INTEGER NOT NULL,
+                        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        thumbnail_path VARCHAR(512)
+                    )
+                '''))
+                trans.commit()
+                logger.info("[AUTO_MIGRATE] Created table maintenance_files")
+            except Exception as e:
+                trans.rollback()
+                logger.error(f"[AUTO_MIGRATE] Error creating maintenance_files table: {e}")
+                raise
+    else:
+        logger.info("[AUTO_MIGRATE] Table maintenance_files already exists")
+
 def run_auto_migration():
     from app import app  # Import here to avoid circular import
     with app.app_context():
@@ -91,7 +118,7 @@ def run_auto_migration():
         add_column_if_not_exists(engine, 'users', 'remember_enabled', 'BOOLEAN DEFAULT FALSE')
         
         # Add your new database migrations here
-        
+        create_maintenance_files_table(engine)
         # Run data fixes
         run_data_fix(engine, fix_audit_completions_timestamps, 
                     "Fix audit completion records with missing timestamps")
