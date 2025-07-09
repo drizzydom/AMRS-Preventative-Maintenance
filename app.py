@@ -1072,7 +1072,6 @@ def dashboard():
                 'overdue': len(site_overdue),
                 'due_soon': len(site_due_soon)
             }
-        
         total_parts = len(parts)
         all_overdue_total = len(all_overdue)
         all_due_soon_total = len(all_due_soon)
@@ -4534,6 +4533,10 @@ def bulk_import():
                     freq_unit = 'day'
                 elif freq_unit in ['year', 'years']:
                     freq_value = freq_value * 365;
+                    freq_unit = 'day'
+                
+                # Special case: if unit is empty but frequency is a valid number, treat as days
+                if freq_value > 0 and not freq_unit:
                     freq_unit = 'day'
             
             if machine_name and part_name:
