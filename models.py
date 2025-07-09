@@ -411,3 +411,22 @@ class AuditTaskCompletion(db.Model):
     completed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class MaintenanceFile(db.Model):
+    """Model for files (images, PDFs, etc.) attached to maintenance records"""
+    __tablename__ = 'maintenance_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    maintenance_record_id = db.Column(db.Integer, db.ForeignKey('maintenance_records.id'), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    filepath = db.Column(db.String(512), nullable=False)  # Absolute or relative path in /var/data
+    filetype = db.Column(db.String(50), nullable=False)  # MIME type
+    filesize = db.Column(db.Integer, nullable=False)  # Size in bytes
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    thumbnail_path = db.Column(db.String(512), nullable=True)  # For images only
+
+    # Relationship to maintenance record
+    maintenance_record = db.relationship('MaintenanceRecord', backref=db.backref('files', lazy=True, cascade="all, delete-orphan"))
+
+    def __repr__(self):
+        return f'<MaintenanceFile {self.filename} for Record {self.maintenance_record_id}>'
