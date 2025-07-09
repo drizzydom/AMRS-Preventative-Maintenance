@@ -134,3 +134,33 @@ html .badge.bg-primary {
     left: 0;
   }
 }
+
+/* Dark mode styles */
+body.dark-mode {
+    background-color: #181a1b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode .card,
+body.dark-mode .navbar,
+body.dark-mode .modal-content {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode .btn-primary {
+    background-color: #444 !important;
+    border-color: #444 !important;
+}
+body.dark-mode .form-control {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+}
+body.dark-mode .form-control:focus {
+    background-color: #23272b !important;
+    color: #fff !important;
+}
+body.dark-mode .alert {
+    background-color: #222 !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+}
