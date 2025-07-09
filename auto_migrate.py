@@ -85,6 +85,10 @@ def run_auto_migration():
         # Ensure users table has username_hash and email_hash columns
         add_column_if_not_exists(engine, 'users', 'username_hash', 'VARCHAR(64)')
         add_column_if_not_exists(engine, 'users', 'email_hash', 'VARCHAR(64)')
+        # Ensure users table has remember me columns
+        add_column_if_not_exists(engine, 'users', 'remember_token', 'VARCHAR(100)')
+        add_column_if_not_exists(engine, 'users', 'remember_token_expiration', 'TIMESTAMP')
+        add_column_if_not_exists(engine, 'users', 'remember_enabled', 'BOOLEAN DEFAULT FALSE')
         
         # Add your new database migrations here
         
