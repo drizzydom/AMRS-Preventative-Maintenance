@@ -1708,36 +1708,7 @@ def audit_history_page():
         
         return weeks
 
-    # Determine which machines to display (machines with audit data)
-    display_machines = []
-    for machine in available_machines:
-        if machine.id in machine_data:
-            display_machines.append(machine)
-    
-    return render_template('audit_history.html',
-        completions=completions,
-        today=today,
-        month=month,
-        year=year,
-        current_month=month,  # Add current_month for template compatibility
-        current_year=year,    # Add current_year for template compatibility
-        month_weeks=month_weeks,
-        machine_data=machine_data,
-        audit_tasks=audit_tasks,
-        unique_tasks=unique_tasks,
-        machines=machines_dict,
-        users=users,
-        sites=sites,
-        selected_site=site_id,
-        selected_machine=selected_machine,
-        available_months=available_months,
-        available_machines=available_machines,
-        selected_month=selected_month,
-        all_tasks_per_machine=all_tasks_per_machine,
-        interval_bars=interval_bars,
-        display_machines=display_machines,  # <-- Add the missing display_machines variable
-        get_calendar_weeks=get_calendar_weeks  # <-- Pass the function to the template
-    )
+    return render_template('audit_history.html', audit_tasks=audit_tasks, sites=sites, completions=completions, today=today, can_delete_audits=can_delete_audits, can_complete_audits=can_complete_audits, eligibility=eligibility, get_calendar_weeks=get_calendar_weeks, month_completions=month_completions)
 
 @app.route('/audit-history/print-view')
 @login_required
@@ -1889,7 +1860,7 @@ def audit_history_print_view():
                     get_calendar_weeks=lambda start, end: [],
                     today=today
                 )
-    completions = query.all()
+    completions = completions_query.all()
 
     print(f"[DEBUG] Print view - Date range: {start_date} to {end_date}")
     print(f"[DEBUG] Print view - Site filter: {site_id}, Machine filter: {machine_id}")
@@ -2879,14 +2850,25 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
+        remember = request.form.get('remember') == 'on'
         # Add debug for login attempts
-        app.logger.debug(f"Login attempt: username={username}")
-        
+        app.logger.debug(f"Login attempt: username={username}, remember={remember}")
         user = User.query.filter_by(username_hash=hash_value(username)).first()
-        
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
+            # Set remember preference and token
+            user.set_remember_preference(remember)
+            if remember:
+                token = user.generate_remember_token()
+                db.session.commit()
+                # Set cookie for persistent login (30 days)
+                resp = redirect(request.args.get('next') or url_for('dashboard'))
+                resp.set_cookie('remember_token', token, max_age=30*24*60*60, httponly=True, samesite='Lax')
+                app.logger.debug(f"Remember token set for user_id={user.id}")
+                return resp
+            else:
+                user.clear_remember_token()
+                db.session.commit()
             app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
             next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard'))
@@ -4691,15 +4673,15 @@ def bulk_import():
                                     db.session.flush()  # Get the ID
                                 
                                 # Use smart maintenance record creation with deduplication
-                                maintenance, maint_status = find_or_create_maintenance(record, machine, part)
+                                maintenance, status = find_or_create_maintenance(record, machine, part)
                                 
                                 if maintenance:
                                     if maintenance.id is None:  # New maintenance record
                                         db.session.add(maintenance)
                                         maint_added += 1
-                                    elif "Updated" in maint_status:
+                                    elif "Updated" in status:
                                         maint_updated += 1
-                                    elif "Found" in maint_status:
+                                    elif "Found" in status:
                                         merged += 1
                             except Exception as e:
                                 errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
@@ -5000,15 +4982,15 @@ def bulk_import():
                                     db.session.flush()  # Get the ID
                                 
                                 # Use smart maintenance record creation with deduplication
-                                maintenance, maint_status = find_or_create_maintenance(record, machine, part)
+                                maintenance, status = find_or_create_maintenance(record, machine, part)
                                 
                                 if maintenance:
                                     if maintenance.id is None:  # New maintenance record
                                         db.session.add(maintenance)
                                         maintenance_added += 1
-                                    elif "Updated" in maint_status:
+                                    elif "Updated" in status:
                                         updated += 1
-                                    elif "Found" in maint_status:
+                                    elif "Found" in status:
                                         merged += 1
                             except Exception as e:
                                 errors.append(f"Error processing maintenance record for machine '{machine_name}': {str(e)}")
