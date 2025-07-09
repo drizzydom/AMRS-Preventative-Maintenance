@@ -1557,7 +1557,7 @@ def audit_history_page():
             return render_template('audit_history.html', 
                 completions=completions, 
                 month=month, 
-                year=year, 
+                year=year,
                 current_month=month,
                 current_year=year,
                 month_weeks=[], 
@@ -1591,7 +1591,7 @@ def audit_history_page():
                 return render_template('audit_history.html', 
                     completions=completions, 
                     month=month, 
-                    year=year, 
+                    year=year,
                     current_month=month,
                     current_year=year,
                     month_weeks=[], 
@@ -1804,7 +1804,7 @@ def audit_history_print_view():
             return render_template('audit_history.html', 
                 completions=completions, 
                 month=month, 
-                year=year, 
+                year=year,
                 current_month=month,
                 current_year=year,
                 month_weeks=[], 
@@ -1838,7 +1838,7 @@ def audit_history_print_view():
                 return render_template('audit_history.html', 
                     completions=completions, 
                     month=month, 
-                    year=year, 
+                    year=year,
                     current_month=month,
                     current_year=year,
                     month_weeks=[], 
@@ -5253,3 +5253,29 @@ def get_database_stats():
     except Exception as e:
         app.logger.error(f"Error getting database stats: {e}")
         return {}
+    
+# File serving routes
+@app.route('/files/<uuid:file_id>')
+@login_required
+def serve_uploaded_file(file_id):
+    """Serve uploaded files securely by file UUID (original or thumbnail)."""
+    from models import MaintenanceFile
+    file = MaintenanceFile.query.filter_by(id=file_id).first_or_404()
+    # Only allow access to files related to user's records (unless admin)
+    if not current_user.is_admin:
+        if not file.maintenance_record or file.maintenance_record.user_id != current_user.id:
+            abort(403)
+    # Serve the file
+    return send_file(file.filepath, as_attachment=False, download_name=file.filename)
+
+@app.route('/files/thumb/<uuid:file_id>')
+@login_required
+def serve_uploaded_thumbnail(file_id):
+    from models import MaintenanceFile
+    file = MaintenanceFile.query.filter_by(id=file_id).first_or_404()
+    if not file.thumbnail_path:
+        abort(404)
+    if not current_user.is_admin:
+        if not file.maintenance_record or file.maintenance_record.user_id != current_user.id:
+            abort(403)
+    return send_file(file.thumbnail_path, as_attachment=False, download_name=f"thumb_{file.filename}")

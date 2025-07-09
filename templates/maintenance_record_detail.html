@@ -192,6 +192,38 @@
       {% endif %}
     </div>
   </div>
+  
+  {% if record.files %}
+  <div class="card mt-3">
+    <div class="card-header">
+      <h6 class="mb-0">Attached Files</h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-2">
+        {% for file in record.files %}
+          <div class="col-6 col-md-4 col-lg-3 mb-2">
+            {% if file.filetype.startswith('image/') %}
+              <a href="{{ url_for('serve_uploaded_file', file_id=file.id) }}" target="_blank">
+                <img src="{{ url_for('serve_uploaded_thumbnail', file_id=file.id) }}" alt="{{ file.filename }}" class="img-fluid rounded border" style="max-height:120px;object-fit:cover;">
+              </a>
+              <div class="small text-truncate mt-1">{{ file.filename }}</div>
+            {% elif file.filetype == 'application/pdf' %}
+              <a href="{{ url_for('serve_uploaded_file', file_id=file.id) }}" target="_blank" class="d-block text-center">
+                <i class="fas fa-file-pdf fa-3x text-danger"></i>
+                <div class="small text-truncate mt-1">{{ file.filename }}</div>
+              </a>
+            {% else %}
+              <a href="{{ url_for('serve_uploaded_file', file_id=file.id) }}" target="_blank" class="d-block text-center">
+                <i class="fas fa-file fa-3x text-secondary"></i>
+                <div class="small text-truncate mt-1">{{ file.filename }}</div>
+              </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <style>
