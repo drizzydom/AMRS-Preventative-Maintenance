@@ -238,21 +238,18 @@ body.dark-mode .text-danger,
 body.dark-mode .btn-danger,
 body.dark-mode .alert-danger {
     color: #fff !important;
-    background-color: #b02a37 !important;
     border-color: #a71d2a !important;
 }
 body.dark-mode .text-warning,
 body.dark-mode .btn-warning,
 body.dark-mode .alert-warning {
     color: #fff !important;
-    background-color: #e6a700 !important;
     border-color: #c49000 !important;
 }
 body.dark-mode .text-success,
 body.dark-mode .btn-success,
 body.dark-mode .alert-success {
     color: #fff !important;
-    background-color: #198754 !important;
     border-color: #146c43 !important;
 }
 body.dark-mode .btn,
