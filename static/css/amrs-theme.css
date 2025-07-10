@@ -349,3 +349,10 @@ body.dark-mode .text-success {
     background: none !important;
     border: none !important;
 }
+body.dark-mode .text-dark,
+body.dark-mode .fw-semibold.text-dark,
+body.dark-mode .text-dark.fw-semibold,
+body.dark-mode .text-dark.me-3,
+body.dark-mode .fw-semibold.text-dark.me-3 {
+    color: #fff !important;
+}
