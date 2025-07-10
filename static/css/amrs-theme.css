@@ -269,3 +269,23 @@ body.dark-mode .badge.bg-primary {
     background-color: #FE7900 !important;
     color: #23272b !important;
 }
+body.dark-mode .accordion,
+body.dark-mode .accordion-item,
+body.dark-mode .accordion-header,
+body.dark-mode .accordion-button {
+    background-color: #23272b !important;
+    color: #fff !important;
+    border-color: #444 !important;
+}
+body.dark-mode .accordion-button:not(.collapsed) {
+    background-color: #181a1b !important;
+    color: #FE7900 !important;
+    box-shadow: none;
+}
+body.dark-mode .accordion-body {
+    background-color: #23272b !important;
+    color: #fff !important;
+}
+body.dark-mode .accordion-button:focus {
+    box-shadow: 0 0 0 0.2rem rgba(254,121,0,0.25) !important;
+}
