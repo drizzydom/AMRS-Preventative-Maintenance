@@ -612,35 +612,47 @@
     <!-- Page specific scripts -->
     {% block scripts %}{% endblock %}
     
-    <!-- Dark Mode Toggle Button -->
-    <button id="darkModeToggle" class="btn btn-outline-secondary" style="position:fixed;bottom:20px;right:20px;z-index:9999;">
-        <span id="darkModeIcon" class="fa fa-moon"></span> Dark Mode
-    </button>
+    <!-- Dark Mode Toggle Button (moved to top navbar) -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const toggle = document.getElementById('darkModeToggle');
-        const icon = document.getElementById('darkModeIcon');
-        // Check saved preference
-        if (localStorage.getItem('darkMode') === 'enabled') {
-            document.body.classList.add('dark-mode');
-            icon.classList.remove('fa-moon');
-            icon.classList.add('fa-sun');
-            toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-sun"></span> Light Mode';
-        }
-        toggle.addEventListener('click', function() {
-            document.body.classList.toggle('dark-mode');
-            if (document.body.classList.contains('dark-mode')) {
-                localStorage.setItem('darkMode', 'enabled');
+        // Move the dark mode toggle to the navbar
+        const nav = document.querySelector('.navbar .container-fluid');
+        if (nav) {
+            let toggle = document.getElementById('darkModeToggle');
+            if (!toggle) {
+                toggle = document.createElement('button');
+                toggle.id = 'darkModeToggle';
+                toggle.className = 'btn btn-outline-secondary ms-2';
+                toggle.style = 'position:static;float:right;';
+                toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-moon"></span> Dark Mode';
+                nav.appendChild(toggle);
+            }
+            const icon = document.getElementById('darkModeIcon') || toggle.querySelector('span');
+            // Check saved preference
+            if (localStorage.getItem('darkMode') === 'enabled') {
+                document.body.classList.add('dark-mode');
                 icon.classList.remove('fa-moon');
                 icon.classList.add('fa-sun');
                 toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-sun"></span> Light Mode';
-            } else {
-                localStorage.setItem('darkMode', 'disabled');
-                icon.classList.remove('fa-sun');
-                icon.classList.add('fa-moon');
-                toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-moon"></span> Dark Mode';
             }
-        });
+            toggle.addEventListener('click', function() {
+                document.body.classList.toggle('dark-mode');
+                if (document.body.classList.contains('dark-mode')) {
+                    localStorage.setItem('darkMode', 'enabled');
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                    toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-sun"></span> Light Mode';
+                } else {
+                    localStorage.setItem('darkMode', 'disabled');
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                    toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-moon"></span> Dark Mode';
+                }
+            });
+        }
+        // Remove old toggle if present
+        const oldToggle = document.querySelector('button#darkModeToggle[style*="position:fixed"]');
+        if (oldToggle) oldToggle.remove();
     });
     </script>
     <!-- End Dark Mode Toggle -->
