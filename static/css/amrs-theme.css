@@ -238,18 +238,21 @@ body.dark-mode .text-danger,
 body.dark-mode .btn-danger,
 body.dark-mode .alert-danger {
     color: #fff !important;
+    background-color: #b02a37 !important;
     border-color: #a71d2a !important;
 }
 body.dark-mode .text-warning,
 body.dark-mode .btn-warning,
 body.dark-mode .alert-warning {
     color: #fff !important;
+    background-color: #e6a700 !important;
     border-color: #c49000 !important;
 }
 body.dark-mode .text-success,
 body.dark-mode .btn-success,
 body.dark-mode .alert-success {
     color: #fff !important;
+    background-color: #198754 !important;
     border-color: #146c43 !important;
 }
 body.dark-mode .btn,
@@ -319,4 +322,30 @@ body.dark-mode tr.table-success > td {
 body.dark-mode .bg-light {
     background-color: #23272b !important;
     color: #fff !important;
+}
+
+/* Ensure .btn- and .alert- keep background, but .text-* only changes text color in dark mode */
+body.dark-mode .btn-danger,
+body.dark-mode .btn-warning,
+body.dark-mode .btn-success,
+body.dark-mode .alert-danger,
+body.dark-mode .alert-warning,
+body.dark-mode .alert-success {
+    /* Keep background and border as set above */
+    color: #fff !important;
+}
+body.dark-mode .text-danger {
+    color: #ff6b6b !important;
+    background: none !important;
+    border: none !important;
+}
+body.dark-mode .text-warning {
+    color: #ffe066 !important;
+    background: none !important;
+    border: none !important;
+}
+body.dark-mode .text-success {
+    color: #8cffc1 !important;
+    background: none !important;
+    border: none !important;
 }
