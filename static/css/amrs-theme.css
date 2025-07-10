@@ -319,3 +319,7 @@ body.dark-mode tr.table-success > td {
     background-color: #198754 !important;
     color: #fff !important;
 }
+body.dark-mode .bg-light {
+    background-color: #23272b !important;
+    color: #fff !important;
+}
