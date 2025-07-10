@@ -207,3 +207,65 @@ body.dark-mode .sidebar .sidebar-link {
 body.dark-mode a:not(.btn):hover {
     color: #E56C00 !important;
 }
+
+/* Dark mode styles - improved for cards, headers, and text */
+body.dark-mode .card {
+    background-color: #23272b !important;
+    color: #fff !important;
+    border-color: #444 !important;
+}
+body.dark-mode .card-header {
+    background-color: #181a1b !important;
+    color: #FE7900 !important;
+    border-bottom: 1px solid #444 !important;
+}
+body.dark-mode .card-title,
+body.dark-mode .card-header h5,
+body.dark-mode .card-header h6,
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6 {
+    color: #FE7900 !important;
+}
+body.dark-mode .text-muted,
+body.dark-mode .text-secondary {
+    color: #b0b0b0 !important;
+}
+body.dark-mode .text-danger,
+body.dark-mode .btn-danger,
+body.dark-mode .alert-danger {
+    color: #fff !important;
+    background-color: #b02a37 !important;
+    border-color: #a71d2a !important;
+}
+body.dark-mode .text-warning,
+body.dark-mode .btn-warning,
+body.dark-mode .alert-warning {
+    color: #fff !important;
+    background-color: #e6a700 !important;
+    border-color: #c49000 !important;
+}
+body.dark-mode .text-success,
+body.dark-mode .btn-success,
+body.dark-mode .alert-success {
+    color: #fff !important;
+    background-color: #198754 !important;
+    border-color: #146c43 !important;
+}
+body.dark-mode .btn,
+body.dark-mode .form-label,
+body.dark-mode .form-text,
+body.dark-mode .info-label,
+body.dark-mode .info-value {
+    color: #fff !important;
+}
+body.dark-mode .form-control::placeholder {
+    color: #b0b0b0 !important;
+}
+body.dark-mode .badge.bg-primary {
+    background-color: #FE7900 !important;
+    color: #23272b !important;
+}
