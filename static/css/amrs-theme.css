@@ -289,3 +289,33 @@ body.dark-mode .accordion-body {
 body.dark-mode .accordion-button:focus {
     box-shadow: 0 0 0 0.2rem rgba(254,121,0,0.25) !important;
 }
+body.dark-mode tr,
+body.dark-mode tr > th,
+body.dark-mode tr > td {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode tr.table-primary,
+body.dark-mode tr.table-primary > th,
+body.dark-mode tr.table-primary > td {
+    background-color: #181a1b !important;
+    color: #FE7900 !important;
+}
+body.dark-mode tr.table-danger,
+body.dark-mode tr.table-danger > th,
+body.dark-mode tr.table-danger > td {
+    background-color: #b02a37 !important;
+    color: #fff !important;
+}
+body.dark-mode tr.table-warning,
+body.dark-mode tr.table-warning > th,
+body.dark-mode tr.table-warning > td {
+    background-color: #e6a700 !important;
+    color: #fff !important;
+}
+body.dark-mode tr.table-success,
+body.dark-mode tr.table-success > th,
+body.dark-mode tr.table-success > td {
+    background-color: #198754 !important;
+    color: #fff !important;
+}
