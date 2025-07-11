@@ -1817,12 +1817,17 @@ def audit_history_print():
     audit_tasks = {}
     all_tasks_per_machine = {}
     
+    # Create a lookup dictionary for machines to avoid multiple queries
+    machine_ids = {completion.machine_id for completion in completions}
+    machines_lookup = {machine.id: machine for machine in Machine.query.filter(Machine.id.in_(machine_ids)).all()}
+    
     for completion in completions:
         task = completion.audit_task
-        if not task or not task.machine:
+        machine = machines_lookup.get(completion.machine_id)
+        if not task or not machine or not completion.completed_at:
             continue
             
-        machine_id = task.machine.id
+        machine_id = machine.id
         completion_date = completion.completed_at.strftime('%Y-%m-%d')
         
         if machine_id not in machine_data:
