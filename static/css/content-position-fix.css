@@ -5,8 +5,11 @@
 
 /* ==== DESKTOP LAYOUT (992px and above) ==== */
 @media (min-width: 992px) {
-    /* Sidebar expanded state */
+    /* Sidebar expanded state (default) */
     .content-container {
+        margin-left: 200px;
+        width: calc(100% - 200px);
+        max-width: calc(100% - 200px);
         transition: margin-left 0.3s ease, width 0.3s ease;
     }
     
