@@ -33,7 +33,7 @@ import csv
 import json
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, UserSite, encrypt_value, hash_value
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
@@ -1781,9 +1781,7 @@ def audit_history_print():
     if current_user.is_admin:
         sites = Site.query.all()
     else:
-        user_sites = UserSite.query.filter_by(user_id=current_user.id).all()
-        site_ids = [us.site_id for us in user_sites]
-        sites = Site.query.filter(Site.id.in_(site_ids)).all() if site_ids else []
+        sites = current_user.sites
 
     # Build query for completions
     query = AuditTaskCompletion.query.filter(
