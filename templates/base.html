@@ -399,22 +399,20 @@
     }
     </style>
 </head>
-<body class="preload">
-    <header>
-        <!-- Navigation Bar - Simplified with reduced height -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
-            <div class="container-fluid d-flex align-items-center justify-content-center position-relative">
-                <button class="navbar-toggler position-absolute start-0" type="button" id="hamburger-btn"
-                        aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                
-                <a class="navbar-brand text-center" href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer">
-                    <i class="fas fa-tools me-2"></i> Accurate Machine Repair
-                </a>
-            </div>
-        </nav>
-    </header>
+<body class="d-flex flex-column h-100 {% block body_class %}{% endblock %}">
+    <!-- Top navigation bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container-fluid d-flex align-items-center justify-content-center position-relative">
+            <button class="navbar-toggler position-absolute start-0" type="button" id="hamburger-btn"
+                    aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <a class="navbar-brand text-center" href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer">
+                <i class="fas fa-tools me-2"></i> Accurate Machine Repair
+            </a>
+        </div>
+    </nav>
 
     <div class="container-fluid centered-layout">
         <div class="row">
