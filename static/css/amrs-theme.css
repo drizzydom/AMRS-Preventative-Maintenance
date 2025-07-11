@@ -539,3 +539,7 @@ body.dark-mode .info-section a {
 body.dark-mode .info-section a:hover {
     color: #E56C00 !important;
 }
+body.dark-mode .text-content {
+    color: #e0e0e0 !important;
+    background-color: #23272b !important;
+}
