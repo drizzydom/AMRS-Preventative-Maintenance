@@ -2,8 +2,10 @@
 {% block title %}Maintenance Records{% endblock %}
 {% block header_title %}Maintenance Records{% endblock %}
 {% block content %}
-<h2 class="mb-4">Maintenance Records</h2>
-  <form method="get" class="row g-3 mb-4">
+<div class="row g-2">
+    <div class="col-12">
+        <h2 class="mb-4">Maintenance Records</h2>
+        <form method="get" class="row g-3 mb-4">
     {% if sites|length > 1 %}
     <div class="col-md-4">
       <label for="site_id" class="form-label">Site</label>
@@ -36,11 +38,11 @@
         {% endfor %}
       </select>
     </div>
-  </form>
-  {% if records %}
-  <div class="table-responsive">
-    <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
-    <table class="table table-striped table-hover">
+        </form>
+        {% if records %}
+        <div class="table-responsive">
+            <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
+            <table class="table table-striped table-hover">
       <thead>
         <tr>
           <th>Date</th>
@@ -72,11 +74,13 @@
         </tr>
         {% endfor %}
       </tbody>
-    </table>
-  </div>
-  {% elif selected_part %}
-    <div class="alert alert-info mt-4">No maintenance records found for this part.</div>
-  {% endif %}
+            </table>
+        </div>
+        {% elif selected_part %}
+            <div class="alert alert-info mt-4">No maintenance records found for this part.</div>
+        {% endif %}
+    </div>
+</div>
 
 <script>
 // Make table rows clickable
