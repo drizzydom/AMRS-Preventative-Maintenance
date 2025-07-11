@@ -356,3 +356,175 @@ body.dark-mode .text-dark.me-3,
 body.dark-mode .fw-semibold.text-dark.me-3 {
     color: #fff !important;
 }
+
+/* --- Audit Calendar & Audit Machine Section Styles --- */
+.audit-machine-section {
+  border: 1px solid #dee2e6;
+  border-radius: 0.5em;
+  margin-bottom: 1.5em;
+  padding: 1em;
+  background: #f8f9fa;
+}
+.audit-machine-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  margin-bottom: 0.5em;
+}
+@media (max-width: 767.98px) {
+  .audit-task-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1em;
+  }
+  .audit-machine-section {
+    min-width: 320px;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0.75em 0.5em;
+  }
+  .audit-machine-title {
+    font-size: 1em;
+  }
+  .audit-checkoff {
+    width: 2em !important;
+    height: 2em !important;
+    min-width: 2em !important;
+    min-height: 2em !important;
+    margin-right: 1em;
+  }
+  .form-check-label {
+    font-size: 1.1em;
+    padding-left: 0.25em;
+  }
+  .btn {
+    font-size: 1.1em;
+    padding: 0.75em 1.25em;
+  }
+  .btn-lg {
+    font-size: 1.2em;
+    padding: 1em 2em;
+  }
+  .sticky-save {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+    padding: 0.75em 1em;
+    text-align: right;
+  }
+}
+@media (max-width: 575.98px) {
+  .audit-machine-section {
+    padding: 0.5em 0.25em;
+  }
+  .form-check-label {
+    font-size: 1em;
+  }
+}
+
+/* Calendar Styles */
+.calendar-table {
+  width: 100%;
+}
+.calendar-table th,
+.calendar-table td {
+  border: 1px solid #dee2e6;
+  text-align: center;
+  vertical-align: top;
+}
+.calendar-table th {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  padding: 0.5rem;
+}
+.calendar-day {
+  height: 80px;
+  position: relative;
+  padding: 0.25rem;
+}
+.calendar-day.empty-day {
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
+.calendar-day.today {
+  background-color: #007bff !important;
+  color: white !important;
+}
+.date-number {
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+.task-markers {
+  position: absolute;
+  bottom: 5px;
+  left: 2px;
+  right: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+}
+.task-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.legend-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+.calendar-legend {
+  background: #f8f9fa;
+  border-radius: 0.5em;
+  padding: 1em;
+}
+.monthly-calendar {
+  background: #f8f9fa;
+  border-radius: 0.5em;
+  padding: 1em 0.5em;
+}
+
+/* --- Dark Mode for Audit Calendar & Audit Machine Section --- */
+body.dark-mode .audit-machine-section {
+  background: #23272b !important;
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+}
+body.dark-mode .calendar-legend {
+  background: #23272b !important;
+  color: #e0e0e0 !important;
+  border-radius: 0.5em;
+}
+body.dark-mode .monthly-calendar {
+  background: #23272b !important;
+  color: #e0e0e0 !important;
+  border-radius: 0.5em;
+}
+body.dark-mode .calendar-table th,
+body.dark-mode .calendar-table td {
+  background-color: #23272b !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+body.dark-mode .calendar-table th {
+  color: #FE7900 !important;
+}
+body.dark-mode .calendar-day.today {
+  background-color: #FE7900 !important;
+  color: #23272b !important;
+}
+body.dark-mode .date-number {
+  color: #fff !important;
+}
