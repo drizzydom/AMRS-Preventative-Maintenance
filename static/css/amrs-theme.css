@@ -528,3 +528,14 @@ body.dark-mode .calendar-day.today {
 body.dark-mode .date-number {
   color: #fff !important;
 }
+body.dark-mode .info-section {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+}
+body.dark-mode .info-section a {
+    color: #FE7900 !important;
+}
+body.dark-mode .info-section a:hover {
+    color: #E56C00 !important;
+}
