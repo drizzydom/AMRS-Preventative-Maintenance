@@ -33,7 +33,7 @@ import csv
 import json
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, UserSite, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
@@ -1730,6 +1730,159 @@ def audit_history_page():
         all_tasks_per_machine=all_tasks_per_machine,
         interval_bars=interval_bars,
         display_machines=available_machines,
+        get_calendar_weeks=get_calendar_weeks
+    )
+
+@app.route('/audit-history/print-view', methods=['GET'])
+@login_required
+def audit_history_print():
+    """Print view for audit history."""
+    # Same permission checks as audit_history_page
+    if current_user.is_admin:
+        can_access = True
+    else:
+        if hasattr(current_user, 'role') and current_user.role:
+            if hasattr(current_user.role, 'name'):
+                permissions = (current_user.role.permissions or '').replace(' ', '').split(',') 
+                can_access = 'audits.access' in permissions
+            else:
+                user_role = Role.query.filter_by(name=current_user.role).first()
+                permissions = (user_role.permissions or '').replace(' ', '').split(',') if user_role and user_role.permissions else []
+                can_access = 'audits.access' in permissions
+        else:
+            can_access = False
+    if not can_access:
+        flash('You do not have permission to access audit history.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    from calendar import monthrange
+    today = datetime.now().date()
+    
+    # Parse month/year from month_year param
+    month_year = request.args.get('month_year')
+    if month_year:
+        try:
+            year, month = map(int, month_year.split('-'))
+        except Exception:
+            month = today.month
+            year = today.year
+    else:
+        month = today.month
+        year = today.year
+    
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    # Get filters
+    site_id = request.args.get('site_id', type=int)
+    selected_machine = request.args.get('machine_id', type=int)
+    
+    # Get sites
+    if current_user.is_admin:
+        sites = Site.query.all()
+    else:
+        user_sites = UserSite.query.filter_by(user_id=current_user.id).all()
+        site_ids = [us.site_id for us in user_sites]
+        sites = Site.query.filter(Site.id.in_(site_ids)).all() if site_ids else []
+
+    # Build query for completions
+    query = AuditTaskCompletion.query.filter(
+        AuditTaskCompletion.completed_at >= first_day,
+        AuditTaskCompletion.completed_at <= last_day
+    )
+
+    # Apply site filter
+    if site_id:
+        site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
+        task_ids = [task.id for task in site_audit_tasks]
+        if task_ids:
+            query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+        else:
+            # No tasks for this site, return empty
+            return render_template('audit_history_pdf.html', 
+                machines=[], completions=[], machine_data={}, 
+                audit_tasks={}, all_tasks_per_machine={}, 
+                start_date=first_day, end_date=last_day, today=today,
+                get_calendar_weeks=get_calendar_weeks)
+    else:
+        if not current_user.is_admin and sites:
+            site_ids = [site.id for site in sites]
+            site_audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).all()
+            task_ids = [task.id for task in site_audit_tasks]
+            if task_ids:
+                query = query.filter(AuditTaskCompletion.audit_task_id.in_(task_ids))
+
+    completions = query.all()
+
+    # Build machine data structure
+    machine_data = {}
+    audit_tasks = {}
+    all_tasks_per_machine = {}
+    
+    for completion in completions:
+        task = completion.audit_task
+        if not task or not task.machine:
+            continue
+            
+        machine_id = task.machine.id
+        completion_date = completion.completed_at.strftime('%Y-%m-%d')
+        
+        if machine_id not in machine_data:
+            machine_data[machine_id] = {}
+        if completion_date not in machine_data[machine_id]:
+            machine_data[machine_id][completion_date] = []
+        
+        machine_data[machine_id][completion_date].append(completion)
+        audit_tasks[completion.audit_task_id] = task
+        
+        if machine_id not in all_tasks_per_machine:
+            all_tasks_per_machine[machine_id] = []
+        if task not in all_tasks_per_machine[machine_id]:
+            all_tasks_per_machine[machine_id].append(task)
+
+    # Get machines that have data
+    machines = []
+    for machine_id in machine_data.keys():
+        machine = Machine.query.get(machine_id)
+        if machine:
+            # Apply machine filter
+            if selected_machine and machine.id != selected_machine:
+                continue
+            machines.append(machine)
+
+    # Generate calendar weeks function
+    def get_calendar_weeks(start_date, end_date):
+        import calendar
+        weeks = []
+        current = start_date.replace(day=1)
+        
+        # Get first Monday of the month view
+        while current.weekday() != 0:  # 0 is Monday
+            current -= timedelta(days=1)
+        
+        # Generate weeks until we cover the end date
+        while current <= end_date or len(weeks) < 6:
+            week = []
+            for i in range(7):
+                week.append(current + timedelta(days=i))
+            weeks.append(week)
+            current += timedelta(days=7)
+            
+            # Stop if we have 6 weeks and covered the month
+            if len(weeks) >= 6 and current > end_date:
+                break
+                
+        return weeks
+
+    return render_template('audit_history_pdf.html',
+        machines=machines,
+        completions=completions,
+        machine_data=machine_data,
+        audit_tasks=audit_tasks,
+        all_tasks_per_machine=all_tasks_per_machine,
+        start_date=first_day,
+        end_date=last_day,
+        today=today,
         get_calendar_weeks=get_calendar_weeks
     )
 
