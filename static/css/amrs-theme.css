@@ -543,3 +543,8 @@ body.dark-mode .text-content {
     color: #e0e0e0 !important;
     background-color: #23272b !important;
 }
+
+/* Override Bootstrap's .col flex to prevent unwanted indentation */
+.col {
+    flex: none !important;
+}
