@@ -36,14 +36,10 @@
 
 /* Footer spacing on larger screens */
 @media (min-width: 992px) {
+  /* Footer with sidebar offset - REMOVED: positioning handled by base.html */
   .footer .container-fluid {
     padding-left: 1.25rem !important;
     padding-right: 1.25rem !important;
-  }
-  
-  /* Footer with sidebar offset */
-  .footer .container-fluid {
-    padding-left: calc(1rem + 200px) !important;
     width: 100% !important;
   }
 }
