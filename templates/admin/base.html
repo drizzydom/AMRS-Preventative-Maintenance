@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, shrink-to-fit=no">
+    <title>{% block title %}Maintenance Tracker{% endblock %}</title>
+    
+    <!-- Load critical CSS as early as possible -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/preload-fix.css') }}">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- CORE CSS FILES - Keep only essential ones -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
+    
+    <!-- Enhanced mouse navigation and table improvements -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/horizontal-scroll-enhancements.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/compact-table-layouts.css') }}">
+    
+    <!-- Theme CSS must be loaded last to apply theme colors properly -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
+    
+    <!-- Print CSS must be loaded absolutely last to override all other styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
+    
+    {% block extra_css %}{% endblock %}
+    
+    <!-- Core layout styles - using higher specificity instead of !important -->
+    <style>
+    /* 1. HEADER POSITIONING - Ensure it's above all other elements */
+    html body header,
+    body header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px; /* Fixed height for navbar */
+        z-index: 1050; /* Highest z-index to stay on top */
+    }
+    
+    html body .navbar,
+    body .navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        min-height: 48px;
+        z-index: 1050; /* Highest z-index */
+    }
+    
+    /* 2. SIDEBAR POSITIONING - fixed below header */
+    html body .sidebar,
+    body:not(.mobile-view) .sidebar {
+        position: fixed;
+        width: 200px;
+        top: 48px; /* Start right below the navbar */
+        left: 0;
+        bottom: 48px; /* Make room for footer */
+        height: calc(100vh - 96px); /* Account for both navbar and footer */
+        overflow-y: auto;
+        z-index: 1020; /* Below the navbar z-index */
+    }
+    
+    html body .sidebar-container,
+    body:not(.mobile-view) .sidebar-container {
+        width: 200px;
+        flex: 0 0 200px;
+    }
+    
+    /* 3. BODY PADDING - ensure content starts below header */
+    html body,
+    body {
+        padding-top: 48px; /* Exactly match header height */
+    }
+    
+    /* 4. MAIN CONTENT POSITIONING - Complete positioning rules */
+    /* DEFAULT DESKTOP LAYOUT - Sidebar Expanded (200px) */
+    @media (min-width: 992px) {
+        .content-container {
+            margin-left: 200px;
+            width: calc(100% - 200px);
+            max-width: calc(100% - 200px);
+            transition: margin-left 0.3s ease, width 0.3s ease;
+        }
+    }
+    
+    /* DESKTOP COLLAPSED SIDEBAR STATE - handled by sidebar collapse rules below */
+    /* MOBILE LAYOUT - handled by mobile rules below */
+    
+    html body .container-fluid,
+    .centered-layout .row .centered-content-col .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-top: 1rem; /* Increased padding to create more space below header */
+    }
+    
+    /* 5. RESET VERTICAL SPACING - with specific combined selectors */
+    html body .page-content,
+    .centered-layout .centered-content-col .content-container .page-content {
+        margin-top: 0;
+        padding-top: 1rem; /* Added padding to create space between header and content */
+        padding-left: 0;
+        padding-right: 0;
+    }
+    
+    /* 6. ENSURE TABLE DISPLAYS CORRECTLY - with class hierarchy */
+    html body .table-responsive,
+    .card-body .table-responsive {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    /* 7. FOOTER POSITIONING AND STYLING */
+    html body .footer,
+    body .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        z-index: 1030; /* Below header but above most content */
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        display: flex;
+        align-items: center;
+    }
+    
+    html body .footer .container-fluid,
+    body .footer .container-fluid {
+        width: 100%;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    
+    html body .footer .d-flex,
+    body .footer .d-flex {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    /* 8. MOBILE ADJUSTMENTS */
+    @media (max-width: 991.98px) {
+        html body .content-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        html body .sidebar {
+            position: fixed;
+            top: 48px;
+            left: -280px;
+            width: 280px;
+            height: calc(100vh - 96px);
+            z-index: 1040;
+            transition: left 0.3s ease;
+            bottom: 48px;
+        }
+        
+        html body .sidebar.show {
+            left: 0;
+        }
+        
+        /* Mobile navbar adjustments */
+        .navbar-brand {
+            font-size: 1.1rem !important;
+            text-decoration: none !important;
+            color: white !important;
+        }
+        
+        .navbar-brand:hover {
+            color: rgba(255,255,255,0.8) !important;
+        }
+        
+        /* Mobile close button */
+        .sidebar-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.95);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.5rem;
+            color: #333;
+            z-index: 1100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .sidebar-close-btn:focus {
+            outline: 2px solid #0d6efd;
+        }
+        @media (min-width: 992px) {
+            .sidebar-close-btn { display: none !important; }
+        }
+        /* Sidebar overlay polish */
+        body.sidebar-active::before {
+            background-color: rgba(0,0,0,0.45) !important;
+            transition: background 0.2s;
+        }
+        /* Prevent background scroll when sidebar is open on mobile */
+        body.sidebar-active {
+            overflow: hidden;
+            position: fixed;
+            width: 100vw;
+        }
+    }
+    
+    /* Extra small screens - further adjustments */
+    @media (max-width: 575.98px) {
+        .navbar-brand {
+            font-size: 1rem !important;
+        }
+        
+        .navbar .container-fluid {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+    }
+    
+    /* Very small screens - ultra compact */
+    @media (max-width: 350px) {
+        .navbar-brand {
+            font-size: 0.9rem !important;
+        }
+        
+        .navbar .container-fluid {
+            padding-left: 0.25rem;
+            padding-right: 0.25rem;
+        }
+    }
+    /* --- SIDEBAR COLLAPSE FOR DESKTOP --- */
+    body.sidebar-collapsed .sidebar,
+    html body.sidebar-collapsed .sidebar {
+        width: 56px !important;
+        min-width: 56px !important;
+        max-width: 56px !important;
+        transition: width 0.2s;
+    }
+    body.sidebar-collapsed .sidebar-container,
+    html body.sidebar-collapsed .sidebar-container {
+        width: 56px !important;
+        min-width: 56px !important;
+        max-width: 56px !important;
+        transition: width 0.2s;
+    }
+    body.sidebar-collapsed .content-container,
+    html body.sidebar-collapsed .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+        max-width: calc(100% - 56px) !important;
+        transition: margin-left 0.2s, width 0.2s;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-link-text {
+        display: none !important;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-icon {
+        margin-right: 0 !important;
+        display: flex !important;
+        justify-content: center;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-nav-item {
+        text-align: center;
+    }
+    body.sidebar-collapsed .sidebar .sidebar-toggle-btn {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+    
+    @media (max-width: 991.98px) {
+        body.sidebar-collapsed .sidebar,
+        html body.sidebar-collapsed .sidebar {
+            width: 280px !important;
+            min-width: 280px !important;
+            max-width: 280px !important;
+        }
+        body.sidebar-collapsed .content-container,
+        html body.sidebar-collapsed .content-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+    /* --- END SIDEBAR COLLAPSE --- */
+    /* --- MOBILE-FRIENDLY TABLES --- */
+    @media (max-width: 767.98px) {
+        .table-responsive, .card-body .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            margin-bottom: 1rem;
+        }
+        table.table {
+            min-width: 600px;
+        }
+        .table-scroll-hint {
+            display: block;
+            font-size: 0.85em;
+            color: #888;
+            text-align: right;
+            margin-bottom: 0.25rem;
+        }
+    }
+    /* --- END MOBILE-FRIENDLY TABLES --- */
+    
+    /* Hamburger button improvements */
+    #hamburger-btn {
+        position: relative;
+        z-index: 1201;
+        width: 48px;
+        height: 48px;
+        border: none;
+        background: rgba(255,255,255,0.85);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: background 0.2s, box-shadow 0.2s;
+        margin-right: 0.5rem;
+    }
+    #hamburger-btn:focus {
+        outline: 2px solid #0d6efd;
+    }
+    #hamburger-btn .navbar-toggler-icon {
+        width: 28px;
+        height: 28px;
+        display: inline-block;
+        position: relative;
+        transition: transform 0.3s;
+    }
+    /* Hamburger to X animation */
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon {
+        background-image: none;
+    }
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:before,
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:after,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:before,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:after {
+        content: '';
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        transition: transform 0.3s, top 0.3s, opacity 0.3s;
+    }
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:before,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:before {
+        top: 12px;
+        transform: rotate(45deg);
+    }
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon:after,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon:after {
+        top: 12px;
+        transform: rotate(-45deg);
+    }
+    #hamburger-btn .navbar-toggler-icon:before,
+    #hamburger-btn .navbar-toggler-icon:after {
+        content: '';
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        transition: transform 0.3s, top 0.3s, opacity 0.3s;
+    }
+    #hamburger-btn .navbar-toggler-icon:before {
+        top: 8px;
+        transform: rotate(0);
+    }
+    #hamburger-btn .navbar-toggler-icon:after {
+        top: 20px;
+        transform: rotate(0);
+    }
+    /* Hide default hamburger lines when animating */
+    body.sidebar-active #hamburger-btn .navbar-toggler-icon,
+    body.sidebar-collapsed #hamburger-btn .navbar-toggler-icon {
+        background-image: none !important;
+    }
+    /* Sticky hamburger for mobile */
+    @media (max-width: 991.98px) {
+        #hamburger-btn {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            margin: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        }
+    }
+    </style>
+</head>
+<body class="preload">
+    <header>
+        <!-- Navigation Bar - Simplified with reduced height -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary compact-navbar">
+            <div class="container-fluid d-flex align-items-center justify-content-center position-relative">
+                <button class="navbar-toggler position-absolute start-0" type="button" id="hamburger-btn"
+                        aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                
+                <a class="navbar-brand text-center" href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-tools me-2"></i> Accurate Machine Repair
+                </a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container-fluid centered-layout">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-auto px-0 sidebar-container">
+                <div class="sidebar">
+                    <ul class="sidebar-nav">
+                        <!-- Desktop collapse button (only visible on desktop) -->
+                        <li class="sidebar-nav-item sidebar-toggle-item d-none d-lg-block">
+                            <button class="sidebar-toggle-btn" onclick="toggleSidebarCollapse()" aria-label="Collapse Sidebar">
+                                <i class="fas fa-angle-double-left"></i>
+                            </button>
+                        </li>
+                        
+                        <!-- Regular sidebar navigation items -->
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-tachometer-alt"></i>
+                                <span class="sidebar-link-text">Dashboard</span>
+                            </a>
+                        </li>
+
+                        {# Sites Management - requires sites.view permission #}
+                        {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-building"></i>
+                                <span class="sidebar-link-text">Sites</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Machines Management - requires machines.view permission #}
+                        {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'machines.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-industry"></i>
+                                <span class="sidebar-link-text">Machines</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Parts Management - requires parts.view permission #}
+                        {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'parts.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-cogs"></i>
+                                <span class="sidebar-link-text">Parts</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Record Maintenance - requires maintenance.record permission #}
+                        {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.record' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('maintenance_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-tools"></i>
+                                <span class="sidebar-link-text">Record Maintenance</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# User Profile - always available to authenticated users #}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-user"></i>
+                                <span class="sidebar-link-text">User Profile</span>
+                            </a>
+                        </li>
+
+                        {# Admin Panel - requires admin role #}
+                        {% if current_user.is_admin %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-user-shield"></i>
+                                <span class="sidebar-link-text">Admin</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Audits - requires audits.access permission #}
+                        {% if current_user.is_authenticated and (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'audits.access' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('audits_page') }}" class="sidebar-link {% if request.endpoint == 'audits_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-clipboard-check"></i>
+                                <span class="sidebar-link-text">Audits</span>
+                            </a>
+                        </li>
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('audit_history_page') }}" class="sidebar-link {% if request.endpoint == 'audit_history_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-history"></i>
+                                <span class="sidebar-link-text">Audit History</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {# Maintenance Records - requires maintenance.view permission #}
+                        {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('maintenance_records_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_records_page' %}active{% endif %}">
+                                <i class="sidebar-icon fas fa-history"></i>
+                                <span class="sidebar-link-text">Maintenance Records</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                    
+                    <!-- User information and logout at bottom of sidebar -->
+                    {% if current_user.is_authenticated %}
+                    <div class="sidebar-footer">
+                        <!-- Removed username and role display, keeping only logout button -->
+                        <a href="{{ url_for('logout') }}" class="sidebar-logout-btn">
+                            <i class="sidebar-icon fas fa-sign-out-alt"></i>
+                            <span>Logout</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                <!-- Sidebar overlay for mobile -->
+                <div id="sidebar-overlay" class="sidebar-overlay d-lg-none">
+                    <span class="overlay-text">Tap to close menu</span>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col px-0 centered-content-col">
+                <div class="content-container">
+                    <div class="container-fluid py-4 px-3">
+                        <!-- Page Header -->
+                        {% if current_user.is_authenticated %}
+                        <div class="page-header mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
+                                <div class="header_actions">
+                                    {% block header_actions %}{% endblock %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Flash Messages -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    {% set alert_class = "success" if category == "success" else "danger" if category == "error" else category %}
+                                    <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+                                        <i class="fas fa-{% if alert_class == 'success' %}check-circle{% elif alert_class == 'danger' %}exclamation-circle{% elif alert_class == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                        
+                        <!-- Page Content -->
+                        <div class="page-content">
+                            {% block content %}{% endblock %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 bg-light">
+        <div class="container-fluid px-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <div>
+                    <span class="text-muted">© {{ now.year if now else 2025 }} Accurate Machine Repair, LLC</span>
+                </div>
+                <div>
+                    <span class="text-muted">Version 1.0</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Main application scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
+    <!-- Enhanced horizontal scrolling support for mouse users -->
+    <script src="{{ url_for('static', filename='js/horizontal-scroll-support.js') }}"></script>
+    
+    <!-- Remove preload class after page load to enable animations -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.remove('preload');
+        });
+    </script>
+    
+    <!-- Page specific scripts -->
+    {% block scripts %}{% endblock %}
+    
+    <!-- Dark Mode Toggle Button (moved to top navbar) -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Move the dark mode toggle to the navbar
+        const nav = document.querySelector('.navbar .container-fluid');
+        if (nav) {
+            let toggle = document.getElementById('darkModeToggle');
+            if (!toggle) {
+                toggle = document.createElement('button');
+                toggle.id = 'darkModeToggle';
+                toggle.className = 'btn btn-outline-secondary ms-2';
+                toggle.style = 'position:static;float:right;';
+                toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-moon"></span> Dark Mode';
+                nav.appendChild(toggle);
+            }
+            const icon = document.getElementById('darkModeIcon') || toggle.querySelector('span');
+            // Check saved preference
+            if (localStorage.getItem('darkMode') === 'enabled') {
+                document.body.classList.add('dark-mode');
+                icon.classList.remove('fa-moon');
+                icon.classList.add('fa-sun');
+                toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-sun"></span> Light Mode';
+            }
+            toggle.addEventListener('click', function() {
+                document.body.classList.toggle('dark-mode');
+                if (document.body.classList.contains('dark-mode')) {
+                    localStorage.setItem('darkMode', 'enabled');
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                    toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-sun"></span> Light Mode';
+                } else {
+                    localStorage.setItem('darkMode', 'disabled');
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                    toggle.innerHTML = '<span id="darkModeIcon" class="fa fa-moon"></span> Dark Mode';
+                }
+            });
+        }
+        // Remove old toggle if present
+        const oldToggle = document.querySelector('button#darkModeToggle[style*="position:fixed"]');
+        if (oldToggle) oldToggle.remove();
+    });
+    </script>
+    <!-- End Dark Mode Toggle -->
+</body>
+</html>
