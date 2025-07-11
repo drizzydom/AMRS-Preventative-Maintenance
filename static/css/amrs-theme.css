@@ -564,3 +564,13 @@ body.dark-mode .month-header {
 body.dark-mode .legend-text {
     color: #e0e0e0;
 }
+
+/* Dark mode backgrounds for info-section and text-content */
+body.dark-mode .info-section {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode .text-content {
+    background-color: #202124 !important;
+    color: #e0e0e0 !important;
+}
