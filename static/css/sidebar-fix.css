@@ -178,10 +178,8 @@ html body .sidebar {
     pointer-events: auto;
   }
   
-  /* Prevent clicks on content when sidebar is open */
-  body.sidebar-active .content-container {
-    pointer-events: none; /* Prevent background clicks */
-  }
+  /* Prevent clicks on content when sidebar is open - REMOVED POSITIONING RULE */
+  /* All content positioning rules are now consolidated in base.html for consistency */
 }
 
 /* Mobile content should take up full width when sidebar is closed */
@@ -202,10 +200,8 @@ html body .sidebar {
     flex: 0 0 0 !important;
   }
 
-  /* Prevent clicks on content when sidebar is open */
-  body.sidebar-active .content-container {
-    pointer-events: none; /* Prevent background clicks */
-  }
+  /* Prevent clicks on content when sidebar is open - REMOVED POSITIONING RULE */
+  /* All content positioning rules are now consolidated in base.html for consistency */
 }
 
 .sidebar-overlay {
@@ -235,10 +231,8 @@ body.sidebar-active .sidebar-overlay {
     pointer-events: auto !important;
   }
   
-  /* Allow interaction with page content even when sidebar is open */
-  body.sidebar-active .content-container {
-    pointer-events: auto !important; /* Allow content interaction */
-  }
+  /* Allow interaction with page content even when sidebar is open - REMOVED POSITIONING RULE */
+  /* All content positioning rules are now consolidated in base.html for consistency */
 }
 
 /* Desktop sidebar collapse button - always visible */

@@ -80,16 +80,8 @@ body.sidebar-collapsed .sidebar .sidebar-link-text {
     display: none;
 }
 
-/* Adjust main content area when sidebar is collapsed */
-body.sidebar-collapsed .content-container,
-body.sidebar-collapsed .main-content,
-body.sidebar-collapsed .col-content,
-body.sidebar-collapsed .page-content,
-body.sidebar-collapsed .footer {
-    margin-left: 50px !important; /* Match collapsed sidebar width */
-    width: calc(100% - 50px) !important;
-    max-width: calc(100% - 50px) !important;
-}
+/* Adjust main content area when sidebar is collapsed - MOVED TO BASE.HTML */
+/* All content positioning rules are now consolidated in base.html for consistency */
 
 /* Remove any legacy toggle button styling */
 .sidebar-toggle {
