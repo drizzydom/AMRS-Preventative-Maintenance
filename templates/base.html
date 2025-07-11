@@ -23,7 +23,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
     
     <!-- Enhanced mouse navigation and table improvements -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/horizontal-scroll-enhancements.css') }}">
@@ -86,8 +85,19 @@
         padding-top: 48px; /* Exactly match header height */
     }
     
-    /* 4. MAIN CONTENT POSITIONING - moved to content-position-fix.css for consistency */
-    /* All layout rules are now consolidated in CSS files for better maintainability */
+    /* 4. MAIN CONTENT POSITIONING - Complete positioning rules */
+    /* DEFAULT DESKTOP LAYOUT - Sidebar Expanded (200px) */
+    @media (min-width: 992px) {
+        .content-container {
+            margin-left: 200px;
+            width: calc(100% - 200px);
+            max-width: calc(100% - 200px);
+            transition: margin-left 0.3s ease, width 0.3s ease;
+        }
+    }
+    
+    /* DESKTOP COLLAPSED SIDEBAR STATE - handled by sidebar collapse rules below */
+    /* MOBILE LAYOUT - handled by mobile rules below */
     
     html body .container-fluid,
     .centered-layout .row .centered-content-col .container-fluid {
@@ -143,9 +153,9 @@
     /* 8. MOBILE ADJUSTMENTS */
     @media (max-width: 991.98px) {
         html body .content-container {
-            margin-left: 0;
-            width: 100%;
-            max-width: 100%;
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
         }
         
         html body .sidebar {
