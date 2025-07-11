@@ -272,6 +272,18 @@
         display: flex;
         justify-content: center;
     }
+    
+    /* DEFAULT DESKTOP LAYOUT - Sidebar Expanded */
+    @media (min-width: 992px) {
+        .content-container,
+        html .content-container {
+            margin-left: 200px !important;
+            width: calc(100% - 200px) !important;
+            max-width: calc(100% - 200px) !important;
+            transition: margin-left 0.2s, width 0.2s;
+        }
+    }
+    
     @media (max-width: 991.98px) {
         body.sidebar-collapsed .sidebar,
         html body.sidebar-collapsed .sidebar {
