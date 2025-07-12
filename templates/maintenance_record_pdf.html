@@ -243,7 +243,7 @@
                 <div>
                     <div class="info-row">
                         <div class="info-label">Date:</div>
-                        <div class="info-value">{{ record.date.strftime('%B %d, %Y') }}</div>
+                        <div class="info-value">{{ record.created_at|to_eastern.strftime('%Y-%m-%d') }}</div>
                     </div>
                     <div class="info-row">
                         <div class="info-label">Type:</div>

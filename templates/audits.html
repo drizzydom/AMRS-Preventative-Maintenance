@@ -29,7 +29,7 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12 mb-4">
-            <h2 class="h4">Audit Tasks for {{ today.strftime('%Y-%m-%d') }}</h2>
+            <h2 class="h4">Audit Tasks for {{ today|to_eastern('%Y-%m-%d') }}</h2>
         </div>
         {% if current_user.is_admin %}
         <div class="col-12 mb-4">

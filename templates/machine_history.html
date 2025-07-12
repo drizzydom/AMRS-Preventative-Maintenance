@@ -57,8 +57,8 @@
                         {% for record in maintenance_records %}
                         <tr>
                             <td>{{ record.part }}</td>
-                            <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
-                            <td>{{ record.next_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ record.date|to_eastern('%Y-%m-%d') }}</td>
+                            <td>{{ record.next_date|to_eastern('%Y-%m-%d') }}</td>
                             <td>{{ record.frequency }}</td>
                             <td>
                                 {% if has_permission('maintenance.record') %}

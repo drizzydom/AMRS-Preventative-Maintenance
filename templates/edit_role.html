@@ -67,8 +67,8 @@
             <div class="card">
                 <div class="card-header">Role Information</div>
                 <div class="card-body">
-                    <p><strong>Created:</strong> {{ role.created_at.strftime('%Y-%m-%d') if role.created_at }}</p>
-                    <p><strong>Last Updated:</strong> {{ role.updated_at.strftime('%Y-%m-%d') if role.updated_at }}</p>
+                    <p><strong>Created:</strong> {{ role.created_at|to_eastern('%Y-%m-%d') if role.created_at }}</p>
+                    <p><strong>Last Updated:</strong> {{ role.updated_at|to_eastern('%Y-%m-%d') if role.updated_at }}</p>
                     
                     <div class="mt-3">
                         <a href="{{ url_for('admin_roles') }}" class="btn btn-sm btn-outline-secondary">Back to Roles</a>
