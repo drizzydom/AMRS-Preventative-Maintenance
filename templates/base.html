@@ -29,6 +29,27 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/horizontal-scroll-enhancements.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/compact-table-layouts.css') }}">
     
+    <!-- Prevent flash of light mode - must be inline and in head -->
+    <script>
+    (function() {
+        // Apply dark mode immediately if preference is set
+        if (localStorage.getItem('darkMode') === 'enabled') {
+            // Apply to all possible selectors immediately
+            document.documentElement.classList.add('dark-mode');
+            document.querySelector(':root').classList.add('dark-mode');
+            
+            // Also add to body when it's available
+            if (document.body) {
+                document.body.classList.add('dark-mode');
+            } else {
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.body.classList.add('dark-mode');
+                });
+            }
+        }
+    })();
+    </script>
+    
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
@@ -625,8 +646,10 @@
         const icon = document.getElementById('darkModeIcon');
         
         if (toggle && icon) {
-            // Check saved preference
+            // Check saved preference and sync UI (class may already be applied by head script)
             if (localStorage.getItem('darkMode') === 'enabled') {
+                // Ensure all elements have the class (in case head script missed any)
+                document.documentElement.classList.add('dark-mode');
                 document.body.classList.add('dark-mode');
                 icon.classList.remove('fa-moon');
                 icon.classList.add('fa-sun');
@@ -635,6 +658,8 @@
             }
             
             toggle.addEventListener('click', function() {
+                // Toggle on all relevant elements
+                document.documentElement.classList.toggle('dark-mode');
                 document.body.classList.toggle('dark-mode');
                 const textSpan = toggle.querySelector('.d-none.d-md-inline');
                 

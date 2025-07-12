@@ -135,25 +135,39 @@ html .badge.bg-primary {
   }
 }
 
-/* Dark mode styles */
+/* Dark mode styles - Support both html and body selectors for early application */
+:root.dark-mode,
+html.dark-mode,
 body.dark-mode {
-    background-color: #181a1b !important;
-    color: #e0e0e0 !important;
+    --dark-bg: #181a1b;
+    --dark-text: #e0e0e0;
+    --dark-card-bg: #23272b;
+    --dark-border: #444;
+    background-color: var(--dark-bg) !important;
+    color: var(--dark-text) !important;
 }
+
+html.dark-mode .card,
+html.dark-mode .navbar,
+html.dark-mode .modal-content,
 body.dark-mode .card,
 body.dark-mode .navbar,
 body.dark-mode .modal-content {
-    background-color: #23272b !important;
-    color: #e0e0e0 !important;
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
 }
+:root.dark-mode .btn-primary,
+html.dark-mode .btn-primary,
 body.dark-mode .btn-primary {
     background-color: #444 !important;
     border-color: #444 !important;
 }
+:root.dark-mode .form-control,
+html.dark-mode .form-control,
 body.dark-mode .form-control {
-    background-color: #23272b;
+    background-color: var(--dark-card-bg);
     color: #f8f9fa;
-    border-color: #444;
+    border-color: var(--dark-border);
 }
 body.dark-mode .form-control:focus {
     background-color: #23272b;
