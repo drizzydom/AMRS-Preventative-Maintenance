@@ -24,11 +24,11 @@
               <div class="info-section">
                 <div class="info-row">
                   <span class="info-label">Date:</span>
-                  <span class="info-value">{{ record.date.strftime('%A, %B %d, %Y') if record.date else 'N/A' }}</span>
+                  <span class="info-value">{{ record.created_at.strftime('%A, %B %d, %Y') if record.created_at else 'N/A' }}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Time:</span>
-                  <span class="info-value">{{ record.date.strftime('%I:%M %p') if record.date else 'N/A' }}</span>
+                  <span class="info-value">{{ record.created_at.strftime('%Y-%m-%d %I:%M %p') if record.created_at else 'N/A' }}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Performed By:</span>
