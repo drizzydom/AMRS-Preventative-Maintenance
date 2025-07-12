@@ -67,9 +67,9 @@
             <div class="card">
                 <div class="card-header">User Information</div>
                 <div class="card-body">
-                    <p><strong>Created:</strong> {{ user.created_at.strftime('%Y-%m-%d') if user.created_at }}</p>
-                    <p><strong>Last Updated:</strong> {{ user.updated_at.strftime('%Y-%m-%d') if user.updated_at }}</p>
-                    <p><strong>Last Login:</strong> {{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login }}</p>
+                    <p><strong>Created:</strong> {{ user.created_at|to_eastern('%Y-%m-%d') if user.created_at }}</p>
+                    <p><strong>Last Updated:</strong> {{ user.updated_at|to_eastern('%Y-%m-%d') if user.updated_at }}</p>
+                    <p><strong>Last Login:</strong> {{ user.last_login|to_eastern('%Y-%m-%d %H:%M') if user.last_login }}</p>
                     <p><strong>Is Admin:</strong> {{ "Yes" if user.is_admin else "No" }}</p>
                     
                     <div class="mt-3">

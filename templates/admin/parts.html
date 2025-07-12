@@ -58,8 +58,8 @@
                                 <div class="text-muted small">
                                     <div><span class="fw-medium">Machine:</span> {{ part.machine.name }}</div>
                                     <div><span class="fw-medium">Site:</span> {{ part.machine.site.name }}</div>
-                                    <div><span class="fw-medium">Last:</span> {{ part.last_maintenance.strftime('%Y-%m-%d') }}</div>
-                                    <div><span class="fw-medium">Next:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                                    <div><span class="fw-medium">Last:</span> {{ part.last_maintenance|to_eastern('%Y-%m-%d') }}</div>
+                                    <div><span class="fw-medium">Next:</span> {{ part.next_maintenance|to_eastern('%Y-%m-%d') }}</div>
                                 </div>
                             </div>
                         </td>
