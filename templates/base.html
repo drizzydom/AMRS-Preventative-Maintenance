@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, shrink-to-fit=no">
     <title>{% block title %}Maintenance Tracker{% endblock %}</title>
     
+    <!-- Early dark mode script: must be first in head to prevent FOUC -->
+    <script>
+      (function() {
+        try {
+          var dark = localStorage.getItem('theme') === 'dark' ||
+                     (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark-mode');
+        } catch(e){}
+      })();
+    </script>
     <!-- Load critical CSS as early as possible -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preload-fix.css') }}">
     
