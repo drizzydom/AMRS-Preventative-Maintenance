@@ -31,7 +31,7 @@
             <h2>⚠️ Overdue Maintenance Items</h2>
             <ul>
                 {% for part in overdue_parts %}
-                <li><strong>{{ part.machine.name }}:</strong> {{ part.name }} - {{ (now - part.next_maintenance).days }} days overdue (Due: {{ part.next_maintenance.strftime('%Y-%m-%d') }})</li>
+                <li><strong>{{ part.machine.name }}:</strong> {{ part.name }} - {{ (now - part.next_maintenance).days }} days overdue (Due: {{ part.next_maintenance|to_eastern('%Y-%m-%d') }})</li>
                 {% endfor %}
             </ul>
         </div>
@@ -42,7 +42,7 @@
             <h3>🔔 Maintenance Due Soon</h3>
             <ul>
                 {% for part in due_soon_parts %}
-                <li><strong>{{ part.machine.name }}:</strong> {{ part.name }} - Due in {{ (part.next_maintenance - now).days }} days ({{ part.next_maintenance.strftime('%Y-%m-%d') }})</li>
+                <li><strong>{{ part.machine.name }}:</strong> {{ part.name }} - Due in {{ (part.next_maintenance - now).days }} days ({{ part.next_maintenance|to_eastern('%Y-%m-%d') }})</li>
                 {% endfor %}
             </ul>
         </div>

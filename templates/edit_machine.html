@@ -80,7 +80,7 @@
                                     
                                     {% if machine.decommissioned %}
                                     <div class="mt-3 text-muted small">
-                                        <strong>Decommissioned:</strong> {{ machine.decommissioned_date.strftime('%Y-%m-%d %H:%M') if machine.decommissioned_date }}<br>
+                                        <strong>Decommissioned:</strong> {{ machine.decommissioned_date|to_eastern('%Y-%m-%d %H:%M') if machine.decommissioned_date }}<br>
                                         {% if machine.decommissioned_by_user %}
                                         <strong>By:</strong> {{ machine.decommissioned_by_user.username }}
                                         {% endif %}
