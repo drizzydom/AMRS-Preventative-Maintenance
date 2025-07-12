@@ -1,3 +1,4 @@
+
 # Standard library imports
 import os
 import sys
@@ -33,7 +34,7 @@ import csv
 import json
 
 # Local imports
-from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, encrypt_value, hash_value
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
@@ -2391,6 +2392,36 @@ def maintenance_page():
                         client_id=client_id if client_id else None
                     )
                     db.session.add(new_record)
+
+                    # Save uploaded files
+                    files = request.files.getlist('maintenance_files')
+                    import os
+                    from werkzeug.utils import secure_filename
+                    upload_folder = os.path.join('/var/data', 'maintenance_files')
+                    os.makedirs(upload_folder, exist_ok=True)
+                    for file in files:
+                        if file and file.filename:
+                            filename = secure_filename(file.filename)
+                            filepath = os.path.join(upload_folder, filename)
+                            # Ensure unique filename
+                            base, ext = os.path.splitext(filename)
+                            counter = 1
+                            while os.path.exists(filepath):
+                                filename = f"{base}_{counter}{ext}"
+                                filepath = os.path.join(upload_folder, filename)
+                                counter += 1
+                            file.save(filepath)
+                            filetype = file.mimetype
+                            filesize = os.path.getsize(filepath)
+                            maintenance_file = MaintenanceFile(
+                                maintenance_record=new_record,
+                                filename=filename,
+                                filepath=filepath,
+                                filetype=filetype,
+                                filesize=filesize
+                            )
+                            db.session.add(maintenance_file)
+
                     # Update part's last_maintenance and next_maintenance
                     part = Part.query.get(part_id)
                     if part:
@@ -2408,7 +2439,7 @@ def maintenance_page():
                         part.next_maintenance = maintenance_date + delta
                         db.session.add(part)
                     db.session.commit()
-                    flash('Maintenance record added successfully!', 'success')
+                    flash('Maintenance record and files added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
                 except ValueError:
                     flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
@@ -5095,6 +5126,31 @@ def inject_permission_helpers():
         is_admin=lambda: is_admin_user(current_user) if current_user.is_authenticated else False
     )
 
+# Serve uploaded maintenance files
+@app.route('/files/<int:file_id>')
+@login_required
+def serve_uploaded_file(file_id):
+    maintenance_file = MaintenanceFile.query.get_or_404(file_id)
+    # Only allow access to users who can see the record
+    record = maintenance_file.maintenance_record
+    if not (current_user.is_admin or record.user_id == current_user.id):
+        abort(403)
+    return send_file(maintenance_file.filepath, as_attachment=True, download_name=maintenance_file.filename)
+
+# Serve uploaded maintenance file thumbnails (fallback to original if not available)
+@app.route('/files/<int:file_id>/thumb')
+@login_required
+def serve_uploaded_thumbnail(file_id):
+    maintenance_file = MaintenanceFile.query.get_or_404(file_id)
+    # Only allow access to users who can see the record
+    record = maintenance_file.maintenance_record
+    if not (current_user.is_admin or record.user_id == current_user.id):
+        abort(403)
+    if maintenance_file.thumbnail_path and os.path.exists(maintenance_file.thumbnail_path):
+        return send_file(maintenance_file.thumbnail_path, as_attachment=False)
+    else:
+        return send_file(maintenance_file.filepath, as_attachment=False)
+    
 # Enhanced error handlers with better user experience
 @app.errorhandler(404)
 def enhanced_page_not_found(e):
