@@ -3224,18 +3224,12 @@ def manage_machines():
                 flash('You do not have access to this site.', 'danger')
                 return redirect(url_for('manage_machines'))
                 
-            # Filter machines by selected site with eager loading
-            machines_query = Machine.query.options(
-                db.joinedload(Machine.site),
-                db.joinedload(Machine.parts)
-            ).filter_by(site_id=site_id)
+            # Filter machines by selected site
+            machines_query = Machine.query.filter_by(site_id=site_id)
             title = f"Machines for {Site.query.get_or_404(site_id).name}"
         else:
-            # Show machines from all sites user has access to with eager loading
-            machines_query = Machine.query.options(
-                db.joinedload(Machine.site),
-                db.joinedload(Machine.parts)
-            ).filter(Machine.site_id.in_(site_ids)) if site_ids else Machine.query.filter(False)
+            # Show machines from all sites user has access to
+            machines_query = Machine.query.filter(Part.machine_id.in_(machine_ids)) if machine_ids else Machine.query.filter(False)
             title = "Machines"
         
         # Apply decommissioned filter
