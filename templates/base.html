@@ -1,9 +1,26 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="preload">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, shrink-to-fit=no">
     <title>{% block title %}Maintenance Tracker{% endblock %}</title>
+    
+    <!-- Prevent flash of light mode - CRITICAL: Must be first -->
+    <script>
+    (function() {
+        // Check dark mode preference immediately
+        var isDarkMode = localStorage.getItem('darkMode') === 'enabled';
+        if (isDarkMode) {
+            // Apply dark mode classes to html immediately
+            document.documentElement.classList.add('dark-mode');
+            document.documentElement.style.backgroundColor = '#1a1a1a';
+            document.documentElement.style.color = '#e0e0e0';
+            
+            // Add page loading class for smooth transition
+            document.documentElement.classList.add('page-loading');
+        }
+    })();
+    </script>
     
     <!-- Load critical CSS as early as possible -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preload-fix.css') }}">
@@ -632,7 +649,15 @@
     <!-- Remove preload class after page load to enable animations -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            document.body.classList.remove('preload');
+            // Remove preload classes once everything is loaded
+            document.documentElement.classList.remove('preload', 'page-loading');
+            document.body.classList.remove('preload', 'page-loading');
+            
+            // Ensure dark mode is properly applied after page load
+            if (localStorage.getItem('darkMode') === 'enabled') {
+                document.documentElement.classList.add('dark-mode');
+                document.body.classList.add('dark-mode');
+            }
         });
     </script>
     
@@ -682,6 +707,12 @@
         if (oldToggle && oldToggle !== toggle) {
             oldToggle.remove();
         }
+        
+        // Final cleanup - remove all loading classes
+        setTimeout(function() {
+            document.documentElement.classList.remove('preload', 'page-loading');
+            document.body.classList.remove('preload', 'page-loading');
+        }, 100);
     });
     </script>
     <!-- End Dark Mode Toggle -->
