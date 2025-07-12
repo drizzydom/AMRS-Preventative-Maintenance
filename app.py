@@ -1,6 +1,4 @@
 
-
-
 # Standard library imports
 import os
 import sys
@@ -38,18 +36,6 @@ import json
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
-
-# Timezone support for US Eastern (EST/EDT)
-try:
-    from zoneinfo import ZoneInfo
-    EASTERN_TZ = ZoneInfo("America/New_York")
-except ImportError:
-    try:
-        import pytz
-        EASTERN_TZ = pytz.timezone("America/New_York")
-    except ImportError:
-        EASTERN_TZ = None
-
 
 # Patch is_admin property to User class immediately after import
 @property
@@ -5164,25 +5150,6 @@ def serve_uploaded_thumbnail(file_id):
         return send_file(maintenance_file.thumbnail_path, as_attachment=False)
     else:
         return send_file(maintenance_file.filepath, as_attachment=False)
-    
-# Jinja2 filter to convert UTC/naive datetimes to US Eastern time
-@app.template_filter('to_eastern')
-def to_eastern(dt):
-    if not dt:
-        return dt
-    if EASTERN_TZ is None:
-        return dt  # fallback: show as is
-    # If naive, assume UTC
-    if dt.tzinfo is None:
-        try:
-            from datetime import timezone
-            dt = dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            return dt
-    try:
-        return dt.astimezone(EASTERN_TZ)
-    except Exception:
-        return dt
     
 # Enhanced error handlers with better user experience
 @app.errorhandler(404)
