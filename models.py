@@ -1,7 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 from sqlalchemy.types import JSON as SA_JSON
@@ -20,14 +20,9 @@ if not FERNET_KEY:
     print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
     print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
     print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
-    # If application is starting up, we'll use a temporary key for testing only
-    # This is not secure and should not be used in production!
-    if os.environ.get('FLASK_ENV') == 'development' or os.environ.get('FLASK_DEBUG') == '1':
-        print("[SECURITY WARNING] Development mode detected. Using a temporary key for encryption.")
-        FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
-    else:
-        # For production, we don't want to silently continue with an insecure setup
-        raise ValueError("USER_FIELD_ENCRYPTION_KEY environment variable must be set in production.")
+    # For development/testing, use a temporary key
+    print("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
+    FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
 
 # Initialize Fernet cipher with the key
 fernet = Fernet(FERNET_KEY)
@@ -85,6 +80,10 @@ class User(UserMixin, db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     reset_token = db.Column(db.String(100), default=None)
     reset_token_expiration = db.Column(db.DateTime, default=None)
+    # Remember me token fields for persistent authentication
+    remember_token = db.Column(db.String(100), default=None)
+    remember_token_expiration = db.Column(db.DateTime, default=None)
+    remember_enabled = db.Column(db.Boolean, default=False)  # User preference for remember me
     notification_preferences = db.Column(
         PG_JSON().with_variant(SA_JSON(), 'sqlite'),
         nullable=True,
@@ -158,6 +157,50 @@ class User(UserMixin, db.Model):
     def set_notification_preferences(self, prefs):
         self.notification_preferences = prefs
         db.session.commit()
+    
+    def generate_remember_token(self):
+        """Generate a new remember token for persistent authentication"""
+        import secrets
+        token = secrets.token_urlsafe(32)
+        self.remember_token = token
+        # Set token expiration to 30 days from now
+        self.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
+        return token
+    
+    def verify_remember_token(self, token):
+        """Verify if the provided remember token is valid and not expired"""
+        if not self.remember_token or not self.remember_token_expiration:
+            return False
+        
+        # Check if token matches and hasn't expired
+        if self.remember_token == token and datetime.utcnow() < self.remember_token_expiration:
+            return True
+        
+        return False
+    
+    def clear_remember_token(self):
+        """Clear the remember token (for logout or security purposes)"""
+        self.remember_token = None
+        self.remember_token_expiration = None
+    
+    def set_remember_preference(self, enabled):
+        """Set user's preference for remember me functionality"""
+        self.remember_enabled = enabled
+        if not enabled:
+            # If user disables remember me, clear any existing tokens
+            self.clear_remember_token()
+    
+    @classmethod
+    def find_by_remember_token(cls, token):
+        """Find a user by their remember token if it's valid"""
+        if not token:
+            return None
+            
+        user = cls.query.filter_by(remember_token=token).first()
+        if user and user.verify_remember_token(token):
+            return user
+        
+        return None
     
     def __repr__(self):
         return f'<User {self.username}>'
@@ -368,3 +411,22 @@ class AuditTaskCompletion(db.Model):
     completed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class MaintenanceFile(db.Model):
+    """Model for files (images, PDFs, etc.) attached to maintenance records"""
+    __tablename__ = 'maintenance_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    maintenance_record_id = db.Column(db.Integer, db.ForeignKey('maintenance_records.id'), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    filepath = db.Column(db.String(512), nullable=False)  # Absolute or relative path in /var/data
+    filetype = db.Column(db.String(50), nullable=False)  # MIME type
+    filesize = db.Column(db.Integer, nullable=False)  # Size in bytes
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    thumbnail_path = db.Column(db.String(512), nullable=True)  # For images only
+
+    # Relationship to maintenance record
+    maintenance_record = db.relationship('MaintenanceRecord', backref=db.backref('files', lazy=True, cascade="all, delete-orphan"))
+
+    def __repr__(self):
+        return f'<MaintenanceFile {self.filename} for Record {self.maintenance_record_id}>'

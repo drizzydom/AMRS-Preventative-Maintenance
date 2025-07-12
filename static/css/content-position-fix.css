@@ -7,10 +7,13 @@
 @media (min-width: 992px) {
     /* Sidebar expanded state */
     .content-container {
-        margin-left: 200px;
-        width: calc(100% - 200px);
-        max-width: calc(100% - 200px);
         transition: margin-left 0.3s ease, width 0.3s ease;
+    }
+
+    /* Specific fix for maintenance records page when sidebar is expanded */
+    body.maintenance-records-page:not(.sidebar-collapsed) .content-container {
+        margin-left: 200px; /* Match sidebar width */
+        width: calc(100% - 200px);
     }
     
     /* Sidebar collapsed state */
@@ -81,5 +84,10 @@ body {
 /* Fix tables layout */
 .table-responsive {
     margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.scroll-indicator-container {
+    height: 40px !important;
     margin-bottom: 0 !important;
 }

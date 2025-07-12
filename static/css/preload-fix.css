@@ -1,6 +1,6 @@
 /**
- * PRELOAD FIX
- * Prevents content jumping during page load
+ * CRITICAL PRELOAD FIX
+ * Prevents content jumping and flash of light mode during page load
  * This file should be loaded as early as possible
  */
 

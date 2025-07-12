@@ -84,16 +84,127 @@ body .navbar-dark {
   line-height: 1.5;
 }
 
-/* Center the navbar brand on mobile */
-@media (max-width: 991.98px) {
+/* Dark Mode Toggle in Navbar */
+.navbar-dark-mode-toggle {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.navbar-dark-mode-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: white;
+}
+
+.navbar-dark-mode-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: white;
+}
+
+/* Early dark mode application - prevent flash of light mode */
+:root.dark-mode .navbar-dark-mode-toggle,
+html.dark-mode .navbar-dark-mode-toggle,
+body.dark-mode .navbar-dark-mode-toggle {
+  border-color: rgba(224, 224, 224, 0.3);
+  color: #e0e0e0;
+  background-color: rgba(224, 224, 224, 0.1);
+}
+
+:root.dark-mode .navbar-dark-mode-toggle:hover,
+html.dark-mode .navbar-dark-mode-toggle:hover,
+body.dark-mode .navbar-dark-mode-toggle:hover {
+  background-color: rgba(224, 224, 224, 0.2);
+  border-color: rgba(224, 224, 224, 0.5);
+  color: #e0e0e0;
+}
+
+:root.dark-mode .navbar-dark-mode-toggle:focus,
+html.dark-mode .navbar-dark-mode-toggle:focus,
+body.dark-mode .navbar-dark-mode-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(254, 121, 0, 0.25);
+  border-color: #FE7900;
+  color: #e0e0e0;
+}
+
+/* Dark mode styles for navbar elements */
+body.dark-mode .navbar-dark-mode-toggle {
+  border-color: rgba(224, 224, 224, 0.3);
+  color: #e0e0e0;
+  background-color: rgba(224, 224, 224, 0.1);
+}
+
+body.dark-mode .navbar-dark-mode-toggle:hover {
+  background-color: rgba(224, 224, 224, 0.2);
+  border-color: rgba(224, 224, 224, 0.5);
+  color: #e0e0e0;
+}
+
+body.dark-mode .navbar-dark-mode-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(254, 121, 0, 0.25);
+  border-color: #FE7900;
+  color: #e0e0e0;
+}
+
+/* Improved navbar layout for mobile and desktop */
+.navbar .container-fluid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 1rem;
+}
+
+.navbar-brand {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.navbar-nav.ms-auto {
+  margin-left: auto !important;
+  position: relative;
+  z-index: 10;
+}
+
+/* Mobile adjustments */
+@media (max-width: 767.98px) {
   .navbar-brand {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    margin: 0;
+    font-size: 0.9rem;
+    max-width: calc(100vw - 140px); /* Account for hamburger + toggle button */
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .navbar-dark-mode-toggle {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.8rem;
   }
   
   .navbar-toggler {
-    order: -1; /* Move toggler to the left */
+    padding: 0.2rem 0.4rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 575.98px) {
+  .navbar-brand {
+    font-size: 0.8rem;
+    max-width: calc(100vw - 120px);
+  }
+  
+  .navbar-brand .me-2 {
+    display: none; /* Hide the icon on very small screens */
+  }
+  
+  .navbar-dark-mode-toggle {
+    padding: 0.15rem 0.3rem;
+    min-width: 40px; /* Ensure minimum touch target */
   }
 }

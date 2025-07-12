@@ -134,3 +134,457 @@ html .badge.bg-primary {
     left: 0;
   }
 }
+
+/* Dark mode styles - Support both html and body selectors for early application */
+:root.dark-mode,
+html.dark-mode,
+body.dark-mode {
+    --dark-bg: #181a1b;
+    --dark-text: #e0e0e0;
+    --dark-card-bg: #23272b;
+    --dark-border: #444;
+    background-color: var(--dark-bg) !important;
+    color: var(--dark-text) !important;
+}
+
+html.dark-mode .card,
+html.dark-mode .navbar,
+html.dark-mode .modal-content,
+body.dark-mode .card,
+body.dark-mode .navbar,
+body.dark-mode .modal-content {
+    background-color: var(--dark-card-bg) !important;
+    color: var(--dark-text) !important;
+}
+:root.dark-mode .btn-primary,
+html.dark-mode .btn-primary,
+body.dark-mode .btn-primary {
+    background-color: #444 !important;
+    border-color: #444 !important;
+}
+:root.dark-mode .form-control,
+html.dark-mode .form-control,
+body.dark-mode .form-control {
+    background-color: var(--dark-card-bg);
+    color: #f8f9fa;
+    border-color: var(--dark-border);
+}
+body.dark-mode .form-control:focus {
+    background-color: #23272b;
+    color: #fff;
+    border-color: #FE7900;
+    box-shadow: 0 0 0 0.2rem rgba(254,121,0,0.15);
+}
+body.dark-mode .form-control::placeholder {
+    color: #b0b0b0;
+}
+body.dark-mode .alert {
+    background-color: #222 !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+}
+body.dark-mode .table,
+body.dark-mode .table-striped,
+body.dark-mode .table-hover {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode .table th,
+body.dark-mode .table td {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+}
+body.dark-mode .table thead th {
+    background-color: #181a1b !important;
+    color: #FE7900 !important;
+    border-color: #444 !important;
+}
+body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: #202124 !important;
+}
+body.dark-mode .table-hover > tbody > tr:hover {
+    background-color: #2a2d31 !important;
+}
+body.dark-mode .sidebar,
+body.dark-mode .sidebar .sidebar-link {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode .sidebar .sidebar-link.active,
+body.dark-mode .sidebar .sidebar-link:hover {
+    color: #FE7900 !important;
+    background-color: #181a1b !important;
+}
+body.dark-mode .sidebar .sidebar-link .sidebar-icon {
+    color: #FE7900 !important;
+}
+body.dark-mode a:not(.btn),
+body.dark-mode .sidebar .sidebar-link {
+    color: #FE7900 !important;
+}
+body.dark-mode a:not(.btn):hover {
+    color: #E56C00 !important;
+}
+
+/* Dark mode styles - improved for cards, headers, and text */
+body.dark-mode .card {
+    background-color: #23272b !important;
+    color: #fff !important;
+    border-color: #444 !important;
+}
+body.dark-mode .card-header {
+    background-color: #181a1b !important;
+    color: #FE7900 !important;
+    border-bottom: 1px solid #444 !important;
+}
+body.dark-mode .card-title,
+body.dark-mode .card-header h5,
+body.dark-mode .card-header h6,
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6 {
+    color: #FE7900 !important;
+}
+body.dark-mode .text-muted,
+body.dark-mode .text-secondary {
+    color: #b0b0b0 !important;
+}
+body.dark-mode .text-danger,
+body.dark-mode .btn-danger,
+body.dark-mode .alert-danger {
+    color: #fff !important;
+    background-color: #b02a37 !important;
+    border-color: #a71d2a !important;
+}
+body.dark-mode .text-warning,
+body.dark-mode .btn-warning,
+body.dark-mode .alert-warning {
+    color: #fff !important;
+    background-color: #e6a700 !important;
+    border-color: #c49000 !important;
+}
+body.dark-mode .text-success,
+body.dark-mode .btn-success,
+body.dark-mode .alert-success {
+    color: #fff !important;
+    background-color: #198754 !important;
+    border-color: #146c43 !important;
+}
+body.dark-mode .btn,
+body.dark-mode .form-label,
+body.dark-mode .form-text,
+body.dark-mode .info-label,
+body.dark-mode .info-value {
+    color: #fff !important;
+}
+body.dark-mode .form-control::placeholder {
+    color: #b0b0b0 !important;
+}
+body.dark-mode .badge.bg-primary {
+    background-color: #FE7900 !important;
+    color: #23272b !important;
+}
+body.dark-mode .accordion,
+body.dark-mode .accordion-item,
+body.dark-mode .accordion-header,
+body.dark-mode .accordion-button {
+    background-color: #23272b !important;
+    color: #fff !important;
+    border-color: #444 !important;
+}
+body.dark-mode .accordion-button:not(.collapsed) {
+    background-color: #181a1b !important;
+    color: #FE7900 !important;
+    box-shadow: none;
+}
+body.dark-mode .accordion-body {
+    background-color: #23272b !important;
+    color: #fff !important;
+}
+body.dark-mode .accordion-button:focus {
+    box-shadow: 0 0 0 0.2rem rgba(254,121,0,0.25) !important;
+}
+body.dark-mode tr,
+body.dark-mode tr > th,
+body.dark-mode tr > td {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode tr.table-primary,
+body.dark-mode tr.table-primary > th,
+body.dark-mode tr.table-primary > td {
+    background-color: #181a1b !important;
+    color: #FE7900 !important;
+}
+body.dark-mode tr.table-danger,
+body.dark-mode tr.table-danger > th,
+body.dark-mode tr.table-danger > td {
+    background-color: #b02a37 !important;
+    color: #fff !important;
+}
+body.dark-mode tr.table-warning,
+body.dark-mode tr.table-warning > th,
+body.dark-mode tr.table-warning > td {
+    background-color: #e6a700 !important;
+    color: #fff !important;
+}
+body.dark-mode tr.table-success,
+body.dark-mode tr.table-success > th,
+body.dark-mode tr.table-success > td {
+    background-color: #198754 !important;
+    color: #fff !important;
+}
+body.dark-mode .bg-light {
+    background-color: #23272b !important;
+    color: #fff !important;
+}
+
+/* Ensure .btn- and .alert- keep background, but .text-* only changes text color in dark mode */
+body.dark-mode .btn-danger,
+body.dark-mode .btn-warning,
+body.dark-mode .btn-success,
+body.dark-mode .alert-danger,
+body.dark-mode .alert-warning,
+body.dark-mode .alert-success {
+    /* Keep background and border as set above */
+    color: #fff !important;
+}
+body.dark-mode .text-danger {
+    color: #ff6b6b !important;
+    background: none !important;
+    border: none !important;
+}
+body.dark-mode .text-warning {
+    color: #ffe066 !important;
+    background: none !important;
+    border: none !important;
+}
+body.dark-mode .text-success {
+    color: #8cffc1 !important;
+    background: none !important;
+    border: none !important;
+}
+body.dark-mode .text-dark,
+body.dark-mode .fw-semibold.text-dark,
+body.dark-mode .text-dark.fw-semibold,
+body.dark-mode .text-dark.me-3,
+body.dark-mode .fw-semibold.text-dark.me-3 {
+    color: #fff !important;
+}
+body.dark-mode .machine-name.fw-bold {
+    color: #f8f9fa !important;
+}
+
+/* --- Audit Calendar & Audit Machine Section Styles --- */
+.audit-machine-section {
+  border: 1px solid #dee2e6;
+  border-radius: 0.5em;
+  margin-bottom: 1.5em;
+  padding: 1em;
+  background: #f8f9fa;
+}
+.audit-machine-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  margin-bottom: 0.5em;
+}
+@media (max-width: 767.98px) {
+  .audit-task-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1em;
+  }
+  .audit-machine-section {
+    min-width: 320px;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0.75em 0.5em;
+  }
+  .audit-machine-title {
+    font-size: 1em;
+  }
+  .audit-checkoff {
+    width: 2em !important;
+    height: 2em !important;
+    min-width: 2em !important;
+    min-height: 2em !important;
+    margin-right: 1em;
+  }
+  .form-check-label {
+    font-size: 1.1em;
+    padding-left: 0.25em;
+  }
+  .btn {
+    font-size: 1.1em;
+    padding: 0.75em 1.25em;
+  }
+  .btn-lg {
+    font-size: 1.2em;
+    padding: 1em 2em;
+  }
+  .sticky-save {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+    padding: 0.75em 1em;
+    text-align: right;
+  }
+}
+@media (max-width: 575.98px) {
+  .audit-machine-section {
+    padding: 0.5em 0.25em;
+  }
+  .form-check-label {
+    font-size: 1em;
+  }
+}
+
+/* Calendar Styles */
+.calendar-table {
+  width: 100%;
+}
+.calendar-table th,
+.calendar-table td {
+  border: 1px solid #dee2e6;
+  text-align: center;
+  vertical-align: top;
+}
+.calendar-table th {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  padding: 0.5rem;
+}
+.calendar-day {
+  height: 80px;
+  position: relative;
+  padding: 0.25rem;
+}
+.calendar-day.empty-day {
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
+.calendar-day.today {
+  background-color: #007bff !important;
+  color: white !important;
+}
+.date-number {
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+.task-markers {
+  position: absolute;
+  bottom: 5px;
+  left: 2px;
+  right: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+}
+.task-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.legend-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+.calendar-legend {
+  background: #f8f9fa;
+  border-radius: 0.5em;
+  padding: 1em;
+}
+.monthly-calendar {
+  background: #f8f9fa;
+  border-radius: 0.5em;
+  padding: 1em 0.5em;
+}
+
+/* --- Dark Mode for Audit Calendar & Audit Machine Section --- */
+body.dark-mode .audit-machine-section {
+  background: #23272b !important;
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+}
+body.dark-mode .calendar-legend {
+  background: #23272b !important;
+  color: #e0e0e0 !important;
+  border-radius: 0.5em;
+}
+body.dark-mode .monthly-calendar {
+  background: #23272b !important;
+  color: #e0e0e0 !important;
+  border-radius: 0.5em;
+}
+body.dark-mode .calendar-table th,
+body.dark-mode .calendar-table td {
+  background-color: #23272b !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+body.dark-mode .calendar-table th {
+  color: #FE7900 !important;
+}
+body.dark-mode .calendar-day.today {
+  background-color: #FE7900 !important;
+  color: #23272b !important;
+}
+body.dark-mode .date-number {
+  color: #fff !important;
+}
+body.dark-mode .form-select {
+    background-color: #23272b;
+    color: #f8f9fa;
+    border-color: #444;
+}
+body.dark-mode .form-select:focus {
+    background-color: #23272b;
+    color: #fff;
+    border-color: #FE7900;
+    box-shadow: 0 0 0 0.2rem rgba(254,121,0,0.15);
+}
+body.dark-mode .form-select option {
+    background-color: #23272b;
+    color: #f8f9fa;
+}
+body.dark-mode .no-data {
+    background-color: #23272b;
+    color: #f8f9fa;
+    border-color: #444;
+}
+body.dark-mode .month-header {
+    background-color: #181a1b;
+    color: #f8f9fa;
+    border-color: #444;
+}
+body.dark-mode .legend-text {
+    color: #e0e0e0;
+}
+
+/* Dark mode backgrounds for info-section and text-content */
+body.dark-mode .info-section {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+}
+body.dark-mode .text-content {
+    background-color: #202124 !important;
+    color: #e0e0e0 !important;
+}

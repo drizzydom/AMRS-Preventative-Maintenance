@@ -20,26 +20,34 @@
     </div>
     {% else %}
     <!-- Site Filter Dropdown - Only show if user has access to multiple sites -->
-    {% if sites|length > 1 %}
+    {% if all_sites|length > 1 %}
     <div class="card mb-3">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <label for="site-filter" class="form-label mb-0 me-2"><i class="fas fa-filter me-1"></i> Filter by Site:</label>
-                    <select class="form-select form-select-sm d-inline-block w-auto" id="site-filter">
-                        <option value="all" selected>All Sites</option>
-                        {% for site in sites %}
-                        <option value="{{ site.id }}">{{ site.name }}</option>
+                    <select class="form-select form-select-sm d-inline-block w-auto" id="site-filter" onchange="filterBySite()">
+                        <option value="all" {% if site_filter == 'all' %}selected{% endif %}>All Sites</option>
+                        {% for site in all_sites %}
+                        <option value="{{ site.id }}" {% if site_filter == site.id|string %}selected{% endif %}>{{ site.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <small class="text-muted">Currently showing: <span id="current-filter">All Sites</span></small>
+                <small class="text-muted">Currently showing: <span id="current-filter">
+                    {% if site_filter == 'all' %}
+                        All Sites
+                    {% else %}
+                        {% for site in all_sites %}
+                            {% if site_filter == site.id|string %}{{ site.name }}{% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </span></small>
             </div>
         </div>
     </div>
     {% else %}
     <!-- Single site users don't need a filter dropdown -->
-    <div class="d-none" id="single-site-identifier" data-site-id="{{ sites[0].id if sites }}"></div>
+    <div class="d-none" id="single-site-identifier" data-site-id="{{ all_sites[0].id if all_sites }}"></div>
     {% endif %}
 
     <!-- Decommissioned Machines Toggle - Only show if there are decommissioned machines -->
@@ -152,6 +160,20 @@
                     <span class="badge bg-danger">{{ overdue_count }}</span>
                 </div>
                 <div class="card-body p-0">
+                    {% if all_sites|length > 1 and site_filter == 'all' %}
+                        {# Multiple sites and "All Sites" selected - show combined top 3 from all sites #}
+                        {% set highlights = all_overdue %}
+                        {% set total_overdue = all_overdue_total %}
+                    {% else %}
+                        {# Single site or specific site selected - show top 3 from this site only #}
+                        {% set highlights = site_part_highlights[sites[0].id]['overdue'] if site_part_highlights and sites and sites[0].id in site_part_highlights else [] %}
+                        {% set total_overdue = site_part_totals[sites[0].id]['overdue'] if site_part_totals and sites and sites[0].id in site_part_totals else 0 %}
+                    {% endif %}
+                    {% if total_overdue > 3 %}
+                    <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
+                        Only the 3 most relevant overdue parts are shown here. Additional overdue maintenance items are listed below under the machines.
+                    </div>
+                    {% endif %}
                     <div class="table-responsive d-none d-md-block">
                         <table class="table table-hover align-middle">
                             <thead>
@@ -165,62 +187,43 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for site in sites %}
-                                    {% for machine in site.machines %}
-                                        {% if not machine.decommissioned %}
-                                        {% for part in machine.parts %}
-                                            {% set days_until = (part.next_maintenance - now).days %}
-                                            {% if days_until < 0 %}
-                                                <tr data-site-id="{{ site.id }}">
-                                                    <td>{{ part.name }}</td>
-                                                    <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
-                                                    <td>{{ site.name }}</td>
-                                                    <td><span class="text-danger fw-bold">{{ -days_until }} days</span></td>
-                                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
-                                                    <td>
-                                                        <!-- Maintenance button in the overdue parts panel -->
-                                                        {% if has_permission('maintenance.record') %}
-                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                            <i class="fas fa-tools"></i> Maintenance
-                                                        </a>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                            {% endif %}
-                                        {% endfor %}
+                                {# Show top 3 most relevant overdue parts for the current filter #}
+                                {% for item in highlights %}
+                                <tr data-site-id="{{ item.site.id }}">
+                                    <td>{{ item.part.name }}</td>
+                                    <td>{{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</td>
+                                    <td>{{ item.site.name }}</td>
+                                    <td><span class="text-danger fw-bold">{{ -item.days_until }} days</span></td>
+                                    <td>{{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if has_permission('maintenance.record') %}
+                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                            <i class="fas fa-tools"></i> Maintenance
+                                        </a>
                                         {% endif %}
-                                    {% endfor %}
+                                    </td>
+                                </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                     <!-- Mobile card-list version -->
                     <div class="d-block d-md-none px-2 py-2">
-                        {% for site in sites %}
-                            {% for machine in site.machines %}
-                                {% if not machine.decommissioned %}
-                                {% for part in machine.parts %}
-                                    {% set days_until = (part.next_maintenance - now).days %}
-                                    {% if days_until < 0 %}
-                                    <div class="mobile-table-card mb-2" data-site-id="{{ site.id }}">
-                                        <div class="fw-bold">{{ part.name }}</div>
-                                        <div><span class="text-muted">Machine:</span> {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</div>
-                                        <div><span class="text-muted">Site:</span> {{ site.name }}</div>
-                                        <div><span class="text-danger fw-bold">Overdue: {{ -days_until }} days</span></div>
-                                        <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
-                                        <div class="mt-2">
-                                            <!-- Mobile card-list version - maintenance button -->
-                                            {% if has_permission('maintenance.record') %}
-                                            <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                <i class="fas fa-tools"></i> Maintenance
-                                            </a>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
+                        {% for item in highlights %}
+                        <div class="mobile-table-card mb-2" data-site-id="{{ item.site.id }}">
+                            <div class="fw-bold">{{ item.part.name }}</div>
+                            <div><span class="text-muted">Machine:</span> {{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</div>
+                            <div><span class="text-muted">Site:</span> {{ item.site.name }}</div>
+                            <div><span class="text-danger fw-bold">Overdue: {{ -item.days_until }} days</span></div>
+                            <div><span class="text-muted">Next Maintenance:</span> {{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                            <div class="mt-2">
+                                {% if has_permission('maintenance.record') %}
+                                <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                    <i class="fas fa-tools"></i> Maintenance
+                                </a>
                                 {% endif %}
-                            {% endfor %}
+                            </div>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -240,6 +243,20 @@
                     <span class="badge bg-warning text-dark">{{ due_soon_count }}</span>
                 </div>
                 <div class="card-body p-0">
+                    {% if all_sites|length > 1 and site_filter == 'all' %}
+                        {# Multiple sites and "All Sites" selected - show combined top 3 from all sites #}
+                        {% set highlights = all_due_soon %}
+                        {% set total_due_soon = all_due_soon_total %}
+                    {% else %}
+                        {# Single site or specific site selected - show top 3 from this site only #}
+                        {% set highlights = site_part_highlights[sites[0].id]['due_soon'] if site_part_highlights and sites and sites[0].id in site_part_highlights else [] %}
+                        {% set total_due_soon = site_part_totals[sites[0].id]['due_soon'] if site_part_totals and sites and sites[0].id in site_part_totals else 0 %}
+                    {% endif %}
+                    {% if total_due_soon > 3 %}
+                    <div class="alert alert-info mb-0 small rounded-0 border-0 border-bottom">
+                        Only the 3 most relevant due soon parts are shown here. Additional due soon maintenance items are listed below under the machines.
+                    </div>
+                    {% endif %}
                     <div class="table-responsive d-none d-md-block">
                         <table class="table table-hover align-middle">
                             <thead>
@@ -253,61 +270,43 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for site in sites %}
-                                    {% for machine in site.machines %}
-                                        {% if not machine.decommissioned %}
-                                        {% for part in machine.parts %}
-                                            {% set days_until = (part.next_maintenance - now).days %}
-                                            {% if days_until >= 0 and days_until <= site.notification_threshold %}
-                                                <tr data-site-id="{{ site.id }}">
-                                                    <td>{{ part.name }}</td>
-                                                    <td>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</td>
-                                                    <td>{{ site.name }}</td>
-                                                    <td><span class="text-warning fw-bold">{{ days_until }} days</span></td>
-                                                    <td>{{ part.next_maintenance.strftime('%Y-%m-%d') }}</td>
-                                                    <td>
-                                                        {% if has_permission('maintenance.record') %}
-                                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                            <i class="fas fa-tools"></i> Maintenance
-                                                        </a>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                            {% endif %}
-                                        {% endfor %}
+                                {# Show top 3 most relevant due soon parts for the current filter #}
+                                {% for item in highlights %}
+                                <tr data-site-id="{{ item.site.id }}">
+                                    <td>{{ item.part.name }}</td>
+                                    <td>{{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</td>
+                                    <td>{{ item.site.name }}</td>
+                                    <td><span class="text-warning fw-bold">{{ item.days_until }} days</span></td>
+                                    <td>{{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if has_permission('maintenance.record') %}
+                                        <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                            <i class="fas fa-tools"></i> Maintenance
+                                        </a>
                                         {% endif %}
-                                    {% endfor %}
+                                    </td>
+                                </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                     <!-- Mobile card-list version -->
                     <div class="d-block d-md-none px-2 py-2">
-                        {% for site in sites %}
-                            {% for machine in site.machines %}
-                                {% if not machine.decommissioned %}
-                                {% for part in machine.parts %}
-                                    {% set days_until = (part.next_maintenance - now).days %}
-                                    {% if days_until >= 0 and days_until <= site.notification_threshold %}
-                                    <div class="mobile-table-card mb-2" data-site-id="{{ site.id }}">
-                                        <div class="fw-bold">{{ part.name }}</div>
-                                        <div><span class="text-muted">Machine:</span> {{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</div>
-                                        <div><span class="text-muted">Site:</span> {{ site.name }}</div>
-                                        <div><span class="text-warning fw-bold">Due In: {{ days_until }} days</span></div>
-                                        <div><span class="text-muted">Next Maintenance:</span> {{ part.next_maintenance.strftime('%Y-%m-%d') }}</div>
-                                        <div class="mt-2">
-                                            <!-- Mobile card-list version - maintenance button -->
-                                            {% if has_permission('maintenance.record') %}
-                                            <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
-                                                <i class="fas fa-tools"></i> Maintenance
-                                            </a>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
+                        {% for item in highlights %}
+                        <div class="mobile-table-card mb-2" data-site-id="{{ item.site.id }}">
+                            <div class="fw-bold">{{ item.part.name }}</div>
+                            <div><span class="text-muted">Machine:</span> {{ item.machine.name }}{% if item.machine.machine_number %} ({{ item.machine.machine_number }}){% elif item.machine.serial_number %} (SN: {{ item.machine.serial_number }}){% endif %}</div>
+                            <div><span class="text-muted">Site:</span> {{ item.site.name }}</div>
+                            <div><span class="text-warning fw-bold">Due In: {{ item.days_until }} days</span></div>
+                            <div><span class="text-muted">Next Maintenance:</span> {{ item.part.next_maintenance.strftime('%Y-%m-%d') }}</div>
+                            <div class="mt-2">
+                                {% if has_permission('maintenance.record') %}
+                                <a href="{{ url_for('maintenance_page') }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                                    <i class="fas fa-tools"></i> Maintenance
+                                </a>
                                 {% endif %}
-                            {% endfor %}
+                            </div>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -442,7 +441,7 @@
                                                   <i class="fas fa-list"></i>
                                               </button>
                                               
-                                              <a href="{{ url_for('machine_history', machine_id=machine.id) }}" class="btn btn-sm btn-outline-info btn-icon" aria-label="History">
+                                              <a href="{{ url_for('maintenance_records_page') }}?machine_id={{ machine.id }}" class="btn btn-sm btn-outline-info btn-icon btn-machine-history" data-machine-id="{{ machine.id }}" aria-label="History">
                                                   <i class="fas fa-history"></i>
                                               </a>
                                           </div>
@@ -674,6 +673,20 @@
                 statusElement.textContent = 'Showing active machines only';
             }
             currentUrl.searchParams.delete('show_decommissioned');
+        }
+        
+        // Navigate to the new URL
+        window.location.href = currentUrl.toString();
+    }
+
+    function filterBySite() {
+        const dropdown = document.getElementById('site-filter');
+        const currentUrl = new URL(window.location);
+        
+        if (dropdown.value === 'all') {
+            currentUrl.searchParams.delete('site_filter');
+        } else {
+            currentUrl.searchParams.set('site_filter', dropdown.value);
         }
         
         // Navigate to the new URL
