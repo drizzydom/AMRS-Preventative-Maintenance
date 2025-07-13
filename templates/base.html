@@ -11,10 +11,24 @@
         try {
           var dark = localStorage.getItem('theme') === 'dark' ||
                      (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (dark) document.documentElement.classList.add('dark-mode');
+          if (dark) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
         } catch(e){}
       })();
     </script>
+    <style>
+      html[data-theme='dark'], body[data-theme='dark'] {
+        background: #181a1b !important;
+        color-scheme: dark;
+      }
+      html[data-theme='light'], body[data-theme='light'] {
+        background: #fff !important;
+        color-scheme: light;
+      }
+    </style>
     <!-- Load critical CSS as early as possible -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preload-fix.css') }}">
     
