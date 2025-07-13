@@ -129,11 +129,11 @@
               <h6 class="text-muted mb-2">Record Information</h6>
               <small class="text-muted">
                 {% if record.created_at %}
-                  Created: {{ record.created_at.strftime('%Y-%m-%d %I:%M %p') }}
+                  Created: {{ record.created_at|to_eastern('%Y-%m-%d %I:%M %p') }}
                 {% endif %}
                 {% if record.updated_at and record.updated_at != record.created_at %}
                   {% if record.created_at %} | {% endif %}
-                  Last Updated: {{ record.updated_at.strftime('%Y-%m-%d %I:%M %p') }}
+                  Last Updated: {{ record.updated_at|to_eastern('%Y-%m-%d %I:%M %p') }}
                 {% endif %}
               </small>
             </div>
