@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Preload critical CSS for faster rendering -->
+    <link rel="preload" as="style" href="{{ url_for('static', filename='css/preload-fix.css') }}">
+    <link rel="preload" as="style" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
+    <link rel="preload" as="style" href="{{ url_for('static', filename='css/main.css') }}">
     <!-- Set browser background color for dark and light mode before content loads -->
     <meta name="theme-color" content="#181a1b" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#fff" media="(prefers-color-scheme: light)">
