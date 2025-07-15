@@ -258,14 +258,23 @@ app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'htt
 # Ensure URLs work with and without trailing slashes
 app.url_map.strict_slashes = False
 
-# Configure the database
-try:
-    print("[APP] Configuring database...")
-    configure_database(app)
-except Exception as e:
-    print(f"[APP] Error configuring database: {str(e)}")
-    # Set a fallback configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+
+# --- OFFLINE/ONLINE DATABASE SWITCH (must run before db.init_app and any model access) ---
+offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1"
+if offline_mode:
+    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    print(f"[AMRS] OFFLINE MODE: Using local database at {db_path}")
+else:
+    try:
+        print("[APP] Configuring database...")
+        configure_database(app)
+    except Exception as e:
+        print(f"[APP] Error configuring database: {str(e)}")
+        # Set a fallback configuration
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+    print("[AMRS] ONLINE MODE: Using configured database URI")
 
 # Initialize database
 print("[APP] Initializing SQLAlchemy...")
@@ -3001,36 +3010,193 @@ def sync_status():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/api/sync/data', methods=['POST'])
+
+
+# --- SYNC ENDPOINT FOR OFFLINE USAGE ---
+@app.route('/api/sync/data', methods=['GET', 'POST'])
 @login_required
 def sync_data():
-    """Handle data synchronization requests from desktop clients."""
-    try:
-        data = request.json
-        sync_type = data.get('type')
-        if sync_type == 'push':
-            # Handle data being pushed from client to server
-            # Process items from the client
-            return jsonify({'status': 'success', 'message': 'Data received successfully'})
-            
-        elif sync_type == 'pull':
-            # Handle client requesting data from server
-            # Return requested data based on parameters
-            entity_type = data.get('entity_type')
-            timestamp = data.get('last_sync')
-            
-            # This is simplified - in a real implementation you would fetch actual data
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'type': entity_type,
-                    'items': []  # Actual data would go here
+    """Two-way sync endpoint: GET returns all data, POST accepts pushed data from offline clients. Admins only."""
+    if not current_user.is_authenticated or not is_admin_user(current_user):
+        return jsonify({'error': 'Unauthorized'}), 403
+    if request.method == 'GET':
+        try:
+            # Collect all relevant data
+            users = [
+                {
+                    'id': u.id,
+                    'username': u.username,
+                    'email': u.email,
+                    'role_id': u.role_id,
+                    'is_admin': getattr(u, 'is_admin', False),
+                    'active': getattr(u, 'active', True),
                 }
-            })
-        else:
-            return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+                for u in User.query.all()
+            ]
+            roles = [
+                {
+                    'id': r.id,
+                    'name': r.name,
+                    'permissions': r.permissions,
+                }
+                for r in Role.query.all()
+            ]
+            sites = [
+                {
+                    'id': s.id,
+                    'name': s.name,
+                    'location': getattr(s, 'location', ''),
+                }
+                for s in Site.query.all()
+            ]
+            machines = [
+                {
+                    'id': m.id,
+                    'name': m.name,
+                    'model': m.model,
+                    'serial_number': m.serial_number,
+                    'machine_number': m.machine_number,
+                    'site_id': m.site_id,
+                }
+                for m in Machine.query.all()
+            ]
+            parts = [
+                {
+                    'id': p.id,
+                    'name': p.name,
+                    'description': p.description,
+                    'machine_id': p.machine_id,
+                    'maintenance_frequency': p.maintenance_frequency,
+                    'maintenance_unit': p.maintenance_unit,
+                    'last_maintenance': p.last_maintenance.isoformat() if p.last_maintenance else None,
+                    'next_maintenance': p.next_maintenance.isoformat() if p.next_maintenance else None,
+                }
+                for p in Part.query.all()
+            ]
+            maintenance_records = [
+                {
+                    'id': r.id,
+                    'machine_id': r.machine_id,
+                    'part_id': r.part_id,
+                    'user_id': r.user_id,
+                    'maintenance_type': r.maintenance_type,
+                    'description': r.description,
+                    'date': r.date.isoformat() if r.date else None,
+                    'performed_by': r.performed_by,
+                    'status': r.status,
+                    'notes': r.notes,
+                }
+                for r in MaintenanceRecord.query.all()
+            ]
+            # Optionally add audit tasks, completions, etc.
+            data = {
+                'users': users,
+                'roles': roles,
+                'sites': sites,
+                'machines': machines,
+                'parts': parts,
+                'maintenance_records': maintenance_records,
+            }
+            return jsonify(data)
+        except Exception as e:
+            app.logger.error(f"Error in sync_data: {e}")
+            return jsonify({'error': str(e)}), 500
+    elif request.method == 'POST':
+        # Accept pushed data from offline client and merge into DB
+        try:
+            data = request.get_json(force=True)
+            # --- Users ---
+            for u in data.get('users', []):
+                user = User.query.get(u['id'])
+                if user:
+                    user.username = u['username']
+                    user.email = u['email']
+                    user.role_id = u['role_id']
+                    user.is_admin = u.get('is_admin', False)
+                    user.active = u.get('active', True)
+                else:
+                    user = User(
+                        id=u['id'], username=u['username'], email=u['email'],
+                        role_id=u['role_id'], is_admin=u.get('is_admin', False), active=u.get('active', True)
+                    )
+                    db.session.add(user)
+            # --- Roles ---
+            for r in data.get('roles', []):
+                role = Role.query.get(r['id'])
+                if role:
+                    role.name = r['name']
+                    role.permissions = r['permissions']
+                else:
+                    role = Role(id=r['id'], name=r['name'], permissions=r['permissions'])
+                    db.session.add(role)
+            # --- Sites ---
+            for s in data.get('sites', []):
+                site = Site.query.get(s['id'])
+                if site:
+                    site.name = s['name']
+                    site.location = s.get('location', '')
+                else:
+                    site = Site(id=s['id'], name=s['name'], location=s.get('location', ''))
+                    db.session.add(site)
+            # --- Machines ---
+            for m in data.get('machines', []):
+                machine = Machine.query.get(m['id'])
+                if machine:
+                    machine.name = m['name']
+                    machine.model = m['model']
+                    machine.serial_number = m['serial_number']
+                    machine.machine_number = m['machine_number']
+                    machine.site_id = m['site_id']
+                else:
+                    machine = Machine(
+                        id=m['id'], name=m['name'], model=m['model'], serial_number=m['serial_number'],
+                        machine_number=m['machine_number'], site_id=m['site_id']
+                    )
+                    db.session.add(machine)
+            # --- Parts ---
+            for p in data.get('parts', []):
+                part = Part.query.get(p['id'])
+                if part:
+                    part.name = p['name']
+                    part.description = p['description']
+                    part.machine_id = p['machine_id']
+                    part.maintenance_frequency = p['maintenance_frequency']
+                    part.maintenance_unit = p['maintenance_unit']
+                    part.last_maintenance = p['last_maintenance']
+                    part.next_maintenance = p['next_maintenance']
+                else:
+                    part = Part(
+                        id=p['id'], name=p['name'], description=p['description'], machine_id=p['machine_id'],
+                        maintenance_frequency=p['maintenance_frequency'], maintenance_unit=p['maintenance_unit'],
+                        last_maintenance=p['last_maintenance'], next_maintenance=p['next_maintenance']
+                    )
+                    db.session.add(part)
+            # --- Maintenance Records ---
+            for r in data.get('maintenance_records', []):
+                record = MaintenanceRecord.query.get(r['id'])
+                if record:
+                    record.machine_id = r['machine_id']
+                    record.part_id = r['part_id']
+                    record.user_id = r['user_id']
+                    record.maintenance_type = r['maintenance_type']
+                    record.description = r['description']
+                    record.date = r['date']
+                    record.performed_by = r['performed_by']
+                    record.status = r['status']
+                    record.notes = r['notes']
+                else:
+                    record = MaintenanceRecord(
+                        id=r['id'], machine_id=r['machine_id'], part_id=r['part_id'], user_id=r['user_id'],
+                        maintenance_type=r['maintenance_type'], description=r['description'], date=r['date'],
+                        performed_by=r['performed_by'], status=r['status'], notes=r['notes']
+                    )
+                    db.session.add(record)
+            db.session.commit()
+            return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error in sync_data POST: {e}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/health-check')
 def health_check():
@@ -5240,6 +5406,23 @@ def enhanced_server_error(e):
     
 
 
+
+# --- OFFLINE/ONLINE DATABASE SWITCH ---
+import sqlalchemy
+offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1"
+if offline_mode:
+    # Use local SQLite database for offline mode
+    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Rebind the db engine if already initialized
+    if hasattr(db, 'engine'):
+        db.engine.dispose()
+        db.__init__(app)
+    print("[AMRS] Running in OFFLINE MODE: using local maintenance.db")
+else:
+    print("[AMRS] Running in ONLINE MODE: using configured database URI")
+
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
     # Run the Flask app locally with the same settings as Render
@@ -5247,4 +5430,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     # Use debug mode only if FLASK_ENV=development
     debug = os.environ.get("FLASK_ENV", "production") == "development"
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    # Use 127.0.0.1 for offline mode, 0.0.0.0 for online
+    host = "127.0.0.1" if offline_mode else "0.0.0.0"
+    app.run(host=host, port=port, debug=debug)
