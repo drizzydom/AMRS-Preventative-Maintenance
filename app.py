@@ -259,22 +259,69 @@ app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'htt
 app.url_map.strict_slashes = False
 
 
-# --- OFFLINE/ONLINE DATABASE SWITCH (must run before db.init_app and any model access) ---
-offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1"
-if offline_mode:
-    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    print(f"[AMRS] OFFLINE MODE: Using local database at {db_path}")
-else:
+
+# --- Environment/Platform Detection and Database Switch ---
+def is_render():
+    """Detect if running on Render.com (production cloud)."""
+    return os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+
+def auto_sync_offline_db():
+    """Automatically synchronize the local SQLite database from the online API if possible."""
+    import subprocess
+    import sys
+    sync_script = os.path.join(os.path.dirname(__file__), "sync_db.py")
+    if os.path.exists(sync_script):
+        print("[AMRS] Attempting to sync local database from online API...")
+        # Get sync credentials from environment
+        sync_url = os.environ.get("SYNC_URL") or os.environ.get("API_URL") or os.environ.get("RENDER_EXTERNAL_URL")
+        sync_username = os.environ.get("SYNC_USERNAME") or os.environ.get("ADMIN_USERNAME") or os.environ.get("DEFAULT_ADMIN_USERNAME")
+        sync_password = os.environ.get("SYNC_PASSWORD") or os.environ.get("ADMIN_PASSWORD") or os.environ.get("DEFAULT_ADMIN_PASSWORD")
+        if not sync_url or not sync_username:
+            print("[AMRS] Sync credentials missing: --url and --username are required. Set SYNC_URL and SYNC_USERNAME in your environment.")
+            return
+        cmd = [sys.executable, sync_script, "--url", sync_url, "--username", sync_username]
+        if sync_password:
+            cmd += ["--password", sync_password]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            print("[AMRS] Sync script output:")
+            print(result.stdout)
+            if result.returncode != 0:
+                print(f"[AMRS] Sync script failed: {result.stderr}")
+            else:
+                print("[AMRS] Local database sync completed.")
+        except Exception as e:
+            print(f"[AMRS] Error running sync script: {e}")
+    else:
+        print(f"[AMRS] Sync script not found at {sync_script}, skipping auto-sync.")
+
+# --- Main DB selection logic ---
+if is_render():
+    # On Render: always use the online (PostgreSQL) database
     try:
-        print("[APP] Configuring database...")
+        print("[AMRS] Detected Render environment. Configuring production database...")
         configure_database(app)
     except Exception as e:
         print(f"[APP] Error configuring database: {str(e)}")
-        # Set a fallback configuration
         app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-    print("[AMRS] ONLINE MODE: Using configured database URI")
+    print("[AMRS] ONLINE MODE: Using configured database URI (Render)")
+else:
+    # On local device: default to offline mode (local SQLite), unless OFFLINE_MODE=0 is explicitly set
+    offline_mode = os.environ.get("OFFLINE_MODE") != "0"  # Default to offline unless OFFLINE_MODE=0
+    if offline_mode:
+        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        auto_sync_offline_db()
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        print(f"[AMRS] LOCAL OFFLINE MODE: Using local database at {db_path}")
+    else:
+        try:
+            print("[AMRS] LOCAL ONLINE MODE: Configuring online database...")
+            configure_database(app)
+        except Exception as e:
+            print(f"[APP] Error configuring database: {str(e)}")
+            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        print("[AMRS] LOCAL ONLINE MODE: Using configured database URI")
 
 # Initialize database
 print("[APP] Initializing SQLAlchemy...")
