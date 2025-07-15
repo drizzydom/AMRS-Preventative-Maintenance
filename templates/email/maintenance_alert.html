@@ -29,7 +29,7 @@
             <h2>⚠️ Overdue Maintenance Items</h2>
             <ul>
                 {% for part in overdue_parts %}
-                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date }})</li>
+                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - {{ part.days }} days overdue (Due: {{ part.due_date|to_eastern('%Y-%m-%d') }})</li>
                 {% endfor %}
             </ul>
         </div>
@@ -39,7 +39,7 @@
             <h2>🔔 Maintenance Due Soon ({{ threshold }} days)</h2>
             <ul>
                 {% for part in due_soon_parts %}
-                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days ({{ part.due_date }})</li>
+                <li><strong>{{ part.machine }}:</strong> {{ part.part }} - Due in {{ part.days }} days ({{ part.due_date|to_eastern('%Y-%m-%d') }})</li>
                 {% endfor %}
             </ul>
         </div>

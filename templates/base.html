@@ -1,10 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Preload critical CSS for faster rendering -->
+    <link rel="preload" as="style" href="{{ url_for('static', filename='css/preload-fix.css') }}">
+    <link rel="preload" as="style" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
+    <link rel="preload" as="style" href="{{ url_for('static', filename='css/main.css') }}">
+    <!-- Set browser background color for dark and light mode before content loads -->
+    <meta name="theme-color" content="#181a1b" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#fff" media="(prefers-color-scheme: light)">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, shrink-to-fit=no">
     <title>{% block title %}Maintenance Tracker{% endblock %}</title>
     
+    <!-- Early dark mode script: must be first in head to prevent FOUC -->
+    <script>
+      (function() {
+        try {
+          var dark = localStorage.getItem('theme') === 'dark' ||
+                     (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
+        } catch(e){}
+      })();
+    </script>
+    <style>
+      html[data-theme='dark'], body[data-theme='dark'] {
+        background: #181a1b !important;
+        color-scheme: dark;
+      }
+      html[data-theme='light'], body[data-theme='light'] {
+        background: #fff !important;
+        color-scheme: light;
+      }
+    </style>
     <!-- Load critical CSS as early as possible -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preload-fix.css') }}">
     
@@ -614,7 +645,7 @@
                     <span class="text-muted">© {{ now.year if now else 2025 }} Accurate Machine Repair, LLC</span>
                 </div>
                 <div>
-                    <span class="text-muted">Version 1.1</span>
+                    <span class="text-muted">Version 1.2</span>
                 </div>
             </div>
         </div>

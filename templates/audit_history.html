@@ -120,7 +120,7 @@
                     </div>
                     <div class="report-title">
                         <h2>Audit History Report</h2>
-                        <span class="report-id">Generated on {{ today.strftime('%Y-%m-%d') }}</span>
+                        <span class="report-id">Generated on {{ today|to_eastern('%Y-%m-%d') }}</span>
                     </div>
                     <div class="report-meta">
                         <div class="report-section">

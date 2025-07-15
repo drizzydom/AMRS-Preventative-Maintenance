@@ -102,6 +102,7 @@ app = Flask(__name__, instance_relative_config=True)
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
 
+
 # Add custom Jinja2 filters
 @app.template_filter('format_datetime')
 def format_datetime(value, fmt='%Y%m%d%H%M%S'):
@@ -114,6 +115,32 @@ def format_datetime(value, fmt='%Y%m%d%H%M%S'):
         return value.strftime(fmt)
     else:
         return ""
+
+# --- Add to_eastern Jinja2 filter for timezone conversion ---
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from pytz import timezone as ZoneInfo
+
+def to_eastern(dt, fmt='%Y-%m-%d %I:%M %p'):
+    if not dt:
+        return ''
+    try:
+        # If naive, assume UTC
+        if getattr(dt, 'tzinfo', None) is None:
+            from datetime import timezone as dt_timezone
+            dt = dt.replace(tzinfo=dt_timezone.utc)
+        # Use zoneinfo if available, else pytz
+        try:
+            eastern = dt.astimezone(ZoneInfo('America/New_York'))
+        except Exception:
+            # Fallback for pytz
+            eastern = dt.astimezone(ZoneInfo('US/Eastern'))
+        return eastern.strftime(fmt)
+    except Exception:
+        return str(dt)
+
+app.jinja_env.filters['to_eastern'] = to_eastern
 
 # Email configuration (all secrets from environment)
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')

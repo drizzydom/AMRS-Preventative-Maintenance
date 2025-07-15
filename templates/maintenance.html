@@ -63,7 +63,7 @@
                         </div>
                         <div class="col-md-3 mb-3">
                             <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="date" name="date" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                            <input type="date" class="form-control" id="date" name="date" value="{{ now|to_eastern('%Y-%m-%d') }}" required>
                         </div>
                     </div>
                     <div class="row">
@@ -90,7 +90,7 @@
                     <div class="mb-3">
                         <label for="maintenance_files" class="form-label">Attach Files (Images or PDFs)</label>
                         <input class="form-control" type="file" id="maintenance_files" name="maintenance_files" accept="image/*,application/pdf" multiple>
-                        <div class="form-text">You may upload multiple images (JPG, PNG, WebP) or PDFs. Max 5MB per file. Note: This feature is currently experimental and may not work as intended.</div>
+                        <div class="form-text">You may upload multiple images (JPG, PNG, WebP) or PDFs. Max 5MB per file.</div>
                     </div>
                     <div class="text-end">
                         <button type="submit" class="btn btn-success">
