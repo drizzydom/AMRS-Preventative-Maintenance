@@ -1,4 +1,5 @@
 
+
 # Standard library imports
 import os
 import sys
@@ -5236,3 +5237,14 @@ def enhanced_server_error(e):
         </body>
         </html>
         ''', 500
+    
+
+
+# Standard Flask app runner for local/offline mode (must be at the very end of the file)
+if __name__ == "__main__":
+    # Run the Flask app locally with the same settings as Render
+    # Use the PORT environment variable if set, otherwise default to 10000 (or 5000 for Flask default)
+    port = int(os.environ.get("PORT", 10000))
+    # Use debug mode only if FLASK_ENV=development
+    debug = os.environ.get("FLASK_ENV", "production") == "development"
+    app.run(host="0.0.0.0", port=port, debug=debug)
