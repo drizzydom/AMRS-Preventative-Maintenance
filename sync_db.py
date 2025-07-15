@@ -52,12 +52,18 @@ login_resp = session.post(login_url, data={
     'password': args.password
 }, allow_redirects=True)
 
+print(f"Login response status: {login_resp.status_code}")
+print(f"Login response headers: {login_resp.headers}")
+print(f"Session cookies after login: {session.cookies.get_dict()}")
 if login_resp.status_code != 200 or ('Set-Cookie' not in login_resp.headers and 'session' not in session.cookies):
     print("Login failed. Check credentials and try again.")
+    print(f"Login response text: {login_resp.text}")
     sys.exit(1)
 
 print("Login successful. Downloading sync data...")
 sync_resp = session.get(sync_url)
+print(f"Sync GET response status: {sync_resp.status_code}")
+print(f"Sync GET response headers: {sync_resp.headers}")
 if sync_resp.status_code != 200:
     print(f"Failed to fetch sync data: {sync_resp.status_code} {sync_resp.text}")
     sys.exit(1)
