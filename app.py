@@ -1452,58 +1452,77 @@ def dashboard():
             for machine in site.machines:
                 if show_decommissioned or not machine.decommissioned:
                     for part in machine.parts:
-                        if part.next_maintenance:
-                            try:
-                                # Ensure next_maintenance is a datetime object
-                                if isinstance(part.next_maintenance, str):
-                                    # Try to parse string to datetime
+                        # Skip parts without next_maintenance date or with None value
+                        if not part.next_maintenance:
+                            continue
+                            
+                        try:
+                            # Ensure next_maintenance is a datetime object
+                            if isinstance(part.next_maintenance, str):
+                                # Try to parse string to datetime
+                                try:
+                                    part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
+                                except ValueError:
                                     try:
-                                        part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
+                                        part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d')
                                     except ValueError:
-                                        try:
-                                            part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d')
-                                        except ValueError:
-                                            app.logger.warning(f"Invalid date format for part {part.id}: {part.next_maintenance}")
-                                            continue  # Skip invalid date strings
-                                
-                                days_until = (part.next_maintenance - now).days
-                                if days_until is not None and days_until < 0:
-                                    site_overdue.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                    if site in sites:  # Only count for displayed sites
-                                        overdue_count += 1
-                                    all_overdue.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                elif days_until is not None and days_until <= 30:
-                                    site_due_soon.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                    if site in sites:  # Only count for displayed sites
-                                        due_soon_count += 1
-                                    all_due_soon.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                else:
-                                    if site in sites:  # Only count for displayed sites
-                                        ok_count += 1
-                            except (TypeError, AttributeError) as e:
-                                # Skip parts with invalid maintenance dates
-                                app.logger.warning(f"Invalid maintenance date for part {part.id}: {e}")
+                                        app.logger.warning(f"Invalid date format for part {part.id}: {part.next_maintenance}")
+                                        continue  # Skip invalid date strings
+                            
+                            # Double-check that next_maintenance is still not None after parsing
+                            if not part.next_maintenance:
                                 continue
+                                
+                            # Calculate days until maintenance
+                            try:
+                                days_until = (part.next_maintenance - now).days
+                            except (TypeError, AttributeError) as calc_error:
+                                app.logger.warning(f"Error calculating days for part {part.id}: {calc_error}")
+                                continue
+                            
+                            # Ensure days_until is an integer (it should be from timedelta.days)
+                            if days_until is None or not isinstance(days_until, int):
+                                app.logger.warning(f"Invalid days_until calculation for part {part.id}: {days_until}")
+                                continue
+                                
+                            if days_until < 0:
+                                site_overdue.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                                if site in sites:  # Only count for displayed sites
+                                    overdue_count += 1
+                                all_overdue.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                            elif days_until <= 30:
+                                site_due_soon.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                                if site in sites:  # Only count for displayed sites
+                                    due_soon_count += 1
+                                all_due_soon.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                            else:
+                                if site in sites:  # Only count for displayed sites
+                                    ok_count += 1
+                                    
+                        except (TypeError, AttributeError) as e:
+                            # Skip parts with invalid maintenance dates
+                            app.logger.warning(f"Invalid maintenance date for part {part.id}: {e}")
+                            continue
             
             # Store site-specific data
             site_part_highlights[site.id] = {
@@ -1536,7 +1555,9 @@ def dashboard():
                               show_decommissioned=show_decommissioned,
                               decommissioned_count=decommissioned_count)
     except Exception as e:
+        import traceback
         app.logger.error(f"Dashboard error: {str(e)}")
+        app.logger.error(f"Dashboard error traceback: {traceback.format_exc()}")
         # Instead of redirecting, show a minimal dashboard with an error message
         flash(f'Error loading dashboard data: {str(e)}', 'error')
         return render_template('dashboard.html', 
