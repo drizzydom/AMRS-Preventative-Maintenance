@@ -104,6 +104,10 @@ def parts_status(self, current_date=None):
                 
             days_until = (part.next_maintenance - current_date).days
             
+            # Skip if days_until is None (shouldn't happen but safety check)
+            if days_until is None:
+                continue
+            
             # Overdue parts
             if days_until < 0:
                 overdue.append(part)
@@ -1463,7 +1467,7 @@ def dashboard():
                                             continue  # Skip invalid date strings
                                 
                                 days_until = (part.next_maintenance - now).days
-                                if days_until < 0:
+                                if days_until is not None and days_until < 0:
                                     site_overdue.append({
                                         'part': part,
                                         'machine': machine,
@@ -1478,7 +1482,7 @@ def dashboard():
                                         'site': site,
                                         'days_until': days_until
                                     })
-                                elif days_until <= 30:
+                                elif days_until is not None and days_until <= 30:
                                     site_due_soon.append({
                                         'part': part,
                                         'machine': machine,
