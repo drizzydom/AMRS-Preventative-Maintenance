@@ -3406,7 +3406,12 @@ def check_api_auth():
     auth = request.authorization
     if auth and auth.username and auth.password:
         try:
-            user = User.query.filter_by(username=auth.username).first()
+            # Try both encrypted and plain username lookups for compatibility
+            user = User.query.filter_by(_username=encrypt_value(auth.username)).first()
+            if not user:
+                # Fallback to plain username lookup (for older records)
+                user = User.query.filter_by(username=auth.username).first()
+            
             if user and user.check_password(auth.password) and is_admin_user(user):
                 return True
         except Exception as e:
