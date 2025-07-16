@@ -327,23 +327,42 @@ def auto_sync_offline_db():
         # Test connectivity and authentication
         session = requests.Session()
         
-        # Login to the online system
-        login_resp = session.post(f"{online_url}/login", data={
-            'username': online_username,
-            'password': online_password
-        })
+        # Try API-based authentication first, then fall back to session-based auth
+        auth_success = False
         
-        if login_resp.status_code != 200:
-            print(f"[SYNC] Failed to authenticate with online system: {login_resp.status_code}")
-            return False
+        # Method 1: Try direct API with basic auth
+        try:
+            test_resp = session.get(f"{online_url}/api/sync/status", 
+                                  auth=(online_username, online_password))
+            if test_resp.status_code == 200:
+                auth_success = True
+                print("[SYNC] Successfully authenticated via API basic auth")
+        except:
+            pass
             
-        print("[SYNC] Successfully authenticated with online system")
+        # Method 2: Try session-based login if API auth failed
+        if not auth_success:
+            try:
+                login_resp = session.post(f"{online_url.replace('/api', '')}/login", data={
+                    'username': online_username,
+                    'password': online_password
+                })
+                
+                if login_resp.status_code == 200 and 'dashboard' in login_resp.text.lower():
+                    auth_success = True
+                    print("[SYNC] Successfully authenticated via session login")
+            except Exception as e:
+                print(f"[SYNC] Session login failed: {e}")
+        
+        if not auth_success:
+            print(f"[SYNC] Failed to authenticate with online system")
+            return False
         
         # Get local database path
         local_db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
         
         # Perform sync
-        sync_success = perform_bidirectional_sync(session, online_url, local_db_path)
+        sync_success = perform_bidirectional_sync(session, online_url, local_db_path, online_username, online_password)
         
         if sync_success:
             print("[SYNC] Two-way synchronization completed successfully")
@@ -356,7 +375,7 @@ def auto_sync_offline_db():
         print(f"[SYNC] Sync failed - operating in offline mode: {str(e)}")
         return False
 
-def perform_bidirectional_sync(session, online_url, local_db_path):
+def perform_bidirectional_sync(session, online_url, local_db_path, username, password):
     """Perform the actual bidirectional sync using the API."""
     try:
         import sqlite3
@@ -366,7 +385,11 @@ def perform_bidirectional_sync(session, online_url, local_db_path):
         # Step 1: Download data from online system
         print("[SYNC] Downloading data from online system...")
         
-        download_resp = session.get(f"{online_url}/api/sync/data")
+        # Use the authenticated session with basic auth
+        # Remove /api from online_url if it's already there to avoid double /api/api
+        base_url = online_url.replace('/api', '') if online_url.endswith('/api') else online_url
+        download_resp = session.get(f"{base_url}/api/sync/data", 
+                                   auth=(username, password))
         if download_resp.status_code != 200:
             print(f"[SYNC] Failed to download data: {download_resp.status_code}")
             return False
@@ -389,9 +412,10 @@ def perform_bidirectional_sync(session, online_url, local_db_path):
         if local_changes:
             print(f"[SYNC] Uploading {sum(len(v) for v in local_changes.values())} local changes...")
             
-            upload_resp = session.post(f"{online_url}/api/sync/data", 
+            upload_resp = session.post(f"{base_url}/api/sync/data", 
                                      json=local_changes,
-                                     headers={'Content-Type': 'application/json'})
+                                     headers={'Content-Type': 'application/json'},
+                                     auth=(username, password))
             
             if upload_resp.status_code != 200:
                 print(f"[SYNC] Failed to upload changes: {upload_resp.status_code}")
@@ -3371,12 +3395,30 @@ def sync_status():
 
 
 
+# --- API AUTHENTICATION HELPER ---
+def check_api_auth():
+    """Check authentication for API endpoints - supports both session and basic auth."""
+    # Check session-based authentication first
+    if current_user.is_authenticated and is_admin_user(current_user):
+        return True
+    
+    # Check basic authentication for API access
+    auth = request.authorization
+    if auth and auth.username and auth.password:
+        try:
+            user = User.query.filter_by(username=auth.username).first()
+            if user and user.check_password(auth.password) and is_admin_user(user):
+                return True
+        except Exception as e:
+            print(f"[API AUTH] Error checking basic auth: {e}")
+    
+    return False
+
 # --- SYNC ENDPOINT FOR OFFLINE USAGE ---
 @app.route('/api/sync/data', methods=['GET', 'POST'])
-@login_required
 def sync_data():
     """Two-way sync endpoint: GET returns all data, POST accepts pushed data from offline clients. Admins only."""
-    if not current_user.is_authenticated or not is_admin_user(current_user):
+    if not check_api_auth():
         return jsonify({'error': 'Unauthorized'}), 403
     if request.method == 'GET':
         try:
