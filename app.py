@@ -269,31 +269,9 @@ def auto_sync_offline_db():
     """Automatically synchronize the local SQLite database from the online API if possible."""
     import subprocess
     import sys
-    sync_script = os.path.join(os.path.dirname(__file__), "sync_db.py")
-    if os.path.exists(sync_script):
-        print("[AMRS] Attempting to sync local database from online API...")
-        # Get sync credentials from environment
-        sync_url = os.environ.get("SYNC_URL") or os.environ.get("API_URL") or os.environ.get("RENDER_EXTERNAL_URL")
-        sync_username = os.environ.get("SYNC_USERNAME") or os.environ.get("ADMIN_USERNAME") or os.environ.get("DEFAULT_ADMIN_USERNAME")
-        sync_password = os.environ.get("SYNC_PASSWORD") or os.environ.get("ADMIN_PASSWORD") or os.environ.get("DEFAULT_ADMIN_PASSWORD")
-        if not sync_url or not sync_username:
-            print("[AMRS] Sync credentials missing: --url and --username are required. Set SYNC_URL and SYNC_USERNAME in your environment.")
-            return
-        cmd = [sys.executable, sync_script, "--url", sync_url, "--username", sync_username]
-        if sync_password:
-            cmd += ["--password", sync_password]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            print("[AMRS] Sync script output:")
-            print(result.stdout)
-            if result.returncode != 0:
-                print(f"[AMRS] Sync script failed: {result.stderr}")
-            else:
-                print("[AMRS] Local database sync completed.")
-        except Exception as e:
-            print(f"[AMRS] Error running sync script: {e}")
-    else:
-        print(f"[AMRS] Sync script not found at {sync_script}, skipping auto-sync.")
+    # Old sync logic removed. New sync logic will be implemented separately.
+    print("[AMRS] Offline sync utilities have been removed. Please use the new two-way sync system.")
+
 
 # --- Main DB selection logic ---
 if is_render():
@@ -310,7 +288,6 @@ else:
     offline_mode = os.environ.get("OFFLINE_MODE") != "0"  # Default to offline unless OFFLINE_MODE=0
     if offline_mode:
         db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-        auto_sync_offline_db()
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
         app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         print(f"[AMRS] LOCAL OFFLINE MODE: Using local database at {db_path}")
@@ -326,6 +303,48 @@ else:
 # Initialize database
 print("[APP] Initializing SQLAlchemy...")
 db.init_app(app)
+
+    # --- Ensure schema exists before import if needed (for offline mode) ---
+if not is_render() and offline_mode:
+    from sqlalchemy import create_engine, inspect as sa_inspect
+    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+    engine = create_engine(f"sqlite:///{db_path}")
+    inspector = sa_inspect(engine)
+    with app.app_context():
+        if not inspector.has_table('users'):
+            print("[AMRS] SQLite schema not found. Creating tables before import...")
+            db.create_all()
+        else:
+            print("[AMRS] SQLite schema already exists. Skipping table creation.")
+    print("[AMRS] Offline sync utilities have been removed. Please use the new two-way sync system.")
+# --- Ensure timestamp columns exist on Render launch for future sync compatibility ---
+def ensure_sync_columns():
+    """Ensure all tables have created_at, updated_at, and deleted_at columns for sync."""
+    try:
+        print("[SYNC] Ensuring sync columns exist in all tables...")
+        inspector = inspect(db.engine)
+        sync_columns = [
+            ('created_at', 'TIMESTAMP'),
+            ('updated_at', 'TIMESTAMP'),
+            ('deleted_at', 'TIMESTAMP')
+        ]
+        for table in ALLOWED_TABLES:
+            if inspector.has_table(table):
+                existing_columns = {col['name'] for col in inspector.get_columns(table)}
+                with db.engine.connect() as conn:
+                    for col_name, col_type in sync_columns:
+                        if col_name not in existing_columns:
+                            print(f"[SYNC] Adding {col_name} to {table}...")
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                            conn.commit()
+        print("[SYNC] Sync columns ensured.")
+    except Exception as e:
+        print(f"[SYNC] Error ensuring sync columns: {e}")
+
+# Call ensure_sync_columns on Render launch
+if is_render():
+    with app.app_context():
+        ensure_sync_columns()
 
 # Initialize Flask-Login
 print("[APP] Initializing Flask-Login...")
