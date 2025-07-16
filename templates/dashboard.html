@@ -392,7 +392,7 @@
                                       {% set days_until = (part.next_maintenance - now).days %}
                                       {% if days_until < 0 %}
                                           {% set overdue_parts = overdue_parts + [part] %}
-                                      {% elif days_until <= site.notification_threshold %}
+                                      {% elif site.notification_threshold and days_until <= site.notification_threshold %}
                                           {% set due_soon_parts = due_soon_parts + [part] %}
                                       {% else %}
                                           {% set ok_parts = ok_parts + [part] %}
@@ -473,7 +473,7 @@
                                                       <td>
                                                         {% if days_until < 0 %}
                                                           <span class="badge bg-danger">{{ -days_until }} days overdue</span>
-                                                        {% elif days_until <= site.notification_threshold %}
+                                                        {% elif site.notification_threshold and days_until <= site.notification_threshold %}
                                                           <span class="badge bg-warning">Due in {{ days_until }} days</span>
                                                         {% else %}
                                                           <span class="badge bg-success">OK ({{ days_until }} days)</span>
