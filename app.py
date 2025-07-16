@@ -1,4 +1,39 @@
 
+# Whitelist allowed table and column names for schema changes
+ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions'}
+ALLOWED_COLUMNS = {
+    'users': {'last_login', 'reset_token', 'reset_token_expiration', 'created_at', 'updated_at'},
+    'roles': {'created_at', 'updated_at'},
+    'sites': {'created_at', 'updated_at'},
+    'machines': {'created_at', 'updated_at'},
+    'parts': {'created_at', 'updated_at'},
+    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
+    'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
+    'audit_task_completions': {'created_at', 'updated_at'}
+}
+
+# --- Ensure sync columns exist in SQLite for offline mode ---
+def ensure_sync_columns_sqlite():
+    """Ensure all tables in SQLite have created_at, updated_at, deleted_at columns."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    sync_columns = [
+        ('created_at', 'TIMESTAMP'),
+        ('updated_at', 'TIMESTAMP'),
+        ('deleted_at', 'TIMESTAMP')
+    ]
+    for table in ALLOWED_TABLES:
+        if inspector.has_table(table):
+            existing_columns = {col['name'] for col in inspector.get_columns(table)}
+            with db.engine.connect() as conn:
+                for col_name, col_type in sync_columns:
+                    if col_name not in existing_columns:
+                        print(f"[SYNC] Adding {col_name} to {table} (SQLite)...")
+                        # SQLite does not support IF NOT EXISTS for ADD COLUMN
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+    print("[SYNC] Sync columns ensured in SQLite.")
+
 
 # Standard library imports
 import os
@@ -33,6 +68,7 @@ import smtplib
 from jinja2 import Environment, FileSystemLoader
 import csv
 import json
+import requests
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
@@ -266,11 +302,260 @@ def is_render():
     return os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 def auto_sync_offline_db():
-    """Automatically synchronize the local SQLite database from the online API if possible."""
-    import subprocess
-    import sys
-    # Old sync logic removed. New sync logic will be implemented separately.
-    print("[AMRS] Offline sync utilities have been removed. Please use the new two-way sync system.")
+    """Automatically synchronize the local SQLite database with the online database using two-way sync."""
+    if is_render():
+        print("[SYNC] Running on Render - no offline sync needed")
+        return True
+    
+    # Check if we have the necessary environment variables for online access
+    try:
+        import requests
+        from datetime import datetime
+        
+        # Check if we have online connectivity by trying to reach the API
+        online_url = os.environ.get('AMRS_ONLINE_URL')
+        online_username = os.environ.get('AMRS_ADMIN_USERNAME') 
+        online_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        
+        if not all([online_url, online_username, online_password]):
+            print("[SYNC] Missing online credentials - operating in offline-only mode")
+            print("[SYNC] Set AMRS_ONLINE_URL, AMRS_ADMIN_USERNAME, AMRS_ADMIN_PASSWORD for sync")
+            return True
+            
+        print("[SYNC] Starting two-way database synchronization...")
+        
+        # Test connectivity and authentication
+        session = requests.Session()
+        
+        # Login to the online system
+        login_resp = session.post(f"{online_url}/login", data={
+            'username': online_username,
+            'password': online_password
+        })
+        
+        if login_resp.status_code != 200:
+            print(f"[SYNC] Failed to authenticate with online system: {login_resp.status_code}")
+            return False
+            
+        print("[SYNC] Successfully authenticated with online system")
+        
+        # Get local database path
+        local_db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        
+        # Perform sync
+        sync_success = perform_bidirectional_sync(session, online_url, local_db_path)
+        
+        if sync_success:
+            print("[SYNC] Two-way synchronization completed successfully")
+        else:
+            print("[SYNC] Synchronization completed with some errors")
+            
+        return sync_success
+        
+    except Exception as e:
+        print(f"[SYNC] Sync failed - operating in offline mode: {str(e)}")
+        return False
+
+def perform_bidirectional_sync(session, online_url, local_db_path):
+    """Perform the actual bidirectional sync using the API."""
+    try:
+        import sqlite3
+        import requests
+        from datetime import datetime
+        
+        # Step 1: Download data from online system
+        print("[SYNC] Downloading data from online system...")
+        
+        download_resp = session.get(f"{online_url}/api/sync/data")
+        if download_resp.status_code != 200:
+            print(f"[SYNC] Failed to download data: {download_resp.status_code}")
+            return False
+            
+        online_data = download_resp.json()
+        
+        # Step 2: Update local database with online changes
+        local_conn = sqlite3.connect(local_db_path)
+        local_cursor = local_conn.cursor()
+        
+        # Import online data into local database
+        import_online_data_to_local(online_data, local_cursor)
+        local_conn.commit()
+        
+        # Step 3: Get local changes to upload
+        print("[SYNC] Preparing local changes for upload...")
+        local_changes = get_local_changes_for_upload(local_cursor)
+        
+        # Step 4: Upload local changes to online system
+        if local_changes:
+            print(f"[SYNC] Uploading {sum(len(v) for v in local_changes.values())} local changes...")
+            
+            upload_resp = session.post(f"{online_url}/api/sync/data", 
+                                     json=local_changes,
+                                     headers={'Content-Type': 'application/json'})
+            
+            if upload_resp.status_code != 200:
+                print(f"[SYNC] Failed to upload changes: {upload_resp.status_code}")
+                local_conn.close()
+                return False
+                
+            print("[SYNC] Successfully uploaded local changes")
+        else:
+            print("[SYNC] No local changes to upload")
+        
+        # Update sync timestamp
+        update_last_sync_timestamp(local_cursor)
+        local_conn.commit()
+        local_conn.close()
+        
+        return True
+        
+    except Exception as e:
+        print(f"[SYNC] Error during bidirectional sync: {str(e)}")
+        return False
+
+def import_online_data_to_local(online_data, cursor):
+    """Import downloaded online data into the local SQLite database."""
+    try:
+        # Import each table's data
+        for table_name, records in online_data.items():
+            if table_name not in ALLOWED_TABLES:
+                continue
+                
+            print(f"[SYNC] Importing {len(records)} records for table {table_name}")
+            
+            for record in records:
+                # Handle soft deletes by checking deleted_at
+                if record.get('deleted_at'):
+                    # Mark as deleted locally
+                    cursor.execute(f"""
+                        UPDATE {table_name} 
+                        SET deleted_at = ? 
+                        WHERE id = ?
+                    """, (record['deleted_at'], record['id']))
+                else:
+                    # Insert or update record
+                    upsert_record_sqlite(table_name, record, cursor)
+                    
+    except Exception as e:
+        print(f"[SYNC] Error importing online data: {str(e)}")
+        raise
+
+def get_local_changes_for_upload(cursor):
+    """Get local changes that need to be uploaded to the online system."""
+    try:
+        changes = {}
+        
+        # Get last sync timestamp
+        last_sync = get_last_sync_timestamp_local(cursor)
+        
+        for table_name in ALLOWED_TABLES:
+            if last_sync:
+                # Get records modified since last sync
+                cursor.execute(f"""
+                    SELECT * FROM {table_name} 
+                    WHERE updated_at > ? OR created_at > ?
+                    OR (deleted_at IS NOT NULL AND deleted_at > ?)
+                """, (last_sync, last_sync, last_sync))
+            else:
+                # First sync - get all records
+                cursor.execute(f"SELECT * FROM {table_name}")
+            
+            records = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            
+            # Convert to list of dictionaries
+            table_changes = []
+            for record in records:
+                record_dict = dict(zip(columns, record))
+                # Convert datetime objects to ISO strings for JSON serialization
+                for key, value in record_dict.items():
+                    if isinstance(value, datetime):
+                        record_dict[key] = value.isoformat()
+                table_changes.append(record_dict)
+            
+            if table_changes:
+                changes[table_name] = table_changes
+                
+        return changes
+        
+    except Exception as e:
+        print(f"[SYNC] Error getting local changes: {str(e)}")
+        return {}
+
+def upsert_record_sqlite(table_name, record, cursor):
+    """Insert or update a record in SQLite using UPSERT."""
+    try:
+        # Get table columns
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        table_info = cursor.fetchall()
+        table_columns = [col[1] for col in table_info]
+        
+        # Filter record to only include columns that exist in the table
+        filtered_record = {k: v for k, v in record.items() if k in table_columns}
+        
+        if not filtered_record:
+            return
+            
+        columns = list(filtered_record.keys())
+        placeholders = ', '.join(['?' for _ in columns])
+        
+        # Build UPSERT query for SQLite
+        if 'id' in columns:
+            update_clauses = ', '.join([f"{col} = excluded.{col}" for col in columns if col != 'id'])
+            sql = f"""
+                INSERT INTO {table_name} ({', '.join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT(id) DO UPDATE SET {update_clauses}
+            """
+        else:
+            # No id column, just insert
+            sql = f"""
+                INSERT OR REPLACE INTO {table_name} ({', '.join(columns)})
+                VALUES ({placeholders})
+            """
+        
+        values = [filtered_record[col] for col in columns]
+        cursor.execute(sql, values)
+        
+    except Exception as e:
+        print(f"[SYNC] Error upserting record in {table_name}: {str(e)}")
+
+def get_last_sync_timestamp_local(cursor):
+    """Get the last sync timestamp from local metadata."""
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sync_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("SELECT value FROM sync_metadata WHERE key = 'last_sync'")
+        result = cursor.fetchone()
+        return result[0] if result else None
+        
+    except Exception as e:
+        print(f"[SYNC] Error getting last sync timestamp: {str(e)}")
+        return None
+
+def update_last_sync_timestamp(cursor):
+    """Update the last sync timestamp in local metadata."""
+    try:
+        from datetime import datetime
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
+            VALUES ('last_sync', ?, ?)
+        """, (datetime.utcnow().isoformat(), datetime.utcnow()))
+        
+    except Exception as e:
+        print(f"[SYNC] Error updating last sync timestamp: {str(e)}")
+
+# Remove the old helper functions that are no longer needed
+def get_online_db_config():
+    """Get online database configuration if available."""
+    return None  # We're using API-based sync instead of direct database access
 
 
 # --- Main DB selection logic ---
@@ -316,7 +601,15 @@ if not is_render() and offline_mode:
             db.create_all()
         else:
             print("[AMRS] SQLite schema already exists. Skipping table creation.")
-    print("[AMRS] Offline sync utilities have been removed. Please use the new two-way sync system.")
+        ensure_sync_columns_sqlite()
+        
+        # Perform automatic two-way sync
+        print("[AMRS] Starting automatic two-way synchronization...")
+        sync_success = auto_sync_offline_db()
+        if sync_success:
+            print("[AMRS] Two-way sync completed successfully")
+        else:
+            print("[AMRS] Two-way sync completed with errors - continuing in offline mode")
 # --- Ensure timestamp columns exist on Render launch for future sync compatibility ---
 def ensure_sync_columns():
     """Ensure all tables have created_at, updated_at, and deleted_at columns for sync."""
