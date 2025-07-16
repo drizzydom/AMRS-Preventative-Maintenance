@@ -60,6 +60,12 @@ def migrate_sqlite_schema(db_path):
         if 'users' in tables_info:
             user_columns = tables_info['users']
             
+            # Add missing full_name column
+            if 'full_name' not in user_columns:
+                logger.info("Adding full_name column to users table")
+                cursor.execute("ALTER TABLE users ADD COLUMN full_name VARCHAR(100)")
+                migrations_applied += 1
+            
             # Check if username_hash has NOT NULL constraint
             if 'username_hash' in user_columns:
                 col_info = user_columns['username_hash']
@@ -74,6 +80,16 @@ def migrate_sqlite_schema(db_path):
                 if col_info[3] == 1:  # NOT NULL constraint
                     logger.info("Removing NOT NULL constraint from email_hash column")
                     # This was already handled in the previous manual fix
+        
+        # Roles table migrations
+        if 'roles' in tables_info:
+            roles_columns = tables_info['roles']
+            
+            # Add missing description column
+            if 'description' not in roles_columns:
+                logger.info("Adding description column to roles table")
+                cursor.execute("ALTER TABLE roles ADD COLUMN description TEXT")
+                migrations_applied += 1
         
         # Parts table migrations
         if 'parts' in tables_info:
@@ -145,6 +161,56 @@ def migrate_sqlite_schema(db_path):
             if 'notes' not in mr_columns:
                 logger.info("Adding notes column to maintenance_records table")
                 cursor.execute("ALTER TABLE maintenance_records ADD COLUMN notes TEXT")
+                migrations_applied += 1
+        
+        # Audit Tasks table migrations
+        if 'audit_tasks' in tables_info:
+            at_columns = tables_info['audit_tasks']
+            
+            # Add missing description column
+            if 'description' not in at_columns:
+                logger.info("Adding description column to audit_tasks table")
+                cursor.execute("ALTER TABLE audit_tasks ADD COLUMN description TEXT")
+                migrations_applied += 1
+            
+            # Add missing color column
+            if 'color' not in at_columns:
+                logger.info("Adding color column to audit_tasks table")
+                cursor.execute("ALTER TABLE audit_tasks ADD COLUMN color VARCHAR(32) DEFAULT '#007bff'")
+                migrations_applied += 1
+            
+            # Add missing interval column
+            if 'interval' not in at_columns:
+                logger.info("Adding interval column to audit_tasks table")
+                cursor.execute("ALTER TABLE audit_tasks ADD COLUMN interval VARCHAR(50) DEFAULT 'monthly'")
+                migrations_applied += 1
+            
+            # Add missing custom_interval_days column
+            if 'custom_interval_days' not in at_columns:
+                logger.info("Adding custom_interval_days column to audit_tasks table")
+                cursor.execute("ALTER TABLE audit_tasks ADD COLUMN custom_interval_days INTEGER")
+                migrations_applied += 1
+        
+        # Audit Task Completions table migrations
+        if 'audit_task_completions' in tables_info:
+            atc_columns = tables_info['audit_task_completions']
+            
+            # Add missing completed column
+            if 'completed' not in atc_columns:
+                logger.info("Adding completed column to audit_task_completions table")
+                cursor.execute("ALTER TABLE audit_task_completions ADD COLUMN completed BOOLEAN DEFAULT 0")
+                migrations_applied += 1
+            
+            # Add missing completed_at column
+            if 'completed_at' not in atc_columns:
+                logger.info("Adding completed_at column to audit_task_completions table")
+                cursor.execute("ALTER TABLE audit_task_completions ADD COLUMN completed_at DATETIME")
+                migrations_applied += 1
+            
+            # Add missing notes column
+            if 'notes' not in atc_columns:
+                logger.info("Adding notes column to audit_task_completions table")
+                cursor.execute("ALTER TABLE audit_task_completions ADD COLUMN notes TEXT")
                 migrations_applied += 1
         
         conn.commit()
