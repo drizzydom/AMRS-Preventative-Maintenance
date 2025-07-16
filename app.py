@@ -340,7 +340,11 @@ def auto_sync_offline_db():
         
         # Method 1: Try direct API with basic auth
         try:
-            test_resp = session.get(f"{online_url}/api/sync/status", 
+            # Clean up URL to avoid double /api - handle all cases including trailing slashes
+            clean_url = online_url.rstrip('/')
+            if clean_url.endswith('/api'):
+                clean_url = clean_url[:-4]  # Remove /api
+            test_resp = session.get(f"{clean_url}/api/sync/status", 
                                   auth=(online_username, online_password))
             if test_resp.status_code == 200:
                 auth_success = True
@@ -351,7 +355,11 @@ def auto_sync_offline_db():
         # Method 2: Try session-based login if API auth failed
         if not auth_success:
             try:
-                login_resp = session.post(f"{online_url.replace('/api', '')}/login", data={
+                # Clean up URL to avoid double /api - handle all cases including trailing slashes
+                clean_url = online_url.rstrip('/')
+                if clean_url.endswith('/api'):
+                    clean_url = clean_url[:-4]  # Remove /api
+                login_resp = session.post(f"{clean_url}/login", data={
                     'username': online_username,
                     'password': online_password
                 })
@@ -394,9 +402,11 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         print("[SYNC] Downloading data from online system...")
         
         # Use the authenticated session with basic auth
-        # Remove /api from online_url if it's already there to avoid double /api/api
-        base_url = online_url.replace('/api', '') if online_url.endswith('/api') else online_url
-        download_resp = session.get(f"{base_url}/api/sync/data", 
+        # Clean up URL to avoid double /api/api - handle all cases including trailing slashes
+        clean_url = online_url.rstrip('/')
+        if clean_url.endswith('/api'):
+            clean_url = clean_url[:-4]  # Remove /api
+        download_resp = session.get(f"{clean_url}/api/sync/data", 
                                    auth=(username, password))
         if download_resp.status_code != 200:
             print(f"[SYNC] Failed to download data: {download_resp.status_code}")
@@ -420,7 +430,7 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         if local_changes:
             print(f"[SYNC] Uploading {sum(len(v) for v in local_changes.values())} local changes...")
             
-            upload_resp = session.post(f"{base_url}/api/sync/data", 
+            upload_resp = session.post(f"{clean_url}/api/sync/data", 
                                      json=local_changes,
                                      headers={'Content-Type': 'application/json'},
                                      auth=(username, password))
@@ -3580,7 +3590,7 @@ def sync_data():
                     'id': c.id,
                     'audit_task_id': c.audit_task_id,
                     'machine_id': c.machine_id,
-                    'user_id': c.user_id,
+                    'user_id': getattr(c, 'completed_by', None),  # Use completed_by as user_id
                     'date': c.date.isoformat() if c.date else None,
                     'completed': getattr(c, 'completed', False),
                     'completed_at': c.completed_at.isoformat() if getattr(c, 'completed_at', None) else None,
