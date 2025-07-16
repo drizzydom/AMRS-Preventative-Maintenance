@@ -98,6 +98,10 @@ def parts_status(self, current_date=None):
     # Loop through all machines at this site
     for machine in self.machines:
         for part in machine.parts:
+            # Skip parts without next_maintenance date
+            if not part.next_maintenance:
+                continue
+                
             days_until = (part.next_maintenance - current_date).days
             
             # Overdue parts
@@ -1219,10 +1223,10 @@ def inject_site_helpers():
                 total_parts += len(parts)
                 
                 for part in parts:
-                    if part.quantity == 0:
-                        out_of_stock += 1
-                    elif part.quantity < 5:  # Assume 5 is the low stock threshold
-                        low_stock += 1
+                    # Skip quantity checks since Part model doesn't have quantity field
+                    # This function currently only counts total parts
+                    # Future enhancement: add quantity field to Part model if needed
+                    pass
             
             return {
                 'total': total_parts,
@@ -3446,9 +3450,12 @@ def sync_data():
                     'id': u.id,
                     'username': u.username,
                     'email': u.email,
+                    'full_name': u.full_name,  # Add full name for proper display
                     'role_id': u.role_id,
                     'is_admin': getattr(u, 'is_admin', False),
                     'active': getattr(u, 'active', True),
+                    'created_at': u.created_at.isoformat() if u.created_at else None,
+                    'updated_at': u.updated_at.isoformat() if u.updated_at else None,
                 }
                 for u in User.query.all()
             ]
@@ -3457,6 +3464,9 @@ def sync_data():
                     'id': r.id,
                     'name': r.name,
                     'permissions': r.permissions,
+                    'description': getattr(r, 'description', ''),
+                    'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
+                    'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
                 }
                 for r in Role.query.all()
             ]
@@ -3465,6 +3475,11 @@ def sync_data():
                     'id': s.id,
                     'name': s.name,
                     'location': getattr(s, 'location', ''),
+                    'contact_email': getattr(s, 'contact_email', ''),
+                    'enable_notifications': getattr(s, 'enable_notifications', True),
+                    'notification_threshold': getattr(s, 'notification_threshold', 30),
+                    'created_at': s.created_at.isoformat() if getattr(s, 'created_at', None) else None,
+                    'updated_at': s.updated_at.isoformat() if getattr(s, 'updated_at', None) else None,
                 }
                 for s in Site.query.all()
             ]
@@ -3476,6 +3491,12 @@ def sync_data():
                     'serial_number': m.serial_number,
                     'machine_number': m.machine_number,
                     'site_id': m.site_id,
+                    'decommissioned': getattr(m, 'decommissioned', False),
+                    'decommissioned_date': m.decommissioned_date.isoformat() if getattr(m, 'decommissioned_date', None) else None,
+                    'decommissioned_by': getattr(m, 'decommissioned_by', None),
+                    'decommissioned_reason': getattr(m, 'decommissioned_reason', ''),
+                    'created_at': m.created_at.isoformat() if getattr(m, 'created_at', None) else None,
+                    'updated_at': m.updated_at.isoformat() if getattr(m, 'updated_at', None) else None,
                 }
                 for m in Machine.query.all()
             ]
@@ -3487,8 +3508,11 @@ def sync_data():
                     'machine_id': p.machine_id,
                     'maintenance_frequency': p.maintenance_frequency,
                     'maintenance_unit': p.maintenance_unit,
+                    'maintenance_days': getattr(p, 'maintenance_days', None),
                     'last_maintenance': p.last_maintenance.isoformat() if p.last_maintenance else None,
                     'next_maintenance': p.next_maintenance.isoformat() if p.next_maintenance else None,
+                    'created_at': p.created_at.isoformat() if getattr(p, 'created_at', None) else None,
+                    'updated_at': p.updated_at.isoformat() if getattr(p, 'updated_at', None) else None,
                 }
                 for p in Part.query.all()
             ]
@@ -3504,8 +3528,42 @@ def sync_data():
                     'performed_by': r.performed_by,
                     'status': r.status,
                     'notes': r.notes,
+                    'comments': getattr(r, 'comments', ''),
+                    'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
+                    'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
                 }
                 for r in MaintenanceRecord.query.all()
+            ]
+            # Add audit tasks and completions for comprehensive sync
+            audit_tasks = [
+                {
+                    'id': t.id,
+                    'name': t.name,
+                    'description': getattr(t, 'description', ''),
+                    'site_id': t.site_id,
+                    'machine_id': getattr(t, 'machine_id', None),
+                    'interval': getattr(t, 'interval', 'monthly'),
+                    'custom_interval_days': getattr(t, 'custom_interval_days', None),
+                    'color': getattr(t, 'color', '#007bff'),
+                    'created_at': t.created_at.isoformat() if getattr(t, 'created_at', None) else None,
+                    'updated_at': t.updated_at.isoformat() if getattr(t, 'updated_at', None) else None,
+                }
+                for t in AuditTask.query.all()
+            ]
+            audit_task_completions = [
+                {
+                    'id': c.id,
+                    'audit_task_id': c.audit_task_id,
+                    'machine_id': c.machine_id,
+                    'user_id': c.user_id,
+                    'date': c.date.isoformat() if c.date else None,
+                    'completed': getattr(c, 'completed', False),
+                    'completed_at': c.completed_at.isoformat() if getattr(c, 'completed_at', None) else None,
+                    'notes': getattr(c, 'notes', ''),
+                    'created_at': c.created_at.isoformat() if getattr(c, 'created_at', None) else None,
+                    'updated_at': c.updated_at.isoformat() if getattr(c, 'updated_at', None) else None,
+                }
+                for c in AuditTaskCompletion.query.all()
             ]
             # Optionally add audit tasks, completions, etc.
             data = {
@@ -3515,6 +3573,8 @@ def sync_data():
                 'machines': machines,
                 'parts': parts,
                 'maintenance_records': maintenance_records,
+                'audit_tasks': audit_tasks,
+                'audit_task_completions': audit_task_completions,
             }
             return jsonify(data)
         except Exception as e:
