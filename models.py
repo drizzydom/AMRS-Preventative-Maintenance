@@ -118,6 +118,18 @@ class User(UserMixin, db.Model):
         self._email = encrypt_value(value)
         self.email_hash = hash_value(value)
 
+    @property
+    def display_name(self):
+        """Get the best available display name for the user"""
+        if self.full_name:
+            return self.full_name
+        try:
+            if self.username:
+                return self.username
+        except:
+            pass
+        return f"User #{self.id}"
+    
     def set_password(self, password):
         """Set the password hash"""
         self.password_hash = generate_password_hash(password)

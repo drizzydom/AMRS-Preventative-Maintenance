@@ -24,15 +24,15 @@
               <div class="info-section">
                 <div class="info-row">
                   <span class="info-label">Date:</span>
-                  <span class="info-value">{{ record.created_at|to_eastern('%A, %B %d, %Y') if record.created_at else 'N/A' }}</span>
+                  <span class="info-value">{{ (record.created_at or record.date)|to_eastern('%A, %B %d, %Y') if (record.created_at or record.date) else 'N/A' }}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Time:</span>
-                  <span class="info-value">{{ record.created_at|to_eastern('%I:%M %p') if record.created_at else 'N/A' }}</span>
+                  <span class="info-value">{{ (record.created_at or record.date)|to_eastern('%I:%M %p') if (record.created_at or record.date) else 'N/A' }}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Performed By:</span>
-                  <span class="info-value">{{ record.performed_by or (record.user.full_name if record.user and record.user.full_name else (record.user.username if record.user else 'Unknown')) }}</span>
+                  <span class="info-value">{{ record.performed_by or (record.user.display_name if record.user else 'Unknown') }}</span>
                 </div>
                 {% if record.maintenance_type %}
                 <div class="info-row">
