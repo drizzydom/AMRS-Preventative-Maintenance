@@ -625,6 +625,19 @@ if not is_render() and offline_mode:
             db.create_all()
         else:
             print("[AMRS] SQLite schema already exists. Skipping table creation.")
+        
+        # Run SQLite schema migration to ensure compatibility with online database
+        try:
+            from sqlite_schema_migration import migrate_sqlite_schema
+            print("[AMRS] Running SQLite schema migration...")
+            migrations_applied = migrate_sqlite_schema(db_path)
+            if migrations_applied > 0:
+                print(f"[AMRS] Applied {migrations_applied} schema migrations")
+            else:
+                print("[AMRS] SQLite schema is up to date")
+        except Exception as e:
+            print(f"[AMRS] Warning: Schema migration failed: {e}")
+        
         ensure_sync_columns_sqlite()
         
         # Perform automatic two-way sync
