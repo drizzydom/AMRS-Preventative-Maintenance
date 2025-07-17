@@ -2228,6 +2228,31 @@ def audit_history_print():
         flash('You do not have permission to access audit history.', 'danger')
         return redirect(url_for('dashboard'))
 
+    # Define the calendar weeks function early
+    def get_calendar_weeks(start_date, end_date):
+        """Get calendar weeks for the date range."""
+        import calendar
+        weeks = []
+        current = start_date.replace(day=1)
+        
+        # Get first Monday of the month view
+        while current.weekday() != 0:  # 0 is Monday
+            current -= timedelta(days=1)
+        
+        # Generate weeks until we cover the end date
+        while current <= end_date or len(weeks) < 6:
+            week = []
+            for i in range(7):
+                week.append(current + timedelta(days=i))
+            weeks.append(week)
+            current += timedelta(days=7)
+            
+            # Stop if we have 6 weeks and covered the month
+            if len(weeks) >= 6 and current > end_date:
+                break
+                
+        return weeks
+
     from calendar import monthrange
     today = datetime.now().date()
     
@@ -2325,30 +2350,6 @@ def audit_history_print():
             if selected_machine and machine.id != selected_machine:
                 continue
             machines.append(machine)
-
-    # Generate calendar weeks function
-    def get_calendar_weeks(start_date, end_date):
-        import calendar
-        weeks = []
-        current = start_date.replace(day=1)
-        
-        # Get first Monday of the month view
-        while current.weekday() != 0:  # 0 is Monday
-            current -= timedelta(days=1)
-        
-        # Generate weeks until we cover the end date
-        while current <= end_date or len(weeks) < 6:
-            week = []
-            for i in range(7):
-                week.append(current + timedelta(days=i))
-            weeks.append(week)
-            current += timedelta(days=7)
-            
-            # Stop if we have 6 weeks and covered the month
-            if len(weeks) >= 6 and current > end_date:
-                break
-                
-        return weeks
 
     return render_template('audit_history_pdf.html',
         machines=machines,
@@ -3625,12 +3626,14 @@ def sync_data():
                 if user:
                     user.username = u['username']
                     user.email = u['email']
+                    user.full_name = u.get('full_name')  # Add full_name sync
                     user.role_id = u['role_id']
                     user.is_admin = u.get('is_admin', False)
                     user.active = u.get('active', True)
                 else:
                     user = User(
                         id=u['id'], username=u['username'], email=u['email'],
+                        full_name=u.get('full_name'),  # Add full_name sync
                         role_id=u['role_id'], is_admin=u.get('is_admin', False), active=u.get('active', True)
                     )
                     db.session.add(user)

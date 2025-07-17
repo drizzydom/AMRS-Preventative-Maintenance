@@ -14,7 +14,7 @@
 <body>
     <div class="container">
         <h1>Audit Task Reminder</h1>
-        <p>Hello {{ user.full_name or user.username }},</p>
+        <p>Hello {{ user.display_name }},</p>
         <p>This is a reminder that the following audit task is still <strong>incomplete</strong> for today ({{ date|to_eastern('%Y-%m-%d') }}):</p>
         <div class="details">
             <div><span class="label">Site:</span> {{ site.name }}</div>
