@@ -30,7 +30,7 @@
             <div class="mb-3">
                 <label for="maintained_by" class="form-label">Maintained By</label>
                 <input type="text" class="form-control" id="maintained_by" name="maintained_by" 
-                       placeholder="{{ current_user.full_name or current_user.username }}">
+                       placeholder="{{ current_user.display_name }}">
                 <small class="form-text">Leave blank to use your name</small>
             </div>
             <div class="mb-3">
