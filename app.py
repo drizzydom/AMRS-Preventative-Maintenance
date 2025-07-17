@@ -1,6 +1,6 @@
 
 # Whitelist allowed table and column names for schema changes
-ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions'}
+ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions', 'machine_audit_task'}
 ALLOWED_COLUMNS = {
     'users': {'last_login', 'reset_token', 'reset_token_expiration', 'created_at', 'updated_at'},
     'roles': {'created_at', 'updated_at'},
@@ -9,7 +9,8 @@ ALLOWED_COLUMNS = {
     'parts': {'created_at', 'updated_at'},
     'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
     'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
-    'audit_task_completions': {'created_at', 'updated_at'}
+    'audit_task_completions': {'created_at', 'updated_at'},
+    'machine_audit_task': {'audit_task_id', 'machine_id'}
 }
 
 # --- Ensure sync columns exist in SQLite for offline mode ---
@@ -325,6 +326,10 @@ def auto_sync_offline_db():
         online_username = os.environ.get('AMRS_ADMIN_USERNAME') 
         online_password = os.environ.get('AMRS_ADMIN_PASSWORD')
         
+        # Strip quotes from URL if present
+        if online_url:
+            online_url = online_url.strip('"\'')
+        
         if not all([online_url, online_username, online_password]):
             print("[SYNC] Missing online credentials - operating in offline-only mode")
             print("[SYNC] Set AMRS_ONLINE_URL, AMRS_ADMIN_USERNAME, AMRS_ADMIN_PASSWORD for sync")
@@ -338,37 +343,37 @@ def auto_sync_offline_db():
         # Try API-based authentication first, then fall back to session-based auth
         auth_success = False
         
-        # Method 1: Try direct API with basic auth
+        # Always try session-based login for data endpoint access
         try:
             # Clean up URL to avoid double /api - handle all cases including trailing slashes
             clean_url = online_url.rstrip('/')
             if clean_url.endswith('/api'):
                 clean_url = clean_url[:-4]  # Remove /api
-            test_resp = session.get(f"{clean_url}/api/sync/status", 
-                                  auth=(online_username, online_password))
-            if test_resp.status_code == 200:
-                auth_success = True
-                print("[SYNC] Successfully authenticated via API basic auth")
-        except:
-            pass
+            login_resp = session.post(f"{clean_url}/login", data={
+                'username': online_username,
+                'password': online_password
+            })
             
-        # Method 2: Try session-based login if API auth failed
+            if login_resp.status_code == 200 and 'dashboard' in login_resp.text.lower():
+                auth_success = True
+                print("[SYNC] Successfully authenticated via session login")
+        except Exception as e:
+            print(f"[SYNC] Session login failed: {e}")
+            
+        # Fallback: Try basic auth for status endpoint test
         if not auth_success:
             try:
                 # Clean up URL to avoid double /api - handle all cases including trailing slashes
                 clean_url = online_url.rstrip('/')
                 if clean_url.endswith('/api'):
                     clean_url = clean_url[:-4]  # Remove /api
-                login_resp = session.post(f"{clean_url}/login", data={
-                    'username': online_username,
-                    'password': online_password
-                })
-                
-                if login_resp.status_code == 200 and 'dashboard' in login_resp.text.lower():
+                test_resp = session.get(f"{clean_url}/api/sync/status", 
+                                      auth=(online_username, online_password))
+                if test_resp.status_code == 200:
                     auth_success = True
-                    print("[SYNC] Successfully authenticated via session login")
-            except Exception as e:
-                print(f"[SYNC] Session login failed: {e}")
+                    print("[SYNC] Successfully authenticated via API basic auth")
+            except:
+                pass
         
         if not auth_success:
             print(f"[SYNC] Failed to authenticate with online system")
@@ -401,13 +406,12 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         # Step 1: Download data from online system
         print("[SYNC] Downloading data from online system...")
         
-        # Use the authenticated session with basic auth
+        # Use the authenticated session (no basic auth needed since we already logged in)
         # Clean up URL to avoid double /api/api - handle all cases including trailing slashes
         clean_url = online_url.rstrip('/')
         if clean_url.endswith('/api'):
             clean_url = clean_url[:-4]  # Remove /api
-        download_resp = session.get(f"{clean_url}/api/sync/data", 
-                                   auth=(username, password))
+        download_resp = session.get(f"{clean_url}/api/sync/data")
         if download_resp.status_code != 200:
             print(f"[SYNC] Failed to download data: {download_resp.status_code}")
             return False
@@ -432,8 +436,7 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
             
             upload_resp = session.post(f"{clean_url}/api/sync/data", 
                                      json=local_changes,
-                                     headers={'Content-Type': 'application/json'},
-                                     auth=(username, password))
+                                     headers={'Content-Type': 'application/json'})
             
             if upload_resp.status_code != 200:
                 print(f"[SYNC] Failed to upload changes: {upload_resp.status_code}")
@@ -542,7 +545,14 @@ def upsert_record_sqlite(table_name, record, cursor):
         placeholders = ', '.join(['?' for _ in columns])
         
         # Build UPSERT query for SQLite
-        if 'id' in columns:
+        if table_name == 'machine_audit_task':
+            # For association tables, use INSERT OR IGNORE since there's no ID column
+            # and we don't want to update existing associations
+            sql = f"""
+                INSERT OR IGNORE INTO {table_name} ({', '.join(columns)})
+                VALUES ({placeholders})
+            """
+        elif 'id' in columns:
             update_clauses = ', '.join([f"{col} = excluded.{col}" for col in columns if col != 'id'])
             sql = f"""
                 INSERT INTO {table_name} ({', '.join(columns)})
@@ -758,7 +768,7 @@ def check_db_connection():
         return False
 
 # Whitelist allowed table and column names for schema changes
-ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions'}
+ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions', 'machine_audit_task'}
 ALLOWED_COLUMNS = {
     'users': {'last_login', 'reset_token', 'reset_token_expiration', 'created_at', 'updated_at'},
     'roles': {'created_at', 'updated_at'},
@@ -767,7 +777,8 @@ ALLOWED_COLUMNS = {
     'parts': {'created_at', 'updated_at'},
     'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
     'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
-    'audit_task_completions': {'created_at', 'updated_at'}
+    'audit_task_completions': {'created_at', 'updated_at'},
+    'machine_audit_task': {'audit_task_id', 'machine_id'}
 }
 
 # Function to ensure database schema matches models
