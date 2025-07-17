@@ -21,7 +21,7 @@
           <td>{% if c.completed_at %}{{ c.completed_at|to_eastern('%Y-%m-%d %H:%M') }}{% else %}{{ c.date|to_eastern('%Y-%m-%d') }}{% endif %}</td>
           <td>{{ audit_tasks[c.audit_task_id].name if c.audit_task_id in audit_tasks else c.audit_task_id }}</td>
           <td>{{ machines[c.machine_id].name if c.machine_id in machines else c.machine_id }}</td>
-          <td>{{ users[c.completed_by].full_name or users[c.completed_by].username if c.completed_by in users else c.completed_by }}</td>
+          <td>{{ users[c.completed_by].display_name if c.completed_by in users else c.completed_by }}</td>
           <td>{% if c.completed %}<span class="badge bg-success">Completed</span>{% else %}<span class="badge bg-warning text-dark">Pending</span>{% endif %}</td>
         </tr>
         {% endfor %}
