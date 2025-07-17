@@ -337,7 +337,7 @@ def record_maintenance(current_user):
     
     # Update part maintenance information
     maintenance_date = datetime.datetime.utcnow()
-    performed_by = current_user.full_name or current_user.username
+    performed_by = current_user.display_name
     
     # Update part
     part.last_maintenance = maintenance_date
