@@ -2483,11 +2483,12 @@ def admin_users():
             
             # Create new user with role as object
             new_user = User(
-                username=username,
-                email=email,
+                # Always use property setters so values are encrypted once
                 password_hash=generate_password_hash(password),
                 role=role
             )
+            new_user.username = username
+            new_user.email = email
             
             # Add user to database
             db.session.add(new_user)
@@ -2890,18 +2891,28 @@ def delete_user(user_id):
 @login_required
 def maintenance_page():
     try:
-        # Restrict sites for non-admins
-        if current_user.is_admin:
+        # Allow admins and users with 'maintenance.record' permission to see all sites
+        def has_maintenance_record_permission(user):
+            if getattr(user, 'is_admin', False):
+                return True
+            if hasattr(user, 'role') and user.role and user.role.permissions:
+                return 'maintenance.record' in user.role.permissions.split(',')
+            return False
+
+        if current_user.is_admin or has_maintenance_record_permission(current_user):
             sites = Site.query.all()
         else:
-            sites = current_user.sites
+            # fallback: only assigned sites
+            sites = getattr(current_user, 'sites', [])
 
         # Get all machines, parts, and sites for the form
-        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in sites])).all()
-        parts = Part.query.filter(Part.machine_id.in_([machine.id for machine in machines])).all()
+        site_ids = [site.id for site in sites] if sites else []
+        machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
+        machine_ids = [machine.id for machine in machines] if machines else []
+        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
         
         # Get all maintenance records with related data
-        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_([machine.id for machine in machines])).order_by(MaintenanceRecord.date.desc()).all()
+        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_(machine_ids)).order_by(MaintenanceRecord.date.desc()).all() if machine_ids else []
         
         # Handle form submission for adding new maintenance records
         if request.method == 'POST':
@@ -3725,10 +3736,11 @@ def sync_data():
                     user.active = u.get('active', True)
                 else:
                     user = User(
-                        id=u['id'], username=u['username'], email=u['email'],
-                        full_name=u.get('full_name'),  # Add full_name sync
+                        id=u['id'], full_name=u.get('full_name'),  # Add full_name sync
                         role_id=u['role_id'], is_admin=u.get('is_admin', False), active=u.get('active', True)
                     )
+                    user.username = u['username']
+                    user.email = u['email']
                     db.session.add(user)
             # --- Roles ---
             for r in data.get('roles', []):
