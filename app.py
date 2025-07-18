@@ -274,9 +274,18 @@ ensure_env_file()
 ensure_email_templates()
 
 # Print debug info about environment
+
 print(f"[APP] Running in environment: {'RENDER' if os.environ.get('RENDER') else 'LOCAL'}")
 print(f"[APP] Working directory: {os.getcwd()}")
 print(f"[APP] Base directory: {BASE_DIR}")
+
+# --- Ensure sync_queue table exists on startup ---
+try:
+    import add_sync_queue_table
+    add_sync_queue_table.upgrade()
+    print('[STARTUP] Ensured sync_queue table exists.')
+except Exception as e:
+    print(f'[STARTUP] Error ensuring sync_queue table: {e}')
 
 try:
     # Import cache configuration
