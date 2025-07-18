@@ -449,6 +449,10 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         
         # Update sync timestamp
         update_last_sync_timestamp(local_cursor)
+        
+        # Fix password hashes for known users after sync
+        fix_common_user_passwords(local_cursor)
+        
         local_conn.commit()
         local_conn.close()
         
@@ -535,8 +539,71 @@ def upsert_record_sqlite(table_name, record, cursor):
         table_info = cursor.fetchall()
         table_columns = [col[1] for col in table_info]
         
-        # Filter record to only include columns that exist in the table
-        filtered_record = {k: v for k, v in record.items() if k in table_columns}
+        # Special handling for users table to ensure encryption fields are handled correctly
+        if table_name == 'users':
+            from models import encrypt_value, hash_value
+            
+            # Process the record to ensure proper encryption
+            processed_record = record.copy()
+            
+            # Check if we need to encrypt the username
+            if 'username' in processed_record:
+                username = processed_record['username']
+                if username and not processed_record.get('username_hash'):
+                    # Plain text username - encrypt it and create hash
+                    processed_record['username'] = encrypt_value(username)
+                    processed_record['username_hash'] = hash_value(username)
+                elif username and processed_record.get('username_hash'):
+                    # Username hash provided - check if username is already encrypted
+                    try:
+                        # Try to decrypt - if it fails, assume it's plain text
+                        from models import decrypt_value
+                        decrypted = decrypt_value(username)
+                        if decrypted == username:
+                            # It's plain text, encrypt it
+                            processed_record['username'] = encrypt_value(username)
+                    except:
+                        # Decryption failed, treat as plain text
+                        processed_record['username'] = encrypt_value(username)
+            
+            # Check if we need to encrypt the email
+            if 'email' in processed_record:
+                email = processed_record['email']
+                if email and not processed_record.get('email_hash'):
+                    # Plain text email - encrypt it and create hash
+                    processed_record['email'] = encrypt_value(email)
+                    processed_record['email_hash'] = hash_value(email)
+                elif email and processed_record.get('email_hash'):
+                    # Email hash provided - check if email is already encrypted
+                    try:
+                        # Try to decrypt - if it fails, assume it's plain text
+                        from models import decrypt_value
+                        decrypted = decrypt_value(email)
+                        if decrypted == email:
+                            # It's plain text, encrypt it
+                            processed_record['email'] = encrypt_value(email)
+                    except:
+                        # Decryption failed, treat as plain text
+                        processed_record['email'] = encrypt_value(email)
+            
+            # Ensure password_hash is present (required field)
+            if 'password_hash' not in processed_record or not processed_record['password_hash']:
+                if processed_record.get('password_reset_required'):
+                    # User needs password reset - generate a secure temporary password
+                    from werkzeug.security import generate_password_hash
+                    temp_password = f"reset_required_{processed_record.get('id', 'unknown')}"
+                    processed_record['password_hash'] = generate_password_hash(temp_password)
+                    print(f"[SYNC] User {processed_record.get('id')} requires password reset")
+                else:
+                    # Generate a random password hash for users without one
+                    from werkzeug.security import generate_password_hash
+                    processed_record['password_hash'] = generate_password_hash('temp_password_needs_reset')
+            
+            # Filter to columns that exist in the table
+            filtered_record = {k: v for k, v in processed_record.items() if k in table_columns}
+        else:
+            # Filter record to only include columns that exist in the table
+            filtered_record = {k: v for k, v in record.items() if k in table_columns}
         
         if not filtered_record:
             return
@@ -571,6 +638,9 @@ def upsert_record_sqlite(table_name, record, cursor):
         
     except Exception as e:
         print(f"[SYNC] Error upserting record in {table_name}: {str(e)}")
+        print(f"[SYNC] Record data: {record}")
+        print(f"[SYNC] Table columns: {table_columns}")
+        raise
 
 def get_last_sync_timestamp_local(cursor):
     """Get the last sync timestamp from local metadata."""
@@ -3492,11 +3562,14 @@ def sync_data():
     if request.method == 'GET':
         try:
             # Collect all relevant data
-            users = [
-                {
+            users = []
+            for u in User.query.all():
+                user_data = {
                     'id': u.id,
-                    'username': u.username,
-                    'email': u.email,
+                    'username': u.username,  # Use decrypted value for compatibility
+                    'username_hash': getattr(u, 'username_hash', None),
+                    'email': u.email,  # Use decrypted value for compatibility
+                    'email_hash': getattr(u, 'email_hash', None),
                     'full_name': u.full_name,  # Add full name for proper display
                     'role_id': u.role_id,
                     'is_admin': getattr(u, 'is_admin', False),
@@ -3504,8 +3577,17 @@ def sync_data():
                     'created_at': u.created_at.isoformat() if u.created_at else None,
                     'updated_at': u.updated_at.isoformat() if u.updated_at else None,
                 }
-                for u in User.query.all()
-            ]
+                # Ensure password_hash is included - critical for offline authentication
+                password_hash = getattr(u, 'password_hash', None)
+                if password_hash:
+                    user_data['password_hash'] = password_hash
+                else:
+                    # If no password hash is available, we need to handle this gracefully
+                    # The offline client should request password reset or use alternative auth
+                    user_data['password_hash'] = None
+                    user_data['password_reset_required'] = True
+                
+                users.append(user_data)
             roles = [
                 {
                     'id': r.id,

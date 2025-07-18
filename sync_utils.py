@@ -42,12 +42,32 @@ def import_json_to_sqlite(json_path, db_path):
     # Import users
     for u in data.get('users', []):
         try:
-            c.execute("""
-                INSERT OR REPLACE INTO users (id, username, email, role_id, is_admin, full_name, password_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (u['id'], u['username'], u['email'], u['role_id'], 
-                  int(u.get('is_admin', False)), u.get('full_name', ''), 
-                  u.get('password_hash', 'default_hash')))
+            # Handle both old and new data formats
+            if 'username_hash' in u and 'email_hash' in u:
+                # New format with encrypted fields
+                c.execute("""
+                    INSERT OR REPLACE INTO users (id, username, username_hash, email, email_hash, 
+                                                role_id, is_admin, full_name, password_hash, 
+                                                created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (u['id'], u.get('username', ''), u.get('username_hash', ''), 
+                      u.get('email', ''), u.get('email_hash', ''), u['role_id'], 
+                      int(u.get('is_admin', False)), u.get('full_name', ''), 
+                      u.get('password_hash', 'default_hash'), u.get('created_at'), u.get('updated_at')))
+            else:
+                # Old format - need to encrypt and hash
+                from models import encrypt_value, hash_value
+                username = u.get('username', '')
+                email = u.get('email', '')
+                c.execute("""
+                    INSERT OR REPLACE INTO users (id, username, username_hash, email, email_hash, 
+                                                role_id, is_admin, full_name, password_hash, 
+                                                created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (u['id'], encrypt_value(username), hash_value(username), 
+                      encrypt_value(email), hash_value(email), u['role_id'], 
+                      int(u.get('is_admin', False)), u.get('full_name', ''), 
+                      u.get('password_hash', 'default_hash'), u.get('created_at'), u.get('updated_at')))
         except Exception as e:
             print(f"[sync_utils] Error inserting user: {u} | {e}")
     # Import roles
