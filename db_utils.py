@@ -8,16 +8,21 @@ from flask import current_app
 from sqlalchemy import text
 
 def get_db_connection():
-    """Get a connection to the PostgreSQL database"""
-    # Get the database URL from the app config or environment
+    """Get a connection to the correct database (SQLite for offline, PostgreSQL for online)"""
+    import sqlite3
     db_url = current_app.config.get('SQLALCHEMY_DATABASE_URI') or os.environ.get('DATABASE_URL')
-    
     if not db_url:
         raise ValueError("Database URL is not configured")
-    
-    # Connect to the database
-    conn = psycopg2.connect(db_url)
-    return conn
+    if db_url.startswith('sqlite:///'):
+        # Use SQLite for offline mode
+        db_path = db_url.replace('sqlite:///', '', 1)
+        conn = sqlite3.connect(db_path)
+        return conn
+    else:
+        # Use PostgreSQL for online mode
+        import psycopg2
+        conn = psycopg2.connect(db_url)
+        return conn
 
 def execute_sql(sql_statement, params=None):
     """
