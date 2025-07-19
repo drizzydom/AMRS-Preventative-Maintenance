@@ -1,3 +1,4 @@
+# ...existing code...
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
 def ensure_large_user_columns():
     """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
@@ -217,6 +218,45 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# --- TOKEN-BASED AUTHENTICATION FOR OFFLINE APP ---
+import secrets
+from datetime import datetime, timedelta
+
+# Helper for token-based API authentication
+def check_token_auth():
+    token = request.headers.get('X-API-Token') or request.args.get('token')
+    if not token:
+        return None
+    user = User.query.filter_by(api_token=token).first()
+    if user and user.api_token_expiration and user.api_token_expiration > datetime.now() and is_admin_user(user):
+        return user
+    return None
+
+# Endpoint to issue a new token for the current admin user
+@app.route('/api/token/issue', methods=['POST'])
+@login_required
+def issue_api_token():
+    if not is_admin_user(current_user):
+        return jsonify({'error': 'Unauthorized'}), 403
+    # Generate a new token and set expiration (e.g., 30 days)
+    token = secrets.token_urlsafe(32)
+    current_user.api_token = token
+    current_user.api_token_expiration = datetime.now() + timedelta(days=30)
+    db.session.commit()
+    return jsonify({'token': token, 'expires': current_user.api_token_expiration.isoformat()})
+
+# Endpoint to validate a token (for offline app to check validity)
+@app.route('/api/token/validate', methods=['POST'])
+def validate_api_token():
+    data = request.get_json(force=True)
+    token = data.get('token')
+    if not token:
+        return jsonify({'valid': False, 'reason': 'No token provided'}), 400
+    user = User.query.filter_by(api_token=token).first()
+    if user and user.api_token_expiration and user.api_token_expiration > datetime.now():
+        return jsonify({'valid': True, 'user_id': user.id, 'expires': user.api_token_expiration.isoformat()})
+    return jsonify({'valid': False, 'reason': 'Invalid or expired token'}), 401
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
@@ -3746,32 +3786,12 @@ def check_api_auth():
 @app.route('/api/sync/data', methods=['GET', 'POST'])
 def sync_data():
     """Two-way sync endpoint: GET returns all data, POST accepts pushed data from offline clients. Admins only."""
-    if not check_api_auth():
+    # Accept either session/basic auth (for web) or token auth (for offline)
+    if not (check_api_auth() or check_token_auth()):
         return jsonify({'error': 'Unauthorized'}), 403
     if request.method == 'GET':
         try:
-            # Collect all relevant data
-            users = []
-            for u in User.query.all():
-                # Always send plain (decrypted) username/email for sync
-                user_data = {
-                    'id': u.id,
-                    'username': u.username,  # Plain value
-                    'email': u.email,        # Plain value
-                    'full_name': u.full_name,
-                    'role_id': u.role_id,
-                    'is_admin': getattr(u, 'is_admin', False),
-                    'active': getattr(u, 'active', True),
-                    'created_at': u.created_at.isoformat() if u.created_at else None,
-                    'updated_at': u.updated_at.isoformat() if u.updated_at else None,
-                }
-                password_hash = getattr(u, 'password_hash', None)
-                if password_hash:
-                    user_data['password_hash'] = password_hash
-                else:
-                    user_data['password_hash'] = None
-                    user_data['password_reset_required'] = True
-                users.append(user_data)
+            # Collect all relevant data (users are NOT included in sync)
             roles = [
                 {
                     'id': r.id,
@@ -3880,7 +3900,7 @@ def sync_data():
             ]
             # Optionally add audit tasks, completions, etc.
             data = {
-                'users': users,
+                # 'users': users,  # User sync removed
                 'roles': roles,
                 'sites': sites,
                 'machines': machines,
@@ -3894,29 +3914,11 @@ def sync_data():
             app.logger.error(f"Error in sync_data: {e}")
             return jsonify({'error': str(e)}), 500
     elif request.method == 'POST':
-        # Accept pushed data from offline client and merge into DB
+        # Accept pushed data from offline client and merge into DB (users are NOT merged)
         try:
             data = request.get_json(force=True)
             # --- Users ---
-            for u in data.get('users', []):
-                user = User.query.get(u['id'])
-                if user:
-                    # Only encrypt/hash when saving to DB
-                    user.username = u['username']  # property setter will encrypt and hash
-                    user.email = u['email']        # property setter will encrypt and hash
-                    user.full_name = u.get('full_name')
-                    user.role_id = u['role_id']
-                    user.active = u.get('active', True)
-                else:
-                    user = User(
-                        id=u['id'],
-                        full_name=u.get('full_name'),
-                        role_id=u['role_id'],
-                        active=u.get('active', True)
-                    )
-                    user.username = u['username']  # property setter will encrypt and hash
-                    user.email = u['email']        # property setter will encrypt and hash
-                    db.session.add(user)
+            # User sync removed: do not process 'users' from incoming data
             # --- Roles ---
             for r in data.get('roles', []):
                 role = Role.query.get(r['id'])
