@@ -123,11 +123,10 @@ from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, Audit
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
-@property
 def is_admin(self):
-    """Add is_admin property to User class for template compatibility"""
+    """Add is_admin property to User class for template compatibility (read-only)"""
     return is_admin_user(self)
-User.is_admin = is_admin
+User.is_admin = property(is_admin)
 
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
