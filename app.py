@@ -3880,12 +3880,12 @@ def sync_data():
                     user.email = u['email']
                     user.full_name = u.get('full_name')  # Add full_name sync
                     user.role_id = u['role_id']
-                    user.is_admin = u.get('is_admin', False)
+                    # user.is_admin = u.get('is_admin', False)  # Removed: is_admin is a read-only property
                     user.active = u.get('active', True)
                 else:
                     user = User(
                         id=u['id'], full_name=u.get('full_name'),  # Add full_name sync
-                        role_id=u['role_id'], is_admin=u.get('is_admin', False), active=u.get('active', True)
+                        role_id=u['role_id'], active=u.get('active', True)  # Removed: is_admin is a read-only property
                     )
                     user.username = u['username']
                     user.email = u['email']
