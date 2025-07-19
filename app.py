@@ -1,3 +1,30 @@
+# --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
+def ensure_large_user_columns():
+    """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
+    try:
+        from sqlalchemy import text
+        engine = db.engine
+        with engine.connect() as conn:
+            # Check column sizes
+            result = conn.execute(text("""
+                SELECT column_name, character_maximum_length
+                FROM information_schema.columns
+                WHERE table_name = 'users' AND column_name IN ('username', 'email')
+            """))
+            needs_update = []
+            for row in result:
+                if row['character_maximum_length'] is not None and row['character_maximum_length'] < 1024:
+                    needs_update.append(row['column_name'])
+            for col in needs_update:
+                print(f"[SCHEMA] Altering users.{col} to VARCHAR(1024)...")
+                try:
+                    conn.execute(text(f"ALTER TABLE users ALTER COLUMN {col} TYPE VARCHAR(1024);"))
+                    print(f"[SCHEMA] users.{col} column updated to VARCHAR(1024)")
+                except Exception as e:
+                    print(f"[SCHEMA] Error updating users.{col}: {e}")
+    except Exception as e:
+        print(f"[SCHEMA] Error ensuring large user columns: {e}")
+
 # --- Utility: Add change to sync_queue ---
 import json as _json
 from sqlalchemy.exc import SQLAlchemyError
@@ -777,6 +804,9 @@ db.init_app(app)
 
 # --- Ensure sync columns and cleanup are only called after db.init_app(app) and within app context ---
 with app.app_context():
+    # --- Ensure large user columns on Render ---
+    if is_render():
+        ensure_large_user_columns()
     cleanup_expired_sync_queue()
     if not is_render() and ("offline_mode" in locals() and offline_mode):
         try:

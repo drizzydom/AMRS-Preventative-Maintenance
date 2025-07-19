@@ -70,9 +70,9 @@ class User(UserMixin, db.Model):
     """User model for authentication and authorization"""
     __tablename__ = 'users'  # Explicit table name for PostgreSQL conventions
     id = db.Column(db.Integer, primary_key=True)
-    _username = db.Column('username', db.Text, unique=True, nullable=False, index=True)
+    _username = db.Column('username', db.String(1024), unique=True, nullable=False, index=True)
     username_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    _email = db.Column('email', db.Text, unique=True, nullable=False)
+    _email = db.Column('email', db.String(1024), unique=True, nullable=False)
     email_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
