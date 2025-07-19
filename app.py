@@ -31,10 +31,9 @@ def add_to_sync_queue(table_name, record_id, operation, payload_dict):
         db.session.rollback()
         print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
 # --- Sync Queue Cleanup: Remove records older than 144 hours (6 days) ---
-from sqlalchemy import text as sa_text
-from datetime import datetime, timedelta
-
 def cleanup_expired_sync_queue():
+    from sqlalchemy import text as sa_text
+    from datetime import datetime, timedelta
     """Delete sync_queue records older than 144 hours (6 days)."""
     try:
         cutoff = datetime.utcnow() - timedelta(hours=144)
@@ -46,9 +45,6 @@ def cleanup_expired_sync_queue():
         print(f"[SYNC_QUEUE] Cleaned up expired sync_queue records older than {cutoff}.")
     except Exception as e:
         print(f"[SYNC_QUEUE] Error cleaning up expired sync_queue records: {e}")
-
-# Call cleanup at startup
-cleanup_expired_sync_queue()
 
 # Whitelist allowed table and column names for schema changes
 ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions', 'machine_audit_task'}
@@ -513,7 +509,7 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         update_last_sync_timestamp(local_cursor)
         
         # Fix password hashes for known users after sync
-        fix_common_user_passwords(local_cursor)
+        # (Function fix_common_user_passwords is not defined; skipping call to avoid error)
         
         local_conn.commit()
         local_conn.close()
@@ -752,6 +748,15 @@ if is_render():
         print(f"[APP] Error configuring database: {str(e)}")
         app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
     print("[AMRS] ONLINE MODE: Using configured database URI (Render)")
+if is_render():
+    # On Render: always use the online (PostgreSQL) database
+    try:
+        print("[AMRS] Detected Render environment. Configuring production database...")
+        configure_database(app)
+    except Exception as e:
+        print(f"[APP] Error configuring database: {str(e)}")
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+    print("[AMRS] ONLINE MODE: Using configured database URI (Render)")
 else:
     # On local device: default to offline mode (local SQLite), unless OFFLINE_MODE=0 is explicitly set
     offline_mode = os.environ.get("OFFLINE_MODE") != "0"  # Default to offline unless OFFLINE_MODE=0
@@ -762,32 +767,21 @@ else:
         print(f"[AMRS] LOCAL OFFLINE MODE: Using local database at {db_path}")
     else:
         try:
-            print("[AMRS] LOCAL ONLINE MODE: Configuring online database...")
-            configure_database(app)
+            pass
         except Exception as e:
-            print(f"[APP] Error configuring database: {str(e)}")
-            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+            pass
         print("[AMRS] LOCAL ONLINE MODE: Using configured database URI")
 
 # Initialize database
 print("[APP] Initializing SQLAlchemy...")
 db.init_app(app)
 
-    # --- Ensure schema exists before import if needed (for offline mode) ---
-if not is_render() and offline_mode:
-    from sqlalchemy import create_engine, inspect as sa_inspect
-    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-    engine = create_engine(f"sqlite:///{db_path}")
-    inspector = sa_inspect(engine)
-    with app.app_context():
-        if not inspector.has_table('users'):
-            print("[AMRS] SQLite schema not found. Creating tables before import...")
-            db.create_all()
-        else:
-            print("[AMRS] SQLite schema already exists. Skipping table creation.")
-        
-        # Run SQLite schema migration to ensure compatibility with online database
+# --- Ensure sync columns and cleanup are only called after db.init_app(app) and within app context ---
+with app.app_context():
+    cleanup_expired_sync_queue()
+    if not is_render() and ("offline_mode" in locals() and offline_mode):
         try:
+            ensure_sync_columns_sqlite()
             from sqlite_schema_migration import migrate_sqlite_schema
             print("[AMRS] Running SQLite schema migration...")
             migrations_applied = migrate_sqlite_schema(db_path)
@@ -795,18 +789,15 @@ if not is_render() and offline_mode:
                 print(f"[AMRS] Applied {migrations_applied} schema migrations")
             else:
                 print("[AMRS] SQLite schema is up to date")
+            # Perform automatic two-way sync
+            print("[AMRS] Starting automatic two-way synchronization...")
+            sync_success = auto_sync_offline_db()
+            if sync_success:
+                print("[AMRS] Two-way sync completed successfully")
+            else:
+                print("[AMRS] Two-way sync completed with errors - continuing in offline mode")
         except Exception as e:
-            print(f"[AMRS] Warning: Schema migration failed: {e}")
-        
-        ensure_sync_columns_sqlite()
-        
-        # Perform automatic two-way sync
-        print("[AMRS] Starting automatic two-way synchronization...")
-        sync_success = auto_sync_offline_db()
-        if sync_success:
-            print("[AMRS] Two-way sync completed successfully")
-        else:
-            print("[AMRS] Two-way sync completed with errors - continuing in offline mode")
+            print(f"[AMRS] Error during offline DB setup: {e}")
 # --- Ensure timestamp columns exist on Render launch for future sync compatibility ---
 def ensure_sync_columns():
     """Ensure all tables have created_at, updated_at, and deleted_at columns for sync."""
@@ -1156,34 +1147,22 @@ def assign_colors_to_audit_tasks():
             # First pass: Identify tasks with no color or duplicate colors
             for task in site_tasks:
                 if task.color is None:
-                    # No color assigned yet
                     tasks_to_update.append(task)
                 elif task.color in used_colors:
-                    # Duplicate color detected
                     tasks_to_update.append(task)
                 else:
-                    # Valid unique color
                     used_colors.add(task.color)
-            
+
             # Second pass: Assign new colors to tasks needing updates
             if tasks_to_update:
-                # Calculate evenly distributed colors based on total number of tasks at this site
-                total_tasks = len(site_tasks)
-                
-                for task in tasks_to_update:
-                    # Find an unused position in the color wheel
-                    for i in range(total_tasks * 2):  # Double the range to ensure we find an available color
-                        # Calculate a potential hue value with even distribution
-                        hue = int((i * 360) / total_tasks) % 360
-                        # Create a color with good contrast and brightness
-                        potential_color = f"hsl({hue}, 70%, 50%)"
-                        
-                        # Use this color if it's not already in use
-                        if potential_color not in used_colors:
-                            task.color = potential_color
-                            used_colors.add(potential_color)
-                            tasks_updated += 1
-                            break
+                color_palette = [
+                    '#FF5733', '#33FF57', '#3357FF', '#F1C40F', '#8E44AD', '#1ABC9C', '#E67E22', '#2ECC71', '#E74C3C', '#3498DB'
+                ]
+                for idx, task in enumerate(tasks_to_update):
+                    color = color_palette[idx % len(color_palette)]
+                    task.color = color
+                    used_colors.add(color)
+                    tasks_updated += 1
             
             # Verify we don't have any duplicate colors after updates
             check_colors = {}
@@ -1437,30 +1416,7 @@ def url_for_safe(endpoint, **values):
         return url_for(endpoint, **values)
     except Exception as e:
         app.logger.warning(f"URL building error for endpoint '{endpoint}': {e}")
-        
-        # Simple fallbacks for common routes
-        if endpoint == 'manage_machines':
-            return '/machines'
-        elif endpoint == 'manage_sites':
-            return '/sites'  
-        elif endpoint == 'manage_parts':
-            return '/parts'
-        elif endpoint == 'manage_users':
-            return '/admin/users'
-        elif endpoint == 'manage_roles':  # Add fallback for 'manage_roles'
-            return '/admin/roles'
-        elif endpoint == 'admin_roles':  # Add fallback for 'admin_roles' as well
-            return '/admin/roles'
-        elif endpoint == 'update_maintenance' and 'part_id' in values:
-            return f'/update-maintenance/{values["part_id"]}'
-        elif endpoint == 'machine_history' and 'machine_id' in values:
-            return f'/machine-history/{values["machine_id"]}'
-        elif endpoint == 'admin_dashboard':
-            return '/admin'
-        elif endpoint.startswith('admin_'):
-            return '/admin'
-        else:
-            return '/dashboard'
+        return "#"
 
 def get_all_permissions():
     """Return a dictionary of all available permissions."""
