@@ -1516,9 +1516,45 @@ def get_all_permissions():
     return permissions
 
 # Add root route handler
+
+# --- Enhanced Login Logic for Online Token Validation and Offline Token Use ---
+import requests
+import json
+
+TOKEN_FILE = os.path.join(BASE_DIR, 'user_token.json')
+
+def store_token(token, expires):
+    with open(TOKEN_FILE, 'w') as f:
+        json.dump({'token': token, 'expires': expires}, f)
+
+def load_token():
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE, 'r') as f:
+            return json.load(f)
+    return None
+
+def clear_token():
+    if os.path.exists(TOKEN_FILE):
+        os.remove(TOKEN_FILE)
+
+def is_token_valid(token_data):
+    if not token_data:
+        return False
+    try:
+        expires = datetime.fromisoformat(token_data['expires'])
+        return expires > datetime.now()
+    except Exception:
+        return False
+
 @app.route('/')
 def index():
     """Homepage route that redirects to dashboard if logged in or shows login page."""
+    # Check for valid token and auto-login if present
+    token_data = load_token()
+    if token_data and is_token_valid(token_data):
+        # Optionally, validate token with server here if desired
+        # For now, just bypass login
+        return redirect(url_for('dashboard'))
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return render_template('login.html')
@@ -3564,44 +3600,48 @@ def update_notification_preferences():
     
     return redirect(url_for('user_profile'))
 
+
+# --- Login Route: Online Validation and Token Storage ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle userlogin."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        remember = request.form.get('remember') == 'on'
-        # Add debug for login attempts
-        app.logger.debug(f"Login attempt: username={username}, remember={remember}")
+        # Try online validation if not on Render
+        online_url = os.environ.get('AMRS_ONLINE_URL')
+        if online_url and not is_render():
+            try:
+                # Clean up URL
+                clean_url = online_url.rstrip('/')
+                if clean_url.endswith('/api'):
+                    clean_url = clean_url[:-4]
+                # Request token from online API
+                resp = requests.post(f"{clean_url}/api/token/issue",
+                                    data={'username': username, 'password': password})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    token = data.get('token')
+                    expires = data.get('expires')
+                    if token and expires:
+                        store_token(token, expires)
+                        flash('Login successful (online).', 'success')
+                        return redirect(url_for('dashboard'))
+                    else:
+                        flash('Failed to retrieve token from server.', 'danger')
+                else:
+                    flash('Invalid credentials (online validation failed).', 'danger')
+            except Exception as e:
+                flash(f'Error connecting to online service: {e}', 'danger')
+        # Fallback: local login
         user = User.query.filter_by(username_hash=hash_value(username)).first()
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
-            # Set remember preference and token
-            user.set_remember_preference(remember)
-            if remember:
-                token = user.generate_remember_token()
-                db.session.commit()
-                # Set cookie for persistent login (30 days)
-                resp = redirect(request.args.get('next') or url_for('dashboard'))
-                resp.set_cookie('remember_token', token, max_age=30*24*60*60, httponly=True, samesite='Lax')
-                app.logger.debug(f"Remember token set for user_id={user.id}")
-                return resp
-            else:
-                user.clear_remember_token()
-                db.session.commit()
-            app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
+            flash('Login successful (offline).', 'success')
+            return redirect(url_for('dashboard'))
         else:
-            if user:
-                app.logger.debug(f"Login failed: Invalid password for username={username}")
-            else:
-                app.logger.debug(f"Login failed: No user found with username={username}")
-            flash('Invalid username or password', 'danger')
-    
+            flash('Invalid credentials.', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')
