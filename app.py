@@ -3753,29 +3753,24 @@ def sync_data():
             # Collect all relevant data
             users = []
             for u in User.query.all():
+                # Always send plain (decrypted) username/email for sync
                 user_data = {
                     'id': u.id,
-                    'username': u.username,  # Use decrypted value for compatibility
-                    'username_hash': getattr(u, 'username_hash', None),
-                    'email': u.email,  # Use decrypted value for compatibility
-                    'email_hash': getattr(u, 'email_hash', None),
-                    'full_name': u.full_name,  # Add full name for proper display
+                    'username': u.username,  # Plain value
+                    'email': u.email,        # Plain value
+                    'full_name': u.full_name,
                     'role_id': u.role_id,
                     'is_admin': getattr(u, 'is_admin', False),
                     'active': getattr(u, 'active', True),
                     'created_at': u.created_at.isoformat() if u.created_at else None,
                     'updated_at': u.updated_at.isoformat() if u.updated_at else None,
                 }
-                # Ensure password_hash is included - critical for offline authentication
                 password_hash = getattr(u, 'password_hash', None)
                 if password_hash:
                     user_data['password_hash'] = password_hash
                 else:
-                    # If no password hash is available, we need to handle this gracefully
-                    # The offline client should request password reset or use alternative auth
                     user_data['password_hash'] = None
                     user_data['password_reset_required'] = True
-                
                 users.append(user_data)
             roles = [
                 {
@@ -3906,19 +3901,21 @@ def sync_data():
             for u in data.get('users', []):
                 user = User.query.get(u['id'])
                 if user:
-                    user.username = u['username']
-                    user.email = u['email']
-                    user.full_name = u.get('full_name')  # Add full_name sync
+                    # Only encrypt/hash when saving to DB
+                    user.username = u['username']  # property setter will encrypt and hash
+                    user.email = u['email']        # property setter will encrypt and hash
+                    user.full_name = u.get('full_name')
                     user.role_id = u['role_id']
-                    # user.is_admin = u.get('is_admin', False)  # Removed: is_admin is a read-only property
                     user.active = u.get('active', True)
                 else:
                     user = User(
-                        id=u['id'], full_name=u.get('full_name'),  # Add full_name sync
-                        role_id=u['role_id'], active=u.get('active', True)  # Removed: is_admin is a read-only property
+                        id=u['id'],
+                        full_name=u.get('full_name'),
+                        role_id=u['role_id'],
+                        active=u.get('active', True)
                     )
-                    user.username = u['username']
-                    user.email = u['email']
+                    user.username = u['username']  # property setter will encrypt and hash
+                    user.email = u['email']        # property setter will encrypt and hash
                     db.session.add(user)
             # --- Roles ---
             for r in data.get('roles', []):
