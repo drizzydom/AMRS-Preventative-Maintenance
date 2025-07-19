@@ -1252,12 +1252,8 @@ with app.app_context():
             ).all()
             
             # Also get users with is_admin=True as a fallback
+            # is_admin is now a property, not a column; skip this filter
             admin_flag_users = []
-            try:
-                # Try to query is_admin column if it exists
-                admin_flag_users = User.query.filter_by(is_admin=True).all()
-            except:
-                print("[APP] is_admin column not available, skipping that filter")
             
             # Combine the lists without duplicates
             all_admin_users = list({user.id: user for user in admin_users + admin_flag_users}.values())
