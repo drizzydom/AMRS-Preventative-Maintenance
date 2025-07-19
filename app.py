@@ -1,4 +1,41 @@
 
+# Whitelist allowed table and column names for schema changes
+ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions', 'machine_audit_task'}
+ALLOWED_COLUMNS = {
+    'users': {'last_login', 'reset_token', 'reset_token_expiration', 'created_at', 'updated_at'},
+    'roles': {'created_at', 'updated_at'},
+    'sites': {'created_at', 'updated_at'},
+    'machines': {'created_at', 'updated_at'},
+    'parts': {'created_at', 'updated_at'},
+    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
+    'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
+    'audit_task_completions': {'created_at', 'updated_at'},
+    'machine_audit_task': {'audit_task_id', 'machine_id'}
+}
+
+# --- Ensure sync columns exist in SQLite for offline mode ---
+def ensure_sync_columns_sqlite():
+    """Ensure all tables in SQLite have created_at, updated_at, deleted_at columns."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    sync_columns = [
+        ('created_at', 'TIMESTAMP'),
+        ('updated_at', 'TIMESTAMP'),
+        ('deleted_at', 'TIMESTAMP')
+    ]
+    for table in ALLOWED_TABLES:
+        if inspector.has_table(table):
+            existing_columns = {col['name'] for col in inspector.get_columns(table)}
+            with db.engine.connect() as conn:
+                for col_name, col_type in sync_columns:
+                    if col_name not in existing_columns:
+                        print(f"[SYNC] Adding {col_name} to {table} (SQLite)...")
+                        # SQLite does not support IF NOT EXISTS for ADD COLUMN
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+    print("[SYNC] Sync columns ensured in SQLite.")
+
+
 # Standard library imports
 import os
 import sys
@@ -32,6 +69,7 @@ import smtplib
 from jinja2 import Environment, FileSystemLoader
 import csv
 import json
+import requests
 
 # Local imports
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
@@ -61,7 +99,15 @@ def parts_status(self, current_date=None):
     # Loop through all machines at this site
     for machine in self.machines:
         for part in machine.parts:
+            # Skip parts without next_maintenance date
+            if not part.next_maintenance:
+                continue
+                
             days_until = (part.next_maintenance - current_date).days
+            
+            # Skip if days_until is None (shouldn't happen but safety check)
+            if days_until is None:
+                continue
             
             # Overdue parts
             if days_until < 0:
@@ -228,9 +274,18 @@ ensure_env_file()
 ensure_email_templates()
 
 # Print debug info about environment
+
 print(f"[APP] Running in environment: {'RENDER' if os.environ.get('RENDER') else 'LOCAL'}")
 print(f"[APP] Working directory: {os.getcwd()}")
 print(f"[APP] Base directory: {BASE_DIR}")
+
+# --- Ensure sync_queue table exists on startup ---
+try:
+    import add_sync_queue_table
+    add_sync_queue_table.upgrade()
+    print('[STARTUP] Ensured sync_queue table exists.')
+except Exception as e:
+    print(f'[STARTUP] Error ensuring sync_queue table: {e}')
 
 try:
     # Import cache configuration
@@ -257,18 +312,476 @@ app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'htt
 # Ensure URLs work with and without trailing slashes
 app.url_map.strict_slashes = False
 
-# Configure the database
-try:
-    print("[APP] Configuring database...")
-    configure_database(app)
-except Exception as e:
-    print(f"[APP] Error configuring database: {str(e)}")
-    # Set a fallback configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+
+
+# --- Environment/Platform Detection and Database Switch ---
+def is_render():
+    """Detect if running on Render.com (production cloud)."""
+    return os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+
+def auto_sync_offline_db():
+    """Automatically synchronize the local SQLite database with the online database using two-way sync."""
+    if is_render():
+        print("[SYNC] Running on Render - no offline sync needed")
+        return True
+    
+    # Check if we have the necessary environment variables for online access
+    try:
+        import requests
+        from datetime import datetime
+        
+        # Check if we have online connectivity by trying to reach the API
+        online_url = os.environ.get('AMRS_ONLINE_URL')
+        online_username = os.environ.get('AMRS_ADMIN_USERNAME') 
+        online_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        
+        # Strip quotes from URL if present
+        if online_url:
+            online_url = online_url.strip('"\'')
+        
+        if not all([online_url, online_username, online_password]):
+            print("[SYNC] Missing online credentials - operating in offline-only mode")
+            print("[SYNC] Set AMRS_ONLINE_URL, AMRS_ADMIN_USERNAME, AMRS_ADMIN_PASSWORD for sync")
+            return True
+            
+        print("[SYNC] Starting two-way database synchronization...")
+        
+        # Test connectivity and authentication
+        session = requests.Session()
+        
+        # Try API-based authentication first, then fall back to session-based auth
+        auth_success = False
+        
+        # Always try session-based login for data endpoint access
+        try:
+            # Clean up URL to avoid double /api - handle all cases including trailing slashes
+            clean_url = online_url.rstrip('/')
+            if clean_url.endswith('/api'):
+                clean_url = clean_url[:-4]  # Remove /api
+            login_resp = session.post(f"{clean_url}/login", data={
+                'username': online_username,
+                'password': online_password
+            })
+            
+            if login_resp.status_code == 200 and 'dashboard' in login_resp.text.lower():
+                auth_success = True
+                print("[SYNC] Successfully authenticated via session login")
+        except Exception as e:
+            print(f"[SYNC] Session login failed: {e}")
+            
+        # Fallback: Try basic auth for status endpoint test
+        if not auth_success:
+            try:
+                # Clean up URL to avoid double /api - handle all cases including trailing slashes
+                clean_url = online_url.rstrip('/')
+                if clean_url.endswith('/api'):
+                    clean_url = clean_url[:-4]  # Remove /api
+                test_resp = session.get(f"{clean_url}/api/sync/status", 
+                                      auth=(online_username, online_password))
+                if test_resp.status_code == 200:
+                    auth_success = True
+                    print("[SYNC] Successfully authenticated via API basic auth")
+            except:
+                pass
+        
+        if not auth_success:
+            print(f"[SYNC] Failed to authenticate with online system")
+            return False
+        
+        # Get local database path
+        local_db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        
+        # Perform sync
+        sync_success = perform_bidirectional_sync(session, online_url, local_db_path, online_username, online_password)
+        
+        if sync_success:
+            print("[SYNC] Two-way synchronization completed successfully")
+        else:
+            print("[SYNC] Synchronization completed with some errors")
+            
+        return sync_success
+        
+    except Exception as e:
+        print(f"[SYNC] Sync failed - operating in offline mode: {str(e)}")
+        return False
+
+def perform_bidirectional_sync(session, online_url, local_db_path, username, password):
+    """Perform the actual bidirectional sync using the API."""
+    try:
+        import sqlite3
+        import requests
+        from datetime import datetime
+        
+        # Step 1: Download data from online system
+        print("[SYNC] Downloading data from online system...")
+        
+        # Use the authenticated session (no basic auth needed since we already logged in)
+        # Clean up URL to avoid double /api/api - handle all cases including trailing slashes
+        clean_url = online_url.rstrip('/')
+        if clean_url.endswith('/api'):
+            clean_url = clean_url[:-4]  # Remove /api
+        download_resp = session.get(f"{clean_url}/api/sync/data")
+        if download_resp.status_code != 200:
+            print(f"[SYNC] Failed to download data: {download_resp.status_code}")
+            return False
+            
+        online_data = download_resp.json()
+        
+        # Step 2: Update local database with online changes
+        local_conn = sqlite3.connect(local_db_path)
+        local_cursor = local_conn.cursor()
+        
+        # Import online data into local database
+        import_online_data_to_local(online_data, local_cursor)
+        local_conn.commit()
+        
+        # Step 3: Get local changes to upload
+        print("[SYNC] Preparing local changes for upload...")
+        local_changes = get_local_changes_for_upload(local_cursor)
+        
+        # Step 4: Upload local changes to online system
+        if local_changes:
+            print(f"[SYNC] Uploading {sum(len(v) for v in local_changes.values())} local changes...")
+            
+            upload_resp = session.post(f"{clean_url}/api/sync/data", 
+                                     json=local_changes,
+                                     headers={'Content-Type': 'application/json'})
+            
+            if upload_resp.status_code != 200:
+                print(f"[SYNC] Failed to upload changes: {upload_resp.status_code}")
+                local_conn.close()
+                return False
+                
+            print("[SYNC] Successfully uploaded local changes")
+        else:
+            print("[SYNC] No local changes to upload")
+        
+        # Update sync timestamp
+        update_last_sync_timestamp(local_cursor)
+        
+        # Fix password hashes for known users after sync
+        fix_common_user_passwords(local_cursor)
+        
+        local_conn.commit()
+        local_conn.close()
+        
+        return True
+        
+    except Exception as e:
+        print(f"[SYNC] Error during bidirectional sync: {str(e)}")
+        return False
+
+def import_online_data_to_local(online_data, cursor):
+    """Import downloaded online data into the local SQLite database."""
+    try:
+        # Import each table's data
+        for table_name, records in online_data.items():
+            if table_name not in ALLOWED_TABLES:
+                continue
+                
+            print(f"[SYNC] Importing {len(records)} records for table {table_name}")
+            
+            for record in records:
+                # Handle soft deletes by checking deleted_at
+                if record.get('deleted_at'):
+                    # Mark as deleted locally
+                    cursor.execute(f"""
+                        UPDATE {table_name} 
+                        SET deleted_at = ? 
+                        WHERE id = ?
+                    """, (record['deleted_at'], record['id']))
+                else:
+                    # Insert or update record
+                    upsert_record_sqlite(table_name, record, cursor)
+                    
+    except Exception as e:
+        print(f"[SYNC] Error importing online data: {str(e)}")
+        raise
+
+def get_local_changes_for_upload(cursor):
+    """Get local changes that need to be uploaded to the online system."""
+    try:
+        changes = {}
+        
+        # Get last sync timestamp
+        last_sync = get_last_sync_timestamp_local(cursor)
+        
+        for table_name in ALLOWED_TABLES:
+            if last_sync:
+                # Get records modified since last sync
+                cursor.execute(f"""
+                    SELECT * FROM {table_name} 
+                    WHERE updated_at > ? OR created_at > ?
+                    OR (deleted_at IS NOT NULL AND deleted_at > ?)
+                """, (last_sync, last_sync, last_sync))
+            else:
+                # First sync - get all records
+                cursor.execute(f"SELECT * FROM {table_name}")
+            
+            records = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            
+            # Convert to list of dictionaries
+            table_changes = []
+            for record in records:
+                record_dict = dict(zip(columns, record))
+                # Convert datetime objects to ISO strings for JSON serialization
+                for key, value in record_dict.items():
+                    if isinstance(value, datetime):
+                        record_dict[key] = value.isoformat()
+                table_changes.append(record_dict)
+            
+            if table_changes:
+                changes[table_name] = table_changes
+                
+        return changes
+        
+    except Exception as e:
+        print(f"[SYNC] Error getting local changes: {str(e)}")
+        return {}
+
+def upsert_record_sqlite(table_name, record, cursor):
+    """Insert or update a record in SQLite using UPSERT."""
+    try:
+        # Get table columns
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        table_info = cursor.fetchall()
+        table_columns = [col[1] for col in table_info]
+        
+        # Special handling for users table to ensure encryption fields are handled correctly
+        if table_name == 'users':
+            from models import encrypt_value, hash_value
+            
+            # Process the record to ensure proper encryption
+            processed_record = record.copy()
+            
+            # Check if we need to encrypt the username
+            if 'username' in processed_record:
+                username = processed_record['username']
+                if username and not processed_record.get('username_hash'):
+                    # Plain text username - encrypt it and create hash
+                    processed_record['username'] = encrypt_value(username)
+                    processed_record['username_hash'] = hash_value(username)
+                elif username and processed_record.get('username_hash'):
+                    # Username hash provided - check if username is already encrypted
+                    try:
+                        # Try to decrypt - if it fails, assume it's plain text
+                        from models import decrypt_value
+                        decrypted = decrypt_value(username)
+                        if decrypted == username:
+                            # It's plain text, encrypt it
+                            processed_record['username'] = encrypt_value(username)
+                    except:
+                        # Decryption failed, treat as plain text
+                        processed_record['username'] = encrypt_value(username)
+            
+            # Check if we need to encrypt the email
+            if 'email' in processed_record:
+                email = processed_record['email']
+                if email and not processed_record.get('email_hash'):
+                    # Plain text email - encrypt it and create hash
+                    processed_record['email'] = encrypt_value(email)
+                    processed_record['email_hash'] = hash_value(email)
+                elif email and processed_record.get('email_hash'):
+                    # Email hash provided - check if email is already encrypted
+                    try:
+                        # Try to decrypt - if it fails, assume it's plain text
+                        from models import decrypt_value
+                        decrypted = decrypt_value(email)
+                        if decrypted == email:
+                            # It's plain text, encrypt it
+                            processed_record['email'] = encrypt_value(email)
+                    except:
+                        # Decryption failed, treat as plain text
+                        processed_record['email'] = encrypt_value(email)
+            
+            # Ensure password_hash is present (required field)
+            if 'password_hash' not in processed_record or not processed_record['password_hash']:
+                if processed_record.get('password_reset_required'):
+                    # User needs password reset - generate a secure temporary password
+                    from werkzeug.security import generate_password_hash
+                    temp_password = f"reset_required_{processed_record.get('id', 'unknown')}"
+                    processed_record['password_hash'] = generate_password_hash(temp_password)
+                    print(f"[SYNC] User {processed_record.get('id')} requires password reset")
+                else:
+                    # Generate a random password hash for users without one
+                    from werkzeug.security import generate_password_hash
+                    processed_record['password_hash'] = generate_password_hash('temp_password_needs_reset')
+            
+            # Filter to columns that exist in the table
+            filtered_record = {k: v for k, v in processed_record.items() if k in table_columns}
+        else:
+            # Filter record to only include columns that exist in the table
+            filtered_record = {k: v for k, v in record.items() if k in table_columns}
+        
+        if not filtered_record:
+            return
+            
+        columns = list(filtered_record.keys())
+        placeholders = ', '.join(['?' for _ in columns])
+        
+        # Build UPSERT query for SQLite
+        if table_name == 'machine_audit_task':
+            # For association tables, use INSERT OR IGNORE since there's no ID column
+            # and we don't want to update existing associations
+            sql = f"""
+                INSERT OR IGNORE INTO {table_name} ({', '.join(columns)})
+                VALUES ({placeholders})
+            """
+        elif 'id' in columns:
+            update_clauses = ', '.join([f"{col} = excluded.{col}" for col in columns if col != 'id'])
+            sql = f"""
+                INSERT INTO {table_name} ({', '.join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT(id) DO UPDATE SET {update_clauses}
+            """
+        else:
+            # No id column, just insert
+            sql = f"""
+                INSERT OR REPLACE INTO {table_name} ({', '.join(columns)})
+                VALUES ({placeholders})
+            """
+        
+        values = [filtered_record[col] for col in columns]
+        cursor.execute(sql, values)
+        
+    except Exception as e:
+        print(f"[SYNC] Error upserting record in {table_name}: {str(e)}")
+        print(f"[SYNC] Record data: {record}")
+        print(f"[SYNC] Table columns: {table_columns}")
+        raise
+
+def get_last_sync_timestamp_local(cursor):
+    """Get the last sync timestamp from local metadata."""
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sync_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("SELECT value FROM sync_metadata WHERE key = 'last_sync'")
+        result = cursor.fetchone()
+        return result[0] if result else None
+        
+    except Exception as e:
+        print(f"[SYNC] Error getting last sync timestamp: {str(e)}")
+        return None
+
+def update_last_sync_timestamp(cursor):
+    """Update the last sync timestamp in local metadata."""
+    try:
+        from datetime import datetime
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
+            VALUES ('last_sync', ?, ?)
+        """, (datetime.utcnow().isoformat(), datetime.utcnow()))
+        
+    except Exception as e:
+        print(f"[SYNC] Error updating last sync timestamp: {str(e)}")
+
+# Remove the old helper functions that are no longer needed
+def get_online_db_config():
+    """Get online database configuration if available."""
+    return None  # We're using API-based sync instead of direct database access
+
+
+# --- Main DB selection logic ---
+if is_render():
+    # On Render: always use the online (PostgreSQL) database
+    try:
+        print("[AMRS] Detected Render environment. Configuring production database...")
+        configure_database(app)
+    except Exception as e:
+        print(f"[APP] Error configuring database: {str(e)}")
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+    print("[AMRS] ONLINE MODE: Using configured database URI (Render)")
+else:
+    # On local device: default to offline mode (local SQLite), unless OFFLINE_MODE=0 is explicitly set
+    offline_mode = os.environ.get("OFFLINE_MODE") != "0"  # Default to offline unless OFFLINE_MODE=0
+    if offline_mode:
+        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        print(f"[AMRS] LOCAL OFFLINE MODE: Using local database at {db_path}")
+    else:
+        try:
+            print("[AMRS] LOCAL ONLINE MODE: Configuring online database...")
+            configure_database(app)
+        except Exception as e:
+            print(f"[APP] Error configuring database: {str(e)}")
+            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        print("[AMRS] LOCAL ONLINE MODE: Using configured database URI")
 
 # Initialize database
 print("[APP] Initializing SQLAlchemy...")
 db.init_app(app)
+
+    # --- Ensure schema exists before import if needed (for offline mode) ---
+if not is_render() and offline_mode:
+    from sqlalchemy import create_engine, inspect as sa_inspect
+    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+    engine = create_engine(f"sqlite:///{db_path}")
+    inspector = sa_inspect(engine)
+    with app.app_context():
+        if not inspector.has_table('users'):
+            print("[AMRS] SQLite schema not found. Creating tables before import...")
+            db.create_all()
+        else:
+            print("[AMRS] SQLite schema already exists. Skipping table creation.")
+        
+        # Run SQLite schema migration to ensure compatibility with online database
+        try:
+            from sqlite_schema_migration import migrate_sqlite_schema
+            print("[AMRS] Running SQLite schema migration...")
+            migrations_applied = migrate_sqlite_schema(db_path)
+            if migrations_applied > 0:
+                print(f"[AMRS] Applied {migrations_applied} schema migrations")
+            else:
+                print("[AMRS] SQLite schema is up to date")
+        except Exception as e:
+            print(f"[AMRS] Warning: Schema migration failed: {e}")
+        
+        ensure_sync_columns_sqlite()
+        
+        # Perform automatic two-way sync
+        print("[AMRS] Starting automatic two-way synchronization...")
+        sync_success = auto_sync_offline_db()
+        if sync_success:
+            print("[AMRS] Two-way sync completed successfully")
+        else:
+            print("[AMRS] Two-way sync completed with errors - continuing in offline mode")
+# --- Ensure timestamp columns exist on Render launch for future sync compatibility ---
+def ensure_sync_columns():
+    """Ensure all tables have created_at, updated_at, and deleted_at columns for sync."""
+    try:
+        print("[SYNC] Ensuring sync columns exist in all tables...")
+        inspector = inspect(db.engine)
+        sync_columns = [
+            ('created_at', 'TIMESTAMP'),
+            ('updated_at', 'TIMESTAMP'),
+            ('deleted_at', 'TIMESTAMP')
+        ]
+        for table in ALLOWED_TABLES:
+            if inspector.has_table(table):
+                existing_columns = {col['name'] for col in inspector.get_columns(table)}
+                with db.engine.connect() as conn:
+                    for col_name, col_type in sync_columns:
+                        if col_name not in existing_columns:
+                            print(f"[SYNC] Adding {col_name} to {table}...")
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                            conn.commit()
+        print("[SYNC] Sync columns ensured.")
+    except Exception as e:
+        print(f"[SYNC] Error ensuring sync columns: {e}")
+
+# Call ensure_sync_columns on Render launch
+if is_render():
+    with app.app_context():
+        ensure_sync_columns()
 
 # Initialize Flask-Login
 print("[APP] Initializing Flask-Login...")
@@ -334,7 +847,7 @@ def check_db_connection():
         return False
 
 # Whitelist allowed table and column names for schema changes
-ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions'}
+ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions', 'machine_audit_task'}
 ALLOWED_COLUMNS = {
     'users': {'last_login', 'reset_token', 'reset_token_expiration', 'created_at', 'updated_at'},
     'roles': {'created_at', 'updated_at'},
@@ -343,7 +856,8 @@ ALLOWED_COLUMNS = {
     'parts': {'created_at', 'updated_at'},
     'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
     'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
-    'audit_task_completions': {'created_at', 'updated_at'}
+    'audit_task_completions': {'created_at', 'updated_at'},
+    'machine_audit_task': {'audit_task_id', 'machine_id'}
 }
 
 # Function to ensure database schema matches models
@@ -813,10 +1327,10 @@ def inject_site_helpers():
                 total_parts += len(parts)
                 
                 for part in parts:
-                    if part.quantity == 0:
-                        out_of_stock += 1
-                    elif part.quantity < 5:  # Assume 5 is the low stock threshold
-                        low_stock += 1
+                    # Skip quantity checks since Part model doesn't have quantity field
+                    # This function currently only counts total parts
+                    # Future enhancement: add quantity field to Part model if needed
+                    pass
             
             return {
                 'total': total_parts,
@@ -1038,58 +1552,77 @@ def dashboard():
             for machine in site.machines:
                 if show_decommissioned or not machine.decommissioned:
                     for part in machine.parts:
-                        if part.next_maintenance:
-                            try:
-                                # Ensure next_maintenance is a datetime object
-                                if isinstance(part.next_maintenance, str):
-                                    # Try to parse string to datetime
+                        # Skip parts without next_maintenance date or with None value
+                        if not part.next_maintenance:
+                            continue
+                            
+                        try:
+                            # Ensure next_maintenance is a datetime object
+                            if isinstance(part.next_maintenance, str):
+                                # Try to parse string to datetime
+                                try:
+                                    part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
+                                except ValueError:
                                     try:
-                                        part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
+                                        part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d')
                                     except ValueError:
-                                        try:
-                                            part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d')
-                                        except ValueError:
-                                            app.logger.warning(f"Invalid date format for part {part.id}: {part.next_maintenance}")
-                                            continue  # Skip invalid date strings
-                                
-                                days_until = (part.next_maintenance - now).days
-                                if days_until < 0:
-                                    site_overdue.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                    if site in sites:  # Only count for displayed sites
-                                        overdue_count += 1
-                                    all_overdue.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                elif days_until <= 30:
-                                    site_due_soon.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                    if site in sites:  # Only count for displayed sites
-                                        due_soon_count += 1
-                                    all_due_soon.append({
-                                        'part': part,
-                                        'machine': machine,
-                                        'site': site,
-                                        'days_until': days_until
-                                    })
-                                else:
-                                    if site in sites:  # Only count for displayed sites
-                                        ok_count += 1
-                            except (TypeError, AttributeError) as e:
-                                # Skip parts with invalid maintenance dates
-                                app.logger.warning(f"Invalid maintenance date for part {part.id}: {e}")
+                                        app.logger.warning(f"Invalid date format for part {part.id}: {part.next_maintenance}")
+                                        continue  # Skip invalid date strings
+                            
+                            # Double-check that next_maintenance is still not None after parsing
+                            if not part.next_maintenance:
                                 continue
+                                
+                            # Calculate days until maintenance
+                            try:
+                                days_until = (part.next_maintenance - now).days
+                            except (TypeError, AttributeError) as calc_error:
+                                app.logger.warning(f"Error calculating days for part {part.id}: {calc_error}")
+                                continue
+                            
+                            # Ensure days_until is an integer (it should be from timedelta.days)
+                            if days_until is None or not isinstance(days_until, int):
+                                app.logger.warning(f"Invalid days_until calculation for part {part.id}: {days_until}")
+                                continue
+                                
+                            if days_until < 0:
+                                site_overdue.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                                if site in sites:  # Only count for displayed sites
+                                    overdue_count += 1
+                                all_overdue.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                            elif days_until <= 30:
+                                site_due_soon.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                                if site in sites:  # Only count for displayed sites
+                                    due_soon_count += 1
+                                all_due_soon.append({
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until
+                                })
+                            else:
+                                if site in sites:  # Only count for displayed sites
+                                    ok_count += 1
+                                    
+                        except (TypeError, AttributeError) as e:
+                            # Skip parts with invalid maintenance dates
+                            app.logger.warning(f"Invalid maintenance date for part {part.id}: {e}")
+                            continue
             
             # Store site-specific data
             site_part_highlights[site.id] = {
@@ -1122,7 +1655,9 @@ def dashboard():
                               show_decommissioned=show_decommissioned,
                               decommissioned_count=decommissioned_count)
     except Exception as e:
+        import traceback
         app.logger.error(f"Dashboard error: {str(e)}")
+        app.logger.error(f"Dashboard error traceback: {traceback.format_exc()}")
         # Instead of redirecting, show a minimal dashboard with an error message
         flash(f'Error loading dashboard data: {str(e)}', 'error')
         return render_template('dashboard.html', 
@@ -1783,6 +2318,31 @@ def audit_history_print():
         flash('You do not have permission to access audit history.', 'danger')
         return redirect(url_for('dashboard'))
 
+    # Define the calendar weeks function early
+    def get_calendar_weeks(start_date, end_date):
+        """Get calendar weeks for the date range."""
+        import calendar
+        weeks = []
+        current = start_date.replace(day=1)
+        
+        # Get first Monday of the month view
+        while current.weekday() != 0:  # 0 is Monday
+            current -= timedelta(days=1)
+        
+        # Generate weeks until we cover the end date
+        while current <= end_date or len(weeks) < 6:
+            week = []
+            for i in range(7):
+                week.append(current + timedelta(days=i))
+            weeks.append(week)
+            current += timedelta(days=7)
+            
+            # Stop if we have 6 weeks and covered the month
+            if len(weeks) >= 6 and current > end_date:
+                break
+                
+        return weeks
+
     from calendar import monthrange
     today = datetime.now().date()
     
@@ -1881,30 +2441,6 @@ def audit_history_print():
                 continue
             machines.append(machine)
 
-    # Generate calendar weeks function
-    def get_calendar_weeks(start_date, end_date):
-        import calendar
-        weeks = []
-        current = start_date.replace(day=1)
-        
-        # Get first Monday of the month view
-        while current.weekday() != 0:  # 0 is Monday
-            current -= timedelta(days=1)
-        
-        # Generate weeks until we cover the end date
-        while current <= end_date or len(weeks) < 6:
-            week = []
-            for i in range(7):
-                week.append(current + timedelta(days=i))
-            weeks.append(week)
-            current += timedelta(days=7)
-            
-            # Stop if we have 6 weeks and covered the month
-            if len(weeks) >= 6 and current > end_date:
-                break
-                
-        return weeks
-
     return render_template('audit_history_pdf.html',
         machines=machines,
         completions=completions,
@@ -1956,11 +2492,12 @@ def admin_users():
             
             # Create new user with role as object
             new_user = User(
-                username=username,
-                email=email,
+                # Always use property setters so values are encrypted once
                 password_hash=generate_password_hash(password),
                 role=role
             )
+            new_user.username = username
+            new_user.email = email
             
             # Add user to database
             db.session.add(new_user)
@@ -2363,18 +2900,28 @@ def delete_user(user_id):
 @login_required
 def maintenance_page():
     try:
-        # Restrict sites for non-admins
-        if current_user.is_admin:
+        # Allow admins and users with 'maintenance.record' permission to see all sites
+        def has_maintenance_record_permission(user):
+            if getattr(user, 'is_admin', False):
+                return True
+            if hasattr(user, 'role') and user.role and user.role.permissions:
+                return 'maintenance.record' in user.role.permissions.split(',')
+            return False
+
+        if current_user.is_admin or has_maintenance_record_permission(current_user):
             sites = Site.query.all()
         else:
-            sites = current_user.sites
+            # fallback: only assigned sites
+            sites = getattr(current_user, 'sites', [])
 
         # Get all machines, parts, and sites for the form
-        machines = Machine.query.filter(Machine.site_id.in_([site.id for site in sites])).all()
-        parts = Part.query.filter(Part.machine_id.in_([machine.id for machine in machines])).all()
+        site_ids = [site.id for site in sites] if sites else []
+        machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
+        machine_ids = [machine.id for machine in machines] if machines else []
+        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
         
         # Get all maintenance records with related data
-        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_([machine.id for machine in machines])).order_by(MaintenanceRecord.date.desc()).all()
+        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_(machine_ids)).order_by(MaintenanceRecord.date.desc()).all() if machine_ids else []
         
         # Handle form submission for adding new maintenance records
         if request.method == 'POST':
@@ -3000,36 +3547,287 @@ def sync_status():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/api/sync/data', methods=['POST'])
-@login_required
+
+
+# --- API AUTHENTICATION HELPER ---
+def check_api_auth():
+    """Check authentication for API endpoints - supports both session and basic auth."""
+    # Check session-based authentication first
+    if current_user.is_authenticated and is_admin_user(current_user):
+        return True
+    
+    # Check basic authentication for API access
+    auth = request.authorization
+    if auth and auth.username and auth.password:
+        try:
+            # Try both encrypted and plain username lookups for compatibility
+            user = User.query.filter_by(_username=encrypt_value(auth.username)).first()
+            if not user:
+                # Fallback to plain username lookup (for older records)
+                user = User.query.filter_by(username=auth.username).first()
+            
+            if user and user.check_password(auth.password) and is_admin_user(user):
+                return True
+        except Exception as e:
+            print(f"[API AUTH] Error checking basic auth: {e}")
+    
+    return False
+
+# --- SYNC ENDPOINT FOR OFFLINE USAGE ---
+@app.route('/api/sync/data', methods=['GET', 'POST'])
 def sync_data():
-    """Handle data synchronization requests from desktop clients."""
-    try:
-        data = request.json
-        sync_type = data.get('type')
-        if sync_type == 'push':
-            # Handle data being pushed from client to server
-            # Process items from the client
-            return jsonify({'status': 'success', 'message': 'Data received successfully'})
-            
-        elif sync_type == 'pull':
-            # Handle client requesting data from server
-            # Return requested data based on parameters
-            entity_type = data.get('entity_type')
-            timestamp = data.get('last_sync')
-            
-            # This is simplified - in a real implementation you would fetch actual data
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'type': entity_type,
-                    'items': []  # Actual data would go here
+    """Two-way sync endpoint: GET returns all data, POST accepts pushed data from offline clients. Admins only."""
+    if not check_api_auth():
+        return jsonify({'error': 'Unauthorized'}), 403
+    if request.method == 'GET':
+        try:
+            # Collect all relevant data
+            users = []
+            for u in User.query.all():
+                user_data = {
+                    'id': u.id,
+                    'username': u.username,  # Use decrypted value for compatibility
+                    'username_hash': getattr(u, 'username_hash', None),
+                    'email': u.email,  # Use decrypted value for compatibility
+                    'email_hash': getattr(u, 'email_hash', None),
+                    'full_name': u.full_name,  # Add full name for proper display
+                    'role_id': u.role_id,
+                    'is_admin': getattr(u, 'is_admin', False),
+                    'active': getattr(u, 'active', True),
+                    'created_at': u.created_at.isoformat() if u.created_at else None,
+                    'updated_at': u.updated_at.isoformat() if u.updated_at else None,
                 }
-            })
-        else:
-            return jsonify({'status': 'error', 'message': 'Invalid sync type'}), 400
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+                # Ensure password_hash is included - critical for offline authentication
+                password_hash = getattr(u, 'password_hash', None)
+                if password_hash:
+                    user_data['password_hash'] = password_hash
+                else:
+                    # If no password hash is available, we need to handle this gracefully
+                    # The offline client should request password reset or use alternative auth
+                    user_data['password_hash'] = None
+                    user_data['password_reset_required'] = True
+                
+                users.append(user_data)
+            roles = [
+                {
+                    'id': r.id,
+                    'name': r.name,
+                    'permissions': r.permissions,
+                    'description': getattr(r, 'description', ''),
+                    'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
+                    'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
+                }
+                for r in Role.query.all()
+            ]
+            sites = [
+                {
+                    'id': s.id,
+                    'name': s.name,
+                    'location': getattr(s, 'location', ''),
+                    'contact_email': getattr(s, 'contact_email', ''),
+                    'enable_notifications': getattr(s, 'enable_notifications', True),
+                    'notification_threshold': getattr(s, 'notification_threshold', 30),
+                    'created_at': s.created_at.isoformat() if getattr(s, 'created_at', None) else None,
+                    'updated_at': s.updated_at.isoformat() if getattr(s, 'updated_at', None) else None,
+                }
+                for s in Site.query.all()
+            ]
+            machines = [
+                {
+                    'id': m.id,
+                    'name': m.name,
+                    'model': m.model,
+                    'serial_number': m.serial_number,
+                    'machine_number': m.machine_number,
+                    'site_id': m.site_id,
+                    'decommissioned': getattr(m, 'decommissioned', False),
+                    'decommissioned_date': m.decommissioned_date.isoformat() if getattr(m, 'decommissioned_date', None) else None,
+                    'decommissioned_by': getattr(m, 'decommissioned_by', None),
+                    'decommissioned_reason': getattr(m, 'decommissioned_reason', ''),
+                    'created_at': m.created_at.isoformat() if getattr(m, 'created_at', None) else None,
+                    'updated_at': m.updated_at.isoformat() if getattr(m, 'updated_at', None) else None,
+                }
+                for m in Machine.query.all()
+            ]
+            parts = [
+                {
+                    'id': p.id,
+                    'name': p.name,
+                    'description': p.description,
+                    'machine_id': p.machine_id,
+                    'maintenance_frequency': p.maintenance_frequency,
+                    'maintenance_unit': p.maintenance_unit,
+                    'maintenance_days': getattr(p, 'maintenance_days', None),
+                    'last_maintenance': p.last_maintenance.isoformat() if p.last_maintenance else None,
+                    'next_maintenance': p.next_maintenance.isoformat() if p.next_maintenance else None,
+                    'created_at': p.created_at.isoformat() if getattr(p, 'created_at', None) else None,
+                    'updated_at': p.updated_at.isoformat() if getattr(p, 'updated_at', None) else None,
+                }
+                for p in Part.query.all()
+            ]
+            maintenance_records = [
+                {
+                    'id': r.id,
+                    'machine_id': r.machine_id,
+                    'part_id': r.part_id,
+                    'user_id': r.user_id,
+                    'maintenance_type': r.maintenance_type,
+                    'description': r.description,
+                    'date': r.date.isoformat() if r.date else None,
+                    'performed_by': r.performed_by,
+                    'status': r.status,
+                    'notes': r.notes,
+                    'comments': getattr(r, 'comments', ''),
+                    'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
+                    'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
+                }
+                for r in MaintenanceRecord.query.all()
+            ]
+            # Add audit tasks and completions for comprehensive sync
+            audit_tasks = [
+                {
+                    'id': t.id,
+                    'name': t.name,
+                    'description': getattr(t, 'description', ''),
+                    'site_id': t.site_id,
+                    'machine_id': getattr(t, 'machine_id', None),
+                    'interval': getattr(t, 'interval', 'monthly'),
+                    'custom_interval_days': getattr(t, 'custom_interval_days', None),
+                    'color': getattr(t, 'color', '#007bff'),
+                    'created_at': t.created_at.isoformat() if getattr(t, 'created_at', None) else None,
+                    'updated_at': t.updated_at.isoformat() if getattr(t, 'updated_at', None) else None,
+                }
+                for t in AuditTask.query.all()
+            ]
+            audit_task_completions = [
+                {
+                    'id': c.id,
+                    'audit_task_id': c.audit_task_id,
+                    'machine_id': c.machine_id,
+                    'user_id': getattr(c, 'completed_by', None),  # Use completed_by as user_id
+                    'date': c.date.isoformat() if c.date else None,
+                    'completed': getattr(c, 'completed', False),
+                    'completed_at': c.completed_at.isoformat() if getattr(c, 'completed_at', None) else None,
+                    'notes': getattr(c, 'notes', ''),
+                    'created_at': c.created_at.isoformat() if getattr(c, 'created_at', None) else None,
+                    'updated_at': c.updated_at.isoformat() if getattr(c, 'updated_at', None) else None,
+                }
+                for c in AuditTaskCompletion.query.all()
+            ]
+            # Optionally add audit tasks, completions, etc.
+            data = {
+                'users': users,
+                'roles': roles,
+                'sites': sites,
+                'machines': machines,
+                'parts': parts,
+                'maintenance_records': maintenance_records,
+                'audit_tasks': audit_tasks,
+                'audit_task_completions': audit_task_completions,
+            }
+            return jsonify(data)
+        except Exception as e:
+            app.logger.error(f"Error in sync_data: {e}")
+            return jsonify({'error': str(e)}), 500
+    elif request.method == 'POST':
+        # Accept pushed data from offline client and merge into DB
+        try:
+            data = request.get_json(force=True)
+            # --- Users ---
+            for u in data.get('users', []):
+                user = User.query.get(u['id'])
+                if user:
+                    user.username = u['username']
+                    user.email = u['email']
+                    user.full_name = u.get('full_name')  # Add full_name sync
+                    user.role_id = u['role_id']
+                    user.is_admin = u.get('is_admin', False)
+                    user.active = u.get('active', True)
+                else:
+                    user = User(
+                        id=u['id'], full_name=u.get('full_name'),  # Add full_name sync
+                        role_id=u['role_id'], is_admin=u.get('is_admin', False), active=u.get('active', True)
+                    )
+                    user.username = u['username']
+                    user.email = u['email']
+                    db.session.add(user)
+            # --- Roles ---
+            for r in data.get('roles', []):
+                role = Role.query.get(r['id'])
+                if role:
+                    role.name = r['name']
+                    role.permissions = r['permissions']
+                else:
+                    role = Role(id=r['id'], name=r['name'], permissions=r['permissions'])
+                    db.session.add(role)
+            # --- Sites ---
+            for s in data.get('sites', []):
+                site = Site.query.get(s['id'])
+                if site:
+                    site.name = s['name']
+                    site.location = s.get('location', '')
+                else:
+                    site = Site(id=s['id'], name=s['name'], location=s.get('location', ''))
+                    db.session.add(site)
+            # --- Machines ---
+            for m in data.get('machines', []):
+                machine = Machine.query.get(m['id'])
+                if machine:
+                    machine.name = m['name']
+                    machine.model = m['model']
+                    machine.serial_number = m['serial_number']
+                    machine.machine_number = m['machine_number']
+                    machine.site_id = m['site_id']
+                else:
+                    machine = Machine(
+                        id=m['id'], name=m['name'], model=m['model'], serial_number=m['serial_number'],
+                        machine_number=m['machine_number'], site_id=m['site_id']
+                    )
+                    db.session.add(machine)
+            # --- Parts ---
+            for p in data.get('parts', []):
+                part = Part.query.get(p['id'])
+                if part:
+                    part.name = p['name']
+                    part.description = p['description']
+                    part.machine_id = p['machine_id']
+                    part.maintenance_frequency = p['maintenance_frequency']
+                    part.maintenance_unit = p['maintenance_unit']
+                    part.last_maintenance = p['last_maintenance']
+                    part.next_maintenance = p['next_maintenance']
+                else:
+                    part = Part(
+                        id=p['id'], name=p['name'], description=p['description'], machine_id=p['machine_id'],
+                        maintenance_frequency=p['maintenance_frequency'], maintenance_unit=p['maintenance_unit'],
+                        last_maintenance=p['last_maintenance'], next_maintenance=p['next_maintenance']
+                    )
+                    db.session.add(part)
+            # --- Maintenance Records ---
+            for r in data.get('maintenance_records', []):
+                record = MaintenanceRecord.query.get(r['id'])
+                if record:
+                    record.machine_id = r['machine_id']
+                    record.part_id = r['part_id']
+                    record.user_id = r['user_id']
+                    record.maintenance_type = r['maintenance_type']
+                    record.description = r['description']
+                    record.date = r['date']
+                    record.performed_by = r['performed_by']
+                    record.status = r['status']
+                    record.notes = r['notes']
+                else:
+                    record = MaintenanceRecord(
+                        id=r['id'], machine_id=r['machine_id'], part_id=r['part_id'], user_id=r['user_id'],
+                        maintenance_type=r['maintenance_type'], description=r['description'], date=r['date'],
+                        performed_by=r['performed_by'], status=r['status'], notes=r['notes']
+                    )
+                    db.session.add(record)
+            db.session.commit()
+            return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error in sync_data POST: {e}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/health-check')
 def health_check():
@@ -5236,3 +6034,33 @@ def enhanced_server_error(e):
         </body>
         </html>
         ''', 500
+    
+
+
+
+# --- OFFLINE/ONLINE DATABASE SWITCH ---
+import sqlalchemy
+offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1"
+if offline_mode:
+    # Use local SQLite database for offline mode
+    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Rebind the db engine if already initialized
+    if hasattr(db, 'engine'):
+        db.engine.dispose()
+        db.__init__(app)
+    print("[AMRS] Running in OFFLINE MODE: using local maintenance.db")
+else:
+    print("[AMRS] Running in ONLINE MODE: using configured database URI")
+
+# Standard Flask app runner for local/offline mode (must be at the very end of the file)
+if __name__ == "__main__":
+    # Run the Flask app locally with the same settings as Render
+    # Use the PORT environment variable if set, otherwise default to 10000 (or 5000 for Flask default)
+    port = int(os.environ.get("PORT", 10000))
+    # Use debug mode only if FLASK_ENV=development
+    debug = os.environ.get("FLASK_ENV", "production") == "development"
+    # Use 127.0.0.1 for offline mode, 0.0.0.0 for online
+    host = "127.0.0.1" if offline_mode else "0.0.0.0"
+    app.run(host=host, port=port, debug=debug)

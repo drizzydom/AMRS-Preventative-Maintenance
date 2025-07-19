@@ -1,3 +1,48 @@
+/* Ensure .site-title and .requirement have correct color in both dark mode toggling methods */
+html[data-theme='dark'] .site-title,
+body[data-theme='dark'] .site-title,
+html.dark-mode .site-title,
+body.dark-mode .site-title {
+  color: #fff !important;
+}
+html[data-theme='dark'] .requirement,
+body[data-theme='dark'] .requirement,
+html.dark-mode .requirement,
+body.dark-mode .requirement {
+  color: #e0e0e0 !important;
+}
+html[data-theme='dark'] .requirement.valid,
+body[data-theme='dark'] .requirement.valid,
+html.dark-mode .requirement.valid,
+body.dark-mode .requirement.valid {
+  color: #6be585 !important;
+}
+/* Ensure .site-title and .requirement have correct color in both light and dark mode */
+html[data-theme='light'] .site-title,
+body[data-theme='light'] .site-title {
+  color: #343a40;
+}
+html[data-theme='dark'] .site-title,
+body[data-theme='dark'] .site-title {
+  color: #fff;
+}
+
+html[data-theme='light'] .requirement,
+body[data-theme='light'] .requirement {
+  color: #6c757d;
+}
+html[data-theme='dark'] .requirement,
+body[data-theme='dark'] .requirement {
+  color: #e0e0e0;
+}
+html[data-theme='light'] .requirement.valid,
+body[data-theme='light'] .requirement.valid {
+  color: #198754;
+}
+html[data-theme='dark'] .requirement.valid,
+body[data-theme='dark'] .requirement.valid {
+  color: #6be585;
+}
 /* Early theme selectors for FOUC prevention */
 html[data-theme='dark'], body[data-theme='dark'] {
   background-color: #181a1b !important;

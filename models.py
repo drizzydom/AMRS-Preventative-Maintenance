@@ -38,9 +38,12 @@ def decrypt_value(value):
     if value is None:
         return None
     try:
+        # First try to decrypt as if it's encrypted
         return fernet.decrypt(value.encode()).decode()
     except (InvalidToken, AttributeError):
-        return None
+        # If decryption fails, assume it's plain text and return as-is
+        # This handles legacy data that wasn't encrypted
+        return value
 
 def hash_value(value):
     if value is None:
@@ -118,6 +121,19 @@ class User(UserMixin, db.Model):
         self._email = encrypt_value(value)
         self.email_hash = hash_value(value)
 
+    @property
+    def display_name(self):
+        """Get the best available display name for the user"""
+        # Check if full_name exists and is not a generic placeholder
+        if self.full_name and not (self.full_name.startswith('User ') and self.full_name.replace('User ', '').isdigit()):
+            return self.full_name
+        try:
+            if self.username:
+                return self.username
+        except:
+            pass
+        return f"User #{self.id}"
+    
     def set_password(self, password):
         """Set the password hash"""
         self.password_hash = generate_password_hash(password)

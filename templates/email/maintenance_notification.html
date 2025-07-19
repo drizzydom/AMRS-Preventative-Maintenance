@@ -23,7 +23,7 @@
         <div class="header-img">
             <h1>Maintenance Notification</h1>
         </div>
-        <p>Hello {{ user.full_name or user.username }},</p>
+        <p>Hello {{ user.display_name }},</p>
         <p>This is a notification about maintenance required at <strong>{{ site.name }}</strong> ({{ site.location }}).</p>
         
         {% if overdue_parts %}
