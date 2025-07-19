@@ -1,3 +1,54 @@
+# --- Utility: Add change to sync_queue ---
+import json as _json
+from sqlalchemy.exc import SQLAlchemyError
+
+def add_to_sync_queue(table_name, record_id, operation, payload_dict):
+    """
+    Add a change to the sync_queue table.
+    Args:
+        table_name (str): Name of the table changed.
+        record_id (str): Primary key of the record changed.
+        operation (str): 'insert', 'update', or 'delete'.
+        payload_dict (dict): The record data (as dict, will be JSON-encoded).
+    """
+    try:
+        from sqlalchemy import text as sa_text
+        now = datetime.utcnow()
+        payload_json = _json.dumps(payload_dict)
+        db.session.execute(sa_text("""
+            INSERT INTO sync_queue (table_name, record_id, operation, payload, created_at, status)
+            VALUES (:table_name, :record_id, :operation, :payload, :created_at, 'pending')
+        """), {
+            "table_name": table_name,
+            "record_id": str(record_id),
+            "operation": operation,
+            "payload": payload_json,
+            "created_at": now
+        })
+        db.session.commit()
+        print(f"[SYNC_QUEUE] Added {operation} for {table_name}:{record_id} to sync_queue.")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
+# --- Sync Queue Cleanup: Remove records older than 144 hours (6 days) ---
+from sqlalchemy import text as sa_text
+from datetime import datetime, timedelta
+
+def cleanup_expired_sync_queue():
+    """Delete sync_queue records older than 144 hours (6 days)."""
+    try:
+        cutoff = datetime.utcnow() - timedelta(hours=144)
+        # Works for both SQLite and PostgreSQL
+        db.session.execute(sa_text("""
+            DELETE FROM sync_queue WHERE created_at < :cutoff
+        """), {"cutoff": cutoff})
+        db.session.commit()
+        print(f"[SYNC_QUEUE] Cleaned up expired sync_queue records older than {cutoff}.")
+    except Exception as e:
+        print(f"[SYNC_QUEUE] Error cleaning up expired sync_queue records: {e}")
+
+# Call cleanup at startup
+cleanup_expired_sync_queue()
 
 # Whitelist allowed table and column names for schema changes
 ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions', 'machine_audit_task'}
@@ -320,6 +371,8 @@ def is_render():
     return os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 def auto_sync_offline_db():
+    # Clean up expired sync queue records before syncing
+    cleanup_expired_sync_queue()
     """Automatically synchronize the local SQLite database with the online database using two-way sync."""
     if is_render():
         print("[SYNC] Running on Render - no offline sync needed")
@@ -1910,8 +1963,22 @@ def audits_page():
                 machine = Machine.query.get(int(machine_id))
                 if machine:
                     audit_task.machines.append(machine)
+                    # Log to sync queue for machine_audit_task association
+                    add_to_sync_queue('machine_audit_task', f'{audit_task.id}_{machine.id}', 'insert', {
+                        'audit_task_id': audit_task.id,
+                        'machine_id': machine.id
+                    })
             db.session.add(audit_task)
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue('audit_tasks', audit_task.id, 'insert', {
+                'id': audit_task.id,
+                'name': audit_task.name,
+                'site_id': audit_task.site_id,
+                'interval': audit_task.interval,
+                'custom_interval_days': audit_task.custom_interval_days,
+                'color': audit_task.color
+            })
             flash('Audit task created successfully.', 'success')
             return redirect(url_for('audits_page'))
         except Exception as e:
@@ -1945,6 +2012,28 @@ def audits_page():
                     updated += 1
         if updated:
             db.session.commit()
+            # Log to sync queue for each new completion
+            for task in audit_tasks:
+                for machine in task.machines:
+                    key = f'complete_{task.id}_{machine.id}'
+                    if key in request.form:
+                        # Find the completion just created
+                        completion = AuditTaskCompletion.query.filter_by(
+                            audit_task_id=task.id,
+                            machine_id=machine.id,
+                            date=today,
+                            completed=True
+                        ).order_by(AuditTaskCompletion.completed_at.desc()).first()
+                        if completion:
+                            add_to_sync_queue('audit_task_completions', completion.id, 'insert', {
+                                'id': completion.id,
+                                'audit_task_id': completion.audit_task_id,
+                                'machine_id': completion.machine_id,
+                                'date': str(completion.date),
+                                'completed': completion.completed,
+                                'completed_by': completion.completed_by,
+                                'completed_at': str(completion.completed_at)
+                            })
             flash(f'{updated} audit task(s) checked off successfully.', 'success')
         else:
             flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'warning')
@@ -2502,7 +2591,14 @@ def admin_users():
             # Add user to database
             db.session.add(new_user)
             db.session.commit()
-            
+            # Log to sync queue
+            add_to_sync_queue('users', new_user.id, 'insert', {
+                'id': new_user.id,
+                'username': new_user.username,
+                'email': new_user.email,
+                'full_name': new_user.full_name,
+                'role_id': new_user.role_id
+            })
             flash(f'User "{username}" created successfully.', 'success')
             return redirect('/admin/users')
         except Exception as e:
@@ -2627,10 +2723,23 @@ def edit_user(user_id):
             
             # Force immediate commit to database
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue('users', user.id, 'update', {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'full_name': user.full_name,
+                'role_id': user.role_id
+            })
+            # Log all site assignments for this user
+            for site in user.sites:
+                add_to_sync_queue('user_sites', f'{user.id}_{site.id}', 'update', {
+                    'user_id': user.id,
+                    'site_id': site.id
+                })
             # Log role change for debugging
             app.logger.info(f"User {user.username} role changed: {old_role_name} -> {new_role_name}")
             flash(f'User "{username}" updated successfully. Role changed from "{old_role_name}" to "{new_role_name}".', 'success')
-            
             # Force session clear before redirect to ensure fresh data on next page load
             db.session.expire_all()
             return redirect(url_for('admin_users'))
@@ -2683,7 +2792,13 @@ def admin_roles():
             # Add role to database
             db.session.add(new_role)
             db.session.commit()
-            
+            # Log to sync queue
+            add_to_sync_queue('roles', new_role.id, 'insert', {
+                'id': new_role.id,
+                'name': new_role.name,
+                'description': new_role.description,
+                'permissions': new_role.permissions
+            })
             flash(f'Role "{name}" created successfully.', 'success')
             return redirect(url_for('admin_roles'))
         except Exception as e:
@@ -2723,6 +2838,8 @@ def delete_machine(machine_id):
         else:
             db.session.delete(machine)
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue('machines', machine_id, 'delete', {'id': machine_id})
             flash(f'Machine "{machine.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_machines'))
@@ -2744,6 +2861,8 @@ def delete_part(part_id):
         # Delete the part
         db.session.delete(part)
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue('parts', part_id, 'delete', {'id': part_id})
         flash(f'Part "{part.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_parts'))
@@ -2771,6 +2890,8 @@ def delete_site(site_id):
         else:
             db.session.delete(site)
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue('sites', site_id, 'delete', {'id': site_id})
             flash(f'Site "{site.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_sites'))
@@ -2852,8 +2973,9 @@ def delete_role(role_id):
         else:
             db.session.delete(role)
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue('roles', role_id, 'delete', {'id': role_id})
             flash(f'Role "{role.name}" has been deleted successfully.', 'success')
-        
         return redirect('/admin/roles')
     except Exception as e:
         db.session.rollback()
@@ -2887,6 +3009,8 @@ def delete_user(user_id):
             
         db.session.delete(user)
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue('users', user_id, 'delete', {'id': user_id})
         flash(f'User "{user.username}" has been deleted successfully.', 'success')
         
         return redirect('/admin/users')
@@ -3013,6 +3137,20 @@ def maintenance_page():
                         part.next_maintenance = maintenance_date + delta
                         db.session.add(part)
                     db.session.commit()
+                    # Log to sync queue
+                    add_to_sync_queue('maintenance_records', new_record.id, 'insert', {
+                        'id': new_record.id,
+                        'machine_id': new_record.machine_id,
+                        'part_id': new_record.part_id,
+                        'user_id': new_record.user_id,
+                        'maintenance_type': new_record.maintenance_type,
+                        'description': new_record.description,
+                        'date': str(new_record.date),
+                        'performed_by': new_record.performed_by,
+                        'status': new_record.status,
+                        'notes': new_record.notes,
+                        'client_id': new_record.client_id
+                    })
                     flash('Maintenance record and files added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
                 except ValueError:
@@ -3064,6 +3202,19 @@ def update_maintenance_alt():
         )
         db.session.add(maintenance_record)
         db.session.commit()
+        # Log to sync queue: maintenance record insert and part update
+        add_to_sync_queue('maintenance_records', maintenance_record.id, 'insert', {
+            'id': maintenance_record.id,
+            'part_id': maintenance_record.part_id,
+            'user_id': maintenance_record.user_id,
+            'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
+            'comments': maintenance_record.comments
+        })
+        add_to_sync_queue('parts', part.id, 'update', {
+            'id': part.id,
+            'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+            'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
+        })
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
         referrer = request.referrer
         if referrer:
@@ -3111,6 +3262,21 @@ def update_maintenance(part_id):
         )
         db.session.add(maintenance_record)
         db.session.commit()
+        # Log to sync queue: maintenance record insert and part update
+        add_to_sync_queue('maintenance_records', maintenance_record.id, 'insert', {
+            'id': maintenance_record.id,
+            'part_id': maintenance_record.part_id,
+            'user_id': maintenance_record.user_id,
+            'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
+            'comments': maintenance_record.comments,
+            'description': maintenance_record.description,
+            'machine_id': maintenance_record.machine_id
+        })
+        add_to_sync_queue('parts', part.id, 'update', {
+            'id': part.id,
+            'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+            'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
+        })
         flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
         referrer = request.referrer
         if referrer:
@@ -3190,6 +3356,11 @@ def user_profile():
                 # Update password
                 user.password_hash = generate_password_hash(new_password)
                 db.session.commit()
+                # Log to sync queue
+                add_to_sync_queue('users', user.id, 'update', {
+                    'id': user.id,
+                    'password_hash': user.password_hash
+                })
                 flash('Password updated successfully!', 'success')
                 return redirect(url_for('user_profile'))
                 
@@ -3229,6 +3400,11 @@ def user_profile():
                     else:
                         user.password_hash = generate_password_hash(new_password)
                         db.session.commit()
+                        # Log to sync queue
+                        add_to_sync_queue('users', user.id, 'update', {
+                            'id': user.id,
+                            'password_hash': user.password_hash
+                        })
                         flash('Password updated successfully', 'success')
                 
                 return redirect(url_for('user_profile'))
@@ -3263,6 +3439,13 @@ def update_profile():
             user.full_name = request.form.get('full_name')
         
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue('users', user.id, 'update', {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'full_name': user.full_name
+        })
         flash('Profile updated successfully.', 'success')
         return redirect(url_for('user_profile'))
     except Exception as e:
@@ -3349,6 +3532,11 @@ def update_notification_preferences():
     if hasattr(user, 'set_notification_preferences'):
         user.set_notification_preferences(prefs)
         db.session.commit()  # Ensure changes are saved
+        # Log to sync queue
+        add_to_sync_queue('users', user.id, 'update', {
+            'id': user.id,
+            'notification_preferences': prefs
+        })
         flash('Notification preferences updated successfully.', 'success')
     else:
         flash('Unable to save notification preferences.', 'danger')
@@ -4033,6 +4221,21 @@ def edit_site(site_id):
                         site.users.append(user)
             
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue('sites', site.id, 'update', {
+                'id': site.id,
+                'name': site.name,
+                'location': site.location,
+                'contact_email': site.contact_email,
+                'notification_threshold': site.notification_threshold,
+                'enable_notifications': site.enable_notifications
+            })
+            # Log all user assignments for this site
+            for user in site.users:
+                add_to_sync_queue('site_users', f'{site.id}_{user.id}', 'update', {
+                    'site_id': site.id,
+                    'user_id': user.id
+                })
             flash(f'Site "{site.name}" has been updated successfully.', 'success')
             return redirect(url_for('manage_sites'))
         except Exception as e:
@@ -4222,6 +4425,17 @@ def edit_machine(machine_id):
                         app.logger.info(f"Updated decommission reason for '{machine.name}': {new_reason}")
             
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue('machines', machine.id, 'update', {
+                'id': machine.id,
+                'name': machine.name,
+                'model': machine.model,
+                'machine_number': machine.machine_number,
+                'serial_number': machine.serial_number,
+                'site_id': machine.site_id,
+                'decommissioned': getattr(machine, 'decommissioned', False),
+                'decommissioned_reason': getattr(machine, 'decommissioned_reason', ''),
+            })
             flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
             return redirect(url_for('manage_machines'))
         except Exception as e:
@@ -4426,6 +4640,15 @@ def edit_part(part_id):
         part.maintenance_frequency = request.form.get('maintenance_frequency', part.maintenance_frequency)
         part.maintenance_unit = request.form.get('maintenance_unit', part.maintenance_unit)
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue('parts', part.id, 'update', {
+            'id': part.id,
+            'name': part.name,
+            'description': part.description,
+            'machine_id': part.machine_id,
+            'maintenance_frequency': part.maintenance_frequency,
+            'maintenance_unit': part.maintenance_unit
+        })
         flash('Part updated successfully.', 'success')
         return redirect(url_for('manage_parts'))
     
