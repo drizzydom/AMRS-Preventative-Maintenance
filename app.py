@@ -23,6 +23,28 @@ def ensure_large_user_columns():
                     print(f"[SCHEMA] users.{col} column updated to VARCHAR(1024)")
                 except Exception as e:
                     print(f"[SCHEMA] Error updating users.{col}: {e}")
+
+            # --- Ensure api_token and api_token_expiration columns exist ---
+            # Check if columns exist
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'users' AND column_name IN ('api_token', 'api_token_expiration')
+            """))
+            existing = {row['column_name'] for row in result}
+            if 'api_token' not in existing:
+                print("[SCHEMA] Adding users.api_token column...")
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN api_token VARCHAR(256);"))
+                    print("[SCHEMA] users.api_token column added")
+                except Exception as e:
+                    print(f"[SCHEMA] Error adding users.api_token: {e}")
+            if 'api_token_expiration' not in existing:
+                print("[SCHEMA] Adding users.api_token_expiration column...")
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN api_token_expiration TIMESTAMP;"))
+                    print("[SCHEMA] users.api_token_expiration column added")
+                except Exception as e:
+                    print(f"[SCHEMA] Error adding users.api_token_expiration: {e}")
     except Exception as e:
         print(f"[SCHEMA] Error ensuring large user columns: {e}")
 
