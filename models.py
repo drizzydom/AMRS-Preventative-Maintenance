@@ -67,6 +67,8 @@ machine_audit_task = Table(
 )
 
 class User(UserMixin, db.Model):
+    api_token = db.Column(db.String(128), unique=True, nullable=True, index=True)
+    api_token_expiration = db.Column(db.DateTime, nullable=True)
     """User model for authentication and authorization"""
     __tablename__ = 'users'  # Explicit table name for PostgreSQL conventions
     id = db.Column(db.Integer, primary_key=True)
