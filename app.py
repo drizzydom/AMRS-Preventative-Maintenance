@@ -168,7 +168,18 @@ import csv
 import json
 import requests
 
-# Local imports
+
+# --- Ensure api_token columns exist before importing models or initializing db ---
+import runpy
+try:
+    runpy.run_path('fix_user_token_columns.py', run_name='__main__')
+    print("[STARTUP] Ensured api_token columns exist in users table before model import.")
+except Exception as e:
+    print(f"[STARTUP] Error ensuring api_token columns before model import: {e}")
+    import traceback
+    print(traceback.format_exc())
+
+# Local imports (must come after migration)
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
 
@@ -1285,8 +1296,8 @@ def assign_colors_to_audit_tasks():
 with app.app_context():
     # --- Ensure api_token columns exist before any queries or migrations ---
     try:
-        from fix_user_token_columns import main as fix_user_token_columns_main
-        fix_user_token_columns_main()
+        import runpy
+        runpy.run_path('fix_user_token_columns.py', run_name='__main__')
         print("[STARTUP] Ensured api_token columns exist in users table.")
     except Exception as e:
         print(f"[STARTUP] Error ensuring api_token columns: {e}")
