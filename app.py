@@ -170,14 +170,21 @@ import requests
 
 
 # --- Ensure api_token columns exist before importing models or initializing db ---
-import runpy
-try:
-    runpy.run_path('fix_user_token_columns.py', run_name='__main__')
-    print("[STARTUP] Ensured api_token columns exist in users table before model import.")
-except Exception as e:
-    print(f"[STARTUP] Error ensuring api_token columns before model import: {e}")
-    import traceback
-    print(traceback.format_exc())
+import os
+import sys
+if os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+    import subprocess
+    try:
+        print("[STARTUP] Running fix_user_token_columns.py migration for Render...")
+        result = subprocess.run([sys.executable, 'fix_user_token_columns.py'], check=True, capture_output=True, text=True)
+        print(result.stdout)
+        print("[STARTUP] Ensured api_token columns exist in users table before model import.")
+    except Exception as e:
+        print(f"[STARTUP] Error ensuring api_token columns before model import: {e}")
+        if hasattr(e, 'output'):
+            print(e.output)
+        import traceback
+        print(traceback.format_exc())
 
 # Local imports (must come after migration)
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
