@@ -1,4 +1,21 @@
-# ...existing code...
+
+# --- Ensure api_token columns exist before importing models or initializing db ---
+import os
+import sys
+if os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+    import subprocess
+    try:
+        print("[STARTUP] Running fix_user_token_columns.py migration for Render...")
+        result = subprocess.run([sys.executable, 'fix_user_token_columns.py'], check=True, capture_output=True, text=True)
+        print(result.stdout)
+        print("[STARTUP] Ensured api_token columns exist in users table before model import.")
+    except Exception as e:
+        print(f"[STARTUP] Error ensuring api_token columns before model import: {e}")
+        if hasattr(e, 'output'):
+            print(e.output)
+        import traceback
+        print(traceback.format_exc())
+
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
 def ensure_large_user_columns():
     """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
