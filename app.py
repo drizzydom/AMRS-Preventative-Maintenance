@@ -1,4 +1,50 @@
 # --- Background Sync Worker ---
+import requests
+
+def upload_pending_sync_queue():
+    """Upload all pending sync_queue items to the server and mark them as synced if successful."""
+    from sqlalchemy import text as sa_text
+    with app.app_context():
+        pending_items = db.session.execute(sa_text("SELECT id, table_name, record_id, operation, payload FROM sync_queue WHERE status = 'pending' ORDER BY created_at ASC")).fetchall()
+        if not pending_items:
+            print("[SYNC] No pending changes to upload.")
+            return
+        print(f"[SYNC] Uploading {len(pending_items)} pending changes from sync_queue...")
+        # Prepare upload payload grouped by table
+        upload_payload = {}
+        for item in pending_items:
+            table = item['table_name']
+            if table not in upload_payload:
+                upload_payload[table] = []
+            try:
+                record = _json.loads(item['payload'])
+                record['__operation__'] = item['operation']
+                record['__sync_queue_id__'] = item['id']
+                upload_payload[table].append(record)
+            except Exception as e:
+                print(f"[SYNC] Error parsing payload for sync_queue id {item['id']}: {e}")
+                continue
+        # Upload to server
+        online_url = os.environ.get('AMRS_ONLINE_URL')
+        api_token = os.environ.get('AMRS_API_TOKEN')
+        if not online_url or not api_token:
+            print("[SYNC] Missing AMRS_ONLINE_URL or AMRS_API_TOKEN; cannot upload changes.")
+            return
+        clean_url = online_url.rstrip('/')
+        if clean_url.endswith('/api'):
+            clean_url = clean_url[:-4]
+        try:
+            resp = requests.post(f"{clean_url}/api/sync/data", json=upload_payload, headers={"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}, timeout=30)
+            if resp.status_code == 200:
+                ids = [item['id'] for item in pending_items]
+                db.session.execute(sa_text("UPDATE sync_queue SET status = 'synced', synced_at = :now WHERE id IN :ids"), {"now": datetime.utcnow(), "ids": tuple(ids)})
+                db.session.commit()
+                print(f"[SYNC] Successfully uploaded and marked {len(ids)} sync_queue items as synced.")
+            else:
+                print(f"[SYNC] Upload failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[SYNC] Exception during upload: {e}")
+
 import threading
 import time
 
@@ -10,20 +56,7 @@ def background_sync_worker():
     while True:
         sync_event.wait()  # Wait until signaled
         try:
-            # Only sync if there are pending changes
-            with app.app_context():
-                from sqlalchemy import text as sa_text
-                pending = db.session.execute(sa_text("SELECT COUNT(*) FROM sync_queue WHERE status = 'pending'"))
-                count = pending.scalar()
-                if count > 0:
-                    print(f"[SYNC] Detected {count} pending changes, running upload sync...")
-                    # Call your upload sync logic here (reuse your upload code)
-                    try:
-                        auto_sync_offline_db()  # This will upload and clear the queue if successful
-                    except Exception as e:
-                        print(f"[SYNC] Error during background sync: {e}")
-                else:
-                    print("[SYNC] No pending changes to sync.")
+            upload_pending_sync_queue()
         except Exception as e:
             print(f"[SYNC] Background sync worker error: {e}")
         finally:
@@ -32,6 +65,8 @@ def background_sync_worker():
 # Start the background sync worker thread
 sync_thread = threading.Thread(target=background_sync_worker, daemon=True)
 sync_thread.start()
+# Signal sync worker on startup to process any existing pending changes
+sync_event.set()
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
 def ensure_large_user_columns():
     """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
