@@ -1283,6 +1283,15 @@ def assign_colors_to_audit_tasks():
 
 # --- Move all startup DB logic inside a single app context ---
 with app.app_context():
+    # --- Ensure api_token columns exist before any queries or migrations ---
+    try:
+        from fix_user_token_columns import main as fix_user_token_columns_main
+        fix_user_token_columns_main()
+        print("[STARTUP] Ensured api_token columns exist in users table.")
+    except Exception as e:
+        print(f"[STARTUP] Error ensuring api_token columns: {e}")
+        import traceback
+        print(traceback.format_exc())
     try:
         run_auto_migration()  # Ensure columns exist before any queries
         print("[STARTUP] Auto-migration completed successfully")
