@@ -1,3 +1,37 @@
+# --- Background Sync Worker ---
+import threading
+import time
+
+# Global event to signal sync worker
+sync_event = threading.Event()
+
+def background_sync_worker():
+    """Background thread that waits for sync_event and uploads sync_queue changes."""
+    while True:
+        sync_event.wait()  # Wait until signaled
+        try:
+            # Only sync if there are pending changes
+            with app.app_context():
+                from sqlalchemy import text as sa_text
+                pending = db.session.execute(sa_text("SELECT COUNT(*) FROM sync_queue WHERE status = 'pending'"))
+                count = pending.scalar()
+                if count > 0:
+                    print(f"[SYNC] Detected {count} pending changes, running upload sync...")
+                    # Call your upload sync logic here (reuse your upload code)
+                    try:
+                        auto_sync_offline_db()  # This will upload and clear the queue if successful
+                    except Exception as e:
+                        print(f"[SYNC] Error during background sync: {e}")
+                else:
+                    print("[SYNC] No pending changes to sync.")
+        except Exception as e:
+            print(f"[SYNC] Background sync worker error: {e}")
+        finally:
+            sync_event.clear()  # Reset event until next change
+
+# Start the background sync worker thread
+sync_thread = threading.Thread(target=background_sync_worker, daemon=True)
+sync_thread.start()
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
 def ensure_large_user_columns():
     """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
@@ -54,6 +88,8 @@ def add_to_sync_queue(table_name, record_id, operation, payload_dict):
         })
         db.session.commit()
         print(f"[SYNC_QUEUE] Added {operation} for {table_name}:{record_id} to sync_queue.")
+        # Signal the background sync worker to run
+        sync_event.set()
     except SQLAlchemyError as e:
         db.session.rollback()
         print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
