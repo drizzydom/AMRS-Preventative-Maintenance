@@ -13,16 +13,16 @@ def upload_pending_sync_queue():
         # Prepare upload payload grouped by table
         upload_payload = {}
         for item in pending_items:
-            table = item['table_name']
+            table = item[1]  # table_name
             if table not in upload_payload:
                 upload_payload[table] = []
             try:
-                record = _json.loads(item['payload'])
-                record['__operation__'] = item['operation']
-                record['__sync_queue_id__'] = item['id']
+                record = _json.loads(item[4])  # payload
+                record['__operation__'] = item[3]  # operation
+                record['__sync_queue_id__'] = item[0]  # id
                 upload_payload[table].append(record)
             except Exception as e:
-                print(f"[SYNC] Error parsing payload for sync_queue id {item['id']}: {e}")
+                print(f"[SYNC] Error parsing payload for sync_queue id {item[0]}: {e}")
                 continue
         # Upload to server
         online_url = os.environ.get('AMRS_ONLINE_URL')
@@ -36,7 +36,7 @@ def upload_pending_sync_queue():
         try:
             resp = requests.post(f"{clean_url}/api/sync/data", json=upload_payload, headers={"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}, timeout=30)
             if resp.status_code == 200:
-                ids = [item['id'] for item in pending_items]
+                ids = [item[0] for item in pending_items]
                 db.session.execute(sa_text("UPDATE sync_queue SET status = 'synced', synced_at = :now WHERE id IN :ids"), {"now": datetime.utcnow(), "ids": tuple(ids)})
                 db.session.commit()
                 print(f"[SYNC] Successfully uploaded and marked {len(ids)} sync_queue items as synced.")
