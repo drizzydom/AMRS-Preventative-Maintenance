@@ -4,6 +4,7 @@ import os
 import sys
 if os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
     import subprocess
+    import traceback
     try:
         print("[STARTUP] Running fix_user_token_columns.py migration for Render...")
         result = subprocess.run([sys.executable, 'fix_user_token_columns.py'], check=True, capture_output=True, text=True)
@@ -13,7 +14,6 @@ if os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTE
         print(f"[STARTUP] Error ensuring api_token columns before model import: {e}")
         if hasattr(e, 'output'):
             print(e.output)
-        import traceback
         print(traceback.format_exc())
 
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
