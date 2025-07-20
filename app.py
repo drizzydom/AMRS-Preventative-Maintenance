@@ -26,15 +26,22 @@ def upload_pending_sync_queue():
                 continue
         # Upload to server
         online_url = os.environ.get('AMRS_ONLINE_URL')
-        api_token = os.environ.get('AMRS_API_TOKEN')
-        if not online_url or not api_token:
-            print("[SYNC] Missing AMRS_ONLINE_URL or AMRS_API_TOKEN; cannot upload changes.")
+        admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+        admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        if not online_url or not admin_username or not admin_password:
+            print("[SYNC] Missing AMRS_ONLINE_URL or AMRS_ADMIN_USERNAME/AMRS_ADMIN_PASSWORD; cannot upload changes.")
             return
-        clean_url = online_url.rstrip('/')
+        clean_url = online_url.strip('"\'').rstrip('/')
         if clean_url.endswith('/api'):
             clean_url = clean_url[:-4]
         try:
-            resp = requests.post(f"{clean_url}/api/sync/data", json=upload_payload, headers={"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}, timeout=30)
+            resp = requests.post(
+                f"{clean_url}/api/sync/data",
+                json=upload_payload,
+                headers={"Content-Type": "application/json"},
+                auth=(admin_username, admin_password),
+                timeout=30
+            )
             if resp.status_code == 200:
                 ids = [item[0] for item in pending_items]
                 db.session.execute(sa_text("UPDATE sync_queue SET status = 'synced', synced_at = :now WHERE id IN :ids"), {"now": datetime.utcnow(), "ids": tuple(ids)})
