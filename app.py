@@ -1950,14 +1950,16 @@ def audits_page():
                 can_delete_audits = 'audits.delete' in permissions
                 can_complete_audits = 'audits.complete' in permissions
 
-    # Restrict sites for non-admins
+
+    # Always re-query audit_tasks and sites from the database to ensure relationships are hydrated after sync/import
+    from sqlalchemy.orm import joinedload
     if current_user.is_admin:
-        audit_tasks = AuditTask.query.all()
-        sites = Site.query.all()
+        audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).all()
+        sites = Site.query.options(joinedload(Site.machines)).all()
     else:
         user_site_ids = [site.id for site in current_user.sites]
-        audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(user_site_ids)).all()
-        sites = current_user.sites
+        audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).filter(AuditTask.site_id.in_(user_site_ids)).all()
+        sites = Site.query.options(joinedload(Site.machines)).filter(Site.id.in_(user_site_ids)).all()
 
     today = date.today()
     completions = {(c.audit_task_id, c.machine_id): c for c in AuditTaskCompletion.query.filter_by(date=today).all()}
