@@ -10,6 +10,9 @@ from flask_login import current_user, login_required
 import os
 from app import app, db
 from app import User, Site, Machine, Part, MaintenanceLog
+from app import Role
+from app import MaintenanceRecord
+from app import AuditTask, AuditTaskCompletion
 
 # Create blueprint for API routes
 api_bp = Blueprint('api', __name__)
@@ -362,6 +365,33 @@ def record_maintenance(current_user):
         'part_id': part.id,
         'next_maintenance': part.next_maintenance.isoformat()
     })
+
+@api_bp.route('/sync/data', methods=['GET'])
+def sync_data():
+    """Endpoint to provide all data needed for offline sync, including audit_tasks."""
+    # Basic HTTP auth for offline sync
+    auth = request.authorization
+    if not auth or not auth.username or not auth.password:
+        return jsonify({'error': 'Missing credentials'}), 401
+    user = User.query.filter_by(username=auth.username).first()
+    if not user or not user.check_password(auth.password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    # Only allow admin or users with sync permission
+    if not user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+
+    # Collect all data for sync
+    data = {}
+    data['users'] = [u.to_dict() for u in User.query.all()]
+    data['roles'] = [r.to_dict() for r in Role.query.all()]
+    data['sites'] = [s.to_dict() for s in Site.query.all()]
+    data['machines'] = [m.to_dict() for m in Machine.query.all()]
+    data['parts'] = [p.to_dict() for p in Part.query.all()]
+    data['maintenance_records'] = [mr.to_dict() for mr in MaintenanceRecord.query.all()] if 'MaintenanceRecord' in globals() else []
+    data['audit_tasks'] = [at.to_dict() for at in AuditTask.query.all()] if 'AuditTask' in globals() else []
+    data['audit_task_completions'] = [ac.to_dict() for ac in AuditTaskCompletion.query.all()] if 'AuditTaskCompletion' in globals() else []
+    data['machine_audit_task'] = [mat.to_dict() for mat in db.session.execute('SELECT * FROM machine_audit_task').fetchall()] if db.engine.has_table('machine_audit_task') else []
+    return jsonify(data)
 
 # Add a health check endpoint
 @api_bp.route('/health', methods=['GET'])
