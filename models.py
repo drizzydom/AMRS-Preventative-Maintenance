@@ -416,6 +416,22 @@ class AuditTask(db.Model):
     machines = db.relationship('Machine', secondary=machine_audit_task, backref='audit_tasks')
     completions = db.relationship('AuditTaskCompletion', backref='audit_task', lazy=True, cascade="all, delete-orphan")
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'site_id': self.site_id,
+            'created_by': self.created_by,
+            'interval': self.interval,
+            'custom_interval_days': self.custom_interval_days,
+            'color': self.color,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            # Optionally include related machine IDs
+            'machine_ids': [m.id for m in self.machines] if hasattr(self, 'machines') else [],
+        }
+
 class AuditTaskCompletion(db.Model):
     __tablename__ = 'audit_task_completions'
     id = db.Column(db.Integer, primary_key=True)
