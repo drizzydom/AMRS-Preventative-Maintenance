@@ -416,8 +416,8 @@ class AuditTask(db.Model):
     machines = db.relationship('Machine', secondary=machine_audit_task, backref='audit_tasks')
     completions = db.relationship('AuditTaskCompletion', backref='audit_task', lazy=True, cascade="all, delete-orphan")
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_machines=True):
+        data = {
             'id': self.id,
             'name': self.name,
             'description': self.description,
@@ -428,9 +428,12 @@ class AuditTask(db.Model):
             'color': self.color,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            # Optionally include related machine IDs
             'machine_ids': [m.id for m in self.machines] if hasattr(self, 'machines') else [],
         }
+        if include_machines:
+            # Include full machine objects for template rendering
+            data['machines'] = [m for m in self.machines] if hasattr(self, 'machines') else []
+        return data
 
 class AuditTaskCompletion(db.Model):
     __tablename__ = 'audit_task_completions'
