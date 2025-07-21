@@ -587,6 +587,12 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         # Import online data into local database
         import_online_data_to_local(online_data, local_cursor)
         local_conn.commit()
+        # Force SQLAlchemy to reload all ORM relationships after import
+        try:
+            from models import db
+            db.session.expire_all()
+        except Exception as e:
+            print(f"[SYNC] Could not expire SQLAlchemy session: {e}")
         
         # Step 3: Get local changes to upload
         print("[SYNC] Preparing local changes for upload...")
