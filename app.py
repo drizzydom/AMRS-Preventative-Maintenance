@@ -627,13 +627,18 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
 def import_online_data_to_local(online_data, cursor):
     """Import downloaded online data into the local SQLite database."""
     try:
+        # Debug: List all tables received from online
+        print(f"[SYNC] Tables received from online: {list(online_data.keys())}")
+        # Ensure audit_tasks is always present in the import, even if empty
+        if 'audit_tasks' not in online_data:
+            print("[SYNC] WARNING: 'audit_tasks' not found in online data. Adding empty list.")
+            online_data['audit_tasks'] = []
         # Import each table's data
         for table_name, records in online_data.items():
             if table_name not in ALLOWED_TABLES:
+                print(f"[SYNC] Skipping table not in ALLOWED_TABLES: {table_name}")
                 continue
-                
             print(f"[SYNC] Importing {len(records)} records for table {table_name}")
-            
             for record in records:
                 # Handle soft deletes by checking deleted_at
                 if record.get('deleted_at'):
@@ -645,8 +650,11 @@ def import_online_data_to_local(online_data, cursor):
                     """, (record['deleted_at'], record['id']))
                 else:
                     # Insert or update record
-                    upsert_record_sqlite(table_name, record, cursor)
-                    
+                    try:
+                        upsert_record_sqlite(table_name, record, cursor)
+                    except Exception as e:
+                        print(f"[SYNC] Error upserting record in {table_name}: {e}")
+                        print(f"[SYNC] Record data: {record}")
     except Exception as e:
         print(f"[SYNC] Error importing online data: {str(e)}")
         raise
