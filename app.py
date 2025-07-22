@@ -899,7 +899,7 @@ db.init_app(app)
 with app.app_context():
     # Register API endpoints blueprint within app context
     from api_endpoints import register_api
-    register_api()
+    register_api(app)
     print("[APP] API endpoints registered")
     
     # --- Ensure large user columns on Render ---

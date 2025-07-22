@@ -444,5 +444,8 @@ def sync_debug():
     return jsonify(debug_info)
 
 # Register blueprint with app
-def register_api():
-    app.register_blueprint(api_bp, url_prefix='/api')
+def register_api(flask_app=None):
+    """Register the API blueprint with the Flask app"""
+    if flask_app is None:
+        from app import app as flask_app
+    flask_app.register_blueprint(api_bp, url_prefix='/api')
