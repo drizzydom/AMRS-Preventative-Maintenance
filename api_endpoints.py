@@ -391,8 +391,11 @@ def sync_data():
     data['audit_tasks'] = [at.to_dict() for at in AuditTask.query.all()] if 'AuditTask' in globals() else []
     data['audit_task_completions'] = [ac.to_dict() for ac in AuditTaskCompletion.query.all()] if 'AuditTaskCompletion' in globals() else []
     # Fix machine_audit_task association export - convert raw rows to dicts
-    if db.engine.has_table('machine_audit_task'):
-        result = db.session.execute('SELECT audit_task_id, machine_id FROM machine_audit_task')
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    if inspector.has_table('machine_audit_task'):
+        from sqlalchemy import text
+        result = db.session.execute(text('SELECT audit_task_id, machine_id FROM machine_audit_task'))
         data['machine_audit_task'] = [{'audit_task_id': row[0], 'machine_id': row[1]} for row in result.fetchall()]
     else:
         data['machine_audit_task'] = []
