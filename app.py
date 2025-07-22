@@ -4105,6 +4105,31 @@ def sync_data():
                         performed_by=r['performed_by'], status=r['status'], notes=r['notes']
                     )
                     db.session.add(record)
+            
+            # --- Audit Task Completions ---
+            for atc in data.get('audit_task_completions', []):
+                completion = AuditTaskCompletion.query.get(atc['id'])
+                if completion:
+                    completion.audit_task_id = atc['audit_task_id']
+                    completion.machine_id = atc['machine_id']
+                    completion.user_id = atc.get('user_id')
+                    completion.date = datetime.fromisoformat(atc['date']) if atc.get('date') else None
+                    completion.completed = atc.get('completed', False)
+                    completion.completed_at = datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
+                    completion.notes = atc.get('notes', '')
+                else:
+                    completion = AuditTaskCompletion(
+                        id=atc['id'],
+                        audit_task_id=atc['audit_task_id'],
+                        machine_id=atc['machine_id'],
+                        user_id=atc.get('user_id'),
+                        date=datetime.fromisoformat(atc['date']) if atc.get('date') else None,
+                        completed=atc.get('completed', False),
+                        completed_at=datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None,
+                        notes=atc.get('notes', '')
+                    )
+                    db.session.add(completion)
+            
             db.session.commit()
             return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200
         except Exception as e:
