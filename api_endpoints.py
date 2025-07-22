@@ -411,6 +411,39 @@ def health_check():
         'version': '1.0.0'
     })
 
+# Diagnostic endpoint to verify sync data structure
+@api_bp.route('/sync/debug', methods=['GET'])
+def sync_debug():
+    """Debug endpoint to check what sync data looks like"""
+    from sqlalchemy import inspect, text
+    
+    debug_info = {
+        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'has_machine_audit_task_table': False,
+        'machine_audit_task_count': 0,
+        'raw_query_test': None,
+        'fix_version': 'v2.0_debug'  # This will tell us if the new code is deployed
+    }
+    
+    try:
+        inspector = inspect(db.engine)
+        debug_info['has_machine_audit_task_table'] = inspector.has_table('machine_audit_task')
+        
+        if debug_info['has_machine_audit_task_table']:
+            # Test the raw query
+            result = db.session.execute(text('SELECT audit_task_id, machine_id FROM machine_audit_task LIMIT 3'))
+            rows = result.fetchall()
+            debug_info['machine_audit_task_count'] = len(rows)
+            debug_info['sample_data'] = [{'audit_task_id': row[0], 'machine_id': row[1]} for row in rows]
+            debug_info['raw_query_test'] = 'success'
+        else:
+            debug_info['raw_query_test'] = 'table_not_found'
+            
+    except Exception as e:
+        debug_info['raw_query_test'] = f'error: {str(e)}'
+    
+    return jsonify(debug_info)
+
 # Register blueprint with app
 def register_api():
     app.register_blueprint(api_bp, url_prefix='/api')
