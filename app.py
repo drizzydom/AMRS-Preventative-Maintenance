@@ -3983,6 +3983,19 @@ def sync_data():
                 }
                 for c in AuditTaskCompletion.query.all()
             ]
+            
+            # Add machine_audit_task associations - CRITICAL for audit task sync
+            from sqlalchemy import inspect, text
+            machine_audit_task = []
+            inspector = inspect(db.engine)
+            if inspector.has_table('machine_audit_task'):
+                try:
+                    result = db.session.execute(text('SELECT audit_task_id, machine_id FROM machine_audit_task'))
+                    machine_audit_task = [{'audit_task_id': row[0], 'machine_id': row[1]} for row in result.fetchall()]
+                except Exception as e:
+                    app.logger.error(f"Error fetching machine_audit_task associations: {e}")
+                    machine_audit_task = []
+            
             # Optionally add audit tasks, completions, etc.
             data = {
                 'users': users,
@@ -3993,6 +4006,7 @@ def sync_data():
                 'maintenance_records': maintenance_records,
                 'audit_tasks': audit_tasks,
                 'audit_task_completions': audit_task_completions,
+                'machine_audit_task': machine_audit_task,
             }
             return jsonify(data)
         except Exception as e:
