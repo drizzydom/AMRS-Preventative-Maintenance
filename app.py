@@ -63,7 +63,8 @@ def background_sync_worker():
     while True:
         sync_event.wait()  # Wait until signaled
         try:
-            upload_pending_sync_queue()
+            with app.app_context():  # Ensure proper Flask app context
+                upload_pending_sync_queue()
         except Exception as e:
             print(f"[SYNC] Background sync worker error: {e}")
         finally:
