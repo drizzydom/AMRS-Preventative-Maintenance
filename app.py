@@ -4142,21 +4142,19 @@ def sync_data():
                 if completion:
                     completion.audit_task_id = atc['audit_task_id']
                     completion.machine_id = atc['machine_id']
-                    completion.user_id = atc.get('user_id')
+                    completion.completed_by = atc.get('user_id')  # Use completed_by instead of user_id
                     completion.date = datetime.fromisoformat(atc['date']) if atc.get('date') else None
                     completion.completed = atc.get('completed', False)
                     completion.completed_at = datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
-                    completion.notes = atc.get('notes', '')
                 else:
                     completion = AuditTaskCompletion(
                         id=atc['id'],
                         audit_task_id=atc['audit_task_id'],
                         machine_id=atc['machine_id'],
-                        user_id=atc.get('user_id'),
+                        completed_by=atc.get('user_id'),  # Use completed_by instead of user_id
                         date=datetime.fromisoformat(atc['date']) if atc.get('date') else None,
                         completed=atc.get('completed', False),
-                        completed_at=datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None,
-                        notes=atc.get('notes', '')
+                        completed_at=datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
                     )
                     db.session.add(completion)
             
