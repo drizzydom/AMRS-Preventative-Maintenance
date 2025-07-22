@@ -44,9 +44,14 @@ def upload_pending_sync_queue():
             )
             if resp.status_code == 200:
                 ids = [item[0] for item in pending_items]
-                db.session.execute(sa_text("UPDATE sync_queue SET status = 'synced', synced_at = :now WHERE id IN :ids"), {"now": datetime.utcnow(), "ids": tuple(ids)})
-                db.session.commit()
-                print(f"[SYNC] Successfully uploaded and marked {len(ids)} sync_queue items as synced.")
+                # Fix SQLite IN clause syntax - create placeholders for each ID
+                if ids:
+                    placeholders = ','.join(['?' for _ in ids])
+                    query = f"UPDATE sync_queue SET status = 'synced', synced_at = ? WHERE id IN ({placeholders})"
+                    params = [datetime.utcnow()] + list(ids)
+                    db.session.execute(sa_text(query), params)
+                    db.session.commit()
+                    print(f"[SYNC] Successfully uploaded and marked {len(ids)} sync_queue items as synced.")
             else:
                 print(f"[SYNC] Upload failed: {resp.status_code} {resp.text}")
         except Exception as e:
