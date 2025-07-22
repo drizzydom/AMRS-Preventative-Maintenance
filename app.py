@@ -3831,12 +3831,27 @@ def check_api_auth():
     if auth and auth.username and auth.password:
         print(f"[API AUTH] Attempting basic auth for username: {auth.username}")
         try:
-            # Try both encrypted and plain username lookups for compatibility
+            # Try encrypted username lookup first
             user = User.query.filter_by(_username=encrypt_value(auth.username)).first()
             if not user:
                 print(f"[API AUTH] No user found with encrypted username, trying plain username")
                 # Fallback to plain username lookup (for older records)
                 user = User.query.filter_by(username=auth.username).first()
+            
+            if not user:
+                print(f"[API AUTH] No direct match found, checking all users for decryption match")
+                # If no direct match, try to find user by decrypting all usernames
+                all_users = User.query.all()
+                for candidate_user in all_users:
+                    try:
+                        # Try to decrypt the stored username and see if it matches
+                        if candidate_user.username == auth.username:
+                            user = candidate_user
+                            print(f"[API AUTH] Found user via decryption match: {auth.username}")
+                            break
+                    except:
+                        # Skip users whose usernames can't be decrypted
+                        continue
             
             if user:
                 print(f"[API AUTH] Found user: {user.username}, checking password and admin status")
