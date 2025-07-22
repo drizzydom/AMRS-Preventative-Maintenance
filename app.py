@@ -895,13 +895,13 @@ else:
 print("[APP] Initializing SQLAlchemy...")
 db.init_app(app)
 
-# Register API endpoints blueprint
-from api_endpoints import register_api
-register_api()
-print("[APP] API endpoints registered")
-
 # --- Ensure sync columns and cleanup are only called after db.init_app(app) and within app context ---
 with app.app_context():
+    # Register API endpoints blueprint within app context
+    from api_endpoints import register_api
+    register_api()
+    print("[APP] API endpoints registered")
+    
     # --- Ensure large user columns on Render ---
     if is_render():
         ensure_large_user_columns()
