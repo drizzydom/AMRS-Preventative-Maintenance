@@ -9,9 +9,8 @@ import datetime
 from flask_login import current_user, login_required
 import os
 from app import app, db
-from app import User, Site, Machine, Part, MaintenanceLog
+from app import User, Site, Machine, Part, MaintenanceRecord
 from app import Role
-from app import MaintenanceRecord
 from app import AuditTask, AuditTaskCompletion
 
 # Create blueprint for API routes
@@ -348,8 +347,8 @@ def record_maintenance(current_user):
     part.update_next_maintenance()
     db.session.commit()
     
-    # Create maintenance log entry
-    log = MaintenanceLog(
+    # Create maintenance record entry
+    log = MaintenanceRecord(
         machine_id=machine.id,
         part_id=part.id,
         performed_by=performed_by,
