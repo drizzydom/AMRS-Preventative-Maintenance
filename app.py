@@ -3823,23 +3823,38 @@ def check_api_auth():
     """Check authentication for API endpoints - supports both session and basic auth."""
     # Check session-based authentication first
     if current_user.is_authenticated and is_admin_user(current_user):
+        print(f"[API AUTH] Session auth successful for user: {current_user.username}")
         return True
     
     # Check basic authentication for API access
     auth = request.authorization
     if auth and auth.username and auth.password:
+        print(f"[API AUTH] Attempting basic auth for username: {auth.username}")
         try:
             # Try both encrypted and plain username lookups for compatibility
             user = User.query.filter_by(_username=encrypt_value(auth.username)).first()
             if not user:
+                print(f"[API AUTH] No user found with encrypted username, trying plain username")
                 # Fallback to plain username lookup (for older records)
                 user = User.query.filter_by(username=auth.username).first()
             
-            if user and user.check_password(auth.password) and is_admin_user(user):
-                return True
+            if user:
+                print(f"[API AUTH] Found user: {user.username}, checking password and admin status")
+                password_valid = user.check_password(auth.password)
+                is_admin = is_admin_user(user)
+                print(f"[API AUTH] Password valid: {password_valid}, Is admin: {is_admin}")
+                
+                if password_valid and is_admin:
+                    print(f"[API AUTH] Basic auth successful for user: {user.username}")
+                    return True
+            else:
+                print(f"[API AUTH] No user found for username: {auth.username}")
         except Exception as e:
             print(f"[API AUTH] Error checking basic auth: {e}")
+    else:
+        print(f"[API AUTH] No basic auth credentials provided")
     
+    print(f"[API AUTH] Authentication failed")
     return False
 
 # --- SYNC ENDPOINT FOR OFFLINE USAGE ---
