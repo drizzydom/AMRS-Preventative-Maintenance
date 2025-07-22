@@ -442,6 +442,24 @@ print(f"[APP] Base directory: {BASE_DIR}")
 try:
     import add_sync_queue_table
     add_sync_queue_table.upgrade()
+    
+    # Check if synced_at column exists and add it if missing
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    if inspector.has_table('sync_queue'):
+        columns = [col['name'] for col in inspector.get_columns('sync_queue')]
+        if 'synced_at' not in columns:
+            print('[STARTUP] Adding synced_at column to sync_queue table...')
+            try:
+                if db.engine.url.drivername == 'sqlite':
+                    db.session.execute(text('ALTER TABLE sync_queue ADD COLUMN synced_at DATETIME'))
+                else:
+                    db.session.execute(text('ALTER TABLE sync_queue ADD COLUMN synced_at TIMESTAMP'))
+                db.session.commit()
+                print('[STARTUP] synced_at column added to sync_queue table.')
+            except Exception as col_error:
+                print(f'[STARTUP] Error adding synced_at column: {col_error}')
+    
     print('[STARTUP] Ensured sync_queue table exists.')
 except Exception as e:
     print(f'[STARTUP] Error ensuring sync_queue table: {e}')
