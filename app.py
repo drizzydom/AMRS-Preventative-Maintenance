@@ -181,6 +181,24 @@ def check_desktop_clients_available():
         print(f"[SYNC] Error checking desktop client availability: {e}")
         return False
 
+def notify_desktop_clients_of_changes():
+    """
+    Notify desktop clients that changes are available for download.
+    This could be expanded to use webhooks, push notifications, etc.
+    """
+    try:
+        # For now, just log that changes are available
+        # In the future, this could trigger push notifications to desktop clients
+        print("[SYNC] Audit task completion changes available for desktop client sync")
+        
+        # Could add webhook calls here to notify specific desktop clients
+        # webhook_url = os.environ.get('DESKTOP_SYNC_WEBHOOK')
+        # if webhook_url:
+        #     requests.post(webhook_url, json={'type': 'audit_completion_change'})
+        
+    except Exception as e:
+        print(f"[SYNC] Error notifying desktop clients: {e}")
+
 def add_to_sync_queue(table_name, record_id, operation, payload_dict):
     """
     Add a change to the sync_queue table.
@@ -2180,6 +2198,17 @@ def audits_page():
                         existing_completion.completed_by = current_user.id
                         existing_completion.completed_at = datetime.now()
                         completion = existing_completion
+                        
+                        # Log to sync queue for updated completion
+                        add_to_sync_queue('audit_task_completions', completion.id, 'update', {
+                            'id': completion.id,
+                            'audit_task_id': completion.audit_task_id,
+                            'machine_id': completion.machine_id,
+                            'date': str(completion.date),
+                            'completed': completion.completed,
+                            'completed_by': completion.completed_by,
+                            'completed_at': str(completion.completed_at)
+                        })
                     else:
                         # Check for any existing completion for this task/machine/date combination
                         # This handles cases where completions exist but weren't in our initial query
@@ -2195,6 +2224,17 @@ def audits_page():
                             existing_any.completed_by = current_user.id
                             existing_any.completed_at = datetime.now()
                             completion = existing_any
+                            
+                            # Log to sync queue for updated completion
+                            add_to_sync_queue('audit_task_completions', completion.id, 'update', {
+                                'id': completion.id,
+                                'audit_task_id': completion.audit_task_id,
+                                'machine_id': completion.machine_id,
+                                'date': str(completion.date),
+                                'completed': completion.completed,
+                                'completed_by': completion.completed_by,
+                                'completed_at': str(completion.completed_at)
+                            })
                         else:
                             # Create new completion record with robust conflict handling
                             # First, fix PostgreSQL sequence to prevent ID conflicts
@@ -2229,33 +2269,27 @@ def audits_page():
                                     db.session.rollback()
                                     # Use merge as fallback
                                     completion = db.session.merge(completion)
+                                    db.session.flush()  # Ensure the merge is processed
                                 else:
                                     raise add_error
+                    
+                    # Log to sync queue immediately after successful completion creation
+                    if completion and hasattr(completion, 'id'):
+                        add_to_sync_queue('audit_task_completions', completion.id, 'insert', {
+                            'id': completion.id,
+                            'audit_task_id': completion.audit_task_id,
+                            'machine_id': completion.machine_id,
+                            'date': str(completion.date),
+                            'completed': completion.completed,
+                            'completed_by': completion.completed_by,
+                            'completed_at': str(completion.completed_at)
+                        })
+                    
                     updated += 1
         if updated:
             db.session.commit()
-            # Log to sync queue for each new completion
-            for task in audit_tasks:
-                for machine in task.machines:
-                    key = f'complete_{task.id}_{machine.id}'
-                    if key in request.form:
-                        # Find the completion just created
-                        completion = AuditTaskCompletion.query.filter_by(
-                            audit_task_id=task.id,
-                            machine_id=machine.id,
-                            date=today,
-                            completed=True
-                        ).order_by(AuditTaskCompletion.completed_at.desc()).first()
-                        if completion:
-                            add_to_sync_queue('audit_task_completions', completion.id, 'insert', {
-                                'id': completion.id,
-                                'audit_task_id': completion.audit_task_id,
-                                'machine_id': completion.machine_id,
-                                'date': str(completion.date),
-                                'completed': completion.completed,
-                                'completed_by': completion.completed_by,
-                                'completed_at': str(completion.completed_at)
-                            })
+            # Notify desktop clients that audit completion changes are available
+            notify_desktop_clients_of_changes()
             flash(f'{updated} audit task(s) checked off successfully.', 'success')
         else:
             flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'warning')
