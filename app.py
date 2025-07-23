@@ -4134,46 +4134,27 @@ def sync_data():
                     db.session.add(part)
             # --- Maintenance Records ---
             for r in data.get('maintenance_records', []):
-                record = MaintenanceRecord.query.get(r['id'])
-                if record:
-                    record.machine_id = r['machine_id']
-                    record.part_id = r['part_id']
-                    record.user_id = r['user_id']
-                    record.maintenance_type = r['maintenance_type']
-                    record.description = r['description']
-                    record.date = r['date']
-                    record.performed_by = r['performed_by']
-                    record.status = r['status']
-                    record.notes = r['notes']
-                else:
-                    record = MaintenanceRecord(
-                        id=r['id'], machine_id=r['machine_id'], part_id=r['part_id'], user_id=r['user_id'],
-                        maintenance_type=r['maintenance_type'], description=r['description'], date=r['date'],
-                        performed_by=r['performed_by'], status=r['status'], notes=r['notes']
-                    )
-                    db.session.add(record)
+                # Use merge for upsert behavior to avoid ID conflicts
+                record = MaintenanceRecord(
+                    id=r['id'], machine_id=r['machine_id'], part_id=r['part_id'], user_id=r['user_id'],
+                    maintenance_type=r['maintenance_type'], description=r['description'], date=r['date'],
+                    performed_by=r['performed_by'], status=r['status'], notes=r['notes']
+                )
+                db.session.merge(record)
             
             # --- Audit Task Completions ---
             for atc in data.get('audit_task_completions', []):
-                completion = AuditTaskCompletion.query.get(atc['id'])
-                if completion:
-                    completion.audit_task_id = atc['audit_task_id']
-                    completion.machine_id = atc['machine_id']
-                    completion.completed_by = atc.get('user_id')  # Use completed_by instead of user_id
-                    completion.date = datetime.fromisoformat(atc['date']) if atc.get('date') else None
-                    completion.completed = atc.get('completed', False)
-                    completion.completed_at = datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
-                else:
-                    completion = AuditTaskCompletion(
-                        id=atc['id'],
-                        audit_task_id=atc['audit_task_id'],
-                        machine_id=atc['machine_id'],
-                        completed_by=atc.get('user_id'),  # Use completed_by instead of user_id
-                        date=datetime.fromisoformat(atc['date']) if atc.get('date') else None,
-                        completed=atc.get('completed', False),
-                        completed_at=datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
-                    )
-                    db.session.add(completion)
+                # Use merge for upsert behavior to avoid ID conflicts
+                completion = AuditTaskCompletion(
+                    id=atc['id'],
+                    audit_task_id=atc['audit_task_id'],
+                    machine_id=atc['machine_id'],
+                    completed_by=atc.get('user_id'),  # Use completed_by instead of user_id
+                    date=datetime.fromisoformat(atc['date']) if atc.get('date') else None,
+                    completed=atc.get('completed', False),
+                    completed_at=datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
+                )
+                db.session.merge(completion)
             
             db.session.commit()
             return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200
