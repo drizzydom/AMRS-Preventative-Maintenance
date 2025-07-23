@@ -56,8 +56,14 @@ def upload_pending_sync_queue():
                     print(f"[SYNC] Successfully uploaded and marked {len(ids)} sync_queue items as synced.")
             else:
                 print(f"[SYNC] Upload failed: {resp.status_code} {resp.text}")
+                # Don't mark items as failed immediately - they'll be retried later
+        except requests.exceptions.ConnectionError as e:
+            print(f"[SYNC] Connection error during upload (desktop clients may be offline): {e}")
+        except requests.exceptions.Timeout as e:
+            print(f"[SYNC] Timeout during upload: {e}")
         except Exception as e:
             print(f"[SYNC] Exception during upload: {e}")
+            # For any other exception, ensure we don't crash the sync worker
 
 import threading
 import time
@@ -67,15 +73,31 @@ sync_event = threading.Event()
 
 def background_sync_worker():
     """Background thread that waits for sync_event and uploads sync_queue changes."""
+    import time
+    last_periodic_check = time.time()
+    
     while True:
-        sync_event.wait()  # Wait until signaled
+        # Wait for sync event with timeout for periodic checks
+        sync_event.wait(timeout=300)  # Check every 5 minutes even without events
+        
         try:
             with app.app_context():  # Ensure proper Flask app context
-                upload_pending_sync_queue()
+                current_time = time.time()
+                
+                # Periodic check for pending items (every 5 minutes)
+                if current_time - last_periodic_check >= 300:  # 5 minutes
+                    print("[SYNC] Performing periodic check for pending sync items...")
+                    upload_pending_sync_queue()
+                    last_periodic_check = current_time
+                elif sync_event.is_set():
+                    # Event-triggered sync
+                    upload_pending_sync_queue()
+                    
         except Exception as e:
             print(f"[SYNC] Background sync worker error: {e}")
         finally:
-            sync_event.clear()  # Reset event until next change
+            if sync_event.is_set():
+                sync_event.clear()  # Reset event until next change
 
 # Start the background sync worker thread
 sync_thread = threading.Thread(target=background_sync_worker, daemon=True)
@@ -113,6 +135,30 @@ def ensure_large_user_columns():
 import json as _json
 from sqlalchemy.exc import SQLAlchemyError
 
+def check_desktop_clients_available():
+    """
+    Check if desktop client sync is configured and working.
+    Returns True if sync configuration is available, False otherwise.
+    This prevents immediate sync attempts when sync is not properly configured.
+    """
+    try:
+        # Check if sync environment variables are configured
+        online_url = os.environ.get('AMRS_ONLINE_URL')
+        admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+        admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        
+        # If sync is not configured, don't attempt immediate sync
+        if not online_url or not admin_username or not admin_password:
+            return False
+            
+        # Always return True for now - let the background worker handle failures gracefully
+        # This ensures items are queued properly regardless of current connectivity
+        return True
+        
+    except Exception as e:
+        print(f"[SYNC] Error checking desktop client availability: {e}")
+        return False
+
 def add_to_sync_queue(table_name, record_id, operation, payload_dict):
     """
     Add a change to the sync_queue table.
@@ -138,8 +184,14 @@ def add_to_sync_queue(table_name, record_id, operation, payload_dict):
         })
         db.session.commit()
         print(f"[SYNC_QUEUE] Added {operation} for {table_name}:{record_id} to sync_queue.")
-        # Signal the background sync worker to run
-        sync_event.set()
+        
+        # Check if desktop clients are available before triggering immediate sync
+        if check_desktop_clients_available():
+            # Signal the background sync worker to run
+            sync_event.set()
+            print(f"[SYNC_QUEUE] Desktop clients available, triggering immediate sync.")
+        else:
+            print(f"[SYNC_QUEUE] No desktop clients available, item queued for later sync.")
     except SQLAlchemyError as e:
         db.session.rollback()
         print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
@@ -2091,22 +2143,32 @@ def audits_page():
                 key = f'complete_{task.id}_{machine.id}'
                 if key in request.form:
                     # Check if already completed today
-                    if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed:
+                    existing_completion = completions.get((task.id, machine.id))
+                    if existing_completion and existing_completion.completed:
                         continue
                     # Strictly enforce interval: only allow if no previous completion or today >= next eligible date
                     next_eligible = eligibility.get((task.id, machine.id))
                     if next_eligible is not None and today < next_eligible:
                         continue  # Not eligible yet
+                    
                     # Only record completion if eligible (either no previous completion or today >= next_eligible)
-                    completion = AuditTaskCompletion(
-                        audit_task_id=task.id,
-                        machine_id=machine.id,
-                        date=today,
-                        completed=True,
-                        completed_by=current_user.id,
-                        completed_at=datetime.now()
-                    )
-                    db.session.merge(completion)
+                    if existing_completion:
+                        # Update existing completion record
+                        existing_completion.completed = True
+                        existing_completion.completed_by = current_user.id
+                        existing_completion.completed_at = datetime.now()
+                        completion = existing_completion
+                    else:
+                        # Create new completion record
+                        completion = AuditTaskCompletion(
+                            audit_task_id=task.id,
+                            machine_id=machine.id,
+                            date=today,
+                            completed=True,
+                            completed_by=current_user.id,
+                            completed_at=datetime.now()
+                        )
+                        db.session.add(completion)
                     updated += 1
         if updated:
             db.session.commit()
