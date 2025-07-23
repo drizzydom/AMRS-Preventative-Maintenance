@@ -135,6 +135,28 @@ def ensure_large_user_columns():
 import json as _json
 from sqlalchemy.exc import SQLAlchemyError
 
+def fix_postgresql_sequence(table_name):
+    """
+    Fix PostgreSQL sequence for a table to avoid ID conflicts.
+    This ensures the next auto-generated ID will be higher than any existing IDs.
+    """
+    try:
+        # Only run on PostgreSQL (not SQLite)
+        if 'postgresql' in str(db.engine.url).lower():
+            from sqlalchemy import text
+            # Get the maximum ID from the table
+            result = db.session.execute(text(f"SELECT MAX(id) FROM {table_name}")).scalar()
+            if result:
+                # Set sequence to max_id + 1
+                sequence_name = f"{table_name}_id_seq"
+                db.session.execute(text(f"SELECT setval('{sequence_name}', {result})"))
+                db.session.commit()
+                print(f"[SEQUENCE] Fixed {sequence_name} to start from {result + 1}")
+    except Exception as e:
+        print(f"[SEQUENCE] Error fixing sequence for {table_name}: {e}")
+        # Don't let sequence errors break the main functionality
+        pass
+
 def check_desktop_clients_available():
     """
     Check if desktop client sync is configured and working.
@@ -2159,16 +2181,32 @@ def audits_page():
                         existing_completion.completed_at = datetime.now()
                         completion = existing_completion
                     else:
-                        # Create new completion record
-                        completion = AuditTaskCompletion(
+                        # Check for any existing completion for this task/machine/date combination
+                        # This handles cases where completions exist but weren't in our initial query
+                        existing_any = AuditTaskCompletion.query.filter_by(
                             audit_task_id=task.id,
                             machine_id=machine.id,
-                            date=today,
-                            completed=True,
-                            completed_by=current_user.id,
-                            completed_at=datetime.now()
-                        )
-                        db.session.add(completion)
+                            date=today
+                        ).first()
+                        
+                        if existing_any:
+                            # Update the existing record
+                            existing_any.completed = True
+                            existing_any.completed_by = current_user.id
+                            existing_any.completed_at = datetime.now()
+                            completion = existing_any
+                        else:
+                            # Create new completion record using merge for safety
+                            completion = AuditTaskCompletion(
+                                audit_task_id=task.id,
+                                machine_id=machine.id,
+                                date=today,
+                                completed=True,
+                                completed_by=current_user.id,
+                                completed_at=datetime.now()
+                            )
+                            # Use merge to handle ID conflicts gracefully
+                            completion = db.session.merge(completion)
                     updated += 1
         if updated:
             db.session.commit()
