@@ -348,7 +348,7 @@ def save_daily_audit_status(app):
                             date=today,
                             completed=False
                         )
-                        db.session.add(completion)
+                        db.session.merge(completion)
                         new_completions.append((task.name, machine.name))
             
             # Save all new completions
