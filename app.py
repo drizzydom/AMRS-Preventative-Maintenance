@@ -2196,7 +2196,20 @@ def audits_page():
                             existing_any.completed_at = datetime.now()
                             completion = existing_any
                         else:
-                            # Create new completion record using merge for safety
+                            # Create new completion record with robust conflict handling
+                            # First, fix PostgreSQL sequence to prevent ID conflicts
+                            try:
+                                if 'postgresql' in str(db.engine.url).lower():
+                                    from sqlalchemy import text
+                                    # Get max ID and update sequence
+                                    max_id = db.session.execute(text("SELECT COALESCE(MAX(id), 0) FROM audit_task_completions")).scalar()
+                                    if max_id:
+                                        db.session.execute(text(f"SELECT setval('audit_task_completions_id_seq', {max_id + 1})"))
+                                        db.session.commit()
+                            except Exception as seq_error:
+                                print(f"[AUDIT] Could not fix sequence: {seq_error}")
+                            
+                            # Now create the completion record
                             completion = AuditTaskCompletion(
                                 audit_task_id=task.id,
                                 machine_id=machine.id,
@@ -2205,8 +2218,19 @@ def audits_page():
                                 completed_by=current_user.id,
                                 completed_at=datetime.now()
                             )
-                            # Use merge to handle ID conflicts gracefully
-                            completion = db.session.merge(completion)
+                            
+                            # Try add first, if it fails due to ID conflict, use merge
+                            try:
+                                db.session.add(completion)
+                                db.session.flush()  # This will trigger the ID assignment and potential conflict
+                            except Exception as add_error:
+                                if "duplicate key" in str(add_error).lower() or "unique constraint" in str(add_error).lower():
+                                    print(f"[AUDIT] ID conflict detected, using merge: {add_error}")
+                                    db.session.rollback()
+                                    # Use merge as fallback
+                                    completion = db.session.merge(completion)
+                                else:
+                                    raise add_error
                     updated += 1
         if updated:
             db.session.commit()
