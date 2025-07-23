@@ -2106,7 +2106,7 @@ def audits_page():
                         completed_by=current_user.id,
                         completed_at=datetime.now()
                     )
-                    db.session.add(completion)
+                    db.session.merge(completion)
                     updated += 1
         if updated:
             db.session.commit()
