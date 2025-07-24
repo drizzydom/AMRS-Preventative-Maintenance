@@ -99,11 +99,25 @@ def background_sync_worker():
             if sync_event.is_set():
                 sync_event.clear()  # Reset event until next change
 
-# Start the background sync worker thread
-sync_thread = threading.Thread(target=background_sync_worker, daemon=True)
-sync_thread.start()
-# Signal sync worker on startup to process any existing pending changes
-sync_event.set()
+# Start the background sync worker thread only for offline clients, not on the online server
+# Check if this is the online server by looking for typical online server indicators
+is_online_server = (
+    os.environ.get('RENDER') or  # Render platform
+    os.environ.get('HEROKU') or  # Heroku platform
+    os.environ.get('RAILWAY') or  # Railway platform
+    'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '') or
+    not os.environ.get('AMRS_ONLINE_URL')  # If no online URL is set, this probably IS the online server
+)
+
+if not is_online_server:
+    # Only start sync worker on offline clients
+    sync_thread = threading.Thread(target=background_sync_worker, daemon=True)
+    sync_thread.start()
+    # Signal sync worker on startup to process any existing pending changes
+    sync_event.set()
+    print("[SYNC] Background sync worker started for offline client")
+else:
+    print("[SYNC] Skipping background sync worker - this appears to be the online server")
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
 def ensure_large_user_columns():
     """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
@@ -209,6 +223,19 @@ def add_to_sync_queue(table_name, record_id, operation, payload_dict):
         payload_dict (dict): The record data (as dict, will be JSON-encoded).
     """
     try:
+        # Check if this is the online server - if so, don't add to sync queue
+        is_online_server = (
+            os.environ.get('RENDER') or  # Render platform
+            os.environ.get('HEROKU') or  # Heroku platform
+            os.environ.get('RAILWAY') or  # Railway platform
+            'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '') or
+            not os.environ.get('AMRS_ONLINE_URL')  # If no online URL is set, this probably IS the online server
+        )
+        
+        if is_online_server:
+            print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
+            return
+            
         from sqlalchemy import text as sa_text
         now = datetime.utcnow()
         payload_json = _json.dumps(payload_dict)
