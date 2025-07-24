@@ -1,5 +1,10 @@
 # --- Background Sync Worker ---
 import requests
+import os
+import threading
+import time
+from datetime import datetime, timedelta, date
+import json as _json
 
 def upload_pending_sync_queue():
     """Upload all pending sync_queue items to the server and mark them as synced if successful."""
@@ -65,15 +70,11 @@ def upload_pending_sync_queue():
             print(f"[SYNC] Exception during upload: {e}")
             # For any other exception, ensure we don't crash the sync worker
 
-import threading
-import time
-
 # Global event to signal sync worker
 sync_event = threading.Event()
 
 def background_sync_worker():
     """Background thread that waits for sync_event and uploads sync_queue changes."""
-    import time
     last_periodic_check = time.time()
     
     while True:
@@ -146,7 +147,6 @@ def ensure_large_user_columns():
         print(f"[SCHEMA] Error ensuring large user columns: {e}")
 
 # --- Utility: Add change to sync_queue ---
-import json as _json
 from sqlalchemy.exc import SQLAlchemyError
 
 def fix_postgresql_sequence(table_name):
@@ -326,7 +326,6 @@ def ensure_sync_columns_sqlite():
 
 
 # Standard library imports
-import os
 import sys
 import random
 import string
@@ -334,7 +333,6 @@ import logging
 import signal
 import argparse
 import calendar
-from datetime import datetime, timedelta, date
 from functools import wraps
 import traceback
 from io import BytesIO
@@ -357,7 +355,6 @@ from sqlalchemy import inspect
 import smtplib
 from jinja2 import Environment, FileSystemLoader
 import csv
-import json
 import requests
 
 # Local imports
@@ -5943,7 +5940,7 @@ def bulk_import():
                 reader = csv.DictReader(stream.splitlines())
                 data = list(reader)
             elif ext == 'json':
-                data = json.load(file.stream)
+                data = _json.load(file.stream)
                 if not isinstance(data, list):
                     flash('JSON must be an array of objects.', 'danger')
                     return redirect(url_for('bulk_import'))
