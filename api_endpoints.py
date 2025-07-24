@@ -8,6 +8,7 @@ import jwt
 import datetime
 from flask_login import current_user, login_required
 import os
+from timezone_utils import get_timezone_aware_now, convert_utc_to_eastern
 from app import app, db
 from app import User, Site, Machine, Part, MaintenanceRecord
 from app import Role
@@ -69,7 +70,7 @@ def login():
     # Generate JWT token
     token = jwt.encode({
         'user_id': user.id,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+        'exp': get_timezone_aware_now() + datetime.timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     }, JWT_SECRET_KEY)
     
     # Return token and user info
@@ -88,7 +89,7 @@ def login():
 @token_required
 def get_dashboard(current_user):
     """API endpoint to get dashboard data"""
-    now = datetime.datetime.utcnow()
+    now = get_timezone_aware_now()  # Use timezone-aware datetime
     
     # Get all parts
     parts = Part.query.all()
@@ -338,7 +339,7 @@ def record_maintenance(current_user):
         return jsonify({'error': 'Access denied'}), 403
     
     # Update part maintenance information
-    maintenance_date = datetime.datetime.utcnow()
+    maintenance_date = get_timezone_aware_now()  # Use timezone-aware datetime
     performed_by = current_user.display_name
     
     # Update part
@@ -406,7 +407,7 @@ def health_check():
     """Simple health check endpoint for the Electron app to verify server status"""
     return jsonify({
         'status': 'ok',
-        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'timestamp': get_timezone_aware_now().isoformat(),
         'version': '1.0.0'
     })
 
@@ -417,7 +418,7 @@ def sync_debug():
     from sqlalchemy import inspect, text
     
     debug_info = {
-        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'timestamp': get_timezone_aware_now().isoformat(),
         'has_machine_audit_task_table': False,
         'machine_audit_task_count': 0,
         'raw_query_test': None,

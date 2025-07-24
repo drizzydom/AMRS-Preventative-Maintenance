@@ -6,6 +6,15 @@ import time
 from datetime import datetime, timedelta, date
 import json as _json
 
+# Import enhanced sync utilities
+from timezone_utils import get_timezone_aware_now, get_eastern_date, is_online_server
+from sync_utils_enhanced import (
+    add_to_sync_queue_enhanced, 
+    trigger_manual_sync, 
+    start_enhanced_sync_worker,
+    cleanup_expired_sync_queue_enhanced
+)
+
 def upload_pending_sync_queue():
     """Upload all pending sync_queue items to the server and mark them as synced if successful."""
     from sqlalchemy import text as sa_text
@@ -100,25 +109,8 @@ def background_sync_worker():
             if sync_event.is_set():
                 sync_event.clear()  # Reset event until next change
 
-# Start the background sync worker thread only for offline clients, not on the online server
-# Check if this is the online server by looking for typical online server indicators
-is_online_server = (
-    os.environ.get('RENDER') or  # Render platform
-    os.environ.get('HEROKU') or  # Heroku platform
-    os.environ.get('RAILWAY') or  # Railway platform
-    'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '') or
-    not os.environ.get('AMRS_ONLINE_URL')  # If no online URL is set, this probably IS the online server
-)
-
-if not is_online_server:
-    # Only start sync worker on offline clients
-    sync_thread = threading.Thread(target=background_sync_worker, daemon=True)
-    sync_thread.start()
-    # Signal sync worker on startup to process any existing pending changes
-    sync_event.set()
-    print("[SYNC] Background sync worker started for offline client")
-else:
-    print("[SYNC] Skipping background sync worker - this appears to be the online server")
+# Start the enhanced background sync worker for offline clients only
+start_enhanced_sync_worker()
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
 def ensure_large_user_columns():
     """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
@@ -2106,7 +2098,7 @@ def audits_page():
         audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).filter(AuditTask.site_id.in_(user_site_ids)).all()
         sites = Site.query.options(joinedload(Site.machines)).filter(Site.id.in_(user_site_ids)).all()
 
-    today = date.today()
+    today = get_eastern_date()  # Use timezone-aware date
     completions = {(c.audit_task_id, c.machine_id): c for c in AuditTaskCompletion.query.filter_by(date=today).all()}
     
     # Build a dict: (task_id, machine_id) -> next_eligible_date
@@ -2177,22 +2169,22 @@ def audits_page():
                 machine = Machine.query.get(int(machine_id))
                 if machine:
                     audit_task.machines.append(machine)
-                    # Log to sync queue for machine_audit_task association
-                    add_to_sync_queue('machine_audit_task', f'{audit_task.id}_{machine.id}', 'insert', {
+                    # Log to sync queue for machine_audit_task association (immediate sync)
+                    add_to_sync_queue_enhanced('machine_audit_task', f'{audit_task.id}_{machine.id}', 'insert', {
                         'audit_task_id': audit_task.id,
                         'machine_id': machine.id
-                    })
+                    }, immediate_sync=True)
             db.session.add(audit_task)
             db.session.commit()
-            # Log to sync queue
-            add_to_sync_queue('audit_tasks', audit_task.id, 'insert', {
+            # Log to sync queue (immediate sync)
+            add_to_sync_queue_enhanced('audit_tasks', audit_task.id, 'insert', {
                 'id': audit_task.id,
                 'name': audit_task.name,
                 'site_id': audit_task.site_id,
                 'interval': audit_task.interval,
                 'custom_interval_days': audit_task.custom_interval_days,
                 'color': audit_task.color
-            })
+            }, immediate_sync=True)
             flash('Audit task created successfully.', 'success')
             return redirect(url_for('audits_page'))
         except Exception as e:
@@ -2220,19 +2212,19 @@ def audits_page():
                         # Update existing completion record
                         existing_completion.completed = True
                         existing_completion.completed_by = current_user.id
-                        existing_completion.completed_at = datetime.now()
+                        existing_completion.completed_at = get_timezone_aware_now()  # Use timezone-aware datetime
                         completion = existing_completion
                         
-                        # Log to sync queue for updated completion
-                        add_to_sync_queue('audit_task_completions', completion.id, 'update', {
+                        # Log to sync queue for updated completion (immediate sync)
+                        add_to_sync_queue_enhanced('audit_task_completions', completion.id, 'update', {
                             'id': completion.id,
                             'audit_task_id': completion.audit_task_id,
                             'machine_id': completion.machine_id,
                             'date': str(completion.date),
                             'completed': completion.completed,
                             'completed_by': completion.completed_by,
-                            'completed_at': str(completion.completed_at)
-                        })
+                            'completed_at': completion.completed_at.isoformat() if completion.completed_at else None
+                        }, immediate_sync=True)
                     else:
                         # Check for any existing completion for this task/machine/date combination
                         # This handles cases where completions exist but weren't in our initial query
@@ -2246,19 +2238,19 @@ def audits_page():
                             # Update the existing record
                             existing_any.completed = True
                             existing_any.completed_by = current_user.id
-                            existing_any.completed_at = datetime.now()
+                            existing_any.completed_at = get_timezone_aware_now()  # Use timezone-aware datetime
                             completion = existing_any
                             
-                            # Log to sync queue for updated completion
-                            add_to_sync_queue('audit_task_completions', completion.id, 'update', {
+                            # Log to sync queue for updated completion (immediate sync)
+                            add_to_sync_queue_enhanced('audit_task_completions', completion.id, 'update', {
                                 'id': completion.id,
                                 'audit_task_id': completion.audit_task_id,
                                 'machine_id': completion.machine_id,
                                 'date': str(completion.date),
                                 'completed': completion.completed,
                                 'completed_by': completion.completed_by,
-                                'completed_at': str(completion.completed_at)
-                            })
+                                'completed_at': completion.completed_at.isoformat() if completion.completed_at else None
+                            }, immediate_sync=True)
                         else:
                             # Create new completion record with robust conflict handling
                             # First, fix PostgreSQL sequence to prevent ID conflicts
@@ -2280,7 +2272,7 @@ def audits_page():
                                 date=today,
                                 completed=True,
                                 completed_by=current_user.id,
-                                completed_at=datetime.now()
+                                completed_at=get_timezone_aware_now()  # Use timezone-aware datetime
                             )
                             
                             # Try add first, if it fails due to ID conflict, use merge
@@ -2297,17 +2289,17 @@ def audits_page():
                                 else:
                                     raise add_error
                     
-                    # Log to sync queue immediately after successful completion creation
+                    # Log to sync queue immediately after successful completion creation (immediate sync)
                     if completion and hasattr(completion, 'id'):
-                        add_to_sync_queue('audit_task_completions', completion.id, 'insert', {
+                        add_to_sync_queue_enhanced('audit_task_completions', completion.id, 'insert', {
                             'id': completion.id,
                             'audit_task_id': completion.audit_task_id,
                             'machine_id': completion.machine_id,
                             'date': str(completion.date),
                             'completed': completion.completed,
                             'completed_by': completion.completed_by,
-                            'completed_at': str(completion.completed_at)
-                        })
+                            'completed_at': completion.completed_at.isoformat() if completion.completed_at else None
+                        }, immediate_sync=True)
                     
                     updated += 1
         if updated:
@@ -3482,19 +3474,19 @@ def update_maintenance_alt():
         )
         db.session.add(maintenance_record)
         db.session.commit()
-        # Log to sync queue: maintenance record insert and part update
-        add_to_sync_queue('maintenance_records', maintenance_record.id, 'insert', {
+        # Log to sync queue: maintenance record insert and part update (immediate sync)
+        add_to_sync_queue_enhanced('maintenance_records', maintenance_record.id, 'insert', {
             'id': maintenance_record.id,
             'part_id': maintenance_record.part_id,
             'user_id': maintenance_record.user_id,
             'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
             'comments': maintenance_record.comments
-        })
-        add_to_sync_queue('parts', part.id, 'update', {
+        }, immediate_sync=True)
+        add_to_sync_queue_enhanced('parts', part.id, 'update', {
             'id': part.id,
             'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
             'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
-        })
+        }, immediate_sync=True)
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
         referrer = request.referrer
         if referrer:
@@ -4009,11 +4001,21 @@ def sync_status():
         # Basic information about the server state
         return jsonify({
             'status': 'online',
-            'server_time': datetime.now().isoformat(),
-            'version': '1.0.0'
+            'server_time': get_timezone_aware_now().isoformat(),
+            'version': '1.0.0',
+            'timezone': 'America/New_York'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/sync/trigger', methods=['POST'])
+def api_trigger_manual_sync():
+    """API endpoint to trigger manual sync (for offline clients only)."""
+    try:
+        result = trigger_manual_sync()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
 
 
