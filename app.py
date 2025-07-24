@@ -111,6 +111,10 @@ def background_sync_worker():
 
 # Start the enhanced background sync worker for offline clients only
 start_enhanced_sync_worker()
+
+
+# --- SocketIO event for triggering sync ---
+# (Moved below app creation for correct initialization)
 # --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
 def ensure_large_user_columns():
     """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
@@ -193,15 +197,8 @@ def notify_desktop_clients_of_changes():
     This could be expanded to use webhooks, push notifications, etc.
     """
     try:
-        # For now, just log that changes are available
-        # In the future, this could trigger push notifications to desktop clients
         print("[SYNC] Audit task completion changes available for desktop client sync")
-        
-        # Could add webhook calls here to notify specific desktop clients
-        # webhook_url = os.environ.get('DESKTOP_SYNC_WEBHOOK')
-        # if webhook_url:
-        #     requests.post(webhook_url, json={'type': 'audit_completion_change'})
-        
+        notify_clients_of_sync()
     except Exception as e:
         print(f"[SYNC] Error notifying desktop clients: {e}")
 
@@ -317,6 +314,9 @@ def ensure_sync_columns_sqlite():
     print("[SYNC] Sync columns ensured in SQLite.")
 
 
+# --- Flask-SocketIO for Real-Time Sync ---
+from flask_socketio import SocketIO, emit
+
 # Standard library imports
 import sys
 import random
@@ -421,6 +421,21 @@ storage_ok = check_persistent_storage()
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Initialize SocketIO after app is created
+from flask_socketio import SocketIO, emit
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+# --- SocketIO event for triggering sync ---
+@socketio.on('connect')
+def handle_connect():
+    print(f"[SocketIO] Client connected: {request.sid}")
+    emit('connected', {'message': 'Connected to AMRS sync server'})
+
+# Function to emit sync event to all clients
+def notify_clients_of_sync():
+    print("[SocketIO] Emitting sync event to all clients...")
+    socketio.emit('sync', {'message': 'Data changed, please sync.'})
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
@@ -6609,11 +6624,8 @@ else:
 
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
-    # Run the Flask app locally with the same settings as Render
-    # Use the PORT environment variable if set, otherwise default to 10000 (or 5000 for Flask default)
+    # Run the Flask app with SocketIO for WebSocket support
     port = int(os.environ.get("PORT", 10000))
-    # Use debug mode only if FLASK_ENV=development
     debug = os.environ.get("FLASK_ENV", "production") == "development"
-    # Use 127.0.0.1 for offline mode, 0.0.0.0 for online
     host = "127.0.0.1" if offline_mode else "0.0.0.0"
-    app.run(host=host, port=port, debug=debug)
+    socketio.run(app, host=host, port=port, debug=debug)
