@@ -68,13 +68,21 @@ def get_eastern_date():
 def is_online_server():
     """
     Check if this is the online server (Render, Heroku, etc.)
+    
+    An online server is identified by:
+    1. Running on a known cloud platform (RENDER, HEROKU, RAILWAY)
+    2. Having RENDER_EXTERNAL_URL containing 'render.com'
+    3. Having IS_ONLINE_SERVER explicitly set to 'true'
+    
+    NOTE: Missing AMRS_ONLINE_URL does NOT mean this is an online server!
+    That just means it's a misconfigured offline client.
     """
     return (
         os.environ.get('RENDER') or
         os.environ.get('HEROKU') or
         os.environ.get('RAILWAY') or
         'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '') or
-        not os.environ.get('AMRS_ONLINE_URL')
+        os.environ.get('IS_ONLINE_SERVER', '').lower() == 'true'
     )
 
 def get_timezone_aware_now():
