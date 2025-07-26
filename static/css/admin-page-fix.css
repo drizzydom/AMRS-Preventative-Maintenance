@@ -5,7 +5,7 @@
 
 /* Remove previous rules that might be conflicting with base.html */
 
-/* Establish proper content structure for all admin pages */
+/* Establish proper content structure for admin pages */
 .page-content .row,
 .admin-dashboard .row,
 .user-profile .row,
