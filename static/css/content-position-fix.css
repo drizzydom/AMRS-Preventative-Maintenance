@@ -10,8 +10,9 @@
         transition: margin-left 0.3s ease, width 0.3s ease;
     }
 
-    /* Specific fix for maintenance records page when sidebar is expanded */
-    body.maintenance-records-page:not(.sidebar-collapsed) .content-container {
+    /* Specific fixes for pages that need extra indentation when sidebar is expanded */
+    body.maintenance-records-page:not(.sidebar-collapsed) .content-container,
+    body.dashboard-page:not(.sidebar-collapsed) .content-container {
         margin-left: 200px; /* Match sidebar width */
         width: calc(100% - 200px);
     }
