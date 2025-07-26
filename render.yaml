@@ -3,11 +3,11 @@ services:
     name: amrs-maintenance
     env: python
     buildCommand: pip install -r requirements.txt && python3 ensure_decommission_fields.py
-    startCommand: gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload wsgi:application
+    startCommand: gunicorn -w 1 --bind 0.0.0.0:$PORT --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload wsgi:application
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
       - key: FLASK_APP
         value: app.py
-      - key: SOCKETIO_ASYNC_MODE
-        value: eventlet
+      - key: RENDER
+        value: "true"
