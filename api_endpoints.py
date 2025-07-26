@@ -366,40 +366,8 @@ def record_maintenance(current_user):
         'next_maintenance': part.next_maintenance.isoformat()
     })
 
-@api_bp.route('/sync/data', methods=['GET'])
-def sync_data():
-    """Endpoint to provide all data needed for offline sync, including audit_tasks."""
-    # Basic HTTP auth for offline sync
-    auth = request.authorization
-    if not auth or not auth.username or not auth.password:
-        return jsonify({'error': 'Missing credentials'}), 401
-    user = User.query.filter_by(username=auth.username).first()
-    if not user or not user.check_password(auth.password):
-        return jsonify({'error': 'Invalid credentials'}), 401
-    # Only allow admin or users with sync permission
-    if not user.is_admin:
-        return jsonify({'error': 'Access denied'}), 403
-
-    # Collect all data for sync
-    data = {}
-    data['users'] = [u.to_dict() for u in User.query.all()]
-    data['roles'] = [r.to_dict() for r in Role.query.all()]
-    data['sites'] = [s.to_dict() for s in Site.query.all()]
-    data['machines'] = [m.to_dict() for m in Machine.query.all()]
-    data['parts'] = [p.to_dict() for p in Part.query.all()]
-    data['maintenance_records'] = [mr.to_dict() for mr in MaintenanceRecord.query.all()] if 'MaintenanceRecord' in globals() else []
-    data['audit_tasks'] = [at.to_dict() for at in AuditTask.query.all()] if 'AuditTask' in globals() else []
-    data['audit_task_completions'] = [ac.to_dict() for ac in AuditTaskCompletion.query.all()] if 'AuditTaskCompletion' in globals() else []
-    # Fix machine_audit_task association export - convert raw rows to dicts
-    from sqlalchemy import inspect
-    inspector = inspect(db.engine)
-    if inspector.has_table('machine_audit_task'):
-        from sqlalchemy import text
-        result = db.session.execute(text('SELECT audit_task_id, machine_id FROM machine_audit_task'))
-        data['machine_audit_task'] = [{'audit_task_id': row[0], 'machine_id': row[1]} for row in result.fetchall()]
-    else:
-        data['machine_audit_task'] = []
-    return jsonify(data)
+# Sync endpoint moved to app.py to avoid duplication
+# The main sync endpoint with both GET and POST support is in app.py
 
 # Add a health check endpoint
 @api_bp.route('/health', methods=['GET'])

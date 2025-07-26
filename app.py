@@ -2883,7 +2883,7 @@ def admin_users():
             db.session.add(new_user)
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('users', new_user.id, 'insert', {
+            add_to_sync_queue_enhanced('users', new_user.id, 'insert', {
                 'id': new_user.id,
                 'username': new_user.username,
                 'email': new_user.email,
@@ -3015,7 +3015,7 @@ def edit_user(user_id):
             # Force immediate commit to database
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('users', user.id, 'update', {
+            add_to_sync_queue_enhanced('users', user.id, 'update', {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
@@ -3024,7 +3024,7 @@ def edit_user(user_id):
             })
             # Log all site assignments for this user
             for site in user.sites:
-                add_to_sync_queue('user_sites', f'{user.id}_{site.id}', 'update', {
+                add_to_sync_queue_enhanced('user_sites', f'{user.id}_{site.id}', 'update', {
                     'user_id': user.id,
                     'site_id': site.id
                 })
@@ -3084,7 +3084,7 @@ def admin_roles():
             db.session.add(new_role)
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('roles', new_role.id, 'insert', {
+            add_to_sync_queue_enhanced('roles', new_role.id, 'insert', {
                 'id': new_role.id,
                 'name': new_role.name,
                 'description': new_role.description,
@@ -3130,7 +3130,7 @@ def delete_machine(machine_id):
             db.session.delete(machine)
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('machines', machine_id, 'delete', {'id': machine_id})
+            add_to_sync_queue_enhanced('machines', machine_id, 'delete', {'id': machine_id})
             flash(f'Machine "{machine.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_machines'))
@@ -3153,7 +3153,7 @@ def delete_part(part_id):
         db.session.delete(part)
         db.session.commit()
         # Log to sync queue
-        add_to_sync_queue('parts', part_id, 'delete', {'id': part_id})
+        add_to_sync_queue_enhanced('parts', part_id, 'delete', {'id': part_id})
         flash(f'Part "{part.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_parts'))
@@ -3182,7 +3182,7 @@ def delete_site(site_id):
             db.session.delete(site)
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('sites', site_id, 'delete', {'id': site_id})
+            add_to_sync_queue_enhanced('sites', site_id, 'delete', {'id': site_id})
             flash(f'Site "{site.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_sites'))
@@ -3265,7 +3265,7 @@ def delete_role(role_id):
             db.session.delete(role)
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('roles', role_id, 'delete', {'id': role_id})
+            add_to_sync_queue_enhanced('roles', role_id, 'delete', {'id': role_id})
             flash(f'Role "{role.name}" has been deleted successfully.', 'success')
         return redirect('/admin/roles')
     except Exception as e:
@@ -3301,7 +3301,7 @@ def delete_user(user_id):
         db.session.delete(user)
         db.session.commit()
         # Log to sync queue
-        add_to_sync_queue('users', user_id, 'delete', {'id': user_id})
+        add_to_sync_queue_enhanced('users', user_id, 'delete', {'id': user_id})
         flash(f'User "{user.username}" has been deleted successfully.', 'success')
         
         return redirect('/admin/users')
@@ -3429,7 +3429,7 @@ def maintenance_page():
                         db.session.add(part)
                     db.session.commit()
                     # Log to sync queue
-                    add_to_sync_queue('maintenance_records', new_record.id, 'insert', {
+                    add_to_sync_queue_enhanced('maintenance_records', new_record.id, 'insert', {
                         'id': new_record.id,
                         'machine_id': new_record.machine_id,
                         'part_id': new_record.part_id,
@@ -3554,7 +3554,7 @@ def update_maintenance(part_id):
         db.session.add(maintenance_record)
         db.session.commit()
         # Log to sync queue: maintenance record insert and part update
-        add_to_sync_queue('maintenance_records', maintenance_record.id, 'insert', {
+        add_to_sync_queue_enhanced('maintenance_records', maintenance_record.id, 'insert', {
             'id': maintenance_record.id,
             'part_id': maintenance_record.part_id,
             'user_id': maintenance_record.user_id,
@@ -3563,7 +3563,7 @@ def update_maintenance(part_id):
             'description': maintenance_record.description,
             'machine_id': maintenance_record.machine_id
         })
-        add_to_sync_queue('parts', part.id, 'update', {
+        add_to_sync_queue_enhanced('parts', part.id, 'update', {
             'id': part.id,
             'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
             'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
