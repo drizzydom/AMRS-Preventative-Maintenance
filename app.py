@@ -431,22 +431,49 @@ import os
 from flask_socketio import SocketIO, emit, disconnect
 from flask import request
 
-# Determine async mode based on environment
-async_mode = os.environ.get('SOCKETIO_ASYNC_MODE', 'eventlet')
-if async_mode not in ['eventlet', 'gevent', 'threading']:
-    async_mode = 'eventlet'
+# Determine async mode based on environment and availability
+def get_async_mode():
+    """Determine the best async mode based on environment and available packages"""
+    # Check if we're in production (Render)
+    if os.environ.get('RENDER'):
+        try:
+            import eventlet
+            return 'eventlet'
+        except ImportError:
+            try:
+                import gevent
+                return 'gevent'
+            except ImportError:
+                return 'threading'
+    else:
+        # Local development - use threading for compatibility
+        return 'threading'
 
-# Memory-optimized SocketIO configuration
-socketio = SocketIO(
-    app, 
-    cors_allowed_origins=["https://amrs-maintenance.onrender.com", "http://localhost:10000", "http://127.0.0.1:10000"],
-    async_mode=async_mode,
-    ping_timeout=60,
-    ping_interval=25,
-    max_http_buffer_size=1024*1024,  # 1MB max message size
-    allow_upgrades=True,
-    transports=['websocket', 'polling']
-)
+async_mode = get_async_mode()
+print(f"[SocketIO] Using async_mode: {async_mode}")
+
+# Memory-optimized SocketIO configuration with fallback handling
+try:
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins=["https://amrs-maintenance.onrender.com", "http://localhost:10000", "http://127.0.0.1:10000"],
+        async_mode=async_mode,
+        ping_timeout=60,
+        ping_interval=25,
+        max_http_buffer_size=1024*1024,  # 1MB max message size
+        allow_upgrades=True,
+        transports=['websocket', 'polling']
+    )
+    print(f"[SocketIO] Successfully initialized with {async_mode} mode")
+except Exception as e:
+    print(f"[SocketIO ERROR] Failed to initialize with {async_mode}: {e}")
+    # Fallback to basic threading mode
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins=["https://amrs-maintenance.onrender.com", "http://localhost:10000", "http://127.0.0.1:10000"],
+        async_mode='threading'
+    )
+    print("[SocketIO] Fallback to basic threading mode")
 
 # Connection tracking for memory management
 active_connections = set()
