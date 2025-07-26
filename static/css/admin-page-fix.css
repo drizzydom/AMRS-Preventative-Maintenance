@@ -10,8 +10,7 @@
 .admin-dashboard .row,
 .user-profile .row,
 .admin-roles .row,
-.admin-users .row,
-.dashboard .row {
+.admin-users .row {
     margin-left: 0;
     margin-right: 0;
     width: 100%;
