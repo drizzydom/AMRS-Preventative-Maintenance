@@ -1,15 +1,10 @@
 """
 WSGI entry point for the AMRS Preventative Maintenance application.
 This file is used by Gunicorn to serve the application in production.
-Optimized for SocketIO with memory management.
 """
 import os
 import sys
 import logging
-import eventlet
-
-# Patch standard library for eventlet compatibility BEFORE any other imports
-eventlet.monkey_patch()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +31,7 @@ logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
 from auto_migrate import run_auto_migration
 run_auto_migration()
 
-# Import the Flask app and SocketIO instance from render_app.py
+# Import the Flask app and SocketIO from render_app.py (which imports from app.py)
 from render_app import app, socketio
 
 # Ensure all tables are created before serving requests
@@ -44,14 +39,11 @@ from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine
 with app.app_context():
     db.create_all()
 
-# Memory management settings for eventlet
-eventlet.debug.hub_exceptions(False)  # Reduce debug overhead
-
-# For gunicorn usage - expose the app
+# For gunicorn usage - expose the Flask app
 application = app
 
 if __name__ == "__main__":
-    # Direct run (not recommended for production)
+    # Direct run for testing
     port = int(os.environ.get("PORT", 5000))
-    logger.info(f"[AMRS Production] Starting SocketIO server on 0.0.0.0:{port}")
+    logger.info(f"[AMRS] Starting SocketIO server on 0.0.0.0:{port}")
     socketio.run(app, host="0.0.0.0", port=port, debug=False)
