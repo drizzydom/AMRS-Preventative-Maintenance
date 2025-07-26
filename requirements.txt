@@ -34,3 +34,6 @@ pytest
 pytest-cov
 cryptography
 flask-socketio
+eventlet==0.33.3
+psutil==5.9.0
+python-socketio[client]==5.7.0
