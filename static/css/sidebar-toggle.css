@@ -80,6 +80,17 @@ body.sidebar-collapsed .sidebar .sidebar-link-text {
     display: none;
 }
 
+/* Adjust main content area when sidebar is EXPANDED */
+body:not(.sidebar-collapsed) .content-container,
+body:not(.sidebar-collapsed) .main-content,
+body:not(.sidebar-collapsed) .col-content,
+body:not(.sidebar-collapsed) .page-content,
+body:not(.sidebar-collapsed) .footer {
+    margin-left: 200px !important; /* Match expanded sidebar width */
+    width: calc(100% - 200px) !important;
+    max-width: calc(100% - 200px) !important;
+}
+
 /* Adjust main content area when sidebar is collapsed */
 body.sidebar-collapsed .content-container,
 body.sidebar-collapsed .main-content,
