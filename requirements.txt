@@ -33,7 +33,7 @@ Flask-WTF>=1.0.0
 pytest
 pytest-cov
 cryptography
-flask-socketio
+flask-socketio==5.3.6
 eventlet==0.33.3
 psutil==5.9.0
-python-socketio[client]==5.7.0
+python-socketio==5.10.0
