@@ -427,19 +427,95 @@ storage_ok = check_persistent_storage()
 app = Flask(__name__, instance_relative_config=True)
 
 # Initialize SocketIO after app is created
-from flask_socketio import SocketIO, emit
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+import os
+from flask_socketio import SocketIO, emit, disconnect
+from flask import request
 
-# --- SocketIO event for triggering sync ---
+# Determine async mode based on environment
+async_mode = os.environ.get('SOCKETIO_ASYNC_MODE', 'eventlet')
+if async_mode not in ['eventlet', 'gevent', 'threading']:
+    async_mode = 'eventlet'
+
+# Memory-optimized SocketIO configuration
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins=["https://amrs-maintenance.onrender.com", "http://localhost:10000", "http://127.0.0.1:10000"],
+    async_mode=async_mode,
+    ping_timeout=60,
+    ping_interval=25,
+    max_http_buffer_size=1024*1024,  # 1MB max message size
+    allow_upgrades=True,
+    transports=['websocket', 'polling']
+)
+
+# Connection tracking for memory management
+active_connections = set()
+
+# --- SocketIO event handlers with memory management ---
 @socketio.on('connect')
 def handle_connect():
-    print(f"[SocketIO] Client connected: {request.sid}")
-    emit('connected', {'message': 'Connected to AMRS sync server'})
+    client_id = request.sid
+    active_connections.add(client_id)
+    print(f"[SocketIO] Client connected: {client_id} (Total: {len(active_connections)})")
+    emit('connected', {'message': 'Connected to AMRS sync server', 'client_id': client_id})
 
-# Function to emit sync event to all clients
+@socketio.on('disconnect')
+def handle_disconnect():
+    client_id = request.sid
+    active_connections.discard(client_id)
+    print(f"[SocketIO] Client disconnected: {client_id} (Total: {len(active_connections)})")
+
+@socketio.on('ping')
+def handle_ping():
+    """Handle client ping to maintain connection health"""
+    emit('pong')
+
+# Function to emit sync event to all clients with connection cleanup
 def notify_clients_of_sync():
-    print("[SocketIO] Emitting sync event to all clients...")
-    socketio.emit('sync', {'message': 'Data changed, please sync.'})
+    if not active_connections:
+        print("[SocketIO] No active connections, skipping sync notification")
+        return
+    
+    print(f"[SocketIO] Emitting sync event to {len(active_connections)} clients...")
+    try:
+        socketio.emit('sync', {'message': 'Data changed, please sync.', 'timestamp': str(datetime.utcnow())})
+    except Exception as e:
+        print(f"[SocketIO ERROR] Failed to emit sync event: {e}")
+        # Clean up potentially stale connections
+        active_connections.clear()
+
+# Periodic cleanup function to remove stale connections
+def cleanup_stale_connections():
+    """Remove connections that are no longer active"""
+    stale_count = 0
+    for client_id in list(active_connections):
+        try:
+            # Try to emit a small test message to verify connection
+            socketio.emit('heartbeat', {}, room=client_id)
+        except:
+            active_connections.discard(client_id)
+            stale_count += 1
+    
+    if stale_count > 0:
+        print(f"[SocketIO] Cleaned up {stale_count} stale connections")
+
+# Background cleanup task
+import threading
+import time
+
+def background_cleanup():
+    """Background thread to periodically clean up stale connections"""
+    while True:
+        try:
+            time.sleep(300)  # Clean up every 5 minutes
+            cleanup_stale_connections()
+        except Exception as e:
+            print(f"[SocketIO ERROR] Background cleanup failed: {e}")
+
+# Start background cleanup thread
+cleanup_thread = threading.Thread(target=background_cleanup, daemon=True)
+cleanup_thread.start()
+print("[SocketIO] Started background connection cleanup thread")
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
@@ -4368,7 +4444,6 @@ def sync_data():
 
 @app.route('/health-check')
 def health_check():
-
     """Basic healthcheck endpoint."""
     try:
         # Update to use connection-based execute pattern
@@ -4378,6 +4453,53 @@ def health_check():
     except Exception as e:
         app.logger.error(f"Health check failed: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/memory-status')
+def memory_status():
+    """Memory and connection monitoring endpoint."""
+    try:
+        import psutil
+        import gc
+        
+        # Get process memory info
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        memory_percent = process.memory_percent()
+        
+        # Get Python garbage collection stats
+        gc_stats = gc.get_stats()
+        gc_count = gc.get_count()
+        
+        status = {
+            'memory': {
+                'rss_mb': round(memory_info.rss / 1024 / 1024, 2),
+                'vms_mb': round(memory_info.vms / 1024 / 1024, 2),
+                'percent': round(memory_percent, 2)
+            },
+            'socketio': {
+                'active_connections': len(active_connections),
+                'connection_ids': list(active_connections)
+            },
+            'gc': {
+                'stats': gc_stats,
+                'count': gc_count
+            },
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify(status), 200
+    except ImportError:
+        # Fallback if psutil is not available
+        return jsonify({
+            'socketio': {
+                'active_connections': len(active_connections),
+                'connection_ids': list(active_connections)
+            },
+            'timestamp': datetime.utcnow().isoformat(),
+            'note': 'Install psutil for detailed memory monitoring'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.errorhandler(404)
 def page_not_found(e):
