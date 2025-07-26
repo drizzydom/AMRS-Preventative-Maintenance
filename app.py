@@ -453,10 +453,35 @@ async_mode = get_async_mode()
 print(f"[SocketIO] Using async_mode: {async_mode}")
 
 # Memory-optimized SocketIO configuration with fallback handling
+# Dynamic CORS configuration based on environment
+cors_origins = [
+    "http://localhost:10000", 
+    "http://127.0.0.1:10000",
+    "http://localhost:5000", 
+    "http://127.0.0.1:5000"
+]
+
+# Add production URL if running on Render
+render_external_url = os.environ.get('RENDER_EXTERNAL_URL')
+if render_external_url:
+    cors_origins.append(render_external_url)
+    print(f"[SocketIO] Added Render URL to CORS: {render_external_url}")
+
+# For development/testing, also allow common patterns
+if os.environ.get('FLASK_ENV') == 'development' or os.environ.get('DEBUG'):
+    cors_origins.extend([
+        "https://amrs-maintenance.onrender.com",
+        "https://amrs-pm-test.onrender.com",
+        "*"  # Allow all origins in development (use with caution)
+    ])
+    print("[SocketIO] Added development CORS origins")
+
+print(f"[SocketIO] CORS allowed origins: {cors_origins}")
+
 try:
     socketio = SocketIO(
         app, 
-        cors_allowed_origins=["https://amrs-maintenance.onrender.com", "http://localhost:10000", "http://127.0.0.1:10000"],
+        cors_allowed_origins=cors_origins,
         async_mode=async_mode,
         ping_timeout=60,
         ping_interval=25,
@@ -470,7 +495,7 @@ except Exception as e:
     # Fallback to basic threading mode
     socketio = SocketIO(
         app,
-        cors_allowed_origins=["https://amrs-maintenance.onrender.com", "http://localhost:10000", "http://127.0.0.1:10000"],
+        cors_allowed_origins=cors_origins,
         async_mode='threading'
     )
     print("[SocketIO] Fallback to basic threading mode")
