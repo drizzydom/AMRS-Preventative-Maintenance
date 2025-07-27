@@ -532,11 +532,12 @@ def handle_connect():
         print(f"[SocketIO ERROR] Error in connect handler: {e}")
 
 @socketio.on('disconnect')
-def handle_disconnect():
+def handle_disconnect(reason=None):
     try:
         client_id = request.sid
         active_connections.discard(client_id)
-        print(f"[SocketIO] Client disconnected: {client_id} (Total: {len(active_connections)})")
+        disconnect_reason = reason or 'unknown'
+        print(f"[SocketIO] Client disconnected: {client_id} (reason: {disconnect_reason}) (Total: {len(active_connections)})")
     except Exception as e:
         print(f"[SocketIO ERROR] Error in disconnect handler: {e}")
 
@@ -556,7 +557,13 @@ def handle_connect_error(data):
 @socketio.on_error_default
 def default_error_handler(e):
     """Handle any unhandled SocketIO errors"""
-    print(f"[SocketIO ERROR] Unhandled error: {e}")
+    try:
+        print(f"[SocketIO ERROR] Unhandled error: {e}")
+        # Log additional context
+        import traceback
+        print(f"[SocketIO ERROR] Traceback: {traceback.format_exc()}")
+    except Exception as log_error:
+        print(f"[SocketIO ERROR] Failed to log error: {log_error}")
     # Don't re-raise to prevent crashes
 
 # Function to emit sync event to all clients with robust error handling
@@ -4198,9 +4205,24 @@ def sync_status():
 def api_trigger_manual_sync():
     """API endpoint to trigger manual sync (for offline clients only)."""
     try:
-        result = trigger_manual_sync()
-        return jsonify(result)
+        print("[API] Manual sync trigger requested")
+        # Run sync in a separate thread to avoid blocking SocketIO
+        import threading
+        def run_sync():
+            try:
+                result = trigger_manual_sync()
+                print(f"[API] Manual sync completed: {result}")
+            except Exception as sync_error:
+                print(f"[API] Manual sync failed: {sync_error}")
+        
+        # Start sync in background to prevent SocketIO blocking
+        sync_thread = threading.Thread(target=run_sync, daemon=True)
+        sync_thread.start()
+        
+        # Return immediately to prevent request timeout
+        return jsonify({"status": "triggered", "message": "Sync started in background"})
     except Exception as e:
+        print(f"[API] Manual sync trigger error: {e}")
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
 
