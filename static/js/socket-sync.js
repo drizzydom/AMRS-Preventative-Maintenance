@@ -13,6 +13,7 @@
     let heartbeatInterval = null;
     let connectionTimeout = null;
     let isManualDisconnect = false;
+    let isSyncInProgress = false; // Flag to prevent reconnects during sync
 
     // Connection configuration for offline client stability
     const socketConfig = {
@@ -71,12 +72,22 @@
             socket.on('sync', function(data) {
                 console.log('[SocketIO] Sync event received:', data.message);
                 
-                // Trigger your incremental sync logic here
-                if (window.performIncrementalSync) {
-                    window.performIncrementalSync();
-                } else {
-                    // Fallback: reload the page to get fresh data
-                    window.location.reload();
+                // Set sync flag to prevent reconnection issues
+                isSyncInProgress = true;
+                
+                try {
+                    // Trigger your incremental sync logic here
+                    if (window.performIncrementalSync) {
+                        window.performIncrementalSync();
+                    } else {
+                        // Fallback: reload the page to get fresh data
+                        window.location.reload();
+                    }
+                } finally {
+                    // Clear sync flag after a delay
+                    setTimeout(() => {
+                        isSyncInProgress = false;
+                    }, 10000); // 10 seconds
                 }
             });
 
@@ -115,12 +126,20 @@
                     return;
                 }
                 
-                // Only attempt reconnect for certain disconnect reasons
+                // Be more selective about reconnection reasons
                 if (reason === 'io server disconnect') {
                     // Server-initiated disconnect, don't reconnect automatically
                     console.log('[SocketIO] Server disconnected us, not reconnecting');
+                } else if (reason === 'transport close' || reason === 'transport error') {
+                    // Network/transport issues, wait longer before reconnecting
+                    console.log('[SocketIO] Transport issue, delaying reconnect...');
+                    setTimeout(() => {
+                        if (!isManualDisconnect) {
+                            handleReconnect();
+                        }
+                    }, 5000); // Wait 5 seconds before reconnecting
                 } else {
-                    // Network issues or client-side disconnect, attempt reconnect
+                    // Other disconnect reasons, attempt normal reconnect
                     handleReconnect();
                 }
             });
@@ -148,8 +167,12 @@
     }
 
     function handleReconnect() {
-        if (isManualDisconnect || reconnectAttempts >= maxReconnectAttempts) {
-            console.log('[SocketIO] Max reconnection attempts reached or manual disconnect, giving up');
+        if (isManualDisconnect || isSyncInProgress || reconnectAttempts >= maxReconnectAttempts) {
+            if (isSyncInProgress) {
+                console.log('[SocketIO] Sync in progress, skipping reconnect');
+            } else {
+                console.log('[SocketIO] Max reconnection attempts reached or manual disconnect, giving up');
+            }
             return;
         }
 
@@ -168,14 +191,14 @@
     function startHeartbeat() {
         stopHeartbeat(); // Clear existing interval
         
-        // Send periodic ping to maintain connection
+        // Send periodic ping to maintain connection (reduced frequency)
         heartbeatInterval = setInterval(() => {
             if (socket && socket.connected) {
                 socket.emit('ping');
             } else {
                 stopHeartbeat();
             }
-        }, 25000); // Every 25 seconds
+        }, 45000); // Every 45 seconds (reduced from 25)
     }
 
     function stopHeartbeat() {
