@@ -221,16 +221,8 @@ def add_to_sync_queue(table_name, record_id, operation, payload_dict):
         payload_dict (dict): The record data (as dict, will be JSON-encoded).
     """
     try:
-        # Improved offline/online server detection
-        # Only treat as online server if running on a known cloud platform (RENDER/HEROKU/RAILWAY) or RENDER_EXTERNAL_URL is set
-        # Do NOT treat missing AMRS_ONLINE_URL as online server (that's an offline client misconfiguration)
-        is_online_server = bool(
-            os.environ.get('RENDER') or  # Render platform
-            os.environ.get('HEROKU') or  # Heroku platform
-            os.environ.get('RAILWAY') or  # Railway platform
-            'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '')
-        )
-        if is_online_server:
+        # Use centralized online server detection from timezone_utils
+        if is_online_server():
             print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
             return
         # If AMRS_ONLINE_URL is missing, warn and skip sync (offline client misconfiguration)
