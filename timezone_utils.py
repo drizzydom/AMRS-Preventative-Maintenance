@@ -70,19 +70,19 @@ def is_online_server():
     Check if this is the online server (Render, Heroku, etc.)
     
     An online server is identified by:
-    1. Running on a known cloud platform (RENDER, HEROKU, RAILWAY)
-    2. Having RENDER_EXTERNAL_URL containing 'render.com'
-    3. Having IS_ONLINE_SERVER explicitly set to 'true'
+    1. Running on a known cloud platform (RENDER, HEROKU, RAILWAY set by the platform)
+    2. Having IS_ONLINE_SERVER explicitly set to 'true'
     
+    NOTE: RENDER_EXTERNAL_URL alone doesn't mean this IS the server - 
+    offline clients also set this to know WHERE to sync to.
     NOTE: Missing AMRS_ONLINE_URL does NOT mean this is an online server!
     That just means it's a misconfigured offline client.
     """
     return (
-        os.environ.get('RENDER') or
-        os.environ.get('HEROKU') or
-        os.environ.get('RAILWAY') or
-        'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '') or
-        os.environ.get('IS_ONLINE_SERVER', '').lower() == 'true'
+        os.environ.get('RENDER') or  # Set by Render platform itself
+        os.environ.get('HEROKU') or  # Set by Heroku platform itself  
+        os.environ.get('RAILWAY') or  # Set by Railway platform itself
+        os.environ.get('IS_ONLINE_SERVER', '').lower() == 'true'  # Explicit override
     )
 
 def get_timezone_aware_now():
