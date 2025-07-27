@@ -3,7 +3,7 @@ services:
     name: amrs-maintenance
     env: python
     buildCommand: pip install -r requirements.txt && python3 ensure_decommission_fields.py
-    startCommand: gunicorn -w 1 --bind 0.0.0.0:$PORT --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload wsgi:application
+    startCommand: python wsgi.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0

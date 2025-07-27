@@ -1,12 +1,21 @@
+# --- Load environment variables FIRST (before any other imports) ---
+import os
+from dotenv import load_dotenv
+
+# Get the directory of this file and load .env immediately
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+dotenv_path = os.path.join(BASE_DIR, '.env')
+load_dotenv(dotenv_path)
+print(f"[APP] Loaded .env from: {dotenv_path}")
+
 # --- Background Sync Worker ---
 import requests
-import os
 import threading
 import time
 from datetime import datetime, timedelta, date
 import json as _json
 
-# Import enhanced sync utilities
+# Import enhanced sync utilities (now that .env is loaded)
 from timezone_utils import get_timezone_aware_now, get_eastern_date, is_online_server
 from sync_utils_enhanced import (
     add_to_sync_queue_enhanced, 
@@ -662,13 +671,6 @@ logging.basicConfig(
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
-
-# Get the directory of this file
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-
-# Define dotenv_path before using it
-dotenv_path = os.path.join(BASE_DIR, '.env')
-load_dotenv(dotenv_path)
 
 # Ensure .env file exists
 def ensure_env_file():
