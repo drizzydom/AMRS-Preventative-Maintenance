@@ -14,15 +14,18 @@
     let connectionTimeout = null;
     let isManualDisconnect = false;
 
-    // Connection configuration for memory efficiency
+    // Connection configuration for offline client stability
     const socketConfig = {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'], // Start with polling, upgrade to websocket
         upgrade: true,
-        rememberUpgrade: true,
-        timeout: 20000,
+        rememberUpgrade: false, // Don't remember websocket upgrade to avoid issues
+        timeout: 30000, // Increased timeout for slower connections
         forceNew: true, // Prevent connection reuse issues
         autoConnect: false, // Manual connection control
-        reconnection: false // Handle reconnection manually
+        reconnection: false, // Handle reconnection manually
+        pingTimeout: 120000, // Match server ping timeout
+        pingInterval: 60000,  // Match server ping interval
+        maxHttpBufferSize: 1e6 // 1MB buffer
     };
 
     function connectSocket() {
@@ -78,20 +81,28 @@
             });
 
             // Handle heartbeat responses
-            socket.on('heartbeat', function() {
-                // Silent heartbeat response
+            socket.on('heartbeat', function(data) {
+                // Silent heartbeat response - server is checking if we're alive
+                console.log('[SocketIO] Heartbeat received from server');
             });
 
-            socket.on('pong', function() {
+            socket.on('pong', function(data) {
                 // Response to our ping
+                console.log('[SocketIO] Pong received from server');
             });
 
             // Connection failed
             socket.on('connect_error', function(error) {
                 console.error('[SocketIO] Connection failed:', error.message || error);
+                console.error('[SocketIO] Error details:', error);
                 if (!isManualDisconnect) {
                     handleReconnect();
                 }
+            });
+
+            // Handle transport errors specifically
+            socket.on('error', function(error) {
+                console.error('[SocketIO] Transport error:', error);
             });
 
             // Disconnection handling
