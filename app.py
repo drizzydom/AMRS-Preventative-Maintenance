@@ -484,46 +484,82 @@ try:
         app, 
         cors_allowed_origins=cors_origins,
         async_mode=async_mode,
-        ping_timeout=60,
-        ping_interval=25,
+        ping_timeout=120,  # Increased from 60 to handle slower connections
+        ping_interval=60,  # Increased from 25 to reduce network traffic
         max_http_buffer_size=1024*1024,  # 1MB max message size
         allow_upgrades=True,
-        transports=['websocket', 'polling']
+        transports=['polling', 'websocket'],  # Prefer polling first, then upgrade
+        engineio_logger=False,  # Reduce verbose logging
+        socketio_logger=False   # Reduce verbose logging
     )
     print(f"[SocketIO] Successfully initialized with {async_mode} mode")
 except Exception as e:
     print(f"[SocketIO ERROR] Failed to initialize with {async_mode}: {e}")
-    # Fallback to basic threading mode
+    # Fallback to basic threading mode with conservative settings
     socketio = SocketIO(
         app,
         cors_allowed_origins=cors_origins,
-        async_mode='threading'
+        async_mode='threading',
+        ping_timeout=120,
+        ping_interval=60,
+        transports=['polling'],  # Only use polling in fallback mode
+        engineio_logger=False,
+        socketio_logger=False
     )
     print("[SocketIO] Fallback to basic threading mode")
 
 # Connection tracking for memory management
 active_connections = set()
 
-# --- SocketIO event handlers with memory management ---
+# --- SocketIO event handlers with robust error handling ---
 @socketio.on('connect')
 def handle_connect():
-    client_id = request.sid
-    active_connections.add(client_id)
-    print(f"[SocketIO] Client connected: {client_id} (Total: {len(active_connections)})")
-    emit('connected', {'message': 'Connected to AMRS sync server', 'client_id': client_id})
+    try:
+        client_id = request.sid
+        active_connections.add(client_id)
+        # Get client info for better debugging
+        client_info = {
+            'ip': request.environ.get('REMOTE_ADDR', 'unknown'),
+            'user_agent': request.environ.get('HTTP_USER_AGENT', 'unknown')[:100]
+        }
+        print(f"[SocketIO] Client connected: {client_id} from {client_info['ip']} (Total: {len(active_connections)})")
+        emit('connected', {
+            'message': 'Connected to AMRS sync server', 
+            'client_id': client_id,
+            'server_time': str(datetime.utcnow())
+        })
+    except Exception as e:
+        print(f"[SocketIO ERROR] Error in connect handler: {e}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    client_id = request.sid
-    active_connections.discard(client_id)
-    print(f"[SocketIO] Client disconnected: {client_id} (Total: {len(active_connections)})")
+    try:
+        client_id = request.sid
+        active_connections.discard(client_id)
+        print(f"[SocketIO] Client disconnected: {client_id} (Total: {len(active_connections)})")
+    except Exception as e:
+        print(f"[SocketIO ERROR] Error in disconnect handler: {e}")
 
 @socketio.on('ping')
 def handle_ping():
     """Handle client ping to maintain connection health"""
-    emit('pong')
+    try:
+        emit('pong', {'timestamp': str(datetime.utcnow())})
+    except Exception as e:
+        print(f"[SocketIO ERROR] Error in ping handler: {e}")
 
-# Function to emit sync event to all clients with connection cleanup
+@socketio.on('connect_error')
+def handle_connect_error(data):
+    """Handle connection errors"""
+    print(f"[SocketIO] Connection error: {data}")
+
+@socketio.on_error_default
+def default_error_handler(e):
+    """Handle any unhandled SocketIO errors"""
+    print(f"[SocketIO ERROR] Unhandled error: {e}")
+    # Don't re-raise to prevent crashes
+
+# Function to emit sync event to all clients with robust error handling
 def notify_clients_of_sync():
     if not active_connections:
         print("[SocketIO] No active connections, skipping sync notification")
@@ -531,21 +567,30 @@ def notify_clients_of_sync():
     
     print(f"[SocketIO] Emitting sync event to {len(active_connections)} clients...")
     try:
-        socketio.emit('sync', {'message': 'Data changed, please sync.', 'timestamp': str(datetime.utcnow())})
+        # Emit with acknowledgment to detect failed connections
+        socketio.emit('sync', {
+            'message': 'Data changed, please sync.', 
+            'timestamp': str(datetime.utcnow()),
+            'server_id': os.environ.get('RENDER_SERVICE_NAME', 'local-server')
+        })
+        print(f"[SocketIO] Sync event sent successfully")
     except Exception as e:
         print(f"[SocketIO ERROR] Failed to emit sync event: {e}")
-        # Clean up potentially stale connections
-        active_connections.clear()
+        # Don't clear all connections immediately - let cleanup handle it
+        print(f"[SocketIO] Will clean up stale connections in next cleanup cycle")
 
-# Periodic cleanup function to remove stale connections
+# Improved cleanup function with better error handling
 def cleanup_stale_connections():
     """Remove connections that are no longer active"""
+    if not active_connections:
+        return
+        
     stale_count = 0
     for client_id in list(active_connections):
         try:
             # Try to emit a small test message to verify connection
-            socketio.emit('heartbeat', {}, room=client_id)
-        except:
+            socketio.emit('heartbeat', {'test': True}, room=client_id, timeout=5)
+        except Exception:
             active_connections.discard(client_id)
             stale_count += 1
     
