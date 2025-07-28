@@ -117,6 +117,237 @@ def trigger_manual_sync():
         print(f"[SYNC] Manual sync error: {e}")
         return {"status": "error", "error": str(e)}
 
+def enhanced_bidirectional_sync():
+    """
+    Enhanced bidirectional sync: uploads pending changes AND downloads new data.
+    Used by the periodic sync worker to keep offline clients in sync.
+    """
+    try:
+        # First, upload any pending local changes
+        upload_result = enhanced_upload_pending_sync_queue()
+        print(f"[SYNC] Upload result: {upload_result}")
+        
+        # Then, download and import new data from server
+        download_result = download_and_import_server_data()
+        print(f"[SYNC] Download result: {download_result}")
+        
+        # Return combined results
+        total_uploaded = upload_result.get("uploaded", 0)
+        total_downloaded = download_result.get("imported", 0)
+        
+        if upload_result.get("status") == "success" or download_result.get("status") == "success":
+            return {
+                "status": "success", 
+                "uploaded": total_uploaded,
+                "downloaded": total_downloaded,
+                "total_changes": total_uploaded + total_downloaded
+            }
+        elif upload_result.get("status") == "no_pending" and download_result.get("status") == "no_changes":
+            return {
+                "status": "no_changes",
+                "uploaded": 0,
+                "downloaded": 0, 
+                "total_changes": 0
+            }
+        else:
+            return {
+                "status": "partial_success",
+                "uploaded": total_uploaded,
+                "downloaded": total_downloaded,
+                "upload_status": upload_result.get("status"),
+                "download_status": download_result.get("status")
+            }
+            
+    except Exception as e:
+        print(f"[SYNC] Bidirectional sync error: {e}")
+        return {"status": "error", "error": str(e)}
+
+def download_and_import_server_data():
+    """
+    Download latest data from server and import into local database.
+    Returns status and count of imported records.
+    """
+    try:
+        import requests
+        from app import db, app
+        
+        with app.app_context():
+            # Get server configuration
+            online_url = os.environ.get('AMRS_ONLINE_URL')
+            admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+            admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+            
+            if not all([online_url, admin_username, admin_password]):
+                print("[SYNC] Missing server credentials for download")
+                return {"status": "no_config", "imported": 0}
+            
+            # Clean URL
+            clean_url = online_url.strip('"\'').rstrip('/')
+            if clean_url.endswith('/api'):
+                clean_url = clean_url[:-4]
+            
+            # Create session and authenticate
+            session = requests.Session()
+            
+            # Try session-based login
+            try:
+                login_resp = session.post(f"{clean_url}/login", data={
+                    'username': admin_username,
+                    'password': admin_password
+                })
+                
+                if login_resp.status_code != 200 or 'dashboard' not in login_resp.text.lower():
+                    print("[SYNC] Session authentication failed for download")
+                    return {"status": "auth_failed", "imported": 0}
+                    
+            except Exception as e:
+                print(f"[SYNC] Authentication error: {e}")
+                return {"status": "auth_error", "imported": 0}
+            
+            # Download data from server
+            try:
+                download_resp = session.get(f"{clean_url}/api/sync/data", timeout=30)
+                
+                if download_resp.status_code != 200:
+                    print(f"[SYNC] Download failed: {download_resp.status_code}")
+                    return {"status": "download_failed", "imported": 0}
+                    
+                server_data = download_resp.json()
+                
+            except Exception as e:
+                print(f"[SYNC] Download error: {e}")
+                return {"status": "download_error", "imported": 0}
+            
+            # Import data into local database
+            total_imported = 0
+            
+            # Import audit_task_completions (most important for real-time updates)
+            if 'audit_task_completions' in server_data:
+                imported_count = import_audit_completions(server_data['audit_task_completions'])
+                total_imported += imported_count
+                print(f"[SYNC] Imported {imported_count} audit task completions")
+            
+            # Import other tables as needed
+            for table_name in ['users', 'roles', 'sites', 'machines', 'parts', 'audit_tasks', 'maintenance_records']:
+                if table_name in server_data:
+                    imported_count = import_table_data(table_name, server_data[table_name])
+                    total_imported += imported_count
+                    if imported_count > 0:
+                        print(f"[SYNC] Imported {imported_count} {table_name} records")
+            
+            if total_imported > 0:
+                return {"status": "success", "imported": total_imported}
+            else:
+                return {"status": "no_changes", "imported": 0}
+                
+    except Exception as e:
+        print(f"[SYNC] Download and import error: {e}")
+        return {"status": "error", "error": str(e), "imported": 0}
+
+def import_audit_completions(completions_data):
+    """Import audit task completions from server data."""
+    try:
+        from app import db
+        from models import AuditTaskCompletion
+        
+        imported_count = 0
+        
+        for completion_data in completions_data:
+            try:
+                # Check if record already exists
+                existing = AuditTaskCompletion.query.get(completion_data.get('id'))
+                
+                if existing:
+                    # Update existing record if data is newer
+                    if completion_data.get('updated_at'):
+                        server_updated = completion_data.get('updated_at')
+                        local_updated = existing.updated_at.isoformat() if existing.updated_at else None
+                        
+                        if server_updated != local_updated:
+                            # Update existing record
+                            for key, value in completion_data.items():
+                                if hasattr(existing, key) and key != 'id':
+                                    setattr(existing, key, value)
+                            imported_count += 1
+                else:
+                    # Create new record
+                    completion = AuditTaskCompletion(
+                        id=completion_data.get('id'),
+                        audit_task_id=completion_data.get('audit_task_id'),
+                        machine_id=completion_data.get('machine_id'),
+                        date=completion_data.get('date'),
+                        completed=completion_data.get('completed', False),
+                        completed_by=completion_data.get('completed_by'),
+                        completed_at=completion_data.get('completed_at'),
+                        notes=completion_data.get('notes', ''),
+                        created_at=completion_data.get('created_at'),
+                        updated_at=completion_data.get('updated_at')
+                    )
+                    db.session.add(completion)
+                    imported_count += 1
+                    
+            except Exception as e:
+                print(f"[SYNC] Error importing audit completion {completion_data.get('id')}: {e}")
+                continue
+        
+        db.session.commit()
+        return imported_count
+        
+    except Exception as e:
+        print(f"[SYNC] Error in import_audit_completions: {e}")
+        return 0
+
+def import_table_data(table_name, table_data):
+    """Generic function to import table data."""
+    try:
+        from app import db
+        from models import User, Role, Site, Machine, Part, AuditTask, MaintenanceRecord
+        
+        model_map = {
+            'users': User,
+            'roles': Role, 
+            'sites': Site,
+            'machines': Machine,
+            'parts': Part,
+            'audit_tasks': AuditTask,
+            'maintenance_records': MaintenanceRecord
+        }
+        
+        if table_name not in model_map:
+            return 0
+            
+        model_class = model_map[table_name]
+        imported_count = 0
+        
+        for record_data in table_data:
+            try:
+                existing = model_class.query.get(record_data.get('id'))
+                
+                if existing:
+                    # Update if newer (simplified check)
+                    if record_data.get('updated_at'):
+                        # Update existing record
+                        for key, value in record_data.items():
+                            if hasattr(existing, key) and key != 'id':
+                                setattr(existing, key, value)
+                        imported_count += 1
+                else:
+                    # Create new record using merge to handle conflicts
+                    new_record = model_class(**record_data)
+                    db.session.merge(new_record)
+                    imported_count += 1
+                    
+            except Exception as e:
+                print(f"[SYNC] Error importing {table_name} record {record_data.get('id')}: {e}")
+                continue
+        
+        db.session.commit()
+        return imported_count
+        
+    except Exception as e:
+        print(f"[SYNC] Error importing {table_name}: {e}")
+        return 0
+
 def enhanced_upload_pending_sync_queue():
     """
     Enhanced version of upload_pending_sync_queue with better error handling
@@ -245,13 +476,14 @@ def upload_to_server(upload_payload):
 
 def enhanced_background_sync_worker():
     """
-    Enhanced background sync worker with better scheduling and error handling.
+    Enhanced background sync worker with bidirectional sync capability.
+    Uploads local changes AND downloads server updates automatically.
     """
     last_periodic_check = time.time()
     consecutive_errors = 0
     max_consecutive_errors = 5
     
-    print("[SYNC] Enhanced background sync worker started")
+    print("[SYNC] Enhanced bidirectional sync worker started")
     
     while True:
         try:
@@ -262,14 +494,29 @@ def enhanced_background_sync_worker():
             should_do_periodic = (current_time - last_periodic_check) >= 300  # 5 minutes
             
             if should_do_periodic or sync_event.is_set():
-                print(f"[SYNC] Worker triggered: periodic={should_do_periodic}, event={sync_event.is_set()}")
+                trigger_type = "periodic" if should_do_periodic else "event"
+                print(f"[SYNC] Bidirectional sync triggered: {trigger_type}")
                 
-                result = enhanced_upload_pending_sync_queue()
+                # Perform bidirectional sync (upload + download)
+                result = enhanced_bidirectional_sync()
                 
                 if result["status"] == "success":
                     consecutive_errors = 0  # Reset error counter on success
+                    uploaded = result.get('uploaded', 0)
+                    downloaded = result.get('downloaded', 0)
+                    total = result.get('total_changes', 0)
+                    
+                    if total > 0:
+                        print(f"[SYNC] Bidirectional sync complete: ↑{uploaded} ↓{downloaded} records")
+                elif result["status"] == "no_changes":
+                    consecutive_errors = 0  # Reset on successful no-changes
+                elif result["status"] == "partial_success":
+                    uploaded = result.get('uploaded', 0)
+                    downloaded = result.get('downloaded', 0)
+                    print(f"[SYNC] Partial sync: ↑{uploaded} ↓{downloaded} (some issues occurred)")
                 elif result["status"] == "error":
                     consecutive_errors += 1
+                    print(f"[SYNC] Sync error: {result.get('error', 'Unknown error')}")
                     if consecutive_errors >= max_consecutive_errors:
                         print(f"[SYNC] Too many consecutive errors ({consecutive_errors}), backing off...")
                         time.sleep(60)  # Wait 1 minute before retrying
