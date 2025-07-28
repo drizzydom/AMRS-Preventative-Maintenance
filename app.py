@@ -4332,9 +4332,31 @@ def sync_data():
         return jsonify({'error': 'Unauthorized'}), 403
     if request.method == 'GET':
         try:
-            # Collect all relevant data
+            # Check for incremental sync parameter
+            since_timestamp = request.args.get('since')
+            is_incremental = since_timestamp is not None
+            
+            if is_incremental:
+                try:
+                    # Parse the timestamp for filtering
+                    from datetime import datetime
+                    since_dt = datetime.fromisoformat(since_timestamp.replace('Z', '+00:00'))
+                    print(f"[SYNC] Incremental sync request since: {since_dt}")
+                except (ValueError, TypeError) as e:
+                    print(f"[SYNC] Invalid timestamp format: {since_timestamp}, falling back to full sync")
+                    is_incremental = False
+                    since_dt = None
+            else:
+                since_dt = None
+                print("[SYNC] Full sync request (no timestamp)")
+            
+            # Collect all relevant data with optional timestamp filtering
             users = []
-            for u in User.query.all():
+            user_query = User.query
+            if is_incremental and since_dt:
+                user_query = user_query.filter(User.updated_at > since_dt)
+            
+            for u in user_query.all():
                 user_data = {
                     'id': u.id,
                     'username': u.username,  # Use decrypted value for compatibility
@@ -4359,6 +4381,12 @@ def sync_data():
                     user_data['password_reset_required'] = True
                 
                 users.append(user_data)
+            
+            roles = []
+            role_query = Role.query
+            if is_incremental and since_dt:
+                role_query = role_query.filter(Role.updated_at > since_dt)
+            
             roles = [
                 {
                     'id': r.id,
@@ -4368,8 +4396,14 @@ def sync_data():
                     'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
                     'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
                 }
-                for r in Role.query.all()
+                for r in role_query.all()
             ]
+            
+            sites = []
+            site_query = Site.query
+            if is_incremental and since_dt:
+                site_query = site_query.filter(Site.updated_at > since_dt)
+            
             sites = [
                 {
                     'id': s.id,
@@ -4381,8 +4415,14 @@ def sync_data():
                     'created_at': s.created_at.isoformat() if getattr(s, 'created_at', None) else None,
                     'updated_at': s.updated_at.isoformat() if getattr(s, 'updated_at', None) else None,
                 }
-                for s in Site.query.all()
+                for s in site_query.all()
             ]
+            
+            machines = []
+            machine_query = Machine.query
+            if is_incremental and since_dt:
+                machine_query = machine_query.filter(Machine.updated_at > since_dt)
+            
             machines = [
                 {
                     'id': m.id,
@@ -4398,8 +4438,14 @@ def sync_data():
                     'created_at': m.created_at.isoformat() if getattr(m, 'created_at', None) else None,
                     'updated_at': m.updated_at.isoformat() if getattr(m, 'updated_at', None) else None,
                 }
-                for m in Machine.query.all()
+                for m in machine_query.all()
             ]
+            
+            parts = []
+            part_query = Part.query
+            if is_incremental and since_dt:
+                part_query = part_query.filter(Part.updated_at > since_dt)
+            
             parts = [
                 {
                     'id': p.id,
@@ -4414,8 +4460,14 @@ def sync_data():
                     'created_at': p.created_at.isoformat() if getattr(p, 'created_at', None) else None,
                     'updated_at': p.updated_at.isoformat() if getattr(p, 'updated_at', None) else None,
                 }
-                for p in Part.query.all()
+                for p in part_query.all()
             ]
+            
+            maintenance_records = []
+            maintenance_query = MaintenanceRecord.query
+            if is_incremental and since_dt:
+                maintenance_query = maintenance_query.filter(MaintenanceRecord.updated_at > since_dt)
+            
             maintenance_records = [
                 {
                     'id': r.id,
@@ -4432,9 +4484,14 @@ def sync_data():
                     'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
                     'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
                 }
-                for r in MaintenanceRecord.query.all()
+                for r in maintenance_query.all()
             ]
             # Add audit tasks and completions for comprehensive sync
+            audit_tasks = []
+            audit_task_query = AuditTask.query
+            if is_incremental and since_dt:
+                audit_task_query = audit_task_query.filter(AuditTask.updated_at > since_dt)
+            
             audit_tasks = [
                 {
                     'id': t.id,
@@ -4448,8 +4505,14 @@ def sync_data():
                     'created_at': t.created_at.isoformat() if getattr(t, 'created_at', None) else None,
                     'updated_at': t.updated_at.isoformat() if getattr(t, 'updated_at', None) else None,
                 }
-                for t in AuditTask.query.all()
+                for t in audit_task_query.all()
             ]
+            
+            audit_task_completions = []
+            completion_query = AuditTaskCompletion.query
+            if is_incremental and since_dt:
+                completion_query = completion_query.filter(AuditTaskCompletion.updated_at > since_dt)
+            
             audit_task_completions = [
                 {
                     'id': c.id,
@@ -4463,7 +4526,7 @@ def sync_data():
                     'created_at': c.created_at.isoformat() if getattr(c, 'created_at', None) else None,
                     'updated_at': c.updated_at.isoformat() if getattr(c, 'updated_at', None) else None,
                 }
-                for c in AuditTaskCompletion.query.all()
+                for c in completion_query.all()
             ]
             
             # Add machine_audit_task associations - CRITICAL for audit task sync
@@ -4490,6 +4553,32 @@ def sync_data():
                 'audit_task_completions': audit_task_completions,
                 'machine_audit_task': machine_audit_task,
             }
+            
+            # Add sync metadata for debugging
+            sync_metadata = {
+                'sync_type': 'incremental' if is_incremental else 'full',
+                'since_timestamp': since_timestamp if is_incremental else None,
+                'server_timestamp': datetime.now().isoformat(),
+                'record_counts': {
+                    'users': len(users),
+                    'roles': len(roles),
+                    'sites': len(sites),
+                    'machines': len(machines),
+                    'parts': len(parts),
+                    'maintenance_records': len(maintenance_records),
+                    'audit_tasks': len(audit_tasks),
+                    'audit_task_completions': len(audit_task_completions),
+                    'machine_audit_task': len(machine_audit_task),
+                }
+            }
+            data['_sync_metadata'] = sync_metadata
+            
+            # Log the sync request for debugging
+            total_records = sum(sync_metadata['record_counts'].values())
+            print(f"[SYNC] {sync_metadata['sync_type'].title()} sync served: {total_records} records total")
+            if is_incremental:
+                print(f"[SYNC] Incremental sync since {since_timestamp}: {sync_metadata['record_counts']}")
+            
             return jsonify(data)
         except Exception as e:
             app.logger.error(f"Error in sync_data: {e}")

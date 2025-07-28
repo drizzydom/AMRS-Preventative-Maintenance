@@ -139,6 +139,10 @@ def enhanced_bidirectional_sync():
         total_uploaded = upload_result.get("uploaded", 0)
         total_downloaded = download_result.get("imported", 0)
         
+        # Update sync timestamp if download was successful
+        if download_result.get("status") == "success" and total_downloaded > 0:
+            update_last_sync_timestamp()
+        
         if upload_result.get("status") == "success" or download_result.get("status") == "success":
             return {
                 "status": "success", 
@@ -210,7 +214,18 @@ def download_and_import_server_data():
             
             # Download data from server
             try:
-                download_resp = session.get(f"{clean_url}/api/sync/data", timeout=30)
+                # Get the last successful sync timestamp for incremental sync
+                last_sync_time = get_last_sync_timestamp()
+                
+                # Build download URL with timestamp parameter for incremental sync
+                download_url = f"{clean_url}/api/sync/data"
+                if last_sync_time:
+                    download_url += f"?since={last_sync_time}"
+                    print(f"[SYNC] Requesting incremental sync since: {last_sync_time}")
+                else:
+                    print(f"[SYNC] Requesting full sync (no previous sync timestamp)")
+                
+                download_resp = session.get(download_url, timeout=30)
                 
                 if download_resp.status_code != 200:
                     print(f"[SYNC] Download failed: {download_resp.status_code}")
@@ -257,6 +272,8 @@ def download_and_import_server_data():
                         continue
             
             if total_imported > 0:
+                # Update the last sync timestamp for incremental sync
+                update_last_sync_timestamp()
                 return {"status": "success", "imported": total_imported}
             else:
                 return {"status": "no_changes", "imported": 0}
@@ -320,24 +337,26 @@ def import_audit_completions(completions_data):
                             # Update existing record with no_autoflush protection
                             with db.session.no_autoflush:
                                 for key, value in processed_data.items():
+                                    # Only set attributes that actually exist on the model
                                     if hasattr(existing, key) and key != 'id':
-                                        setattr(existing, key, value)
+                                        # Check if it's a settable attribute (not a property without setter)
+                                        attr = getattr(existing.__class__, key, None)
+                                        if attr is None or not isinstance(attr, property) or attr.fset is not None:
+                                            setattr(existing, key, value)
                             imported_count += 1
                 else:
                     # Create new record with no_autoflush protection
                     with db.session.no_autoflush:
-                        completion = AuditTaskCompletion(
-                            id=processed_data.get('id'),
-                            audit_task_id=processed_data.get('audit_task_id'),
-                            machine_id=processed_data.get('machine_id'),
-                            date=processed_data.get('date'),
-                            completed=processed_data.get('completed', False),
-                            completed_by=processed_data.get('completed_by'),
-                            completed_at=processed_data.get('completed_at'),
-                            notes=processed_data.get('notes', ''),
-                            created_at=processed_data.get('created_at'),
-                            updated_at=processed_data.get('updated_at')
-                        )
+                        # Filter out fields that don't exist on the AuditTaskCompletion model
+                        valid_fields = {}
+                        for key, value in processed_data.items():
+                            if hasattr(AuditTaskCompletion, key):
+                                # Check if it's a settable attribute
+                                attr = getattr(AuditTaskCompletion, key, None)
+                                if attr is None or not isinstance(attr, property) or attr.fset is not None:
+                                    valid_fields[key] = value
+                        
+                        completion = AuditTaskCompletion(**valid_fields)
                         db.session.add(completion)
                     imported_count += 1
                     
@@ -410,7 +429,7 @@ def import_table_data(table_name, table_data):
                                 processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
                             except:
                                 processed_data[key] = value  # Keep original if conversion fails
-                    elif isinstance(value, str) and key in ['created_at', 'updated_at', 'completed_at', 'last_login', 'password_reset_expires', 'last_maintenance', 'next_maintenance']:
+                    elif isinstance(value, str) and key in ['created_at', 'updated_at', 'completed_at', 'last_login', 'password_reset_expires', 'last_maintenance', 'next_maintenance', 'decommissioned_date']:
                         # Convert datetime strings to Python datetime objects
                         try:
                             processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
@@ -431,14 +450,27 @@ def import_table_data(table_name, table_data):
                         # Update existing record with session.no_autoflush to prevent premature flushes
                         with db.session.no_autoflush:
                             for key, value in processed_data.items():
+                                # Only set attributes that actually exist on the model
                                 if hasattr(existing, key) and key != 'id':
-                                    setattr(existing, key, value)
+                                    # Check if it's a settable attribute (not a property without setter)
+                                    attr = getattr(existing.__class__, key, None)
+                                    if attr is None or not isinstance(attr, property) or attr.fset is not None:
+                                        setattr(existing, key, value)
                         imported_count += 1
                 else:
                     # Create new record using merge to handle conflicts
                     try:
                         with db.session.no_autoflush:
-                            new_record = model_class(**processed_data)
+                            # Filter out fields that don't exist on the model
+                            valid_fields = {}
+                            for key, value in processed_data.items():
+                                if hasattr(model_class, key):
+                                    # Check if it's a settable attribute
+                                    attr = getattr(model_class, key, None)
+                                    if attr is None or not isinstance(attr, property) or attr.fset is not None:
+                                        valid_fields[key] = value
+                            
+                            new_record = model_class(**valid_fields)
                             db.session.merge(new_record)
                         imported_count += 1
                     except Exception as create_error:
@@ -777,3 +809,58 @@ def cleanup_expired_sync_queue_enhanced():
     except Exception as e:
         print(f"[SYNC_QUEUE] Error cleaning up expired sync_queue records: {e}")
         return 0
+
+def get_last_sync_timestamp():
+    """
+    Get the timestamp of the last successful sync for incremental downloads.
+    Returns ISO format string or None if no previous sync.
+    """
+    try:
+        from app import db
+        
+        # Get the most recent successful sync timestamp from sync_queue
+        result = db.session.execute(sa_text("""
+            SELECT MAX(synced_at) as last_sync 
+            FROM sync_queue 
+            WHERE status = 'synced' AND synced_at IS NOT NULL
+        """)).fetchone()
+        
+        if result and result[0]:
+            # Return timestamp as ISO string for URL parameter
+            return result[0].isoformat()
+        else:
+            # No previous sync found, return None for full sync
+            return None
+            
+    except Exception as e:
+        print(f"[SYNC] Error getting last sync timestamp: {e}")
+        return None
+
+def update_last_sync_timestamp():
+    """
+    Update a marker to track when the last successful download sync completed.
+    This helps with incremental sync requests.
+    """
+    try:
+        from app import db
+        
+        # Insert a marker record to track successful download sync
+        now = get_timezone_aware_now()
+        db.session.execute(sa_text("""
+            INSERT INTO sync_queue (table_name, record_id, operation, payload, created_at, status, synced_at)
+            VALUES ('_sync_marker', 0, 'download_complete', '{}', :now, 'synced', :now)
+        """), {"now": now})
+        
+        db.session.commit()
+        print(f"[SYNC] Updated last sync timestamp: {now.isoformat()}")
+        
+    except Exception as e:
+        print(f"[SYNC] Error updating last sync timestamp: {e}")
+
+def get_incremental_sync_since(since_timestamp):
+    """
+    Helper function to format timestamp for incremental sync requests.
+    """
+    if since_timestamp:
+        return f"?since={since_timestamp}"
+    return ""
