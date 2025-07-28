@@ -42,10 +42,9 @@ def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, i
         # Import here to avoid circular imports
         from app import db
         
-        # Skip sync queue if this is the online server, unless force_add is True (for imports)
-        if is_online_server() and not force_add:
-            print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
-            return
+        # Online servers should add local changes to sync queue for distribution to offline clients
+        # The only time we skip is if this is an offline client trying to track already-downloaded data
+        # But since we're always in the context of local changes or imports, we should proceed
             
         # Use timezone-aware datetime
         now = get_timezone_aware_now()
