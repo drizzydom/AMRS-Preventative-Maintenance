@@ -21,7 +21,8 @@ from sync_utils_enhanced import (
     add_to_sync_queue_enhanced, 
     trigger_manual_sync, 
     start_enhanced_sync_worker,
-    cleanup_expired_sync_queue_enhanced
+    cleanup_expired_sync_queue_enhanced,
+    should_trigger_sync
 )
 
 def upload_pending_sync_queue():
@@ -4203,24 +4204,45 @@ def sync_status():
 
 @app.route('/api/sync/trigger', methods=['POST'])
 def api_trigger_manual_sync():
-    """API endpoint to trigger manual sync (for offline clients only)."""
+    """API endpoint to trigger manual sync."""
     try:
         print("[API] Manual sync trigger requested")
-        # Run sync in a separate thread to avoid blocking SocketIO
-        import threading
-        def run_sync():
-            try:
-                result = trigger_manual_sync()
-                print(f"[API] Manual sync completed: {result}")
-            except Exception as sync_error:
-                print(f"[API] Manual sync failed: {sync_error}")
         
-        # Start sync in background to prevent SocketIO blocking
-        sync_thread = threading.Thread(target=run_sync, daemon=True)
-        sync_thread.start()
-        
-        # Return immediately to prevent request timeout
-        return jsonify({"status": "triggered", "message": "Sync started in background"})
+        # Check if this is an offline client that should upload to server
+        if should_trigger_sync():
+            print("[API] Offline client - triggering enhanced upload")
+            # Run enhanced sync upload in a separate thread to avoid blocking
+            import threading
+            def run_enhanced_sync():
+                try:
+                    from sync_utils_enhanced import enhanced_upload_pending_sync_queue
+                    result = enhanced_upload_pending_sync_queue()
+                    print(f"[API] Enhanced upload completed: {result}")
+                except Exception as sync_error:
+                    print(f"[API] Enhanced upload failed: {sync_error}")
+            
+            # Start sync in background
+            sync_thread = threading.Thread(target=run_enhanced_sync, daemon=True)
+            sync_thread.start()
+            
+            return jsonify({"status": "triggered", "message": "Enhanced sync upload started"})
+        else:
+            # This is the online server - run traditional sync
+            print("[API] Online server - running traditional sync")
+            import threading
+            def run_sync():
+                try:
+                    result = trigger_manual_sync()
+                    print(f"[API] Manual sync completed: {result}")
+                except Exception as sync_error:
+                    print(f"[API] Manual sync failed: {sync_error}")
+            
+            # Start sync in background to prevent SocketIO blocking
+            sync_thread = threading.Thread(target=run_sync, daemon=True)
+            sync_thread.start()
+            
+            return jsonify({"status": "triggered", "message": "Sync started in background"})
+            
     except Exception as e:
         print(f"[API] Manual sync trigger error: {e}")
         return jsonify({'status': 'error', 'error': str(e)}), 500
