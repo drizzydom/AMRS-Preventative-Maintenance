@@ -227,17 +227,34 @@ def download_and_import_server_data():
             
             # Import audit_task_completions (most important for real-time updates)
             if 'audit_task_completions' in server_data:
-                imported_count = import_audit_completions(server_data['audit_task_completions'])
-                total_imported += imported_count
-                print(f"[SYNC] Imported {imported_count} audit task completions")
+                try:
+                    imported_count = import_audit_completions(server_data['audit_task_completions'])
+                    total_imported += imported_count
+                    print(f"[SYNC] Imported {imported_count} audit task completions")
+                except Exception as e:
+                    print(f"[SYNC] Error importing audit_task_completions: {e}")
+                    # Rollback to clear any error state
+                    try:
+                        db.session.rollback()
+                    except:
+                        pass
             
             # Import other tables as needed
             for table_name in ['users', 'roles', 'sites', 'machines', 'parts', 'audit_tasks', 'maintenance_records']:
                 if table_name in server_data:
-                    imported_count = import_table_data(table_name, server_data[table_name])
-                    total_imported += imported_count
-                    if imported_count > 0:
-                        print(f"[SYNC] Imported {imported_count} {table_name} records")
+                    try:
+                        imported_count = import_table_data(table_name, server_data[table_name])
+                        total_imported += imported_count
+                        if imported_count > 0:
+                            print(f"[SYNC] Imported {imported_count} {table_name} records")
+                    except Exception as e:
+                        print(f"[SYNC] Error importing table {table_name}: {e}")
+                        # Rollback to clear any error state
+                        try:
+                            db.session.rollback()
+                        except:
+                            pass
+                        continue
             
             if total_imported > 0:
                 return {"status": "success", "imported": total_imported}
@@ -253,6 +270,7 @@ def import_audit_completions(completions_data):
     try:
         from app import db
         from models import AuditTaskCompletion
+        from datetime import datetime, date
         
         imported_count = 0
         
@@ -261,51 +279,89 @@ def import_audit_completions(completions_data):
                 # Check if record already exists
                 existing = AuditTaskCompletion.query.get(completion_data.get('id'))
                 
+                # Convert date/datetime strings to proper Python objects
+                processed_data = {}
+                for key, value in completion_data.items():
+                    if value is None:
+                        processed_data[key] = None
+                    elif key == 'date' and isinstance(value, str):
+                        # Convert date string to Python date object
+                        try:
+                            processed_data[key] = datetime.strptime(value, '%Y-%m-%d').date()
+                        except ValueError:
+                            processed_data[key] = value  # Keep original if conversion fails
+                    elif key in ['completed_at', 'created_at', 'updated_at'] and isinstance(value, str):
+                        # Convert datetime string to Python datetime object
+                        try:
+                            processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                        except (ValueError, AttributeError):
+                            processed_data[key] = value  # Keep original if conversion fails
+                    else:
+                        processed_data[key] = value
+                
                 if existing:
                     # Update existing record if data is newer
-                    if completion_data.get('updated_at'):
-                        server_updated = completion_data.get('updated_at')
-                        local_updated = existing.updated_at.isoformat() if existing.updated_at else None
+                    if processed_data.get('updated_at'):
+                        server_updated = processed_data.get('updated_at')
+                        local_updated = existing.updated_at
+                        
+                        # Compare timestamps (handle both datetime and string)
+                        if isinstance(server_updated, str):
+                            try:
+                                server_updated = datetime.fromisoformat(server_updated.replace('Z', '+00:00'))
+                            except:
+                                pass
                         
                         if server_updated != local_updated:
                             # Update existing record
-                            for key, value in completion_data.items():
+                            for key, value in processed_data.items():
                                 if hasattr(existing, key) and key != 'id':
                                     setattr(existing, key, value)
                             imported_count += 1
                 else:
                     # Create new record
                     completion = AuditTaskCompletion(
-                        id=completion_data.get('id'),
-                        audit_task_id=completion_data.get('audit_task_id'),
-                        machine_id=completion_data.get('machine_id'),
-                        date=completion_data.get('date'),
-                        completed=completion_data.get('completed', False),
-                        completed_by=completion_data.get('completed_by'),
-                        completed_at=completion_data.get('completed_at'),
-                        notes=completion_data.get('notes', ''),
-                        created_at=completion_data.get('created_at'),
-                        updated_at=completion_data.get('updated_at')
+                        id=processed_data.get('id'),
+                        audit_task_id=processed_data.get('audit_task_id'),
+                        machine_id=processed_data.get('machine_id'),
+                        date=processed_data.get('date'),
+                        completed=processed_data.get('completed', False),
+                        completed_by=processed_data.get('completed_by'),
+                        completed_at=processed_data.get('completed_at'),
+                        notes=processed_data.get('notes', ''),
+                        created_at=processed_data.get('created_at'),
+                        updated_at=processed_data.get('updated_at')
                     )
                     db.session.add(completion)
                     imported_count += 1
                     
             except Exception as e:
                 print(f"[SYNC] Error importing audit completion {completion_data.get('id')}: {e}")
+                # Rollback the session to clear the error state
+                db.session.rollback()
                 continue
         
-        db.session.commit()
+        # Commit all successful imports
+        if imported_count > 0:
+            db.session.commit()
+        
         return imported_count
         
     except Exception as e:
         print(f"[SYNC] Error in import_audit_completions: {e}")
+        # Rollback the session to clear the error state
+        try:
+            db.session.rollback()
+        except:
+            pass
         return 0
 
 def import_table_data(table_name, table_data):
-    """Generic function to import table data."""
+    """Generic function to import table data with proper date/datetime conversion."""
     try:
         from app import db
         from models import User, Role, Site, Machine, Part, AuditTask, MaintenanceRecord
+        from datetime import datetime, date
         
         model_map = {
             'users': User,
@@ -325,31 +381,71 @@ def import_table_data(table_name, table_data):
         
         for record_data in table_data:
             try:
-                existing = model_class.query.get(record_data.get('id'))
+                # Convert date/datetime strings to proper Python objects
+                processed_data = {}
+                for key, value in record_data.items():
+                    if value is None:
+                        processed_data[key] = None
+                    elif isinstance(value, str) and key in ['date', 'start_date', 'end_date', 'last_maintenance_date', 'next_maintenance_date']:
+                        # Convert date strings to Python date objects
+                        try:
+                            processed_data[key] = datetime.strptime(value, '%Y-%m-%d').date()
+                        except ValueError:
+                            try:
+                                # Try with datetime format and extract date
+                                processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
+                            except:
+                                processed_data[key] = value  # Keep original if conversion fails
+                    elif isinstance(value, str) and key in ['created_at', 'updated_at', 'completed_at', 'last_login', 'password_reset_expires']:
+                        # Convert datetime strings to Python datetime objects
+                        try:
+                            processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                        except (ValueError, AttributeError):
+                            processed_data[key] = value  # Keep original if conversion fails
+                    else:
+                        processed_data[key] = value
+                
+                existing = model_class.query.get(processed_data.get('id'))
                 
                 if existing:
                     # Update if newer (simplified check)
-                    if record_data.get('updated_at'):
+                    if processed_data.get('updated_at'):
                         # Update existing record
-                        for key, value in record_data.items():
+                        for key, value in processed_data.items():
                             if hasattr(existing, key) and key != 'id':
                                 setattr(existing, key, value)
                         imported_count += 1
                 else:
                     # Create new record using merge to handle conflicts
-                    new_record = model_class(**record_data)
-                    db.session.merge(new_record)
-                    imported_count += 1
+                    try:
+                        new_record = model_class(**processed_data)
+                        db.session.merge(new_record)
+                        imported_count += 1
+                    except Exception as create_error:
+                        print(f"[SYNC] Error creating {table_name} record {processed_data.get('id')}: {create_error}")
+                        # Rollback the session to clear the error state
+                        db.session.rollback()
+                        continue
                     
             except Exception as e:
                 print(f"[SYNC] Error importing {table_name} record {record_data.get('id')}: {e}")
+                # Rollback the session to clear the error state
+                db.session.rollback()
                 continue
         
-        db.session.commit()
+        # Commit all successful imports
+        if imported_count > 0:
+            db.session.commit()
+        
         return imported_count
         
     except Exception as e:
         print(f"[SYNC] Error importing {table_name}: {e}")
+        # Rollback the session to clear the error state
+        try:
+            db.session.rollback()
+        except:
+            pass
         return 0
 
 def enhanced_upload_pending_sync_queue():
