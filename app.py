@@ -4580,7 +4580,7 @@ def sync_data():
                     'completed': merged_completion.completed,
                     'completed_by': merged_completion.completed_by,
                     'completed_at': merged_completion.completed_at.isoformat() if merged_completion.completed_at else None
-                }, immediate_sync=False)
+                }, immediate_sync=False, force_add=True)
             
             db.session.commit()
             return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200

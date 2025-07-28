@@ -26,7 +26,7 @@ def should_trigger_sync():
     """
     return not is_online_server()
 
-def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, immediate_sync=True):
+def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, immediate_sync=True, force_add=False):
     """
     Enhanced version of add_to_sync_queue with real-time sync triggering.
     
@@ -36,13 +36,14 @@ def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, i
         operation (str): 'insert', 'update', or 'delete'
         payload_dict (dict): The record data (as dict, will be JSON-encoded)
         immediate_sync (bool): Whether to trigger immediate sync (default: True)
+        force_add (bool): Force adding to sync queue even on online server (for imports)
     """
     try:
         # Import here to avoid circular imports
         from app import db
         
-        # Skip sync queue if this is the online server
-        if is_online_server():
+        # Skip sync queue if this is the online server, unless force_add is True (for imports)
+        if is_online_server() and not force_add:
             print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
             return
             
