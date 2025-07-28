@@ -524,6 +524,27 @@ def handle_connect():
             'user_agent': request.environ.get('HTTP_USER_AGENT', 'unknown')[:100]
         }
         print(f"[SocketIO] Client connected: {client_id} from {client_info['ip']} (Total: {len(active_connections)})")
+        
+        # For offline clients, ensure sync worker is running and trigger sync on reconnect
+        from timezone_utils import is_online_server
+        if not is_online_server():
+            print(f"[SocketIO] Offline client reconnected, performing reconnection sync")
+            
+            # Import sync functions
+            from sync_utils_enhanced import trigger_reconnection_sync
+            
+            # Trigger comprehensive reconnection sync (ensures worker + full bidirectional sync)
+            sync_result = trigger_reconnection_sync()
+            
+            if sync_result.get("status") == "success":
+                total_changes = sync_result.get("total_changes", 0)
+                if total_changes > 0:
+                    print(f"[SocketIO] Reconnection sync successful: {total_changes} changes processed")
+            elif sync_result.get("status") == "no_changes":
+                print(f"[SocketIO] Reconnection sync: No changes needed")
+            else:
+                print(f"[SocketIO] Reconnection sync result: {sync_result.get('status')}")
+        
         emit('connected', {
             'message': 'Connected to AMRS sync server', 
             'client_id': client_id,
