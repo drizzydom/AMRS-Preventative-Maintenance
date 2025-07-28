@@ -4568,7 +4568,19 @@ def sync_data():
                     completed=atc.get('completed', False),
                     completed_at=datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
                 )
-                db.session.merge(completion)
+                merged_completion = db.session.merge(completion)
+                db.session.flush()  # Ensure ID is available
+                
+                # Add to sync queue for tracking (without immediate sync to avoid loop)
+                add_to_sync_queue_enhanced('audit_task_completions', merged_completion.id, 'update', {
+                    'id': merged_completion.id,
+                    'audit_task_id': merged_completion.audit_task_id,
+                    'machine_id': merged_completion.machine_id,
+                    'date': str(merged_completion.date) if merged_completion.date else None,
+                    'completed': merged_completion.completed,
+                    'completed_by': merged_completion.completed_by,
+                    'completed_at': merged_completion.completed_at.isoformat() if merged_completion.completed_at else None
+                }, immediate_sync=False)
             
             db.session.commit()
             return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200
