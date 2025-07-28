@@ -275,6 +275,7 @@ def import_audit_completions(completions_data):
         imported_count = 0
         
         for completion_data in completions_data:
+            session_rollback_needed = False
             try:
                 # Check if record already exists
                 existing = AuditTaskCompletion.query.get(completion_data.get('id'))
@@ -295,7 +296,10 @@ def import_audit_completions(completions_data):
                         try:
                             processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
                         except (ValueError, AttributeError):
-                            processed_data[key] = value  # Keep original if conversion fails
+                            try:
+                                processed_data[key] = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S')
+                            except ValueError:
+                                processed_data[key] = value  # Keep original if conversion fails
                     else:
                         processed_data[key] = value
                 
@@ -313,33 +317,41 @@ def import_audit_completions(completions_data):
                                 pass
                         
                         if server_updated != local_updated:
-                            # Update existing record
-                            for key, value in processed_data.items():
-                                if hasattr(existing, key) and key != 'id':
-                                    setattr(existing, key, value)
+                            # Update existing record with no_autoflush protection
+                            with db.session.no_autoflush:
+                                for key, value in processed_data.items():
+                                    if hasattr(existing, key) and key != 'id':
+                                        setattr(existing, key, value)
                             imported_count += 1
                 else:
-                    # Create new record
-                    completion = AuditTaskCompletion(
-                        id=processed_data.get('id'),
-                        audit_task_id=processed_data.get('audit_task_id'),
-                        machine_id=processed_data.get('machine_id'),
-                        date=processed_data.get('date'),
-                        completed=processed_data.get('completed', False),
-                        completed_by=processed_data.get('completed_by'),
-                        completed_at=processed_data.get('completed_at'),
-                        notes=processed_data.get('notes', ''),
-                        created_at=processed_data.get('created_at'),
-                        updated_at=processed_data.get('updated_at')
-                    )
-                    db.session.add(completion)
+                    # Create new record with no_autoflush protection
+                    with db.session.no_autoflush:
+                        completion = AuditTaskCompletion(
+                            id=processed_data.get('id'),
+                            audit_task_id=processed_data.get('audit_task_id'),
+                            machine_id=processed_data.get('machine_id'),
+                            date=processed_data.get('date'),
+                            completed=processed_data.get('completed', False),
+                            completed_by=processed_data.get('completed_by'),
+                            completed_at=processed_data.get('completed_at'),
+                            notes=processed_data.get('notes', ''),
+                            created_at=processed_data.get('created_at'),
+                            updated_at=processed_data.get('updated_at')
+                        )
+                        db.session.add(completion)
                     imported_count += 1
                     
             except Exception as e:
                 print(f"[SYNC] Error importing audit completion {completion_data.get('id')}: {e}")
-                # Rollback the session to clear the error state
-                db.session.rollback()
+                session_rollback_needed = True
                 continue
+            finally:
+                # Handle session rollback if needed
+                if session_rollback_needed:
+                    try:
+                        db.session.rollback()
+                    except:
+                        pass
         
         # Commit all successful imports
         if imported_count > 0:
@@ -380,6 +392,8 @@ def import_table_data(table_name, table_data):
         imported_count = 0
         
         for record_data in table_data:
+            # Use a separate try-catch for each record with session management
+            session_rollback_needed = False
             try:
                 # Convert date/datetime strings to proper Python objects
                 processed_data = {}
@@ -396,12 +410,16 @@ def import_table_data(table_name, table_data):
                                 processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
                             except:
                                 processed_data[key] = value  # Keep original if conversion fails
-                    elif isinstance(value, str) and key in ['created_at', 'updated_at', 'completed_at', 'last_login', 'password_reset_expires']:
+                    elif isinstance(value, str) and key in ['created_at', 'updated_at', 'completed_at', 'last_login', 'password_reset_expires', 'last_maintenance', 'next_maintenance']:
                         # Convert datetime strings to Python datetime objects
                         try:
                             processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
                         except (ValueError, AttributeError):
-                            processed_data[key] = value  # Keep original if conversion fails
+                            # Try alternative datetime format for historical dates
+                            try:
+                                processed_data[key] = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S')
+                            except ValueError:
+                                processed_data[key] = value  # Keep original if conversion fails
                     else:
                         processed_data[key] = value
                 
@@ -410,28 +428,35 @@ def import_table_data(table_name, table_data):
                 if existing:
                     # Update if newer (simplified check)
                     if processed_data.get('updated_at'):
-                        # Update existing record
-                        for key, value in processed_data.items():
-                            if hasattr(existing, key) and key != 'id':
-                                setattr(existing, key, value)
+                        # Update existing record with session.no_autoflush to prevent premature flushes
+                        with db.session.no_autoflush:
+                            for key, value in processed_data.items():
+                                if hasattr(existing, key) and key != 'id':
+                                    setattr(existing, key, value)
                         imported_count += 1
                 else:
                     # Create new record using merge to handle conflicts
                     try:
-                        new_record = model_class(**processed_data)
-                        db.session.merge(new_record)
+                        with db.session.no_autoflush:
+                            new_record = model_class(**processed_data)
+                            db.session.merge(new_record)
                         imported_count += 1
                     except Exception as create_error:
                         print(f"[SYNC] Error creating {table_name} record {processed_data.get('id')}: {create_error}")
-                        # Rollback the session to clear the error state
-                        db.session.rollback()
+                        session_rollback_needed = True
                         continue
                     
             except Exception as e:
                 print(f"[SYNC] Error importing {table_name} record {record_data.get('id')}: {e}")
-                # Rollback the session to clear the error state
-                db.session.rollback()
+                session_rollback_needed = True
                 continue
+            finally:
+                # Handle session rollback if needed
+                if session_rollback_needed:
+                    try:
+                        db.session.rollback()
+                    except:
+                        pass
         
         # Commit all successful imports
         if imported_count > 0:
