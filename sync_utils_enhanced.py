@@ -19,6 +19,10 @@ from timezone_utils import get_timezone_aware_now, get_eastern_date, is_online_s
 # Global sync event for triggering immediate uploads
 sync_event = threading.Event()
 
+# Global sync worker thread reference
+sync_worker_thread = None
+sync_worker_lock = threading.Lock()
+
 def should_trigger_sync():
     """
     Determine if sync should be triggered based on current environment.
@@ -478,12 +482,17 @@ def enhanced_background_sync_worker():
     """
     Enhanced background sync worker with bidirectional sync capability.
     Uploads local changes AND downloads server updates automatically.
+    Includes health monitoring and auto-recovery.
     """
     last_periodic_check = time.time()
     consecutive_errors = 0
     max_consecutive_errors = 5
     
     print("[SYNC] Enhanced bidirectional sync worker started")
+    
+    # Worker health monitoring
+    worker_start_time = time.time()
+    last_health_log = time.time()
     
     while True:
         try:
@@ -492,6 +501,12 @@ def enhanced_background_sync_worker():
             
             current_time = time.time()
             should_do_periodic = (current_time - last_periodic_check) >= 300  # 5 minutes
+            
+            # Log worker health every hour
+            if (current_time - last_health_log) >= 3600:  # 1 hour
+                uptime = current_time - worker_start_time
+                print(f"[SYNC] Worker health: Running for {uptime/3600:.1f}h, {consecutive_errors} consecutive errors")
+                last_health_log = current_time
             
             if should_do_periodic or sync_event.is_set():
                 trigger_type = "periodic" if should_do_periodic else "event"
@@ -527,25 +542,97 @@ def enhanced_background_sync_worker():
         except Exception as e:
             print(f"[SYNC] Background sync worker error: {e}")
             consecutive_errors += 1
+            
+            # If too many errors, restart the worker
+            if consecutive_errors >= max_consecutive_errors:
+                print(f"[SYNC] Worker has {consecutive_errors} consecutive errors, will restart")
+                break  # Exit the loop to allow restart
+            
             time.sleep(30)  # Wait 30 seconds on error
             
         finally:
             if sync_event.is_set():
                 sync_event.clear()  # Reset event
+    
+    print(f"[SYNC] Background sync worker exiting due to too many errors ({consecutive_errors})")
+    # Mark worker as dead so it can be restarted
+    global sync_worker_thread
+    with sync_worker_lock:
+        sync_worker_thread = None
 
 def start_enhanced_sync_worker():
     """
     Start the enhanced background sync worker for offline clients only.
     """
+    global sync_worker_thread
+    
     if should_trigger_sync():
-        sync_thread = threading.Thread(target=enhanced_background_sync_worker, daemon=True)
-        sync_thread.start()
-        print("[SYNC] Enhanced background sync worker started for offline client")
+        with sync_worker_lock:
+            sync_worker_thread = threading.Thread(target=enhanced_background_sync_worker, daemon=True)
+            sync_worker_thread.start()
+            print("[SYNC] Enhanced background sync worker started for offline client")
         
         # Signal sync worker on startup to process any existing pending changes
         trigger_immediate_sync()
     else:
         print("[SYNC] Skipping enhanced sync worker - this appears to be the online server")
+
+def trigger_reconnection_sync():
+    """
+    Trigger sync after reconnection to catch up on missed changes.
+    This performs a full bidirectional sync to ensure data consistency.
+    """
+    if not should_trigger_sync():
+        return {"status": "skipped", "reason": "online_server"}
+    
+    try:
+        print("[SYNC] Reconnection sync: Performing full bidirectional sync to catch up")
+        
+        # Ensure sync worker is running
+        ensure_sync_worker_running()
+        
+        # Trigger immediate bidirectional sync
+        result = enhanced_bidirectional_sync()
+        
+        if result.get("status") == "success":
+            uploaded = result.get('uploaded', 0)
+            downloaded = result.get('downloaded', 0)
+            total = result.get('total_changes', 0)
+            print(f"[SYNC] Reconnection sync complete: ↑{uploaded} ↓{downloaded} records")
+        elif result.get("status") == "no_changes":
+            print("[SYNC] Reconnection sync: No changes to sync")
+        else:
+            print(f"[SYNC] Reconnection sync result: {result}")
+            
+        return result
+        
+    except Exception as e:
+        print(f"[SYNC] Reconnection sync error: {e}")
+        return {"status": "error", "error": str(e)}
+
+def ensure_sync_worker_running():
+    """
+    Ensure the sync worker is running for offline clients.
+    If the worker thread has died or doesn't exist, restart it.
+    Thread-safe with locking.
+    """
+    global sync_worker_thread
+    
+    if not should_trigger_sync():
+        return  # Online server doesn't need sync worker
+    
+    with sync_worker_lock:
+        # Check if worker thread exists and is alive
+        if sync_worker_thread is None or not sync_worker_thread.is_alive():
+            print("[SYNC] Sync worker not running, starting new worker thread")
+            
+            # Start new worker thread
+            sync_worker_thread = threading.Thread(target=enhanced_background_sync_worker, daemon=True)
+            sync_worker_thread.start()
+            
+            print("[SYNC] New sync worker thread started successfully")
+        else:
+            print("[SYNC] Sync worker already running and healthy")
 
 # Sync queue cleanup with timezone awareness
 def cleanup_expired_sync_queue_enhanced():
