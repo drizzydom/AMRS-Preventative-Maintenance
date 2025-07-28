@@ -154,7 +154,17 @@ def enhanced_upload_pending_sync_queue():
                     record = _json.loads(item[4])  # payload
                     record['__operation__'] = item[3]  # operation
                     record['__sync_queue_id__'] = item[0]  # id
-                    record['__created_at__'] = item[5].isoformat() if item[5] else None  # created_at
+                    
+                    # Handle created_at field - could be datetime object or string
+                    created_at = item[5]
+                    if created_at:
+                        if hasattr(created_at, 'isoformat'):
+                            record['__created_at__'] = created_at.isoformat()
+                        else:
+                            record['__created_at__'] = str(created_at)
+                    else:
+                        record['__created_at__'] = None
+                        
                     upload_payload[table].append(record)
                 except Exception as e:
                     print(f"[SYNC] Error parsing payload for sync_queue id {item[0]}: {e}")
