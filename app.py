@@ -4588,6 +4588,9 @@ def sync_data():
     elif request.method == 'POST':
         # Accept pushed data from offline client and merge into DB
         try:
+            # Import datetime at function scope for availability throughout POST section
+            from datetime import datetime
+            
             data = request.get_json(force=True)
             # --- Users ---
             for u in data.get('users', []):
