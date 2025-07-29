@@ -826,8 +826,17 @@ def get_last_sync_timestamp():
         """)).fetchone()
         
         if result and result[0]:
-            # Return timestamp as ISO string for URL parameter
-            return result[0].isoformat()
+            # Handle both datetime objects and string timestamps
+            timestamp = result[0]
+            if hasattr(timestamp, 'isoformat'):
+                # It's a datetime object
+                return timestamp.isoformat()
+            elif isinstance(timestamp, str):
+                # It's already a string, return as-is
+                return timestamp
+            else:
+                # Convert to string as fallback
+                return str(timestamp)
         else:
             # No previous sync found, return None for full sync
             return None
