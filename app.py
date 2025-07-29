@@ -4332,6 +4332,9 @@ def sync_data():
         return jsonify({'error': 'Unauthorized'}), 403
     if request.method == 'GET':
         try:
+            # Import datetime at function scope for availability throughout
+            from datetime import datetime
+            
             # Check for incremental sync parameter
             since_timestamp = request.args.get('since')
             is_incremental = since_timestamp is not None
@@ -4339,7 +4342,6 @@ def sync_data():
             if is_incremental:
                 try:
                     # Parse the timestamp for filtering
-                    from datetime import datetime
                     since_dt = datetime.fromisoformat(since_timestamp.replace('Z', '+00:00'))
                     print(f"[SYNC] Incremental sync request since: {since_dt}")
                 except (ValueError, TypeError) as e:
