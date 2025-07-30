@@ -450,10 +450,22 @@ storage_ok = check_persistent_storage()
 
 
 
+
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
 
-# Register SQLAlchemy with Flask app before importing models
+# Set up database URI and config before initializing SQLAlchemy
+POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
+if POSTGRESQL_DATABASE_URI:
+    app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+else:
+    # Fallback to SQLite if DATABASE_URL is not set
+    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Register SQLAlchemy with Flask app after config
 from models import db
 db.init_app(app)
 
