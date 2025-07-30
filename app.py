@@ -471,26 +471,6 @@ def bootstrap_secrets():
         "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
     })
 
-# --- Register secure secrets bootstrap endpoint after app is created ---
-from flask import request, jsonify, abort
-
-@app.route('/api/bootstrap-secrets', methods=['POST'])
-def bootstrap_secrets():
-    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
-    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
-    auth_header = request.headers.get('Authorization', '')
-    if not expected_token or auth_header != f"Bearer {expected_token}":
-        abort(403)
-    # Only return the secrets needed for offline sync/bootstrap
-    return jsonify({
-        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
-        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
-        "SYNC_URL": os.environ.get("SYNC_URL"),
-        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
-        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
-        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
-        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
-    })
 
 # Initialize SocketIO after app is created
 import os
