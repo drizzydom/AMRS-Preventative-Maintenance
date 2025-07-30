@@ -28,6 +28,8 @@ def should_trigger_sync():
     Determine if sync should be triggered based on current environment.
     Only offline clients should trigger sync uploads.
     """
+    # True offline clients should trigger sync - they use SQLite and sync to a remote server
+    # Online servers (Render, Heroku, etc.) should NOT trigger sync
     return not is_online_server()
 
 def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, immediate_sync=True, force_add=False):
@@ -46,9 +48,10 @@ def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, i
         # Import here to avoid circular imports
         from app import db
         
-        # Online servers should add local changes to sync queue for distribution to offline clients
-        # The only time we skip is if this is an offline client trying to track already-downloaded data
-        # But since we're always in the context of local changes or imports, we should proceed
+        # Online servers shouldn't add to sync queue unless forced (for bulk imports)
+        if is_online_server() and not force_add:
+            print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
+            return
             
         # Use timezone-aware datetime
         now = get_timezone_aware_now()
