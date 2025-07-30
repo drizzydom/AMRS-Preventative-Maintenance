@@ -449,13 +449,37 @@ from models import User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask
 from auto_migrate import run_auto_migration
 
 # --- Register secure secrets bootstrap endpoint after app is created ---
+
+# --- Security Event Logger import ---
+from security_event_logger import log_security_event
+
 @app.route('/api/bootstrap-secrets', methods=['POST'])
 def bootstrap_secrets():
     """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
     expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
     auth_header = request.headers.get('Authorization', '')
+    remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    event_context = {
+        'ip': remote_addr,
+        'user_agent': request.headers.get('User-Agent', ''),
+        'auth_header': bool(auth_header),
+    }
     if not expected_token or auth_header != f"Bearer {expected_token}":
+        log_security_event(
+            event_type="bootstrap_secrets_denied",
+            user_id=None,
+            username=None,
+            context=event_context,
+            message="Denied bootstrap secrets: invalid or missing token."
+        )
         abort(403)
+    log_security_event(
+        event_type="bootstrap_secrets_success",
+        user_id=None,
+        username=None,
+        context=event_context,
+        message="Bootstrap secrets successfully retrieved."
+    )
     # Only return the secrets needed for offline sync/bootstrap
     return jsonify({
         "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
@@ -4164,22 +4188,28 @@ def login():
     """Handle userlogin."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         remember = request.form.get('remember') == 'on'
-        # Add debug for login attempts
         app.logger.debug(f"Login attempt: username={username}, remember={remember}")
         user = User.query.filter_by(username_hash=hash_value(username)).first()
+        from security_event_logger import log_security_event
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
-            # Set remember preference and token
             user.set_remember_preference(remember)
+            log_security_event(
+                event_type="login_success",
+                details=f"Login from IP: {request.remote_addr} (username: {username})"
+            )
+            # Detect new device/IP (simple version: always log, can be improved)
+            log_security_event(
+                event_type="login_new_device_or_ip",
+                details=f"Login from new device/IP: {request.remote_addr} (username: {username})"
+            )
             if remember:
                 token = user.generate_remember_token()
                 db.session.commit()
-                # Set cookie for persistent login (30 days)
                 resp = redirect(request.args.get('next') or url_for('dashboard'))
                 resp.set_cookie('remember_token', token, max_age=30*24*60*60, httponly=True, samesite='Lax')
                 app.logger.debug(f"Remember token set for user_id={user.id}")
@@ -4195,44 +4225,80 @@ def login():
                 app.logger.debug(f"Login failed: Invalid password for username={username}")
             else:
                 app.logger.debug(f"Login failed: No user found with username={username}")
+            log_security_event(
+                event_type="login_failed",
+                details=f"Failed login attempt for username: {username} from IP: {request.remote_addr}"
+            )
             flash('Invalid username or password', 'danger')
-    
     return render_template('login.html')
+
 
 @app.route('/logout')
 @login_required
 def logout():
     """Handle user logout."""
+    from security_event_logger import log_security_event
+    remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    user_id = getattr(current_user, 'id', None)
+    username = getattr(current_user, 'username', None)
+    event_context = {
+        'ip': remote_addr,
+        'user_agent': request.headers.get('User-Agent', ''),
+    }
+    log_security_event(
+        event_type="logout",
+        user_id=user_id,
+        username=username,
+        context=event_context,
+        message="User logged out."
+    )
     logout_user()
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
-
 def forgot_password():
     """Handle password reset request."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
+
     if request.method == 'POST':
         email = request.form.get('email')
         user = User.query.filter_by(email_hash=hash_value(email)).first()
-        
+        remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+        event_context = {
+            'ip': remote_addr,
+            'user_agent': request.headers.get('User-Agent', ''),
+            'email': email,
+        }
         if user:
             # Generate a password reset token
             reset_token = secrets.token_urlsafe(32)
             expires = datetime.now() + timedelta(hours=24)
-            
             # Store token in database
             user.reset_token = reset_token
             user.reset_token_expiration = expires
             db.session.commit()
-            
+            # Log password reset request (success)
+            log_security_event(
+                event_type="password_reset_requested",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset requested. Token generated."
+            )
             # In a production app, you would send an email with the reset link
-            # For now, just flash a message with the token (for demonstration)
             reset_url = url_for('reset_password', token=reset_token, _external=True)
             flash(f'Password reset link: {reset_url}', 'info')
-            
+        else:
+            # Log password reset request (unknown email)
+            log_security_event(
+                event_type="password_reset_requested_unknown_email",
+                user_id=None,
+                username=None,
+                context=event_context,
+                message="Password reset requested for unknown email."
+            )
         # Always show this message to prevent user enumeration
         flash('If an account with that email exists, a password reset link has been sent.', 'info')
         return redirect(url_for('login'))
@@ -4275,18 +4341,45 @@ def reset_password(token):
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     user = User.query.filter_by(reset_token=token).first()
-    
+    remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    event_context = {
+        'ip': remote_addr,
+        'user_agent': request.headers.get('User-Agent', ''),
+        'token': token,
+        'user_id': getattr(user, 'id', None) if user else None,
+    }
     # Check if token is valid and not expired
     if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
+        log_security_event(
+            event_type="password_reset_token_invalid",
+            user_id=None,
+            username=None,
+            context=event_context,
+            message="Password reset link invalid or expired."
+        )
         flash('The password reset link is invalid or has expired.', 'danger')
         return redirect(url_for('forgot_password'))
     if request.method == 'POST':
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
         if not password or len(password) < 8:
+            log_security_event(
+                event_type="password_reset_failed_short_password",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset failed: password too short."
+            )
             flash('Password must be at least 8 characters long.', 'danger')
             return redirect(url_for('reset_password', token=token))
         elif password != confirm_password:
+            log_security_event(
+                event_type="password_reset_failed_mismatch",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset failed: passwords do not match."
+            )
             flash('Passwords do not match.', 'danger')
             return redirect(url_for('reset_password', token=token))
         else:
@@ -4295,6 +4388,13 @@ def reset_password(token):
             user.reset_token = None
             user.reset_token_expiration = None
             db.session.commit()
+            log_security_event(
+                event_type="password_reset_success",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset successful."
+            )
             flash('Your password has been updated. Please log in.', 'success')
             return redirect(url_for('login'))
     return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
