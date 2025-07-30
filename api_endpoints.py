@@ -9,16 +9,13 @@ import datetime
 from flask_login import current_user, login_required
 import os
 from timezone_utils import get_timezone_aware_now, convert_utc_to_eastern
-from app import app, db
-from app import User, Site, Machine, Part, MaintenanceRecord
-from app import Role
-from app import AuditTask, AuditTaskCompletion
+
 
 # Create blueprint for API routes
 api_bp = Blueprint('api', __name__)
 
 # Secret key for JWT tokens
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', app.config['SECRET_KEY'])
+
 
 # Token expiration time (in minutes)
 TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
@@ -51,6 +48,10 @@ def token_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
+from app import db
+from app import User, Site, Machine, Part, MaintenanceRecord
+from app import Role
+from app import AuditTask, AuditTaskCompletion
 @api_bp.route('/login', methods=['POST'])
 def login():
     """API endpoint for user authentication"""
@@ -415,6 +416,10 @@ def sync_debug():
 # Register blueprint with app
 def register_api(flask_app=None):
     """Register the API blueprint with the Flask app"""
+    # Import app/db/models here to avoid circular import
+    from app import app as default_app, db, User, Site, Machine, Part, MaintenanceRecord, Role, AuditTask, AuditTaskCompletion
+    global JWT_SECRET_KEY
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', default_app.config['SECRET_KEY'])
     if flask_app is None:
-        from app import app as flask_app
+        flask_app = default_app
     flask_app.register_blueprint(api_bp, url_prefix='/api')
