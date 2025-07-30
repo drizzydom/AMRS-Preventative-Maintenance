@@ -112,38 +112,7 @@ def upload_pending_sync_queue():
             print(f"[SYNC] Exception during upload: {e}")
             # For any other exception, ensure we don't crash the sync worker
 
-# Global event to signal sync worker
-sync_event = threading.Event()
-
-def background_sync_worker():
-    """Background thread that waits for sync_event and uploads sync_queue changes."""
-    last_periodic_check = time.time()
-    
-    while True:
-        # Wait for sync event with timeout for periodic checks
-        sync_event.wait(timeout=300)  # Check every 5 minutes even without events
-        
-        try:
-            with app.app_context():  # Ensure proper Flask app context
-                current_time = time.time()
-                
-                # Periodic check for pending items (every 5 minutes)
-                if current_time - last_periodic_check >= 300:  # 5 minutes
-                    print("[SYNC] Performing periodic check for pending sync items...")
-                    upload_pending_sync_queue()
-                    last_periodic_check = current_time
-                elif sync_event.is_set():
-                    # Event-triggered sync
-                    upload_pending_sync_queue()
-                    
-        except Exception as e:
-            print(f"[SYNC] Background sync worker error: {e}")
-        finally:
-            if sync_event.is_set():
-                sync_event.clear()  # Reset event until next change
-
-# Start the enhanced background sync worker for offline clients only
-start_enhanced_sync_worker()
+# Note: Enhanced sync worker will be started after app initialization
 
 
 # --- SocketIO event for triggering sync ---
@@ -237,48 +206,16 @@ def notify_desktop_clients_of_changes():
 
 def add_to_sync_queue(table_name, record_id, operation, payload_dict):
     """
-    Add a change to the sync_queue table.
-    Args:
-        table_name (str): Name of the table changed.
-        record_id (str): Primary key of the record changed.
-        operation (str): 'insert', 'update', or 'delete'.
-        payload_dict (dict): The record data (as dict, will be JSON-encoded).
+    DEPRECATED: Use add_to_sync_queue_enhanced instead.
+    This function is kept for compatibility but redirects to the enhanced version.
     """
     try:
-        # Use centralized online server detection from timezone_utils
-        if is_online_server():
-            print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
-            return
-        # If AMRS_ONLINE_URL is missing, warn and skip sync (offline client misconfiguration)
-        if not os.environ.get('AMRS_ONLINE_URL'):
-            print(f"[SYNC_QUEUE] Skipping sync for {table_name}:{record_id} - missing AMRS_ONLINE_URL (offline client misconfiguration)")
-            return
-            
-        from sqlalchemy import text as sa_text
-        now = datetime.utcnow()
-        payload_json = _json.dumps(payload_dict)
-        db.session.execute(sa_text("""
-            INSERT INTO sync_queue (table_name, record_id, operation, payload, created_at, status)
-            VALUES (:table_name, :record_id, :operation, :payload, :created_at, 'pending')
-        """), {
-            "table_name": table_name,
-            "record_id": str(record_id),
-            "operation": operation,
-            "payload": payload_json,
-            "created_at": now
-        })
-        db.session.commit()
-        print(f"[SYNC_QUEUE] Added {operation} for {table_name}:{record_id} to sync_queue.")
-        
-        # Check if desktop clients are available before triggering immediate sync
-        if check_desktop_clients_available():
-            # Signal the background sync worker to run
-            sync_event.set()
-            print(f"[SYNC_QUEUE] Desktop clients available, triggering immediate sync.")
-        else:
-            print(f"[SYNC_QUEUE] No desktop clients available, item queued for later sync.")
-    except SQLAlchemyError as e:
-        db.session.rollback()
+        # Redirect to enhanced sync queue to avoid duplicate systems
+        add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict)
+        print(f"[SYNC_QUEUE] Redirected {operation} for {table_name}:{record_id} to enhanced sync queue.")
+    except Exception as e:
+        print(f"[SYNC_QUEUE] Error redirecting to enhanced sync: {e}")
+        # Don't fail, just log the error
         print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
 # --- Sync Queue Cleanup: Remove records older than 144 hours (6 days) ---
 def cleanup_expired_sync_queue():
@@ -454,47 +391,15 @@ storage_ok = check_persistent_storage()
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
 
-# Set up database URI and config before initializing SQLAlchemy
-POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
-if POSTGRESQL_DATABASE_URI:
-    app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-else:
-    # Fallback to SQLite if DATABASE_URL is not set
-    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-
 # Register SQLAlchemy with Flask app after config
 from models import db
-db.init_app(app)
+
+# NOTE: Database configuration will be handled later in a single consolidated section
+# NOTE: Database initialization and auto-migration will be handled later in consolidated section
 
 # Now import the rest of the models and other local modules
 from models import User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
-
-# --- Move all startup DB logic inside a single app context ---
-with app.app_context():
-    # Run auto migration (if needed)
-    try:
-        run_auto_migration()
-    except Exception as e:
-        print(f"[STARTUP] Error running auto migration: {e}")
-
-    # Create all tables if they don't exist
-    try:
-        db.create_all()
-        print("[STARTUP] Database tables ensured.")
-    except Exception as e:
-        print(f"[STARTUP] Error creating tables: {e}")
-
-    # Assign colors to audit tasks if function is defined
-    try:
-        if 'assign_colors_to_audit_tasks' in globals():
-            assign_colors_to_audit_tasks()
-    except Exception as e:
-        print(f"[STARTUP] Error assigning colors to audit tasks: {e}")
 
 # --- Register secure secrets bootstrap endpoint after app is created ---
 @app.route('/api/bootstrap-secrets', methods=['POST'])
@@ -613,25 +518,34 @@ def handle_connect():
         }
         print(f"[SocketIO] Client connected: {client_id} from {client_info['ip']} (Total: {len(active_connections)})")
         
-        # For offline clients, ensure sync worker is running and trigger sync on reconnect
+        # For offline clients, trigger sync only when needed (not on every page load)
         from timezone_utils import is_online_server
         if not is_online_server():
-            print(f"[SocketIO] Offline client reconnected, performing reconnection sync")
-            
-            # Import sync functions
-            from sync_utils_enhanced import trigger_reconnection_sync
-            
-            # Trigger comprehensive reconnection sync (ensures worker + full bidirectional sync)
-            sync_result = trigger_reconnection_sync()
-            
-            if sync_result.get("status") == "success":
-                total_changes = sync_result.get("total_changes", 0)
-                if total_changes > 0:
-                    print(f"[SocketIO] Reconnection sync successful: {total_changes} changes processed")
-            elif sync_result.get("status") == "no_changes":
-                print(f"[SocketIO] Reconnection sync: No changes needed")
+            # Check if we should trigger sync (avoids constant syncing)
+            if should_trigger_sync():
+                print(f"[SocketIO] Offline client - sync needed, performing reconnection sync")
+                
+                # Import sync functions
+                from sync_utils_enhanced import trigger_reconnection_sync
+                
+                # Trigger sync in background to avoid blocking page load
+                try:
+                    sync_result = trigger_reconnection_sync()
+                    
+                    if sync_result.get("status") == "success":
+                        total_changes = sync_result.get("total_changes", 0)
+                        if total_changes > 0:
+                            print(f"[SocketIO] Reconnection sync successful: {total_changes} changes processed")
+                    elif sync_result.get("status") == "no_changes":
+                        print(f"[SocketIO] Reconnection sync: No changes needed")
+                    else:
+                        print(f"[SocketIO] Reconnection sync result: {sync_result.get('status')}")
+                except Exception as e:
+                    print(f"[SocketIO] Warning: Background sync failed: {e}")
             else:
-                print(f"[SocketIO] Reconnection sync result: {sync_result.get('status')}")
+                print(f"[SocketIO] Offline client - sync not needed (recent sync completed)")
+        else:
+            print(f"[SocketIO] Online client connected - no sync needed")
         
         emit('connected', {
             'message': 'Connected to AMRS sync server', 
@@ -1286,61 +1200,8 @@ def get_online_db_config():
 
 
 # --- Main DB selection logic ---
-if is_render():
-    # On Render: always use the online (PostgreSQL) database
-    try:
-        print("[AMRS] Detected Render environment. Configuring production database...")
-        configure_database(app)
-    except Exception as e:
-        print(f"[APP] Error configuring database: {str(e)}")
-        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-    print("[AMRS] ONLINE MODE: Using configured database URI (Render)")
-if is_render():
-    # On Render: always use the online (PostgreSQL) database
-    try:
-        print("[AMRS] Detected Render environment. Configuring production database...")
-        configure_database(app)
-    except Exception as e:
-        print(f"[APP] Error configuring database: {str(e)}")
-        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-    print("[AMRS] ONLINE MODE: Using configured database URI (Render)")
-else:
-    # On local device: default to offline mode (local SQLite), unless OFFLINE_MODE=0 is explicitly set
-    offline_mode = os.environ.get("OFFLINE_MODE") != "0"  # Default to offline unless OFFLINE_MODE=0
-    if offline_mode:
-        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-        print(f"[AMRS] LOCAL OFFLINE MODE: Using local database at {db_path}")
-    else:
-        try:
-            pass
-        except Exception as e:
-            pass
-        print("[AMRS] LOCAL ONLINE MODE: Using configured database URI")
+# NOTE: Database configuration moved to consolidated section later in file
 
-
-# Initialize Flask app
-app = Flask(__name__, instance_relative_config=True)
-
-# --- Register secure secrets bootstrap endpoint after app is created ---
-@app.route('/api/bootstrap-secrets', methods=['POST'])
-def bootstrap_secrets():
-    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
-    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
-    auth_header = request.headers.get('Authorization', '')
-    if not expected_token or auth_header != f"Bearer {expected_token}":
-        abort(403)
-    # Only return the secrets needed for offline sync/bootstrap
-    return jsonify({
-        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
-        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
-        "SYNC_URL": os.environ.get("SYNC_URL"),
-        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
-        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
-        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
-        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
-    })
 # --- Ensure timestamp columns exist on Render launch for future sync compatibility ---
 def ensure_sync_columns():
     """Ensure all tables have created_at, updated_at, and deleted_at columns for sync."""
@@ -1359,7 +1220,11 @@ def ensure_sync_columns():
                     for col_name, col_type in sync_columns:
                         if col_name not in existing_columns:
                             print(f"[SYNC] Adding {col_name} to {table}...")
-                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                            # SQLite doesn't support IF NOT EXISTS in ALTER TABLE, so we check first
+                            if 'sqlite' in str(db.engine.url):
+                                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                            else:
+                                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
                             conn.commit()
         print("[SYNC] Sync columns ensured.")
     except Exception as e:
@@ -1887,17 +1752,7 @@ def assign_colors_to_audit_tasks():
         import traceback
         print(traceback.format_exc())
 
-# --- Move all startup DB logic inside a single app context ---
-with app.app_context():
-    try:
-        run_auto_migration()  # Ensure columns exist before any queries
-        print("[STARTUP] Auto-migration completed successfully")
-    except Exception as e:
-        print(f'[AUTO_MIGRATE ERROR] Critical migration failed: {e}')
-        print("App startup may fail due to missing database columns")
-        # Don't exit here, but log the critical error
-        import traceback
-        print(traceback.format_exc())
+# NOTE: All database initialization moved to consolidated section at end of file
     try:
         # --- Ensure audit_tasks.color column exists ---
         from sqlalchemy import text
@@ -2001,11 +1856,8 @@ with app.app_context():
             print("[STARTUP] Healthcheck FAILED: Database is not ready.")
     except Exception as e:
         print(f"[STARTUP] Healthcheck error: {e}")
-    initialize_db_connection()
-    ensure_db_schema()
-    ensure_maintenance_records_schema()
-    assign_colors_to_audit_tasks()  # Add colors to any audit tasks that don't have them yet
-    db.create_all()
+    
+# NOTE: Database initialization moved to consolidated section at end of file
 
 # Add database connection check before requests
 @app.before_request
@@ -4074,7 +3926,7 @@ def user_profile():
                 user.password_hash = generate_password_hash(new_password)
                 db.session.commit()
                 # Log to sync queue
-                add_to_sync_queue('users', user.id, 'update', {
+                add_to_sync_queue_enhanced('users', user.id, 'update', {
                     'id': user.id,
                     'password_hash': user.password_hash
                 })
@@ -4118,7 +3970,7 @@ def user_profile():
                         user.password_hash = generate_password_hash(new_password)
                         db.session.commit()
                         # Log to sync queue
-                        add_to_sync_queue('users', user.id, 'update', {
+                        add_to_sync_queue_enhanced('users', user.id, 'update', {
                             'id': user.id,
                             'password_hash': user.password_hash
                         })
@@ -4157,7 +4009,7 @@ def update_profile():
         
         db.session.commit()
         # Log to sync queue
-        add_to_sync_queue('users', user.id, 'update', {
+        add_to_sync_queue_enhanced('users', user.id, 'update', {
             'id': user.id,
             'username': user.username,
             'email': user.email,
@@ -4250,7 +4102,7 @@ def update_notification_preferences():
         user.set_notification_preferences(prefs)
         db.session.commit()  # Ensure changes are saved
         # Log to sync queue
-        add_to_sync_queue('users', user.id, 'update', {
+        add_to_sync_queue_enhanced('users', user.id, 'update', {
             'id': user.id,
             'notification_preferences': prefs
         })
@@ -5185,7 +5037,7 @@ def edit_site(site_id):
             
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('sites', site.id, 'update', {
+            add_to_sync_queue_enhanced('sites', site.id, 'update', {
                 'id': site.id,
                 'name': site.name,
                 'location': site.location,
@@ -5195,7 +5047,7 @@ def edit_site(site_id):
             })
             # Log all user assignments for this site
             for user in site.users:
-                add_to_sync_queue('site_users', f'{site.id}_{user.id}', 'update', {
+                add_to_sync_queue_enhanced('site_users', f'{site.id}_{user.id}', 'update', {
                     'site_id': site.id,
                     'user_id': user.id
                 })
@@ -5389,7 +5241,7 @@ def edit_machine(machine_id):
             
             db.session.commit()
             # Log to sync queue
-            add_to_sync_queue('machines', machine.id, 'update', {
+            add_to_sync_queue_enhanced('machines', machine.id, 'update', {
                 'id': machine.id,
                 'name': machine.name,
                 'model': machine.model,
@@ -5604,7 +5456,7 @@ def edit_part(part_id):
         part.maintenance_unit = request.form.get('maintenance_unit', part.maintenance_unit)
         db.session.commit()
         # Log to sync queue
-        add_to_sync_queue('parts', part.id, 'update', {
+        add_to_sync_queue_enhanced('parts', part.id, 'update', {
             'id': part.id,
             'name': part.name,
             'description': part.description,
@@ -7224,21 +7076,92 @@ def enhanced_server_error(e):
 
 
 
-# --- OFFLINE/ONLINE DATABASE SWITCH ---
-import sqlalchemy
-offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1"
-if offline_mode:
-    # Use local SQLite database for offline mode
+# --- CONSOLIDATED DATABASE CONFIGURATION ---
+# This is the ONLY place where database configuration should happen
+
+print("[AMRS] Starting consolidated database configuration...")
+
+# Determine environment and database type
+POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
+is_render_env = os.environ.get('RENDER') or os.environ.get('RENDER_SERVICE_NAME')
+offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1" or os.environ.get("OFFLINE_MODE", "").lower() == "true"
+
+# Check if DATABASE_URL is actually PostgreSQL
+is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
+
+# Configure database based on environment
+if is_render_env:
+    # Render environment: always use PostgreSQL
+    if is_postgresql_url:
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print("[AMRS] RENDER MODE: Using PostgreSQL database")
+    else:
+        print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
+        exit(1)
+elif offline_mode:
+    # Local offline mode: use SQLite
     db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    # Rebind the db engine if already initialized
-    if hasattr(db, 'engine'):
-        db.engine.dispose()
-        db.__init__(app)
-    print("[AMRS] Running in OFFLINE MODE: using local maintenance.db")
+    print(f"[AMRS] OFFLINE MODE: Using local SQLite at {db_path}")
 else:
-    print("[AMRS] Running in ONLINE MODE: using configured database URI")
+    # Local online mode: use PostgreSQL if available, fallback to SQLite
+    if is_postgresql_url:
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print("[AMRS] LOCAL ONLINE MODE: Using PostgreSQL database")
+    else:
+        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
+
+# Initialize database with Flask app
+db.init_app(app)
+
+# Perform all database setup within app context
+with app.app_context():
+    try:
+        # Run auto-migration once
+        print("[AMRS] Running database auto-migration...")
+        run_auto_migration()
+        print("[AMRS] Auto-migration completed successfully")
+        
+        # Create tables if needed
+        db.create_all()
+        print("[AMRS] Database tables ensured")
+        
+        # Additional setup for online servers
+        if not offline_mode:
+            try:
+                # Ensure sync columns exist
+                ensure_sync_columns()
+                
+                # Run any additional startup tasks  
+                try:
+                    assign_colors_to_audit_tasks()
+                    print("[AMRS] Audit task colors assigned")
+                except Exception as e:
+                    print(f"[AMRS] Warning: Could not assign audit task colors: {e}")
+                
+                print("[AMRS] Online mode database setup completed")
+            except Exception as e:
+                print(f"[AMRS] Warning: Online mode setup error: {e}")
+                
+    except Exception as e:
+        print(f"[AMRS] ERROR: Database setup failed: {e}")
+        # Don't exit, let the app try to continue
+
+# Initialize sync worker for offline clients only (after all setup is complete)
+if offline_mode:
+    try:
+        start_enhanced_sync_worker()
+        print("[AMRS] Enhanced sync worker started for offline mode")
+    except Exception as e:
+        print(f"[AMRS] Warning: Failed to start sync worker: {e}")
+
+print("[AMRS] Database configuration completed")
 
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
