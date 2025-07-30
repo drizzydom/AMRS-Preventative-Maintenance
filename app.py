@@ -449,8 +449,17 @@ def check_persistent_storage():
 storage_ok = check_persistent_storage()
 
 
+
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Register SQLAlchemy with Flask app before importing models
+from models import db
+db.init_app(app)
+
+# Now import the rest of the models and other local modules
+from models import User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
+from auto_migrate import run_auto_migration
 
 # --- Register secure secrets bootstrap endpoint after app is created ---
 @app.route('/api/bootstrap-secrets', methods=['POST'])
