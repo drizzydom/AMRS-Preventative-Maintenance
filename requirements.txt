@@ -1,3 +1,5 @@
+# For rate-limiting and security
+Flask-Limiter==3.5.1
 # For secure cross-platform secret storage
 keyring==25.2.0
 blinker==1.9.0
