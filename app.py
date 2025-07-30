@@ -465,6 +465,7 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+
 # Register SQLAlchemy with Flask app after config
 from models import db
 db.init_app(app)
@@ -472,6 +473,28 @@ db.init_app(app)
 # Now import the rest of the models and other local modules
 from models import User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
 from auto_migrate import run_auto_migration
+
+# --- Move all startup DB logic inside a single app context ---
+with app.app_context():
+    # Run auto migration (if needed)
+    try:
+        run_auto_migration()
+    except Exception as e:
+        print(f"[STARTUP] Error running auto migration: {e}")
+
+    # Create all tables if they don't exist
+    try:
+        db.create_all()
+        print("[STARTUP] Database tables ensured.")
+    except Exception as e:
+        print(f"[STARTUP] Error creating tables: {e}")
+
+    # Assign colors to audit tasks if function is defined
+    try:
+        if 'assign_colors_to_audit_tasks' in globals():
+            assign_colors_to_audit_tasks()
+    except Exception as e:
+        print(f"[STARTUP] Error assigning colors to audit tasks: {e}")
 
 # --- Register secure secrets bootstrap endpoint after app is created ---
 @app.route('/api/bootstrap-secrets', methods=['POST'])
