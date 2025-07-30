@@ -1,3 +1,24 @@
+# --- Load secrets from keyring for packaged desktop app (before any other imports) ---
+import os
+if os.environ.get("RUNNING_IN_ELECTRON") == "1":
+    try:
+        import keyring
+        for key in [
+            "USER_FIELD_ENCRYPTION_KEY",
+            "RENDER_EXTERNAL_URL",
+            "SYNC_URL",
+            "SYNC_USERNAME",
+            "AMRS_ONLINE_URL",
+            "AMRS_ADMIN_USERNAME",
+            "AMRS_ADMIN_PASSWORD",
+        ]:
+            value = keyring.get_password("amrs", key)
+            if value:
+                os.environ[key] = value
+        print("[APP] Loaded secrets from keyring for desktop app.")
+    except Exception as e:
+        print(f"[APP] Failed to load secrets from keyring: {e}")
+
 # --- Load environment variables FIRST (before any other imports) ---
 import os
 from dotenv import load_dotenv
@@ -8,7 +29,29 @@ dotenv_path = os.path.join(BASE_DIR, '.env')
 load_dotenv(dotenv_path)
 print(f"[APP] Loaded .env from: {dotenv_path}")
 
+# ...existing code...
 # --- Background Sync Worker ---
+# ...existing code...
+# --- Register secure secrets bootstrap endpoint after app is created ---
+from flask import request, jsonify, abort
+
+@app.route('/api/bootstrap-secrets', methods=['POST'])
+def bootstrap_secrets():
+    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
+    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
+    auth_header = request.headers.get('Authorization', '')
+    if not expected_token or auth_header != f"Bearer {expected_token}":
+        abort(403)
+    # Only return the secrets needed for offline sync/bootstrap
+    return jsonify({
+        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
+        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
+        "SYNC_URL": os.environ.get("SYNC_URL"),
+        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
+        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
+        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
+        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
+    })
 import requests
 import threading
 import time
@@ -426,7 +469,29 @@ def check_persistent_storage():
 storage_ok = check_persistent_storage()
 
 # Initialize Flask app
+# Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# --- Register secure secrets bootstrap endpoint after app is created ---
+from flask import request, jsonify, abort
+
+@app.route('/api/bootstrap-secrets', methods=['POST'])
+def bootstrap_secrets():
+    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
+    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
+    auth_header = request.headers.get('Authorization', '')
+    if not expected_token or auth_header != f"Bearer {expected_token}":
+        abort(403)
+    # Only return the secrets needed for offline sync/bootstrap
+    return jsonify({
+        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
+        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
+        "SYNC_URL": os.environ.get("SYNC_URL"),
+        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
+        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
+        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
+        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
+    })
 
 # Initialize SocketIO after app is created
 import os
