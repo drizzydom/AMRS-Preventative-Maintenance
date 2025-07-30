@@ -68,3 +68,4 @@ venv/.DS_Store
 .DS_Store
 secret_config.py
 desktop_bootstrap_secrets.py
+check_keyring_secrets.py
