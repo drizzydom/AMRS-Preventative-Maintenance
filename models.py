@@ -1,3 +1,20 @@
+# --- Security Event Logging Model ---
+class SecurityEvent(db.Model):
+    __tablename__ = 'security_events'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    event_type = db.Column(db.String(64), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    username = db.Column(db.String(255), nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    location = db.Column(db.String(255), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    is_critical = db.Column(db.Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('security_events', lazy=True))
+
+    def __repr__(self):
+        return f'<SecurityEvent {self.event_type} at {self.timestamp}>'
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
