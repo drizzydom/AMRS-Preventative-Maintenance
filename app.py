@@ -29,29 +29,9 @@ dotenv_path = os.path.join(BASE_DIR, '.env')
 load_dotenv(dotenv_path)
 print(f"[APP] Loaded .env from: {dotenv_path}")
 
-# ...existing code...
 # --- Background Sync Worker ---
-# ...existing code...
 # --- Register secure secrets bootstrap endpoint after app is created ---
-from flask import request, jsonify, abort
-
-@app.route('/api/bootstrap-secrets', methods=['POST'])
-def bootstrap_secrets():
-    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
-    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
-    auth_header = request.headers.get('Authorization', '')
-    if not expected_token or auth_header != f"Bearer {expected_token}":
-        abort(403)
-    # Only return the secrets needed for offline sync/bootstrap
-    return jsonify({
-        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
-        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
-        "SYNC_URL": os.environ.get("SYNC_URL"),
-        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
-        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
-        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
-        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
-    })
+# (Keep all previous imports and code here)
 import requests
 import threading
 import time
@@ -468,9 +448,28 @@ def check_persistent_storage():
 # Call this function before your database setup
 storage_ok = check_persistent_storage()
 
-# Initialize Flask app
+
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# --- Register secure secrets bootstrap endpoint after app is created ---
+@app.route('/api/bootstrap-secrets', methods=['POST'])
+def bootstrap_secrets():
+    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
+    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
+    auth_header = request.headers.get('Authorization', '')
+    if not expected_token or auth_header != f"Bearer {expected_token}":
+        abort(403)
+    # Only return the secrets needed for offline sync/bootstrap
+    return jsonify({
+        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
+        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
+        "SYNC_URL": os.environ.get("SYNC_URL"),
+        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
+        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
+        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
+        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
+    })
 
 # --- Register secure secrets bootstrap endpoint after app is created ---
 from flask import request, jsonify, abort
@@ -1296,40 +1295,28 @@ else:
             pass
         print("[AMRS] LOCAL ONLINE MODE: Using configured database URI")
 
-# Initialize database
-print("[APP] Initializing SQLAlchemy...")
-db.init_app(app)
 
-# --- Ensure sync columns and cleanup are only called after db.init_app(app) and within app context ---
-with app.app_context():
-    # Register API endpoints blueprint within app context
-    from api_endpoints import register_api
-    register_api(app)
-    print("[APP] API endpoints registered")
-    
-    # --- Ensure large user columns on Render ---
-    if is_render():
-        ensure_large_user_columns()
-    cleanup_expired_sync_queue()
-    if not is_render() and ("offline_mode" in locals() and offline_mode):
-        try:
-            ensure_sync_columns_sqlite()
-            from sqlite_schema_migration import migrate_sqlite_schema
-            print("[AMRS] Running SQLite schema migration...")
-            migrations_applied = migrate_sqlite_schema(db_path)
-            if migrations_applied > 0:
-                print(f"[AMRS] Applied {migrations_applied} schema migrations")
-            else:
-                print("[AMRS] SQLite schema is up to date")
-            # Perform automatic two-way sync
-            print("[AMRS] Starting automatic two-way synchronization...")
-            sync_success = auto_sync_offline_db()
-            if sync_success:
-                print("[AMRS] Two-way sync completed successfully")
-            else:
-                print("[AMRS] Two-way sync completed with errors - continuing in offline mode")
-        except Exception as e:
-            print(f"[AMRS] Error during offline DB setup: {e}")
+# Initialize Flask app
+app = Flask(__name__, instance_relative_config=True)
+
+# --- Register secure secrets bootstrap endpoint after app is created ---
+@app.route('/api/bootstrap-secrets', methods=['POST'])
+def bootstrap_secrets():
+    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
+    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
+    auth_header = request.headers.get('Authorization', '')
+    if not expected_token or auth_header != f"Bearer {expected_token}":
+        abort(403)
+    # Only return the secrets needed for offline sync/bootstrap
+    return jsonify({
+        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
+        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
+        "SYNC_URL": os.environ.get("SYNC_URL"),
+        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
+        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
+        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
+        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
+    })
 # --- Ensure timestamp columns exist on Render launch for future sync compatibility ---
 def ensure_sync_columns():
     """Ensure all tables have created_at, updated_at, and deleted_at columns for sync."""
