@@ -1,23 +1,70 @@
-# --- Load secrets from keyring for packaged desktop app (before any other imports) ---
+
+
+# --- Load and bootstrap secrets from keyring or remote if missing ---
 import os
-if os.environ.get("RUNNING_IN_ELECTRON") == "1":
-    try:
-        import keyring
-        for key in [
-            "USER_FIELD_ENCRYPTION_KEY",
-            "RENDER_EXTERNAL_URL",
-            "SYNC_URL",
-            "SYNC_USERNAME",
-            "AMRS_ONLINE_URL",
-            "AMRS_ADMIN_USERNAME",
-            "AMRS_ADMIN_PASSWORD",
-        ]:
-            value = keyring.get_password("amrs", key)
-            if value:
-                os.environ[key] = value
-        print("[APP] Loaded secrets from keyring for desktop app.")
-    except Exception as e:
-        print(f"[APP] Failed to load secrets from keyring: {e}")
+import sys
+import json as _json
+try:
+    import keyring
+    import requests
+    KEYRING_SERVICE = "amrs"
+    KEYRING_KEYS = [
+        "USER_FIELD_ENCRYPTION_KEY",
+        "RENDER_EXTERNAL_URL",
+        "SYNC_URL",
+        "SYNC_USERNAME",
+        "AMRS_ONLINE_URL",
+        "AMRS_ADMIN_USERNAME",
+        "AMRS_ADMIN_PASSWORD",
+        "MAIL_SERVER",
+        "MAIL_PORT",
+        "MAIL_USE_TLS",
+        "MAIL_USERNAME",
+        "MAIL_PASSWORD",
+        "MAIL_DEFAULT_SENDER",
+        "SECRET_KEY",
+        "BOOTSTRAP_SECRET_TOKEN",
+    ]
+    loaded_any = False
+    missing_keys = []
+    for key in KEYRING_KEYS:
+        value = keyring.get_password(KEYRING_SERVICE, key)
+        if value:
+            os.environ[key] = value
+            loaded_any = True
+        else:
+            missing_keys.append(key)
+    if missing_keys:
+        print(f"[APP] Missing secrets in keyring: {missing_keys}")
+        # Try to bootstrap from remote if possible
+        bootstrap_url = os.environ.get("BOOTSTRAP_URL")
+        bootstrap_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
+        if bootstrap_url and bootstrap_token:
+            try:
+                resp = requests.post(
+                    bootstrap_url,
+                    headers={"Authorization": f"Bearer {bootstrap_token}"},
+                    timeout=15
+                )
+                if resp.status_code == 200:
+                    secrets = resp.json()
+                    for k, v in secrets.items():
+                        if k in missing_keys and v:
+                            keyring.set_password(KEYRING_SERVICE, k, v)
+                            os.environ[k] = v
+                    print("[APP] Bootstrapped and stored missing secrets from remote.")
+                else:
+                    print(f"[APP] Bootstrap failed: {resp.status_code} {resp.text}")
+            except Exception as e:
+                print(f"[APP] Exception during bootstrap: {e}")
+        else:
+            print("[APP] No BOOTSTRAP_URL or BOOTSTRAP_SECRET_TOKEN set; cannot bootstrap secrets.")
+    elif loaded_any:
+        print("[APP] Loaded secrets from keyring.")
+    else:
+        print("[APP] No secrets found in keyring.")
+except Exception as e:
+    print(f"[APP] Failed to load secrets from keyring: {e}")
 
 # --- Load environment variables FIRST (before any other imports) ---
 import os
