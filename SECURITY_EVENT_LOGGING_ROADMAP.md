@@ -3,6 +3,10 @@
 ## Objective
 Implement robust security event logging, notification, and admin visibility for all critical security-related actions in the application.
 
+
+## Important Requirement
+- All security events that occur while a client device is offline must be logged locally and synchronized to the server when the device comes online, ensuring no events are lost.
+
 ## Features to Implement
 
 ### 1. Security Event Logging
