@@ -1740,6 +1740,82 @@ def assign_colors_to_audit_tasks():
                                 used_colors.add(new_color)
                                 break
     db.session.commit()
+    color_palette = [
+        '#FF5733', '#33FF57', '#3357FF', '#F39C12', '#8E44AD', '#16A085',
+        '#E67E22', '#2ECC71', '#3498DB', '#E74C3C', '#1ABC9C', '#9B59B6',
+        '#34495E', '#27AE60', '#2980B9', '#C0392B', '#F1C40F', '#7F8C8D',
+        '#D35400', '#BDC3C7', '#2C3E50', '#95A5A6', '#FF33A1', '#33FFF6',
+    ]
+    # Check if Site has an audit_tasks relationship
+    if hasattr(Site, 'audit_tasks'):
+        # Query all sites with their audit tasks
+        sites = Site.query.options(joinedload('audit_tasks')).all()
+        for site in sites:
+            used_colors = set()
+            audit_tasks = getattr(site, 'audit_tasks', [])
+            # Collect used colors for this site
+            for task in audit_tasks:
+                if getattr(task, 'color', None):
+                    used_colors.add(task.color)
+            # Assign colors to tasks without one
+            for task in audit_tasks:
+                if not getattr(task, 'color', None):
+                    for color in color_palette:
+                        if color not in used_colors:
+                            task.color = color
+                            used_colors.add(color)
+                            break
+            # Optionally, fix duplicate colors (rare)
+            color_count = {}
+            for task in audit_tasks:
+                color = getattr(task, 'color', None)
+                if color:
+                    color_count[color] = color_count.get(color, 0) + 1
+            for color, count in color_count.items():
+                if count > 1:
+                    tasks_with_color = [t for t in audit_tasks if getattr(t, 'color', None) == color]
+                    for t in tasks_with_color[1:]:
+                        for new_color in color_palette:
+                            if new_color not in used_colors:
+                                t.color = new_color
+                                used_colors.add(new_color)
+                                break
+    else:
+        # Fallback: group audit tasks by site_id
+        from collections import defaultdict
+        tasks_by_site = defaultdict(list)
+        all_tasks = AuditTask.query.all()
+        for task in all_tasks:
+            site_id = getattr(task, 'site_id', None)
+            if site_id is not None:
+                tasks_by_site[site_id].append(task)
+        for site_id, audit_tasks in tasks_by_site.items():
+            used_colors = set()
+            for task in audit_tasks:
+                if getattr(task, 'color', None):
+                    used_colors.add(task.color)
+            for task in audit_tasks:
+                if not getattr(task, 'color', None):
+                    for color in color_palette:
+                        if color not in used_colors:
+                            task.color = color
+                            used_colors.add(color)
+                            break
+            color_count = {}
+            for task in audit_tasks:
+                color = getattr(task, 'color', None)
+                if color:
+                    color_count[color] = color_count.get(color, 0) + 1
+            for color, count in color_count.items():
+                if count > 1:
+                    tasks_with_color = [t for t in audit_tasks if getattr(t, 'color', None) == color]
+                    for t in tasks_with_color[1:]:
+                        for new_color in color_palette:
+                            if new_color not in used_colors:
+                                t.color = new_color
+                                used_colors.add(new_color)
+                                break
+    db.session.commit()
     try:
         # Get all audit tasks
         all_tasks = AuditTask.query.all()
