@@ -72,17 +72,30 @@ def is_online_server():
     An online server is identified by:
     1. Running on a known cloud platform (RENDER, HEROKU, RAILWAY set by the platform)
     2. Having IS_ONLINE_SERVER explicitly set to 'true'
+    3. Being deployed to a production environment
+    
+    For offline mode testing, ensure DATABASE_URL points to SQLite and none of the above are true.
     
     NOTE: RENDER_EXTERNAL_URL alone doesn't mean this IS the server - 
     offline clients also set this to know WHERE to sync to.
-    NOTE: Missing AMRS_ONLINE_URL does NOT mean this is an online server!
-    That just means it's a misconfigured offline client.
     """
     return (
         os.environ.get('RENDER') or  # Set by Render platform itself
         os.environ.get('HEROKU') or  # Set by Heroku platform itself  
         os.environ.get('RAILWAY') or  # Set by Railway platform itself
         os.environ.get('IS_ONLINE_SERVER', '').lower() == 'true'  # Explicit override
+    )
+
+def is_offline_mode():
+    """
+    Check if running in true offline mode (SQLite database, local testing).
+    This is different from is_online_server() - this specifically checks for SQLite usage.
+    """
+    database_url = os.environ.get('DATABASE_URL', '')
+    return (
+        database_url.startswith('sqlite://') or 
+        not database_url or  # No DATABASE_URL means SQLite fallback
+        database_url == 'sqlite:///maintenance.db'
     )
 
 def get_timezone_aware_now():

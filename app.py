@@ -387,7 +387,7 @@ def add_to_sync_queue(table_name, record_id, operation, payload_dict):
     """
     try:
         # Redirect to enhanced sync queue to avoid duplicate systems
-        add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict)
+        add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, immediate_sync=False)
         print(f"[SYNC_QUEUE] Redirected {operation} for {table_name}:{record_id} to enhanced sync queue.")
     except Exception as e:
         print(f"[SYNC_QUEUE] Error redirecting to enhanced sync: {e}")
@@ -3362,7 +3362,7 @@ def admin_users():
                 'email': new_user.email,
                 'full_name': new_user.full_name,
                 'role_id': new_user.role_id
-            })
+            }, immediate_sync=False)
             flash(f'User "{username}" created successfully.', 'success')
             return redirect('/admin/users')
         except Exception as e:
