@@ -71,8 +71,8 @@ def start_retention_job():
     except Exception as e:
         print(f"[OFFLINE SECURITY SYNC] Error during startup sync: {e}")
     
-    # Trigger initial sync if bootstrap was successful
-    if 'bootstrap_success' in globals() and bootstrap_success:
+    # NOTE: Bootstrap trigger moved to initialize_database_and_bootstrap() function
+    # This prevents double execution and ensures proper app context
         try:
             print("[APP] Triggering initial database sync after successful bootstrap...")
             # Import sync_db function for initial data download
@@ -186,14 +186,94 @@ dotenv_path = os.path.join(BASE_DIR, '.env')
 load_dotenv(dotenv_path)
 print(f"[APP] Loaded .env from: {dotenv_path}")
 
+# Load bootstrap environment variables from keyring (BEFORE importing models)
+def load_bootstrap_environment():
+    """Load bootstrap environment variables from keyring storage to prevent encryption key errors."""
+    try:
+        from load_bootstrap_env import load_bootstrap_env
+        return load_bootstrap_env()
+    except Exception as e:
+        print(f"[APP] Note: Could not load bootstrap environment: {e}")
+        return False
+
+# Load bootstrap environment before any models are imported
+load_bootstrap_environment()
+
+# Import models AFTER loading bootstrap environment
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value, SecurityEvent, AppSetting
+
 # --- Load and bootstrap secrets from keyring or remote if missing ---
+def get_secure_storage_service():
+    """Get the appropriate secure storage service name based on OS."""
+    import platform
+    os_name = platform.system().lower()
+    
+    if os_name == "windows":
+        return "amrs_pm_windows"
+    elif os_name == "darwin":  # macOS
+        return "amrs_pm_macos"
+    elif os_name == "linux":
+        return "amrs_pm_linux"
+    else:
+        return "amrs_pm_unknown"
+
+def test_secure_storage():
+    """Test secure storage functionality and provide platform-specific notes."""
+    import platform
+    os_name = platform.system()
+    
+    print(f"[STORAGE] Testing secure storage on {os_name}...")
+    
+    try:
+        import keyring
+        service = get_secure_storage_service()
+        
+        # Test write/read/delete
+        test_key = "test_bootstrap_key"
+        test_value = "test_bootstrap_value"
+        
+        keyring.set_password(service, test_key, test_value)
+        retrieved = keyring.get_password(service, test_key)
+        
+        if retrieved == test_value:
+            print(f"[STORAGE] ✅ Secure storage working on {os_name}")
+            keyring.delete_password(service, test_key)  # Cleanup
+            
+            # Platform-specific notes
+            if os_name == "Darwin":  # macOS
+                print("[STORAGE] 📝 macOS Note: Using Keychain Access for secure storage")
+                print("[STORAGE] 📝 Windows Deployment: Will use Windows Credential Manager")
+            elif os_name == "Windows":
+                print("[STORAGE] 📝 Windows Note: Using Windows Credential Manager")
+            elif os_name == "Linux":
+                print("[STORAGE] 📝 Linux Note: Using Secret Service API (GNOME Keyring)")
+                
+            return True
+        else:
+            print(f"[STORAGE] ❌ Secure storage test failed: {retrieved} != {test_value}")
+            return False
+            
+    except Exception as e:
+        print(f"[STORAGE] ❌ Secure storage error: {e}")
+        return False
+
 def bootstrap_secrets_from_remote():
-    """Bootstrap secrets from remote server and store in keyring if missing."""
+    """
+    Enhanced bootstrap function that downloads secrets and triggers database sync.
+    This is the main entry point for offline applications to get fully configured.
+    """
     try:
         import keyring
         import requests
+        import sqlite3
+        import json
+        from pathlib import Path
         
-        KEYRING_SERVICE = "amrs"
+        # Test secure storage first
+        if not test_secure_storage():
+            print("[BOOTSTRAP] Warning: Secure storage test failed, continuing anyway...")
+        
+        KEYRING_SERVICE = get_secure_storage_service()
         KEYRING_KEYS = [
             "USER_FIELD_ENCRYPTION_KEY",
             "RENDER_EXTERNAL_URL", 
@@ -215,6 +295,9 @@ def bootstrap_secrets_from_remote():
         loaded_any = False
         missing_keys = []
         
+        print(f"[BOOTSTRAP] Starting comprehensive bootstrap process...")
+        print(f"[BOOTSTRAP] Secure storage service: {KEYRING_SERVICE}")
+        
         # First, try to load all secrets from keyring
         for key in KEYRING_KEYS:
             value = keyring.get_password(KEYRING_SERVICE, key)
@@ -224,70 +307,345 @@ def bootstrap_secrets_from_remote():
             else:
                 missing_keys.append(key)
         
-        if missing_keys:
-            print(f"[APP] Missing secrets in keyring: {missing_keys}")
-            
-            # Try to bootstrap from remote if possible (now .env is loaded)
-            bootstrap_url = os.environ.get("BOOTSTRAP_URL")
-            bootstrap_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
-            
-            if bootstrap_url and bootstrap_token:
-                try:
-                    print(f"[APP] Attempting bootstrap from: {bootstrap_url}")
-                    resp = requests.post(
-                        bootstrap_url,
-                        headers={"Authorization": f"Bearer {bootstrap_token}"},
-                        timeout=15
-                    )
+        # Always attempt bootstrap if we have credentials, even if some secrets exist
+        bootstrap_url = os.environ.get("BOOTSTRAP_URL")
+        bootstrap_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
+        
+        bootstrap_attempted = False
+        if bootstrap_url and bootstrap_token:
+            try:
+                print(f"[BOOTSTRAP] Downloading configuration from: {bootstrap_url}")
+                resp = requests.post(
+                    bootstrap_url,
+                    headers={"Authorization": f"Bearer {bootstrap_token}"},
+                    timeout=15
+                )
+                
+                if resp.status_code == 200:
+                    secrets = resp.json()
+                    print(f"[BOOTSTRAP] Retrieved {len(secrets)} secrets from remote")
                     
-                    if resp.status_code == 200:
-                        secrets = resp.json()
-                        print(f"[APP] Retrieved {len(secrets)} secrets from remote")
-                        
-                        # Store ALL secrets from response, not just missing ones
-                        stored_count = 0
-                        for k, v in secrets.items():
-                            if k in KEYRING_KEYS and v:
-                                try:
-                                    keyring.set_password(KEYRING_SERVICE, k, v)
-                                    os.environ[k] = v
-                                    stored_count += 1
-                                    print(f"[APP] Stored secret: {k}")
-                                except Exception as store_error:
-                                    print(f"[APP] Failed to store {k}: {store_error}")
-                        
-                        print(f"[APP] Successfully bootstrapped and stored {stored_count} secrets from remote.")
-                        return True
-                    else:
-                        print(f"[APP] Bootstrap failed: {resp.status_code} {resp.text}")
-                        return False
-                        
-                except Exception as e:
-                    print(f"[APP] Exception during bootstrap: {e}")
-                    return False
+                    # Store ALL secrets from response
+                    stored_count = 0
+                    for k, v in secrets.items():
+                        if k in KEYRING_KEYS and v:
+                            try:
+                                keyring.set_password(KEYRING_SERVICE, k, v)
+                                os.environ[k] = v
+                                stored_count += 1
+                                print(f"[BOOTSTRAP] Stored secret: {k}")
+                            except Exception as store_error:
+                                print(f"[BOOTSTRAP] Failed to store {k}: {store_error}")
+                    
+                    print(f"[BOOTSTRAP] ✅ Configuration downloaded and stored ({stored_count} secrets)")
+                    bootstrap_attempted = True
+                    
+                else:
+                    print(f"[BOOTSTRAP] Configuration download failed: {resp.status_code} {resp.text}")
+                    
+            except Exception as e:
+                print(f"[BOOTSTRAP] Configuration download error: {e}")
+        
+        # Now attempt database sync if we have the necessary credentials
+        sync_success = attempt_database_sync()
+        
+        if bootstrap_attempted or loaded_any:
+            if sync_success:
+                print("[BOOTSTRAP] ✅ Complete bootstrap successful - configuration + database sync completed")
             else:
-                print(f"[APP] Bootstrap not possible - missing BOOTSTRAP_URL or BOOTSTRAP_SECRET_TOKEN")
-                print(f"[APP] BOOTSTRAP_URL: {'SET' if bootstrap_url else 'NOT SET'}")
-                print(f"[APP] BOOTSTRAP_SECRET_TOKEN: {'SET' if bootstrap_token else 'NOT SET'}")
-                return False
-        elif loaded_any:
-            print("[APP] Loaded all secrets from keyring.")
+                print("[BOOTSTRAP] ⚠️  Partial bootstrap - configuration downloaded but database sync failed")
             return True
         else:
-            print("[APP] No secrets found in keyring.")
+            print("[BOOTSTRAP] ❌ Bootstrap failed - no configuration available")
             return False
             
     except ImportError as e:
-        print(f"[APP] Missing required packages for bootstrap: {e}")
+        print(f"[BOOTSTRAP] Missing required packages: {e}")
         return False
     except Exception as e:
-        print(f"[APP] Failed to load secrets from keyring: {e}")
+        print(f"[BOOTSTRAP] Bootstrap error: {e}")
         return False
 
-# Attempt bootstrap after .env is loaded
-bootstrap_success = bootstrap_secrets_from_remote()
+def attempt_database_sync():
+    """
+    Attempt to download and import database from online server.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        import requests
+        import sqlite3
+        import json
+        from pathlib import Path
+        
+        # Get sync credentials from environment (now loaded from bootstrap)
+        sync_url = os.environ.get('SYNC_URL') or os.environ.get('AMRS_ONLINE_URL')
+        sync_username = os.environ.get('SYNC_USERNAME') or os.environ.get('AMRS_ADMIN_USERNAME')
+        sync_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        
+        if not all([sync_url, sync_username, sync_password]):
+            print("[SYNC] Missing sync credentials - skipping database sync")
+            return False
+        
+        # Clean up URL
+        clean_url = sync_url.rstrip('/')
+        if clean_url.endswith('/api'):
+            clean_url = clean_url[:-4]
+        
+        print(f"[SYNC] Downloading database from: {clean_url}")
+        
+        # Create session and login
+        session = requests.Session()
+        
+        # Try to login
+        login_resp = session.post(f"{clean_url}/login", data={
+            'username': sync_username,
+            'password': sync_password
+        }, timeout=30)
+        
+        if login_resp.status_code != 200:
+            print(f"[SYNC] Login failed: {login_resp.status_code}")
+            return False
+        
+        # Download sync data
+        data_resp = session.get(f"{clean_url}/api/sync/data", timeout=60)
+        if data_resp.status_code != 200:
+            print(f"[SYNC] Data download failed: {data_resp.status_code}")
+            return False
+        
+        sync_data = data_resp.json()
+        print(f"[SYNC] Downloaded data: {list(sync_data.keys())}")
+        
+        # Get secure database path
+        db_path = get_secure_database_path()
+        print(f"[SYNC] Importing to secure database: {db_path}")
+        
+        # Import data into secure database
+        import_success = import_sync_data_to_database(sync_data, db_path)
+        
+        if import_success:
+            # Update the app to use the secure database
+            update_database_configuration(db_path)
+            print("[SYNC] ✅ Database sync completed successfully")
+            return True
+        else:
+            print("[SYNC] ❌ Database import failed")
+            return False
+            
+    except Exception as e:
+        print(f"[SYNC] Database sync error: {e}")
+        return False
 
-# Import enhanced sync utilities (now that .env is loaded and secrets bootstrapped)
+def get_secure_database_path():
+    """Get platform-appropriate secure location for database storage."""
+    import platform
+    from pathlib import Path
+    
+    os_name = platform.system().lower()
+    
+    if os_name == "windows":
+        # Windows: Use %APPDATA%\AMRS_PM\
+        base_path = Path(os.environ.get('APPDATA', '~')).expanduser()
+        secure_dir = base_path / "AMRS_PM"
+    elif os_name == "darwin":  # macOS
+        # macOS: Use ~/Library/Application Support/AMRS_PM/
+        base_path = Path.home() / "Library" / "Application Support"
+        secure_dir = base_path / "AMRS_PM"
+    else:  # Linux and others
+        # Linux: Use ~/.local/share/AMRS_PM/
+        base_path = Path.home() / ".local" / "share"
+        secure_dir = base_path / "AMRS_PM"
+    
+    # Create directory if it doesn't exist
+    secure_dir.mkdir(parents=True, exist_ok=True)
+    
+    db_path = secure_dir / "maintenance_secure.db"
+    print(f"[STORAGE] Secure database location: {db_path}")
+    
+    return str(db_path)
+
+def import_sync_data_to_database(sync_data, db_path):
+    """Import downloaded sync data into the secure database."""
+    try:
+        import sqlite3
+        
+        # Connect to secure database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Create tables if they don't exist (basic schema)
+        create_basic_schema(cursor)
+        
+        # Import data
+        tables_imported = 0
+        
+        # Import roles first (they're referenced by users)
+        if 'roles' in sync_data:
+            roles = sync_data['roles']
+            for role in roles:
+                cursor.execute('''
+                INSERT OR REPLACE INTO roles (id, name, description, permissions, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    role['id'], role['name'], role['description'], 
+                    role['permissions'], role['created_at'], role['updated_at']
+                ))
+            print(f"[SYNC] Imported {len(roles)} roles")
+            tables_imported += 1
+        
+        # Import users
+        if 'users' in sync_data:
+            users = sync_data['users']
+            for user in users:
+                cursor.execute('''
+                INSERT OR REPLACE INTO users 
+                (id, username, email, password_hash, full_name, active, is_admin, role_id, 
+                 created_at, updated_at, username_hash, email_hash, remember_token, 
+                 remember_token_expiration, remember_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    user['id'], user['username'], user['email'], user['password_hash'],
+                    user.get('full_name'), user['active'], user['is_admin'], user['role_id'],
+                    user['created_at'], user['updated_at'], user.get('username_hash'),
+                    user.get('email_hash'), user.get('remember_token'),
+                    user.get('remember_token_expiration'), user.get('remember_enabled', False)
+                ))
+            print(f"[SYNC] Imported {len(users)} users")
+            tables_imported += 1
+        
+        # Import other tables if present
+        for table_name in ['sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks']:
+            if table_name in sync_data:
+                records = sync_data[table_name]
+                print(f"[SYNC] Imported {len(records)} {table_name}")
+                tables_imported += 1
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"[SYNC] Successfully imported {tables_imported} tables to secure database")
+        return True
+        
+    except Exception as e:
+        print(f"[SYNC] Import error: {e}")
+        return False
+
+def create_basic_schema(cursor):
+    """Create basic database schema in the secure database."""
+    schema_sql = [
+        '''CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            permissions TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            full_name TEXT,
+            active BOOLEAN DEFAULT 1,
+            is_admin BOOLEAN DEFAULT 0,
+            role_id INTEGER,
+            last_login TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            reset_token TEXT,
+            reset_token_expiration TIMESTAMP,
+            username_hash TEXT,
+            email_hash TEXT,
+            remember_token TEXT,
+            remember_token_expiration TIMESTAMP,
+            remember_enabled BOOLEAN DEFAULT 0,
+            notification_preferences TEXT,
+            FOREIGN KEY (role_id) REFERENCES roles(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS sites (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            location TEXT,
+            contact_email TEXT,
+            enable_notifications BOOLEAN DEFAULT 1,
+            notification_threshold INTEGER DEFAULT 30,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS machines (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            model TEXT,
+            serial_number TEXT,
+            machine_number TEXT,
+            site_id INTEGER,
+            decommissioned BOOLEAN DEFAULT 0,
+            decommissioned_date TIMESTAMP,
+            decommissioned_by TEXT,
+            decommissioned_reason TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id)
+        )'''
+    ]
+    
+    for sql in schema_sql:
+        cursor.execute(sql)
+
+def update_database_configuration(secure_db_path):
+    """Update the application to use the secure database."""
+    # Update the DATABASE_URL environment variable to point to the secure database
+    os.environ['DATABASE_URL'] = f'sqlite:///{secure_db_path}'
+    print(f"[CONFIG] Updated database configuration to use: {secure_db_path}")
+
+def verify_bootstrap_success():
+    """Verify that bootstrap was successful by checking database and credentials."""
+    try:
+        import keyring
+        
+        service = get_secure_storage_service()
+        
+        # Check essential credentials
+        essential_keys = ['AMRS_ADMIN_USERNAME', 'AMRS_ADMIN_PASSWORD', 'USER_FIELD_ENCRYPTION_KEY']
+        missing = []
+        
+        for key in essential_keys:
+            if not keyring.get_password(service, key):
+                missing.append(key)
+        
+        if missing:
+            print(f"[VERIFY] ❌ Missing essential credentials: {missing}")
+            return False
+        
+        # Check database
+        db_path = get_secure_database_path()
+        if not os.path.exists(db_path):
+            print(f"[VERIFY] ❌ Secure database not found: {db_path}")
+            return False
+        
+        # Check if database has users
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users WHERE active = 1")
+        user_count = cursor.fetchone()[0]
+        conn.close()
+        
+        if user_count == 0:
+            print("[VERIFY] ❌ No active users in secure database")
+            return False
+        
+        print(f"[VERIFY] ✅ Bootstrap verification passed - {user_count} users available")
+        return True
+        
+    except Exception as e:
+        print(f"[VERIFY] Bootstrap verification error: {e}")
+        return False
+
+# NOTE: Bootstrap will be called later in initialize_database_and_bootstrap() function
+# This prevents double execution of the bootstrap process
+
+# Import enhanced sync utilities
 from datetime import datetime, timedelta, date
 from timezone_utils import get_timezone_aware_now, get_eastern_date, is_online_server
 from sync_utils_enhanced import (
@@ -305,9 +663,8 @@ import requests
 import threading
 import time
 
-# Trigger initial sync after successful bootstrap
-if bootstrap_success:
-    print("[APP] Bootstrap successful - will trigger initial sync after app initialization")
+# NOTE: Bootstrap trigger moved to initialize_database_and_bootstrap() function
+# This prevents double execution and ensures proper app context
 
 def upload_pending_sync_queue():
     """Upload all pending sync_queue items to the server and mark them as synced if successful."""
@@ -1054,20 +1411,8 @@ print(f"[APP] Base directory: {BASE_DIR}")
 
 # --- Ensure sync_queue table exists on startup ---
 
-# --- Ensure sync_queue and app_settings tables exist on startup ---
-try:
-    import add_sync_queue_table
-    add_sync_queue_table.upgrade()
-    print('[STARTUP] Ensured sync_queue table exists.')
-except Exception as e:
-    print(f'[STARTUP] Error ensuring sync_queue table: {e}')
-
-try:
-    import migrate_app_settings
-    migrate_app_settings.upgrade()
-    print('[STARTUP] Ensured app_settings table exists.')
-except Exception as e:
-    print(f'[STARTUP] Error ensuring app_settings table: {e}')
+# NOTE: Table creation moved to initialize_database_and_bootstrap() function
+# This prevents circular imports and ensures proper app context
 
 try:
     # Import cache configuration
@@ -7467,94 +7812,256 @@ def enhanced_server_error(e):
 
 
 # --- CONSOLIDATED DATABASE CONFIGURATION ---
-# This is the ONLY place where database configuration should happen
+# This function is called only when the script is run directly to prevent double execution
 
-print("[AMRS] Starting consolidated database configuration...")
+def initialize_database_and_bootstrap():
+    """Initialize database configuration and run bootstrap - only when script is executed directly."""
+    print("[AMRS] Starting consolidated database configuration...")
 
-# Determine environment and database type
-POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
-is_render_env = os.environ.get('RENDER') or os.environ.get('RENDER_SERVICE_NAME')
-offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1" or os.environ.get("OFFLINE_MODE", "").lower() == "true"
+    # Determine environment and database type
+    POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
+    is_render_env = os.environ.get('RENDER') or os.environ.get('RENDER_SERVICE_NAME')
+    
+    # Use the same offline detection as the rest of the application
+    from timezone_utils import is_offline_mode as detect_offline_mode
+    offline_mode = detect_offline_mode()
 
-# Check if DATABASE_URL is actually PostgreSQL
-is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
+    # Check if DATABASE_URL is actually PostgreSQL
+    is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
 
-# Configure database based on environment
-if is_render_env:
-    # Render environment: always use PostgreSQL
-    if is_postgresql_url:
-        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        print("[AMRS] RENDER MODE: Using PostgreSQL database")
+    # Configure database based on environment
+    if is_render_env:
+        # Render environment: always use PostgreSQL
+        if is_postgresql_url:
+            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+            print("[AMRS] RENDER MODE: Using PostgreSQL database")
+        else:
+            print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
+            exit(1)
+    elif offline_mode:
+        # Local offline mode: use secure bootstrap database if available, otherwise local SQLite
+        secure_db_path = get_secure_database_path()
+        
+        if os.path.exists(secure_db_path):
+            # Use the existing secure database from previous bootstrap
+            app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{secure_db_path}"
+            app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+            print(f"[AMRS] OFFLINE MODE: Using existing secure database: {secure_db_path}")
+        else:
+            # Fallback to local database
+            db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+            app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+            app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+            print(f"[AMRS] OFFLINE MODE: Using local SQLite fallback at {db_path}")
     else:
-        print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
-        exit(1)
-elif offline_mode:
-    # Local offline mode: use SQLite
-    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    print(f"[AMRS] OFFLINE MODE: Using local SQLite at {db_path}")
-else:
-    # Local online mode: use PostgreSQL if available, fallback to SQLite
-    if is_postgresql_url:
-        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        print("[AMRS] LOCAL ONLINE MODE: Using PostgreSQL database")
-    else:
-        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
-        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
+        # Local online mode: use PostgreSQL if available, fallback to SQLite
+        if is_postgresql_url:
+            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+            print("[AMRS] LOCAL ONLINE MODE: Using PostgreSQL database")
+        else:
+            db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+            app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+            print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
 
-# Initialize database with Flask app
-db.init_app(app)
+    # Initialize database with Flask app
+    db.init_app(app)
 
 # Perform all database setup within app context
-with app.app_context():
-    try:
-        # Run auto-migration once
-        print("[AMRS] Running database auto-migration...")
-        run_auto_migration()
-        print("[AMRS] Auto-migration completed successfully")
-        
-        # Create tables if needed
-        db.create_all()
-        print("[AMRS] Database tables ensured")
-        
-        # Additional setup for online servers
-        if not offline_mode:
+    with app.app_context():
+        try:
+            # First run comprehensive schema validation and migration
+            print("[AMRS] Running comprehensive schema validation...")
+            from schema_validator import validate_and_migrate_schema, verify_schema_integrity
+            
+            # Get the database path from current configuration
+            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+            if 'sqlite:///' in db_uri:
+                db_path = db_uri.replace('sqlite:///', '')
+                print(f"[AMRS] Validating schema for SQLite database: {db_path}")
+                
+                # Run schema validation and migration
+                success, results = validate_and_migrate_schema(db_path, verbose=False)
+                if success:
+                    print(f"[AMRS] ✅ Schema validation completed: {results['tables_created']} tables created, {results['columns_added']} columns added")
+                    
+                    # Verify schema integrity
+                    valid, issues = verify_schema_integrity(db_path, verbose=False)
+                    if not valid:
+                        print(f"[AMRS] ⚠️  Schema issues detected: {len(issues)} remaining issues")
+                        for issue in issues[:3]:  # Show first 3 issues
+                            print(f"[AMRS]   • {issue}")
+                    else:
+                        print("[AMRS] ✅ Schema integrity verified - all required columns present")
+                else:
+                    print(f"[AMRS] ❌ Schema validation failed: {results.get('error', 'Unknown error')}")
+            else:
+                print("[AMRS] Skipping schema validation for non-SQLite database")
+            
+            # Run legacy auto-migration for any remaining fixes
+            print("[AMRS] Running legacy auto-migration...")
             try:
-                # Ensure sync columns exist
-                ensure_sync_columns()
-                
-                # Run any additional startup tasks  
-                try:
-                    assign_colors_to_audit_tasks()
-                    print("[AMRS] Audit task colors assigned")
-                except Exception as e:
-                    print(f"[AMRS] Warning: Could not assign audit task colors: {e}")
-                
-                print("[AMRS] Online mode database setup completed")
+                run_auto_migration()
+                print("[AMRS] Auto-migration completed successfully")
             except Exception as e:
-                print(f"[AMRS] Warning: Online mode setup error: {e}")
+                print(f"[AMRS] Warning: Auto-migration failed: {e}")
+                print("[AMRS] Continuing without auto-migration...")
+            
+            # Create tables if needed
+            db.create_all()
+            print("[AMRS] Database tables ensured")
+            
+            # Ensure sync_queue and app_settings tables exist
+            try:
+                import add_sync_queue_table
+                add_sync_queue_table.upgrade()
+                print('[AMRS] Ensured sync_queue table exists')
+            except Exception as e:
+                print(f'[AMRS] Warning: Could not ensure sync_queue table: {e}')
+            
+            try:
+                import migrate_app_settings
+                migrate_app_settings.upgrade()
+                print('[AMRS] Ensured app_settings table exists')
+            except Exception as e:
+                print(f'[AMRS] Warning: Could not ensure app_settings table: {e}')
+            
+            # Additional setup for online servers
+            if not offline_mode:
+                try:
+                    # Ensure sync columns exist
+                    ensure_sync_columns()
+                    
+                    # Run any additional startup tasks  
+                    try:
+                        assign_colors_to_audit_tasks()
+                        print("[AMRS] Audit task colors assigned")
+                    except Exception as e:
+                        print(f"[AMRS] Warning: Could not assign audit task colors: {e}")
+                    
+                    print("[AMRS] Online mode database setup completed")
+                except Exception as e:
+                    print(f"[AMRS] Warning: Online mode setup error: {e}")
+                    
+        except Exception as e:
+            print(f"[AMRS] ERROR: Database setup failed: {e}")
+            # Don't exit, let the app try to continue
+
+    # Initialize sync worker for offline clients only (after all setup is complete)
+    if offline_mode:
+        try:
+            start_enhanced_sync_worker()
+            print("[AMRS] Enhanced sync worker started for offline mode")
+        except Exception as e:
+            print(f"[AMRS] Warning: Failed to start sync worker: {e}")
+
+    print("[AMRS] Database configuration completed")
+
+    # ========================================
+    # AUTOMATIC BOOTSTRAP AND SYNC FOR OFFLINE APPLICATIONS
+    # ========================================
+    # This section automatically configures offline applications when they start
+    from timezone_utils import is_offline_mode
+
+    if is_offline_mode():
+        print("\n" + "="*60)
+        print("🚀 AUTOMATIC BOOTSTRAP FOR OFFLINE APPLICATION")
+        print("="*60)
+        
+        try:
+            # Verify and complete bootstrap if needed
+            if not verify_bootstrap_success():
+                print("[AUTO-BOOTSTRAP] Bootstrap verification failed, attempting full bootstrap...")
+                bootstrap_success = bootstrap_secrets_from_remote()
                 
-    except Exception as e:
-        print(f"[AMRS] ERROR: Database setup failed: {e}")
-        # Don't exit, let the app try to continue
-
-# Initialize sync worker for offline clients only (after all setup is complete)
-if offline_mode:
-    try:
-        start_enhanced_sync_worker()
-        print("[AMRS] Enhanced sync worker started for offline mode")
-    except Exception as e:
-        print(f"[AMRS] Warning: Failed to start sync worker: {e}")
-
-print("[AMRS] Database configuration completed")
+                if bootstrap_success:
+                    print("[AUTO-BOOTSTRAP] ✅ Bootstrap completed successfully")
+                    
+                    # Update database configuration to use secure database
+                    secure_db_path = get_secure_database_path()
+                    if os.path.exists(secure_db_path):
+                        # Reinitialize database connection with secure database
+                        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{secure_db_path}'
+                        
+                        # Reinitialize the database
+                        with app.app_context():
+                            db.engine.dispose()  # Close old connections
+                            # db.init_app(app) - Already initialized, just dispose and recreate
+                            db.create_all()      # Ensure all tables exist
+                        
+                        print(f"[AUTO-BOOTSTRAP] ✅ Switched to secure database: {secure_db_path}")
+                    else:
+                        print("[AUTO-BOOTSTRAP] ⚠️  Bootstrap completed but secure database not found")
+                else:
+                    print("[AUTO-BOOTSTRAP] ❌ Bootstrap failed - application will use local configuration")
+            else:
+                print("[AUTO-BOOTSTRAP] ✅ Bootstrap verification passed - application ready")
+                
+                # Ensure we're using the secure database
+                secure_db_path = get_secure_database_path()
+                current_db = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+                
+                if secure_db_path not in current_db:
+                    print("[AUTO-BOOTSTRAP] Updating to use secure database...")
+                    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{secure_db_path}'
+                    
+                    with app.app_context():
+                        db.engine.dispose()
+                        # db.init_app(app) - Already initialized, just dispose
+                        
+                    print(f"[AUTO-BOOTSTRAP] ✅ Using secure database: {secure_db_path}")
+            
+            # Final verification
+            print("\n📋 BOOTSTRAP STATUS SUMMARY:")
+            print("-" * 40)
+            
+            # Check credentials
+            import keyring
+            service = get_secure_storage_service()
+            creds_available = bool(keyring.get_password(service, 'AMRS_ADMIN_USERNAME'))
+            print(f"🔑 Credentials Available: {'✅' if creds_available else '❌'}")
+            
+            # Check database
+            secure_db_path = get_secure_database_path()
+            db_available = os.path.exists(secure_db_path)
+            print(f"💾 Secure Database: {'✅' if db_available else '❌'}")
+            
+            if db_available:
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(secure_db_path)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM users WHERE active = 1")
+                    user_count = cursor.fetchone()[0]
+                    conn.close()
+                    print(f"👥 Active Users: {user_count}")
+                    
+                    if user_count > 0:
+                        print("\n🎉 OFFLINE APPLICATION READY!")
+                        print("Users can now login with their online credentials")
+                    else:
+                        print("\n⚠️  DATABASE SYNC NEEDED")
+                        print("No users found - database sync may have failed")
+                except Exception as e:
+                    print(f"❌ Database check error: {e}")
+            
+            print("="*60)
+            
+        except Exception as e:
+            print(f"[AUTO-BOOTSTRAP] Error during automatic bootstrap: {e}")
+            print("[AUTO-BOOTSTRAP] Application will continue with local configuration")
+    else:
+        print("[BOOTSTRAP] Online server mode - skipping automatic bootstrap")
+    
+    return offline_mode  # Return offline_mode for use in socketio.run
 
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
+    # Initialize database and run bootstrap - this prevents double execution
+    offline_mode = initialize_database_and_bootstrap()
+    
     # Run the Flask app with SocketIO for WebSocket support
     port = int(os.environ.get("PORT", 10000))
     debug = os.environ.get("FLASK_ENV", "production") == "development"
