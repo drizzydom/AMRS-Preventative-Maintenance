@@ -17,18 +17,21 @@ app = Flask(__name__, instance_relative_config=True)
 from flask_mail import Mail
 mail = Mail(app)
 
-# --- Start Security Event Email Batcher on App Startup ---
-try:
-    from security_event_batcher import SecurityEventBatcher
-    admin_email = os.environ.get('ADMIN_EMAIL') or app.config.get('MAIL_DEFAULT_SENDER')
-    if admin_email:
-        batcher = SecurityEventBatcher(mail, admin_email)
-        batcher.start()
-        print('[STARTUP] SecurityEventBatcher started.')
-    else:
-        print('[STARTUP] SecurityEventBatcher not started: No admin email set.')
-except Exception as e:
-    print(f'[STARTUP] Error starting SecurityEventBatcher: {e}')
+
+# --- Start Security Event Email Batcher on App Startup (inside app context) ---
+@app.before_first_request
+def start_security_event_batcher():
+    try:
+        from security_event_batcher import SecurityEventBatcher
+        admin_email = os.environ.get('ADMIN_EMAIL') or app.config.get('MAIL_DEFAULT_SENDER')
+        if admin_email:
+            batcher = SecurityEventBatcher(mail, admin_email)
+            batcher.start()
+            print('[STARTUP] SecurityEventBatcher started.')
+        else:
+            print('[STARTUP] SecurityEventBatcher not started: No admin email set.')
+    except Exception as e:
+        print(f'[STARTUP] Error starting SecurityEventBatcher: {e}')
 
 
 # --- Security Event Log Retention Policy ---
@@ -72,40 +75,29 @@ from flask_login import login_required, current_user
 from models import db, SecurityEvent
 from sqlalchemy import or_
 # --- Admin Security Event Log Viewer ---
-@app.route('/admin/security-logs')
+# (Moved to be grouped with other admin routes after app and login manager setup)
+
+# --- Admin Security Event Log Viewer ---
+@app.route('/admin/security-logs', methods=['GET'])
 @login_required
 def admin_security_logs():
     if not is_admin_user(current_user):
-        flash('You do not have permission to access this page.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    # Filtering and search
-    page = request.args.get('page', 1, type=int)
-    search = request.args.get('search', '', type=str)
-    selected_type = request.args.get('event_type', '', type=str)
+        flash('You do not have permission to view security logs.', 'danger')
+        return redirect(url_for('admin'))
+    # Get filter parameters
+    event_type = request.args.get('event_type')
+    username = request.args.get('username')
+    days = request.args.get('days', type=int, default=30)
     query = SecurityEvent.query
-    if selected_type:
-        query = query.filter(SecurityEvent.event_type == selected_type)
-    if search:
-        like = f"%{search}%"
-        query = query.filter(
-            or_(
-                SecurityEvent.event_type.ilike(like),
-                SecurityEvent.username.ilike(like),
-                SecurityEvent.ip_address.ilike(like),
-                SecurityEvent.details.ilike(like)
-            )
-        )
-    query = query.order_by(SecurityEvent.timestamp.desc())
-    events = query.paginate(page=page, per_page=25, error_out=False)
-    # Get all event types for filter dropdown
-    event_types = [row[0] for row in db.session.query(SecurityEvent.event_type).distinct().order_by(SecurityEvent.event_type).all()]
-    return render_template(
-        'admin/security_logs.html',
-        events=events,
-        event_types=event_types,
-        selected_type=selected_type
-    )
+    if event_type:
+        query = query.filter(SecurityEvent.event_type == event_type)
+    if username:
+        query = query.filter(SecurityEvent.username == username)
+    if days:
+        since = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(SecurityEvent.timestamp >= since)
+    logs = query.order_by(SecurityEvent.timestamp.desc()).limit(500).all()
+    return render_template('admin_security_logs.html', logs=logs, event_type=event_type, username=username, days=days)
 
 
 # --- API endpoint to receive offline security events from clients ---
