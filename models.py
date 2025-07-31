@@ -15,7 +15,6 @@ class OfflineSecurityEvent(db.Model):
     details = db.Column(db.Text, nullable=True)
     is_critical = db.Column(db.Boolean, default=False)
     synced = db.Column(db.Boolean, default=False, index=True)
-# --- Application Settings Model ---
 class AppSetting(db.Model):
     __tablename__ = 'app_settings'
     key = db.Column(db.String(64), primary_key=True)
@@ -27,6 +26,7 @@ class AppSetting(db.Model):
         return setting.value if setting else default
 
     @staticmethod
+
     def set(key, value):
         setting = AppSetting.query.filter_by(key=key).first()
         if setting:
@@ -35,23 +35,10 @@ class AppSetting(db.Model):
             setting = AppSetting(key=key, value=value)
             db.session.add(setting)
         db.session.commit()
+
 # --- Security Event Logging Model ---
-class SecurityEvent(db.Model):
-    __tablename__ = 'security_events'
-    id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    event_type = db.Column(db.String(64), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    username = db.Column(db.String(255), nullable=True)
-    ip_address = db.Column(db.String(64), nullable=True)
-    location = db.Column(db.String(255), nullable=True)
-    details = db.Column(db.Text, nullable=True)
-    is_critical = db.Column(db.Boolean, default=False)
+# (Moved below User class)
 
-    user = db.relationship('User', backref=db.backref('security_events', lazy=True))
-
-    def __repr__(self):
-        return f'<SecurityEvent {self.event_type} at {self.timestamp}>'
 
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
@@ -146,14 +133,11 @@ class User(UserMixin, db.Model):
         nullable=True,
         default=None
     )
-    
     # Define the relationship with Role
     role = db.relationship('Role', backref='users', lazy='joined')
-    
     # Define the many-to-many relationship with Site
     sites = db.relationship('Site', secondary=user_site, lazy='subquery',
                           backref=db.backref('users', lazy=True))
-    
     # Define the one-to-many relationship with MaintenanceRecord
     maintenance_records = db.relationship('MaintenanceRecord', backref='user', lazy=True)
 
@@ -187,28 +171,26 @@ class User(UserMixin, db.Model):
         except:
             pass
         return f"User #{self.id}"
-    
+
     def set_password(self, password):
         """Set the password hash"""
         self.password_hash = generate_password_hash(password)
-    
+
     def check_password(self, password):
         """Check the password against the stored hash"""
         return check_password_hash(self.password_hash, password)
-    
+
     def has_permission(self, permission):
         """Check if user has a specific permission"""
         # Admin users have all permissions
         if self.is_admin:
             return True
-        
         # Users with no role have no permissions
         if not self.role:
             return False
-        
         # Check if the user's role has the permission
         return self.role.has_permission(permission)
-    
+
     def get_notification_preferences(self):
         default = {
             'enable_email': True,
@@ -227,7 +209,7 @@ class User(UserMixin, db.Model):
     def set_notification_preferences(self, prefs):
         self.notification_preferences = prefs
         db.session.commit()
-    
+
     def generate_remember_token(self):
         """Generate a new remember token for persistent authentication"""
         import secrets
@@ -236,44 +218,58 @@ class User(UserMixin, db.Model):
         # Set token expiration to 30 days from now
         self.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
         return token
-    
+
     def verify_remember_token(self, token):
         """Verify if the provided remember token is valid and not expired"""
         if not self.remember_token or not self.remember_token_expiration:
             return False
-        
         # Check if token matches and hasn't expired
         if self.remember_token == token and datetime.utcnow() < self.remember_token_expiration:
             return True
-        
         return False
-    
+
     def clear_remember_token(self):
         """Clear the remember token (for logout or security purposes)"""
         self.remember_token = None
         self.remember_token_expiration = None
-    
+
     def set_remember_preference(self, enabled):
         """Set user's preference for remember me functionality"""
         self.remember_enabled = enabled
         if not enabled:
             # If user disables remember me, clear any existing tokens
             self.clear_remember_token()
-    
+
     @classmethod
     def find_by_remember_token(cls, token):
         """Find a user by their remember token if it's valid"""
         if not token:
             return None
-            
         user = cls.query.filter_by(remember_token=token).first()
         if user and user.verify_remember_token(token):
             return user
-        
         return None
-    
+
     def __repr__(self):
         return f'<User {self.username}>'
+
+# --- Security Event Logging Model ---
+class SecurityEvent(db.Model):
+    __tablename__ = 'security_events'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    event_type = db.Column(db.String(64), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    username = db.Column(db.String(255), nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    location = db.Column(db.String(255), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    is_critical = db.Column(db.Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('security_events', lazy=True))
+
+    def __repr__(self):
+        return f'<SecurityEvent {self.event_type} at {self.timestamp}>'
 
 class Role(db.Model):
     """Role model for user permissions"""
