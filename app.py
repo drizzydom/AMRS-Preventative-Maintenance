@@ -31,23 +31,6 @@ except Exception as e:
     print(f'[STARTUP] Error starting SecurityEventBatcher: {e}')
 
 
-# --- Admin: Toggle Security Logging ---
-@app.route('/admin/toggle-security-logging', methods=['POST'])
-@login_required
-def toggle_security_logging():
-    if not is_admin_user(current_user):
-        flash('You do not have permission to perform this action.', 'danger')
-        return redirect(url_for('admin'))
-    try:
-        validate_csrf(request.form.get('csrf_token'))
-    except Exception:
-        flash('Invalid CSRF token.', 'danger')
-        return redirect(url_for('admin'))
-    enabled = AppSetting.get('security_event_logging_enabled', '1') == '1'
-    new_value = '0' if enabled else '1'
-    AppSetting.set('security_event_logging_enabled', new_value)
-    flash(f'Security event logging has been {"enabled" if new_value == "1" else "disabled"}.', 'success')
-    return redirect(url_for('admin'))
 # --- Security Event Log Retention Policy ---
 import threading
 from datetime import datetime, timedelta
@@ -2563,22 +2546,24 @@ def admin():
                               now=datetime.now(),
                               security_logging_enabled=True,
                               csrf_token=generate_csrf)
-        
-        # Render admin dashboard view with safe navigation links
-        return render_template('admin.html',
-                              user_count=user_count,
-                              roles_count=roles_count,
-                              site_count=site_count,
-                              sites_count=sites_count,  # Include both variables
-                              machine_count=machine_count,
-                              part_count=part_count,
-                              admin_links=admin_links,
-                              section='dashboard',
-                              active_section='dashboard')
-    except Exception as e:
-        app.logger.error(f"Error in admin route: {e}")
-        flash('An error occurred while loading the admin dashboard.', 'danger')
-        return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
+
+# --- Admin: Toggle Security Logging ---
+@app.route('/admin/toggle-security-logging', methods=['POST'])
+@login_required
+def toggle_security_logging():
+    if not is_admin_user(current_user):
+        flash('You do not have permission to perform this action.', 'danger')
+        return redirect(url_for('admin'))
+    try:
+        validate_csrf(request.form.get('csrf_token'))
+    except Exception:
+        flash('Invalid CSRF token.', 'danger')
+        return redirect(url_for('admin'))
+    enabled = AppSetting.get('security_event_logging_enabled', '1') == '1'
+    new_value = '0' if enabled else '1'
+    AppSetting.set('security_event_logging_enabled', new_value)
+    flash(f'Security event logging has been {"enabled" if new_value == "1" else "disabled"}.', 'success')
+    return redirect(url_for('admin'))
 
 @app.route('/admin/audit-history')
 @login_required
