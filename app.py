@@ -1749,8 +1749,13 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
-# --- Default admin creation logic ---
+# --- Default admin creation logic (for online server first launch only) ---
 def add_default_admin_if_needed():
+    """
+    Create a default admin user if needed.
+    This should ONLY run on the online server during its first launch.
+    Packaged/offline applications should never create admin users - they get users via sync.
+    """
     try:
         admin_username = os.environ.get('DEFAULT_ADMIN_USERNAME')
         admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL')
@@ -2112,8 +2117,13 @@ def assign_colors_to_audit_tasks():
         db.session.rollback()
         print(f"[APP] Error fixing admin users: {e}")
     
-    # Then run the default admin creation logic
-    add_default_admin_if_needed()
+    # Only run default admin creation for the online server (never for offline/packaged applications)
+    from timezone_utils import is_online_server
+    if is_online_server():
+        print("[APP] Running default admin creation (online server - first launch)")
+        add_default_admin_if_needed()
+    else:
+        print("[APP] Skipping default admin creation - offline/packaged application (users will be synced from online server)")
     
     # Standard integrity checks
     try:
