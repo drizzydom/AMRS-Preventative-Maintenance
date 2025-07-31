@@ -54,18 +54,47 @@ import hashlib
 
 # --- Application-level encryption utilities ---
 # The encryption key MUST be set as an environment variable in production
-FERNET_KEY = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
-if not FERNET_KEY:
-    # Instead of generating a key, show an error message recommending proper setup
-    print("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
-    print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
-    print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
-    print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
-    # For development/testing, use a temporary key
-    print("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
-    FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
+def get_fernet_key():
+    """Get the Fernet encryption key, checking environment multiple times if needed."""
+    key = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
+    if not key:
+        # Try to load from keyring if not in environment
+        try:
+            import keyring
+            import platform
+            
+            # Get the appropriate service name
+            os_name = platform.system().lower()
+            if os_name == "windows":
+                service = "amrs_pm_windows"
+            elif os_name == "darwin":  # macOS
+                service = "amrs_pm_macos"
+            elif os_name == "linux":
+                service = "amrs_pm_linux"
+            else:
+                service = "amrs_pm_unknown"
+            
+            key = keyring.get_password(service, 'USER_FIELD_ENCRYPTION_KEY')
+            if key:
+                os.environ['USER_FIELD_ENCRYPTION_KEY'] = key
+                print("[ENCRYPTION] ✅ Loaded encryption key from keyring")
+                return key
+        except Exception:
+            pass  # If keyring fails, continue with fallback
+        
+        # Instead of generating a key, show an error message recommending proper setup
+        print("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
+        print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
+        print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
+        print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
+        # For development/testing, use a temporary key
+        print("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
+        key = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    
+    return key
 
 # Initialize Fernet cipher with the key
+FERNET_KEY = get_fernet_key()
 fernet = Fernet(FERNET_KEY)
 
 def encrypt_value(value):

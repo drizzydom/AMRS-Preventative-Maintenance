@@ -72,30 +72,53 @@ def is_online_server():
     An online server is identified by:
     1. Running on a known cloud platform (RENDER, HEROKU, RAILWAY set by the platform)
     2. Having IS_ONLINE_SERVER explicitly set to 'true'
-    3. Being deployed to a production environment
+    3. Using PostgreSQL database (not SQLite)
     
-    For offline mode testing, ensure DATABASE_URL points to SQLite and none of the above are true.
-    
-    NOTE: RENDER_EXTERNAL_URL alone doesn't mean this IS the server - 
-    offline clients also set this to know WHERE to sync to.
+    IMPORTANT: Offline applications should NEVER return True here, even if they have
+    bootstrap credentials. Those credentials are for CONNECTING to the online server,
+    not for BEING the online server.
     """
-    return (
-        os.environ.get('RENDER') or  # Set by Render platform itself
-        os.environ.get('HEROKU') or  # Set by Heroku platform itself  
-        os.environ.get('RAILWAY') or  # Set by Railway platform itself
-        os.environ.get('IS_ONLINE_SERVER', '').lower() == 'true'  # Explicit override
-    )
+    # First check: explicit platform environment variables (most reliable)
+    if (os.environ.get('RENDER') or 
+        os.environ.get('HEROKU') or 
+        os.environ.get('RAILWAY')):
+        return True
+    
+    # Second check: explicit override
+    if os.environ.get('IS_ONLINE_SERVER', '').lower() == 'true':
+        return True
+    
+    # Third check: database type - online servers use PostgreSQL
+    database_url = os.environ.get('DATABASE_URL', '')
+    if database_url.startswith('postgresql://') or database_url.startswith('postgres://'):
+        return True
+    
+    # Fourth check: if running locally with SQLite, definitely offline
+    if (database_url.startswith('sqlite://') or 
+        not database_url or 
+        'maintenance.db' in database_url or
+        'maintenance_secure.db' in database_url):
+        return False
+    
+    # Default: assume offline for safety
+    return False
 
 def is_offline_mode():
     """
     Check if running in true offline mode (SQLite database, local testing).
-    This is different from is_online_server() - this specifically checks for SQLite usage.
+    This is the inverse of is_online_server() but specifically checks for SQLite usage.
     """
+    # If it's the online server, it's not offline mode
+    if is_online_server():
+        return False
+    
+    # Check database type
     database_url = os.environ.get('DATABASE_URL', '')
     return (
         database_url.startswith('sqlite://') or 
         not database_url or  # No DATABASE_URL means SQLite fallback
-        database_url == 'sqlite:///maintenance.db'
+        'maintenance.db' in database_url or
+        'maintenance_secure.db' in database_url
     )
 
 def get_timezone_aware_now():

@@ -35,7 +35,16 @@ def log_security_event(event_type, details=None, is_critical=False):
         location = get_location_from_ip(ip_address)
         if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
             user_id = current_user.id
-            username = getattr(current_user, 'username', None)
+            # Try to get decrypted username, fallback to user ID if decryption fails
+            try:
+                username = getattr(current_user, 'username', None)
+                # If username looks like encrypted data (starts with gAAAAAB), try to use a fallback
+                if username and username.startswith('gAAAAAB'):
+                    print(f"[SECURITY LOG WARNING] Username appears to be encrypted: {username[:20]}...")
+                    username = f"user_{user_id}"  # Fallback to user ID
+            except Exception as e:
+                print(f"[SECURITY LOG WARNING] Error getting username: {e}")
+                username = f"user_{user_id}"  # Fallback to user ID
     # Try to log online, else fallback to offline queue
     if is_online():
         event = SecurityEvent(
