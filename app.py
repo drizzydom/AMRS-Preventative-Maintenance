@@ -2318,13 +2318,22 @@ def dashboard():
                         if not part.next_maintenance:
                             continue
                         days_until = (part.next_maintenance - now).days
+                        
+                        # Create a dictionary with all needed information for the template
+                        part_info = {
+                            'part': part,
+                            'machine': machine,
+                            'site': site,
+                            'days_until': days_until
+                        }
+                        
                         if days_until < 0:
-                            site_overdue.append(part)
-                            all_overdue.append(part)
+                            site_overdue.append(part_info)
+                            all_overdue.append(part_info)
                             overdue_count += 1
                         elif days_until <= 30:  # Due soon threshold
-                            site_due_soon.append(part)
-                            all_due_soon.append(part)
+                            site_due_soon.append(part_info)
+                            all_due_soon.append(part_info)
                             due_soon_count += 1
                         else:
                             ok_count += 1
