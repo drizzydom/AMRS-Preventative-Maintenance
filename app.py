@@ -1,4 +1,5 @@
 
+
 import os
 import threading
 from datetime import datetime, timedelta
@@ -29,6 +30,8 @@ try:
 except Exception as e:
     print(f'[STARTUP] Error starting SecurityEventBatcher: {e}')
 
+
+# --- Admin: Toggle Security Logging ---
 @app.route('/admin/toggle-security-logging', methods=['POST'])
 @login_required
 def toggle_security_logging():
@@ -40,9 +43,10 @@ def toggle_security_logging():
     except Exception:
         flash('Invalid CSRF token.', 'danger')
         return redirect(url_for('admin'))
-    enabled = 'enabled' in request.form or request.form.get('enabled') == '1'
-    AppSetting.set('security_event_logging_enabled', '1' if enabled else '0')
-    flash(f'Security event logging has been {"enabled" if enabled else "disabled"}.', 'success')
+    enabled = AppSetting.get('security_event_logging_enabled', '1') == '1'
+    new_value = '0' if enabled else '1'
+    AppSetting.set('security_event_logging_enabled', new_value)
+    flash(f'Security event logging has been {"enabled" if new_value == "1" else "disabled"}.', 'success')
     return redirect(url_for('admin'))
 # --- Security Event Log Retention Policy ---
 import threading
