@@ -1,5 +1,6 @@
-# --- Offline Security Event Logging Model ---
-# --- Offline Security Event Logging Model ---
+
+from flask_sqlalchemy import SQLAlchemy
+db = SQLAlchemy()
 from datetime import datetime
 
 class OfflineSecurityEvent(db.Model):
@@ -51,10 +52,10 @@ class SecurityEvent(db.Model):
 
     def __repr__(self):
         return f'<SecurityEvent {self.event_type} at {self.timestamp}>'
-from flask_sqlalchemy import SQLAlchemy
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from datetime import datetime, timedelta
+from datetime import timedelta
 import uuid
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 from sqlalchemy.types import JSON as SA_JSON
