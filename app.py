@@ -72,32 +72,6 @@ def start_retention_job():
         print(f"[OFFLINE SECURITY SYNC] Error during startup sync: {e}")
 from flask import request, render_template, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
-from models import db, SecurityEvent
-from sqlalchemy import or_
-# --- Admin Security Event Log Viewer ---
-# (Moved to be grouped with other admin routes after app and login manager setup)
-
-# --- Admin Security Event Log Viewer ---
-@app.route('/admin/security-logs', methods=['GET'])
-@login_required
-def admin_security_logs():
-    if not is_admin_user(current_user):
-        flash('You do not have permission to view security logs.', 'danger')
-        return redirect(url_for('admin'))
-    # Get filter parameters
-    event_type = request.args.get('event_type')
-    username = request.args.get('username')
-    days = request.args.get('days', type=int, default=30)
-    query = SecurityEvent.query
-    if event_type:
-        query = query.filter(SecurityEvent.event_type == event_type)
-    if username:
-        query = query.filter(SecurityEvent.username == username)
-    if days:
-        since = datetime.utcnow() - timedelta(days=days)
-        query = query.filter(SecurityEvent.timestamp >= since)
-    logs = query.order_by(SecurityEvent.timestamp.desc()).limit(500).all()
-    return render_template('admin_security_logs.html', logs=logs, event_type=event_type, username=username, days=days)
 
 
 # --- API endpoint to receive offline security events from clients ---
@@ -2341,77 +2315,19 @@ def dashboard():
             for machine in site.machines:
                 if show_decommissioned or not machine.decommissioned:
                     for part in machine.parts:
-                        # Skip parts without next_maintenance date or with None value
                         if not part.next_maintenance:
                             continue
-                            
-                        try:
-                            # Ensure next_maintenance is a datetime object
-                            if isinstance(part.next_maintenance, str):
-                                # Try to parse string to datetime
-                                try:
-                                    part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
-                                except ValueError:
-                                    try:
-                                        part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d')
-                                    except ValueError:
-                                        app.logger.warning(f"Invalid date format for part {part.id}: {part.next_maintenance}")
-                                        continue  # Skip invalid date strings
-                            
-                            # Double-check that next_maintenance is still not None after parsing
-                            if not part.next_maintenance:
-                                continue
-                                
-                            # Calculate days until maintenance
-                            try:
-                                days_until = (part.next_maintenance - now).days
-                            except (TypeError, AttributeError) as calc_error:
-                                app.logger.warning(f"Error calculating days for part {part.id}: {calc_error}")
-                                continue
-                            
-                            # Ensure days_until is an integer (it should be from timedelta.days)
-                            if days_until is None or not isinstance(days_until, int):
-                                app.logger.warning(f"Invalid days_until calculation for part {part.id}: {days_until}")
-                                continue
-                                
-                            if days_until < 0:
-                                site_overdue.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                                if site in sites:  # Only count for displayed sites
-                                    overdue_count += 1
-                                all_overdue.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                            elif days_until <= 30:
-                                site_due_soon.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                                if site in sites:  # Only count for displayed sites
-                                    due_soon_count += 1
-                                all_due_soon.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                            else:
-                                if site in sites:  # Only count for displayed sites
-                                    ok_count += 1
-                                    
-                        except (TypeError, AttributeError) as e:
-                            # Skip parts with invalid maintenance dates
-                            app.logger.warning(f"Invalid maintenance date for part {part.id}: {e}")
-                            continue
+                        days_until = (part.next_maintenance - now).days
+                        if days_until < 0:
+                            site_overdue.append(part)
+                            all_overdue.append(part)
+                            overdue_count += 1
+                        elif days_until <= 30:  # Due soon threshold
+                            site_due_soon.append(part)
+                            all_due_soon.append(part)
+                            due_soon_count += 1
+                        else:
+                            ok_count += 1
             
             # Store site-specific data
             site_part_highlights[site.id] = {
@@ -2422,6 +2338,7 @@ def dashboard():
                 'overdue': len(site_overdue),
                 'due_soon': len(site_due_soon)
             }
+        
         total_parts = len(parts)
         all_overdue_total = len(all_overdue)
         all_due_soon_total = len(all_due_soon)
@@ -2443,6 +2360,7 @@ def dashboard():
                               now=now,
                               show_decommissioned=show_decommissioned,
                               decommissioned_count=decommissioned_count)
+                              
     except Exception as e:
         import traceback
         app.logger.error(f"Dashboard error: {str(e)}")
@@ -2468,6 +2386,27 @@ def dashboard():
                               show_decommissioned=False,
                               decommissioned_count=0)
 
+# --- Admin Security Event Log Viewer ---
+@app.route('/admin/security-logs', methods=['GET'])
+@login_required
+def admin_security_logs():
+    if not is_admin_user(current_user):
+        flash('You do not have permission to view security logs.', 'danger')
+        return redirect(url_for('admin'))
+    # Get filter parameters
+    event_type = request.args.get('event_type')
+    username = request.args.get('username')
+    days = request.args.get('days', type=int, default=30)
+    query = SecurityEvent.query
+    if event_type:
+        query = query.filter(SecurityEvent.event_type == event_type)
+    if username:
+        query = query.filter(SecurityEvent.username == username)
+    if days:
+        since = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(SecurityEvent.timestamp >= since)
+    logs = query.order_by(SecurityEvent.timestamp.desc()).limit(500).all()
+    return render_template('admin_security_logs.html', logs=logs, event_type=event_type, username=username, days=days)
 
 @app.route('/admin')
 @login_required
