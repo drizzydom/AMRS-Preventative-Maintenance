@@ -1,3 +1,166 @@
+# --- Start Security Event Email Batcher on App Startup ---
+try:
+    from security_event_batcher import SecurityEventBatcher
+    admin_email = os.environ.get('ADMIN_EMAIL') or app.config.get('MAIL_DEFAULT_SENDER')
+    if admin_email:
+        batcher = SecurityEventBatcher(mail, admin_email)
+        batcher.start()
+        print('[STARTUP] SecurityEventBatcher started.')
+    else:
+        print('[STARTUP] SecurityEventBatcher not started: No admin email set.')
+except Exception as e:
+    print(f'[STARTUP] Error starting SecurityEventBatcher: {e}')
+from flask import request, render_template, redirect, url_for, flash, current_app
+from flask_login import login_required, current_user
+from models import db, SecurityEvent, AppSetting
+# --- Security Event Logging Toggle (Admin) ---
+from flask_wtf.csrf import generate_csrf, validate_csrf
+
+@app.route('/admin/toggle-security-logging', methods=['POST'])
+@login_required
+def toggle_security_logging():
+    if not is_admin_user(current_user):
+        flash('You do not have permission to perform this action.', 'danger')
+        return redirect(url_for('admin'))
+    try:
+        validate_csrf(request.form.get('csrf_token'))
+    except Exception:
+        flash('Invalid CSRF token.', 'danger')
+        return redirect(url_for('admin'))
+    enabled = 'enabled' in request.form or request.form.get('enabled') == '1'
+    AppSetting.set('security_event_logging_enabled', '1' if enabled else '0')
+    flash(f'Security event logging has been {"enabled" if enabled else "disabled"}.', 'success')
+    return redirect(url_for('admin'))
+# --- Security Event Log Retention Policy ---
+import threading
+from datetime import datetime, timedelta
+from models import SecurityEvent, db
+
+def delete_old_security_events():
+    retention_days = int(getattr(current_app.config, 'SECURITY_EVENT_LOG_RETENTION_DAYS', 90))
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    num_deleted = SecurityEvent.query.filter(SecurityEvent.timestamp < cutoff).delete()
+    if num_deleted:
+        db.session.commit()
+        print(f"[SECURITY LOG RETENTION] Deleted {num_deleted} security events older than {retention_days} days.")
+
+def start_security_event_retention_job():
+    def job():
+        while True:
+            try:
+                with current_app.app_context():
+                    delete_old_security_events()
+            except Exception as e:
+                print(f"[SECURITY LOG RETENTION] Error: {e}")
+            time.sleep(24 * 3600)  # Run once per day
+    t = threading.Thread(target=job, daemon=True)
+    t.start()
+
+# Start the retention job after app is initialized
+@app.before_first_request
+def start_retention_job():
+    start_security_event_retention_job()
+
+    # Sync offline security events on app startup
+    try:
+        from security_event_logger import sync_offline_security_events
+        sync_offline_security_events()
+    except Exception as e:
+        print(f"[OFFLINE SECURITY SYNC] Error during startup sync: {e}")
+from flask import request, render_template, redirect, url_for, flash, current_app
+from flask_login import login_required, current_user
+from models import db, SecurityEvent
+from sqlalchemy import or_
+# --- Admin Security Event Log Viewer ---
+@app.route('/admin/security-logs')
+@login_required
+def admin_security_logs():
+    if not is_admin_user(current_user):
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # Filtering and search
+    page = request.args.get('page', 1, type=int)
+    search = request.args.get('search', '', type=str)
+    selected_type = request.args.get('event_type', '', type=str)
+    query = SecurityEvent.query
+    if selected_type:
+        query = query.filter(SecurityEvent.event_type == selected_type)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                SecurityEvent.event_type.ilike(like),
+                SecurityEvent.username.ilike(like),
+                SecurityEvent.ip_address.ilike(like),
+                SecurityEvent.details.ilike(like)
+            )
+        )
+    query = query.order_by(SecurityEvent.timestamp.desc())
+    events = query.paginate(page=page, per_page=25, error_out=False)
+    # Get all event types for filter dropdown
+    event_types = [row[0] for row in db.session.query(SecurityEvent.event_type).distinct().order_by(SecurityEvent.event_type).all()]
+    return render_template(
+        'admin/security_logs.html',
+        events=events,
+        event_types=event_types,
+        selected_type=selected_type
+    )
+
+
+# --- API endpoint to receive offline security events from clients ---
+from flask import request, jsonify
+from models import SecurityEvent, db
+import datetime
+
+@app.route('/api/security-events/upload-offline', methods=['POST'])
+def upload_offline_security_events():
+    """
+    Receives a batch of offline security events from a client and inserts them into the SecurityEvent table.
+    Requires HTTP Basic Auth with admin credentials.
+    """
+    # Basic Auth
+    auth = request.authorization
+    import os
+    admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+    admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+    if not auth or not admin_username or not admin_password:
+        return jsonify({'error': 'Authentication required'}), 401
+    if auth.username != admin_username or auth.password != admin_password:
+        return jsonify({'error': 'Invalid credentials'}), 403
+
+    events = request.get_json(force=True)
+    if not isinstance(events, list):
+        return jsonify({'error': 'Invalid payload'}), 400
+    inserted = 0
+    for e in events:
+        try:
+            # Prevent duplicate insertions by checking for unique (timestamp, event_type, user_id, details)
+            exists = SecurityEvent.query.filter_by(
+                timestamp=datetime.datetime.fromisoformat(e['timestamp']) if e.get('timestamp') else None,
+                event_type=e.get('event_type'),
+                user_id=e.get('user_id'),
+                details=e.get('details')
+            ).first()
+            if exists:
+                continue
+            event = SecurityEvent(
+                event_type=e.get('event_type'),
+                user_id=e.get('user_id'),
+                username=e.get('username'),
+                ip_address=e.get('ip_address'),
+                location=e.get('location'),
+                details=e.get('details'),
+                is_critical=e.get('is_critical', False),
+                timestamp=datetime.datetime.fromisoformat(e['timestamp']) if e.get('timestamp') else datetime.datetime.utcnow()
+            )
+            db.session.add(event)
+            inserted += 1
+        except Exception as ex:
+            print(f"[SECURITY EVENT UPLOAD] Error processing event: {ex}")
+            continue
+    db.session.commit()
+    return jsonify({'status': 'ok', 'inserted': inserted}), 200
 
 
 # --- Load and bootstrap secrets from keyring or remote if missing ---
@@ -845,12 +1008,21 @@ print(f"[APP] Working directory: {os.getcwd()}")
 print(f"[APP] Base directory: {BASE_DIR}")
 
 # --- Ensure sync_queue table exists on startup ---
+
+# --- Ensure sync_queue and app_settings tables exist on startup ---
 try:
     import add_sync_queue_table
     add_sync_queue_table.upgrade()
     print('[STARTUP] Ensured sync_queue table exists.')
 except Exception as e:
     print(f'[STARTUP] Error ensuring sync_queue table: {e}')
+
+try:
+    import migrate_app_settings
+    migrate_app_settings.upgrade()
+    print('[STARTUP] Ensured app_settings table exists.')
+except Exception as e:
+    print(f'[STARTUP] Error ensuring app_settings table: {e}')
 
 try:
     # Import cache configuration
@@ -2304,6 +2476,7 @@ def dashboard():
                               show_decommissioned=False,
                               decommissioned_count=0)
 
+
 @app.route('/admin')
 @login_required
 def admin():
@@ -2312,11 +2485,9 @@ def admin():
     if not is_admin_user(current_user):
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
-    
     try:
         # Get comprehensive database statistics
         stats = get_database_stats()
-        
         # Create URLs for admin navigation - provide ALL possible links needed by template
         admin_links = {
             'users': url_for('admin_users'),
@@ -2332,7 +2503,8 @@ def admin():
             'bulk_import': url_for('bulk_import'),
             'debug_info': url_for('debug_info')
         }
-        
+        # Security event logging toggle state
+        security_logging_enabled = AppSetting.get('security_event_logging_enabled', '1') == '1'
         return render_template('admin.html',
                               stats=stats,
                               admin_links=admin_links,
@@ -2349,7 +2521,9 @@ def admin():
                               overdue_count=stats.get('maintenance_overdue', 0),
                               due_soon_count=stats.get('maintenance_due_soon', 0),
                               ok_count=stats.get('maintenance_ok', 0),
-                              now=datetime.now())
+                              now=datetime.now(),
+                              security_logging_enabled=security_logging_enabled,
+                              csrf_token=generate_csrf)
     except Exception as e:
         app.logger.error(f"Error in admin dashboard: {e}")
         flash('Error loading admin dashboard. Some statistics may be unavailable.', 'warning')
@@ -2369,7 +2543,9 @@ def admin():
                               overdue_count=0,
                               due_soon_count=0,
                               ok_count=0,
-                              now=datetime.now())
+                              now=datetime.now(),
+                              security_logging_enabled=True,
+                              csrf_token=generate_csrf)
         
         # Render admin dashboard view with safe navigation links
         return render_template('admin.html',
@@ -3185,6 +3361,7 @@ def audit_history_print():
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
 def admin_users():
+    from security_event_logger import log_security_event
     """User management page."""
     # Use standardized admin check
     if not is_admin_user(current_user):
@@ -3193,6 +3370,11 @@ def admin_users():
     
     # Handle form submission for creating a new user
     if request.method == 'POST':
+        log_security_event(
+            event_type="admin_user_change",
+            details=f"Admin user change by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            is_critical=True
+        )
         try:
             username = request.form.get('username')
             email = request.form.get('email')
@@ -3290,6 +3472,7 @@ def admin_users():
 @app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def edit_user(user_id):
+    from security_event_logger import log_security_event
     """Edit an existing user - admin only"""
     if not is_admin_user(current_user):
         flash('You do not have permission to edit users.', 'danger')
@@ -3304,6 +3487,11 @@ def edit_user(user_id):
     sites = Site.query.all()
     
     if request.method == 'POST':
+        log_security_event(
+            event_type="admin_user_edit",
+            details=f"User {user_id} edited by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            is_critical=True
+        )
         try:
             username = request.form.get('username')
             email = request.form.get('email')
@@ -3400,6 +3588,7 @@ def edit_user(user_id):
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
 def admin_roles():
+    from security_event_logger import log_security_event
     """Redirect or render the roles management page."""
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
@@ -3407,6 +3596,11 @@ def admin_roles():
     
     # Handle form submission for creating a new role
     if request.method == 'POST':
+        log_security_event(
+            event_type="admin_role_change",
+            details=f"Role change by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            is_critical=True
+        )
         try:
             name = request.form.get('name')
             description = request.form.get('description', '')
@@ -5096,6 +5290,12 @@ def manage_sites():
     if request.method == 'POST':
         # Only admins can create sites
         if not is_admin_user(current_user):
+            from security_event_logger import log_security_event
+            log_security_event(
+                event_type="privilege_escalation_attempt",
+                details=f"Non-admin user {getattr(current_user, 'username', None)} attempted to create a site.",
+                is_critical=True
+            )
             flash('You do not have permission to create sites.', 'danger')
             return redirect(url_for('manage_sites'))
             
@@ -5242,6 +5442,12 @@ def manage_machines():
         if site_id:
             # Verify user can access this site
             if not user_can_see_all_sites(current_user) and site_id not in site_ids:
+                from security_event_logger import log_security_event
+                log_security_event(
+                    event_type="suspicious_activity",
+                    details=f"User {getattr(current_user, 'username', None)} attempted to access unauthorized site {site_id} in machines management.",
+                    is_critical=True
+                )
                 flash('You do not have access to this site.', 'danger')
                 return redirect(url_for('manage_machines'))
                 
@@ -5436,6 +5642,12 @@ def manage_parts():
             # Verify user can access this machine
             machine = Machine.query.get(machine_id)
             if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
+                from security_event_logger import log_security_event
+                log_security_event(
+                    event_type="suspicious_activity",
+                    details=f"User {getattr(current_user, 'username', None)} attempted to access unauthorized machine {machine_id} in parts management.",
+                    is_critical=True
+                )
                 flash('You do not have access to this machine.', 'danger')
                 return redirect(url_for('manage_parts'))
             

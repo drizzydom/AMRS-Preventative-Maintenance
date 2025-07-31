@@ -1,0 +1,57 @@
+{% extends 'admin/base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mt-4 mb-3">Security Event Logs</h2>
+    <form method="get" class="form-inline mb-3">
+        <input type="text" name="search" class="form-control mr-2" placeholder="Search event type, user, IP, details" value="{{ request.args.get('search', '') }}">
+        <select name="event_type" class="form-control mr-2">
+            <option value="">All Types</option>
+            {% for t in event_types %}
+                <option value="{{ t }}" {% if t == selected_type %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+    <table class="table table-bordered table-hover table-sm">
+        <thead class="thead-light">
+            <tr>
+                <th>Timestamp</th>
+                <th>Type</th>
+                <th>User</th>
+                <th>IP</th>
+                <th>Location</th>
+                <th>Details</th>
+                <th>Critical</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events.items %}
+            <tr {% if event.is_critical %}class="table-danger"{% endif %}>
+                <td>{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ event.event_type }}</td>
+                <td>{{ event.username or event.user_id or 'N/A' }}</td>
+                <td>{{ event.ip_address or 'N/A' }}</td>
+                <td>{{ event.location or 'N/A' }}</td>
+                <td>{{ event.details or '' }}</td>
+                <td>{% if event.is_critical %}<span class="badge badge-danger">Yes</span>{% else %}No{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <nav aria-label="Page navigation">
+        <ul class="pagination">
+            {% if events.has_prev %}
+                <li class="page-item"><a class="page-link" href="?page={{ events.prev_num }}&search={{ request.args.get('search', '') }}&event_type={{ selected_type }}">Previous</a></li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ events.page }} of {{ events.pages }}</span></li>
+            {% if events.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ events.next_num }}&search={{ request.args.get('search', '') }}&event_type={{ selected_type }}">Next</a></li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endblock %}
