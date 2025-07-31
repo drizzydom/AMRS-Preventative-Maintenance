@@ -23,34 +23,65 @@ sync_event = threading.Event()
 sync_worker_thread = None
 sync_worker_lock = threading.Lock()
 
+# Track last sync attempt time to prevent excessive syncing
+_last_sync_attempt = None
+_sync_cooldown_seconds = 60  # Minimum time between sync attempts (increased for performance)
+
 def should_trigger_sync():
     """
-    Determine if sync should be triggered based on current environment.
-    Only offline clients should trigger sync uploads.
+    Determine if sync should be triggered based on current environment and timing.
+    Only true offline clients should trigger sync uploads, and with appropriate cooldown.
     """
-    # True offline clients should trigger sync - they use SQLite and sync to a remote server
-    # Online servers (Render, Heroku, etc.) should NOT trigger sync
-    return not is_online_server()
+    global _last_sync_attempt
+    
+    # Import here to avoid circular imports
+    from timezone_utils import is_online_server, is_offline_mode
+    
+    # Online servers should NOT trigger sync
+    if is_online_server():
+        return False
+    
+    # If using PostgreSQL but not an online server, don't sync (avoid syncing to self)
+    if not is_offline_mode():
+        return False
+    
+    # Check if enough time has passed since last sync attempt (cooldown)
+    now = get_timezone_aware_now()
+    if _last_sync_attempt:
+        time_since_last = (now - _last_sync_attempt).total_seconds()
+        if time_since_last < _sync_cooldown_seconds:
+            return False
+    
+    # Update last sync attempt time
+    _last_sync_attempt = now
+    return True
 
 def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, immediate_sync=True, force_add=False):
     """
     Enhanced version of add_to_sync_queue with real-time sync triggering.
+    Optimized for offline mode performance.
     
     Args:
         table_name (str): Name of the table changed
         record_id (str|int): Primary key of the record changed
         operation (str): 'insert', 'update', or 'delete'
         payload_dict (dict): The record data (as dict, will be JSON-encoded)
-        immediate_sync (bool): Whether to trigger immediate sync (default: True)
+        immediate_sync (bool): Whether to trigger immediate sync (default: False for performance)
         force_add (bool): Force adding to sync queue even on online server (for imports)
     """
     try:
         # Import here to avoid circular imports
         from app import db
+        from timezone_utils import is_online_server, is_offline_mode
         
         # Online servers shouldn't add to sync queue unless forced (for bulk imports)
         if is_online_server() and not force_add:
             print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
+            return
+        
+        # If using PostgreSQL but not an online server, don't queue (avoid syncing to self)
+        if not is_offline_mode() and not force_add:
+            print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - not in offline mode")
             return
             
         # Use timezone-aware datetime
@@ -72,9 +103,10 @@ def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, i
         
         print(f"[SYNC_QUEUE] Added {operation} for {table_name}:{record_id} to sync_queue (immediate_sync={immediate_sync})")
         
-        # Trigger immediate sync if requested and we're offline
-        if immediate_sync and should_trigger_sync():
-            trigger_immediate_sync()
+        # Only trigger immediate sync for critical operations and when in true offline mode
+        if immediate_sync and is_offline_mode() and should_trigger_sync():
+            # Don't trigger for every single change - batch them
+            trigger_delayed_sync()
             
     except Exception as e:
         print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
@@ -83,6 +115,22 @@ def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, i
             db.session.rollback()
         except:
             pass
+
+def trigger_delayed_sync():
+    """
+    Trigger sync with a small delay to allow batching of multiple changes.
+    This prevents sync from firing on every single database change.
+    """
+    import threading
+    import time
+    
+    def delayed_sync():
+        time.sleep(5)  # Wait 5 seconds to batch multiple changes
+        if should_trigger_sync():
+            trigger_immediate_sync()
+    
+    # Run in background thread to avoid blocking
+    threading.Thread(target=delayed_sync, daemon=True).start()
 
 def trigger_immediate_sync():
     """
