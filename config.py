@@ -32,6 +32,9 @@ class Config:
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB max upload size
     BACKUP_FOLDER = os.environ.get('BACKUP_FOLDER') or 'backups'
 
+    # Security event log retention (in days)
+    SECURITY_EVENT_LOG_RETENTION_DAYS = int(os.environ.get('SECURITY_EVENT_LOG_RETENTION_DAYS', 90))  # Default: 90 days
+
 
 class DevelopmentConfig(Config):
     """Development configuration - enables debug mode and detailed error messages"""
