@@ -70,6 +70,51 @@ def start_retention_job():
         sync_offline_security_events()
     except Exception as e:
         print(f"[OFFLINE SECURITY SYNC] Error during startup sync: {e}")
+    
+    # Trigger initial sync if bootstrap was successful
+    if 'bootstrap_success' in globals() and bootstrap_success:
+        try:
+            print("[APP] Triggering initial database sync after successful bootstrap...")
+            # Import sync_db function for initial data download
+            import subprocess
+            import sys
+            
+            # Check if we have required credentials
+            online_url = os.environ.get('AMRS_ONLINE_URL')
+            admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+            admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+            
+            if online_url and admin_username and admin_password:
+                # Try sync_db.py script for comprehensive data download
+                try:
+                    script_path = os.path.join(BASE_DIR, 'sync_db.py')
+                    if os.path.exists(script_path):
+                        print("[APP] Running sync_db.py for initial data sync...")
+                        result = subprocess.run([
+                            sys.executable, script_path,
+                            '--url', online_url.strip('"\''),
+                            '--username', admin_username,
+                            '--password', admin_password
+                        ], capture_output=True, text=True, timeout=120)
+                        
+                        if result.returncode == 0:
+                            print("[APP] Initial database sync completed successfully")
+                        else:
+                            print(f"[APP] Initial database sync failed: {result.stderr}")
+                    else:
+                        print("[APP] sync_db.py not found, skipping initial sync")
+                        
+                except subprocess.TimeoutExpired:
+                    print("[APP] Initial database sync timed out")
+                except Exception as sync_error:
+                    print(f"[APP] Error during initial database sync: {sync_error}")
+            else:
+                print("[APP] Missing credentials for initial database sync")
+                
+        except Exception as e:
+            print(f"[APP] Error setting up initial sync: {e}")
+    else:
+        print("[APP] Bootstrap was not successful or not attempted - skipping initial sync")
 from flask import request, render_template, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 
@@ -129,74 +174,10 @@ def upload_offline_security_events():
     return jsonify({'status': 'ok', 'inserted': inserted}), 200
 
 
-# --- Load and bootstrap secrets from keyring or remote if missing ---
+# --- Load environment variables FIRST (before any other imports) ---
 import os
 import sys
 import json as _json
-try:
-    import keyring
-    import requests
-    KEYRING_SERVICE = "amrs"
-    KEYRING_KEYS = [
-        "USER_FIELD_ENCRYPTION_KEY",
-        "RENDER_EXTERNAL_URL",
-        "SYNC_URL",
-        "SYNC_USERNAME",
-        "AMRS_ONLINE_URL",
-        "AMRS_ADMIN_USERNAME",
-        "AMRS_ADMIN_PASSWORD",
-        "MAIL_SERVER",
-        "MAIL_PORT",
-        "MAIL_USE_TLS",
-        "MAIL_USERNAME",
-        "MAIL_PASSWORD",
-        "MAIL_DEFAULT_SENDER",
-        "SECRET_KEY",
-        "BOOTSTRAP_SECRET_TOKEN",
-    ]
-    loaded_any = False
-    missing_keys = []
-    for key in KEYRING_KEYS:
-        value = keyring.get_password(KEYRING_SERVICE, key)
-        if value:
-            os.environ[key] = value
-            loaded_any = True
-        else:
-            missing_keys.append(key)
-    if missing_keys:
-        print(f"[APP] Missing secrets in keyring: {missing_keys}")
-        # Try to bootstrap from remote if possible
-        bootstrap_url = os.environ.get("BOOTSTRAP_URL")
-        bootstrap_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
-        if bootstrap_url and bootstrap_token:
-            try:
-                resp = requests.post(
-                    bootstrap_url,
-                    headers={"Authorization": f"Bearer {bootstrap_token}"},
-                    timeout=15
-                )
-                if resp.status_code == 200:
-                    secrets = resp.json()
-                    for k, v in secrets.items():
-                        if k in missing_keys and v:
-                            keyring.set_password(KEYRING_SERVICE, k, v)
-                            os.environ[k] = v
-                    print("[APP] Bootstrapped and stored missing secrets from remote.")
-                else:
-                    print(f"[APP] Bootstrap failed: {resp.status_code} {resp.text}")
-            except Exception as e:
-                print(f"[APP] Exception during bootstrap: {e}")
-        else:
-            print("[APP] No BOOTSTRAP_URL or BOOTSTRAP_SECRET_TOKEN set; cannot bootstrap secrets.")
-    elif loaded_any:
-        print("[APP] Loaded secrets from keyring.")
-    else:
-        print("[APP] No secrets found in keyring.")
-except Exception as e:
-    print(f"[APP] Failed to load secrets from keyring: {e}")
-
-# --- Load environment variables FIRST (before any other imports) ---
-import os
 from dotenv import load_dotenv
 
 # Get the directory of this file and load .env immediately
@@ -205,16 +186,109 @@ dotenv_path = os.path.join(BASE_DIR, '.env')
 load_dotenv(dotenv_path)
 print(f"[APP] Loaded .env from: {dotenv_path}")
 
-# --- Background Sync Worker ---
-# --- Register secure secrets bootstrap endpoint after app is created ---
-# (Keep all previous imports and code here)
-import requests
-import threading
-import time
-from datetime import datetime, timedelta, date
-import json as _json
+# --- Load and bootstrap secrets from keyring or remote if missing ---
+def bootstrap_secrets_from_remote():
+    """Bootstrap secrets from remote server and store in keyring if missing."""
+    try:
+        import keyring
+        import requests
+        
+        KEYRING_SERVICE = "amrs"
+        KEYRING_KEYS = [
+            "USER_FIELD_ENCRYPTION_KEY",
+            "RENDER_EXTERNAL_URL", 
+            "SYNC_URL",
+            "SYNC_USERNAME",
+            "AMRS_ONLINE_URL",
+            "AMRS_ADMIN_USERNAME",
+            "AMRS_ADMIN_PASSWORD",
+            "MAIL_SERVER",
+            "MAIL_PORT",
+            "MAIL_USE_TLS",
+            "MAIL_USERNAME",
+            "MAIL_PASSWORD",
+            "MAIL_DEFAULT_SENDER",
+            "SECRET_KEY",
+            "BOOTSTRAP_SECRET_TOKEN",
+        ]
+        
+        loaded_any = False
+        missing_keys = []
+        
+        # First, try to load all secrets from keyring
+        for key in KEYRING_KEYS:
+            value = keyring.get_password(KEYRING_SERVICE, key)
+            if value:
+                os.environ[key] = value
+                loaded_any = True
+            else:
+                missing_keys.append(key)
+        
+        if missing_keys:
+            print(f"[APP] Missing secrets in keyring: {missing_keys}")
+            
+            # Try to bootstrap from remote if possible (now .env is loaded)
+            bootstrap_url = os.environ.get("BOOTSTRAP_URL")
+            bootstrap_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
+            
+            if bootstrap_url and bootstrap_token:
+                try:
+                    print(f"[APP] Attempting bootstrap from: {bootstrap_url}")
+                    resp = requests.post(
+                        bootstrap_url,
+                        headers={"Authorization": f"Bearer {bootstrap_token}"},
+                        timeout=15
+                    )
+                    
+                    if resp.status_code == 200:
+                        secrets = resp.json()
+                        print(f"[APP] Retrieved {len(secrets)} secrets from remote")
+                        
+                        # Store ALL secrets from response, not just missing ones
+                        stored_count = 0
+                        for k, v in secrets.items():
+                            if k in KEYRING_KEYS and v:
+                                try:
+                                    keyring.set_password(KEYRING_SERVICE, k, v)
+                                    os.environ[k] = v
+                                    stored_count += 1
+                                    print(f"[APP] Stored secret: {k}")
+                                except Exception as store_error:
+                                    print(f"[APP] Failed to store {k}: {store_error}")
+                        
+                        print(f"[APP] Successfully bootstrapped and stored {stored_count} secrets from remote.")
+                        return True
+                    else:
+                        print(f"[APP] Bootstrap failed: {resp.status_code} {resp.text}")
+                        return False
+                        
+                except Exception as e:
+                    print(f"[APP] Exception during bootstrap: {e}")
+                    return False
+            else:
+                print(f"[APP] Bootstrap not possible - missing BOOTSTRAP_URL or BOOTSTRAP_SECRET_TOKEN")
+                print(f"[APP] BOOTSTRAP_URL: {'SET' if bootstrap_url else 'NOT SET'}")
+                print(f"[APP] BOOTSTRAP_SECRET_TOKEN: {'SET' if bootstrap_token else 'NOT SET'}")
+                return False
+        elif loaded_any:
+            print("[APP] Loaded all secrets from keyring.")
+            return True
+        else:
+            print("[APP] No secrets found in keyring.")
+            return False
+            
+    except ImportError as e:
+        print(f"[APP] Missing required packages for bootstrap: {e}")
+        return False
+    except Exception as e:
+        print(f"[APP] Failed to load secrets from keyring: {e}")
+        return False
 
-# Import enhanced sync utilities (now that .env is loaded)
+# Attempt bootstrap after .env is loaded
+bootstrap_success = bootstrap_secrets_from_remote()
+
+# Import enhanced sync utilities (now that .env is loaded and secrets bootstrapped)
+from datetime import datetime, timedelta, date
 from timezone_utils import get_timezone_aware_now, get_eastern_date, is_online_server
 from sync_utils_enhanced import (
     add_to_sync_queue_enhanced, 
@@ -223,6 +297,17 @@ from sync_utils_enhanced import (
     cleanup_expired_sync_queue_enhanced,
     should_trigger_sync
 )
+
+# --- Background Sync Worker ---
+# --- Register secure secrets bootstrap endpoint after app is created ---
+# (Keep all previous imports and code here)
+import requests
+import threading
+import time
+
+# Trigger initial sync after successful bootstrap
+if bootstrap_success:
+    print("[APP] Bootstrap successful - will trigger initial sync after app initialization")
 
 def upload_pending_sync_queue():
     """Upload all pending sync_queue items to the server and mark them as synced if successful."""
@@ -588,27 +673,21 @@ def bootstrap_secrets():
     expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
     auth_header = request.headers.get('Authorization', '')
     remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
-    event_context = {
-        'ip': remote_addr,
-        'user_agent': request.headers.get('User-Agent', ''),
-        'auth_header': bool(auth_header),
-    }
+    
     if not expected_token or auth_header != f"Bearer {expected_token}":
         log_security_event(
             event_type="bootstrap_secrets_denied",
-            user_id=None,
-            username=None,
-            context=event_context,
-            message="Denied bootstrap secrets: invalid or missing token."
+            details=f"Denied bootstrap secrets from {remote_addr}: invalid or missing token",
+            is_critical=True
         )
         abort(403)
+        
     log_security_event(
-        event_type="bootstrap_secrets_success",
-        user_id=None,
-        username=None,
-        context=event_context,
-        message="Bootstrap secrets successfully retrieved."
+        event_type="bootstrap_secrets_success", 
+        details=f"Bootstrap secrets successfully retrieved from {remote_addr}",
+        is_critical=False
     )
+    
     # Only return the secrets needed for offline sync/bootstrap
     return jsonify({
         "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
