@@ -91,8 +91,6 @@ def hash_value(value):
         return None
     return hashlib.sha256(value.lower().encode()).hexdigest()
 
-db = SQLAlchemy()
-
 # Define the association table for many-to-many relationship between User and Site
 user_site = db.Table(
     'user_site',
