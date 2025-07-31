@@ -1,3 +1,21 @@
+
+import os
+import threading
+from datetime import datetime, timedelta
+from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify
+from flask_login import login_required, current_user
+from flask_wtf.csrf import generate_csrf, validate_csrf
+from models import db, SecurityEvent, AppSetting
+from sqlalchemy import or_
+
+# Initialize Flask app at the very top
+app = Flask(__name__, instance_relative_config=True)
+
+
+# --- Initialize Flask-Mail before using it ---
+from flask_mail import Mail
+mail = Mail(app)
+
 # --- Start Security Event Email Batcher on App Startup ---
 try:
     from security_event_batcher import SecurityEventBatcher
@@ -10,11 +28,6 @@ try:
         print('[STARTUP] SecurityEventBatcher not started: No admin email set.')
 except Exception as e:
     print(f'[STARTUP] Error starting SecurityEventBatcher: {e}')
-from flask import request, render_template, redirect, url_for, flash, current_app
-from flask_login import login_required, current_user
-from models import db, SecurityEvent, AppSetting
-# --- Security Event Logging Toggle (Admin) ---
-from flask_wtf.csrf import generate_csrf, validate_csrf
 
 @app.route('/admin/toggle-security-logging', methods=['POST'])
 @login_required
