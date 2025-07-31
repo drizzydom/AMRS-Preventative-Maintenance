@@ -1,3 +1,39 @@
+# --- Offline Security Event Logging Model ---
+# --- Offline Security Event Logging Model ---
+from datetime import datetime
+
+class OfflineSecurityEvent(db.Model):
+    __tablename__ = 'offline_security_events'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    event_type = db.Column(db.String(64), nullable=False)
+    user_id = db.Column(db.Integer, nullable=True)
+    username = db.Column(db.String(255), nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    location = db.Column(db.String(255), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    is_critical = db.Column(db.Boolean, default=False)
+    synced = db.Column(db.Boolean, default=False, index=True)
+# --- Application Settings Model ---
+class AppSetting(db.Model):
+    __tablename__ = 'app_settings'
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.String(255), nullable=True)
+
+    @staticmethod
+    def get(key, default=None):
+        setting = AppSetting.query.filter_by(key=key).first()
+        return setting.value if setting else default
+
+    @staticmethod
+    def set(key, value):
+        setting = AppSetting.query.filter_by(key=key).first()
+        if setting:
+            setting.value = value
+        else:
+            setting = AppSetting(key=key, value=value)
+            db.session.add(setting)
+        db.session.commit()
 # --- Security Event Logging Model ---
 class SecurityEvent(db.Model):
     __tablename__ = 'security_events'
