@@ -8219,151 +8219,160 @@ def enhanced_server_error(e):
 
 
 # --- CONSOLIDATED DATABASE CONFIGURATION ---
-# This function is called only when the script is run directly to prevent double execution
+# Initialize database configuration immediately on import
 
-def initialize_database_and_bootstrap():
-    """Initialize database configuration and run bootstrap - only when script is executed directly."""
-    print("[AMRS] Starting consolidated database configuration...")
+print("[AMRS] Starting consolidated database configuration...")
 
-    # Determine environment and database type
-    POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
-    is_render_env = os.environ.get('RENDER') or os.environ.get('RENDER_SERVICE_NAME')
-    
-    # Use the same offline detection as the rest of the application
-    from timezone_utils import is_offline_mode as detect_offline_mode
-    offline_mode = detect_offline_mode()
+# Determine environment and database type
+POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
+is_render_env = os.environ.get('RENDER') or os.environ.get('RENDER_SERVICE_NAME')
 
-    # Check if DATABASE_URL is actually PostgreSQL
-    is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
+# Use the same offline detection as the rest of the application
+from timezone_utils import is_offline_mode as detect_offline_mode
+offline_mode = detect_offline_mode()
 
-    # Configure database based on environment
-    if is_render_env:
-        # Render environment: always use PostgreSQL
-        if is_postgresql_url:
-            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-            print("[AMRS] RENDER MODE: Using PostgreSQL database")
-        else:
-            print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
-            exit(1)
-    elif offline_mode:
-        # Local offline mode: use secure bootstrap database if available, otherwise local SQLite
-        secure_db_path = get_secure_database_path()
-        
-        if os.path.exists(secure_db_path):
-            # Use the existing secure database from previous bootstrap
-            app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{secure_db_path}"
-            app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-            print(f"[AMRS] OFFLINE MODE: Using existing secure database: {secure_db_path}")
-        else:
-            # Fallback to local database
-            db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-            app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-            app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-            print(f"[AMRS] OFFLINE MODE: Using local SQLite fallback at {db_path}")
+# Check if DATABASE_URL is actually PostgreSQL
+is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
+
+# Configure database based on environment
+if is_render_env:
+    # Render environment: always use PostgreSQL
+    if is_postgresql_url:
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print("[AMRS] RENDER MODE: Using PostgreSQL database")
     else:
-        # Local online mode: use PostgreSQL if available, fallback to SQLite
-        if is_postgresql_url:
-            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-            print("[AMRS] LOCAL ONLINE MODE: Using PostgreSQL database")
-        else:
-            db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-            app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
-            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-            print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
+        print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
+        exit(1)
+elif offline_mode:
+    # Local offline mode: use secure bootstrap database if available, otherwise local SQLite
+    secure_db_path = get_secure_database_path()
+    
+    if os.path.exists(secure_db_path):
+        # Use the existing secure database from previous bootstrap
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{secure_db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        print(f"[AMRS] OFFLINE MODE: Using existing secure database: {secure_db_path}")
+    else:
+        # Fallback to local database
+        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        print(f"[AMRS] OFFLINE MODE: Using local SQLite fallback at {db_path}")
+else:
+    # Local online mode: use PostgreSQL if available, fallback to SQLite
+    if is_postgresql_url:
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print("[AMRS] LOCAL ONLINE MODE: Using PostgreSQL database")
+    else:
+        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
 
-    # Initialize database with Flask app after configuration is complete
-    db.init_app(app)
-    print(f"[AMRS] Database initialized successfully - URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
+# Initialize database with Flask app after configuration is complete
+db.init_app(app)
+print(f"[AMRS] Database initialized successfully - URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
 
-# Perform all database setup within app context
-    with app.app_context():
-        try:
-            # First run comprehensive schema validation and migration
-            print("[AMRS] Running comprehensive schema validation...")
-            from schema_validator import validate_and_migrate_schema, verify_schema_integrity
+# Perform all database setup within app context immediately on import
+with app.app_context():
+    try:
+        # First run comprehensive schema validation and migration
+        print("[AMRS] Running comprehensive schema validation...")
+        from schema_validator import validate_and_migrate_schema, verify_schema_integrity
+        
+        # Get the database path from current configuration
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if 'sqlite:///' in db_uri:
+            db_path = db_uri.replace('sqlite:///', '')
+            print(f"[AMRS] Validating schema for SQLite database: {db_path}")
             
-            # Get the database path from current configuration
-            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-            if 'sqlite:///' in db_uri:
-                db_path = db_uri.replace('sqlite:///', '')
-                print(f"[AMRS] Validating schema for SQLite database: {db_path}")
+            # Run schema validation and migration
+            success, results = validate_and_migrate_schema(db_path, verbose=False)
+            if success:
+                print(f"[AMRS] ✅ Schema validation completed: {results['tables_created']} tables created, {results['columns_added']} columns added")
                 
-                # Run schema validation and migration
-                success, results = validate_and_migrate_schema(db_path, verbose=False)
-                if success:
-                    print(f"[AMRS] ✅ Schema validation completed: {results['tables_created']} tables created, {results['columns_added']} columns added")
-                    
-                    # Verify schema integrity
-                    valid, issues = verify_schema_integrity(db_path, verbose=False)
-                    if not valid:
-                        print(f"[AMRS] ⚠️  Schema issues detected: {len(issues)} remaining issues")
-                        for issue in issues[:3]:  # Show first 3 issues
-                            print(f"[AMRS]   • {issue}")
-                    else:
-                        print("[AMRS] ✅ Schema integrity verified - all required columns present")
+                # Verify schema integrity
+                valid, issues = verify_schema_integrity(db_path, verbose=False)
+                if not valid:
+                    print(f"[AMRS] ⚠️  Schema issues detected: {len(issues)} remaining issues")
+                    for issue in issues[:3]:  # Show first 3 issues
+                        print(f"[AMRS]   • {issue}")
                 else:
-                    print(f"[AMRS] ❌ Schema validation failed: {results.get('error', 'Unknown error')}")
+                    print("[AMRS] ✅ Schema integrity verified - all required columns present")
             else:
-                print("[AMRS] Skipping schema validation for non-SQLite database")
-            
-            # Run legacy auto-migration for any remaining fixes
-            print("[AMRS] Running legacy auto-migration...")
-            try:
-                run_auto_migration()
-                print("[AMRS] Auto-migration completed successfully")
-            except Exception as e:
-                print(f"[AMRS] Warning: Auto-migration failed: {e}")
-                print("[AMRS] Continuing without auto-migration...")
-            
-            # Create tables if needed
-            db.create_all()
-            print("[AMRS] Database tables ensured")
-            
-            # Ensure sync_queue and app_settings tables exist
-            try:
-                import add_sync_queue_table
-                add_sync_queue_table.upgrade()
-                print('[AMRS] Ensured sync_queue table exists')
-            except Exception as e:
-                print(f'[AMRS] Warning: Could not ensure sync_queue table: {e}')
-            
-            try:
-                import migrate_app_settings
-                migrate_app_settings.upgrade()
-                print('[AMRS] Ensured app_settings table exists')
-            except Exception as e:
-                print(f'[AMRS] Warning: Could not ensure app_settings table: {e}')
-            
-            # Additional setup for online servers
-            if not offline_mode:
-                try:
-                    # Ensure sync columns exist
-                    ensure_sync_columns()
-                    
-                    # Ensure audit task-machine associations exist for sync export
-                    try:
-                        ensure_online_server_audit_associations()
-                        print("[AMRS] Online server audit associations ensured")
-                    except Exception as e:
-                        print(f"[AMRS] Warning: Could not ensure online server audit associations: {e}")
-                    
-                    # Run any additional startup tasks  
-                    try:
-                        assign_colors_to_audit_tasks()
-                        print("[AMRS] Audit task colors assigned")
-                    except Exception as e:
-                        print(f"[AMRS] Warning: Could not assign audit task colors: {e}")
-                    
-                    print("[AMRS] Online mode database setup completed")
-                except Exception as e:
-                    print(f"[AMRS] Warning: Online mode setup error: {e}")
-                    
+                print(f"[AMRS] ❌ Schema validation failed: {results.get('error', 'Unknown error')}")
+        else:
+            print("[AMRS] Skipping schema validation for non-SQLite database")
+        
+        # Run legacy auto-migration for any remaining fixes
+        print("[AMRS] Running legacy auto-migration...")
+        try:
+            run_auto_migration()
+            print("[AMRS] Auto-migration completed successfully")
         except Exception as e:
-            print(f"[AMRS] ERROR: Database setup failed: {e}")
-            # Don't exit, let the app try to continue
+            print(f"[AMRS] Warning: Auto-migration failed: {e}")
+            print("[AMRS] Continuing without auto-migration...")
+        
+        # Create tables if needed
+        db.create_all()
+        print("[AMRS] Database tables ensured")
+        
+        # Ensure sync_queue and app_settings tables exist
+        try:
+            import add_sync_queue_table
+            add_sync_queue_table.upgrade()
+            print('[AMRS] Ensured sync_queue table exists')
+        except Exception as e:
+            print(f'[AMRS] Warning: Could not ensure sync_queue table: {e}')
+        
+        try:
+            import migrate_app_settings
+            migrate_app_settings.upgrade()
+            print('[AMRS] Ensured app_settings table exists')
+        except Exception as e:
+            print(f'[AMRS] Warning: Could not ensure app_settings table: {e}')
+        
+        # Additional setup for online servers
+        if not offline_mode:
+            try:
+                # Ensure sync columns exist
+                ensure_sync_columns()
+                print('[AMRS] Ensured sync columns exist')
+                
+                # Ensure audit task-machine associations exist for sync export
+                try:
+                    ensure_online_server_audit_associations()
+                    print("[AMRS] Online server audit associations ensured")
+                except Exception as e:
+                    print(f"[AMRS] Warning: Could not ensure online server audit associations: {e}")
+                
+                # Run any additional startup tasks  
+                try:
+                    assign_colors_to_audit_tasks()
+                    print("[AMRS] Audit task colors assigned")
+                except Exception as e:
+                    print(f"[AMRS] Warning: Could not assign audit task colors: {e}")
+                
+                print("[AMRS] Online mode database setup completed")
+            except Exception as e:
+                print(f"[AMRS] Warning: Online mode setup error: {e}")
+    
+    except Exception as e:
+        print(f"[AMRS] Error during database setup: {e}")
+        import traceback
+        traceback.print_exc()
 
+print("[AMRS] Database initialization and setup completed")
+
+def initialize_bootstrap_only():
+    """Run bootstrap operations only - database is already initialized above."""
+    print("[AMRS] Running bootstrap operations...")
+    
+    # Use the same offline detection as above
+    offline_mode = detect_offline_mode()
+    
     # Initialize sync worker for offline clients only (after all setup is complete)
     if offline_mode:
         try:
@@ -8372,7 +8381,7 @@ def initialize_database_and_bootstrap():
         except Exception as e:
             print(f"[AMRS] Warning: Failed to start sync worker: {e}")
 
-    print("[AMRS] Database configuration completed")
+    print("[AMRS] Bootstrap operations completed")
 
     # ========================================
     # AUTOMATIC BOOTSTRAP AND SYNC FOR OFFLINE APPLICATIONS
@@ -8482,8 +8491,8 @@ def initialize_database_and_bootstrap():
 
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
-    # Initialize database and run bootstrap - this prevents double execution
-    offline_mode = initialize_database_and_bootstrap()
+    # Initialize bootstrap operations - database is already initialized above
+    offline_mode = initialize_bootstrap_only()
     
     # Run the Flask app with SocketIO for WebSocket support
     port = int(os.environ.get("PORT", 10000))
