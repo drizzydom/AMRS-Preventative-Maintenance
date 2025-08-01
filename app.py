@@ -2203,10 +2203,7 @@ def ensure_sync_columns():
     except Exception as e:
         print(f"[SYNC] Error ensuring sync columns: {e}")
 
-# Call ensure_sync_columns on Render launch
-if is_render():
-    with app.app_context():
-        ensure_sync_columns()
+# Note: ensure_sync_columns() is called later during proper database initialization
 
 # Initialize Flask-Login
 print("[APP] Initializing Flask-Login...")
@@ -2264,6 +2261,14 @@ def user_can_see_all_sites(user):
 def check_db_connection():
     """Check if database connection is working and reconnect if needed."""
     try:
+        # Check if we have a Flask app context
+        try:
+            from flask import has_app_context
+            if not has_app_context():
+                return False
+        except:
+            return False
+            
         with db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
@@ -2850,9 +2855,15 @@ def ensure_db_connection():
     if request.path.startswith('/static/') or request.path == '/health-check':
         return
         
-    # Check DB connection for routes that need it
-    if request.endpoint not in ['static', 'health_check'] and not check_db_connection():
-        return jsonify({'error': 'Database connection failure'}), 500
+    # Only check DB connection for routes that actually need it, and only if we have app context
+    try:
+        from flask import has_app_context
+        if request.endpoint not in ['static', 'health_check'] and has_app_context() and not check_db_connection():
+            return jsonify({'error': 'Database connection failure'}), 500
+    except Exception as e:
+        # Don't fail requests due to connection check errors
+        app.logger.warning(f"Database connection check failed: {e}")
+        pass
 
 # Helper: Always allow admins to access any page
 @app.before_request
