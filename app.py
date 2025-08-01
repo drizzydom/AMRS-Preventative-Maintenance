@@ -13,9 +13,9 @@ from sqlalchemy import or_
 # Initialize Flask app at the very top
 app = Flask(__name__, instance_relative_config=True)
 
-# Now import and initialize the database after Flask app creation
+# Import the database instance but don't initialize it yet
 from models import db
-db.init_app(app)
+# Database will be initialized after configuration is set up
 
 
 # --- Initialize Flask-Mail before using it ---
@@ -8240,9 +8240,9 @@ def initialize_database_and_bootstrap():
             app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
             print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
 
-    # Database is already initialized at the top of the file
-    # Just verify the configuration is correct
-    print(f"[AMRS] Database already initialized - URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
+    # Initialize database with Flask app after configuration is complete
+    db.init_app(app)
+    print(f"[AMRS] Database initialized successfully - URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
 
 # Perform all database setup within app context
     with app.app_context():
