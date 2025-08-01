@@ -79,18 +79,24 @@ def is_online_server():
     not for BEING the online server.
     """
     # First check: explicit platform environment variables (most reliable)
-    if (os.environ.get('RENDER') or 
-        os.environ.get('HEROKU') or 
-        os.environ.get('RAILWAY')):
+    render_check = os.environ.get('RENDER')
+    heroku_check = os.environ.get('HEROKU')
+    railway_check = os.environ.get('RAILWAY')
+    
+    if render_check or heroku_check or railway_check:
+        print(f"[DEBUG] Online server detected by platform: RENDER={render_check}, HEROKU={heroku_check}, RAILWAY={railway_check}")
         return True
     
     # Second check: explicit override
-    if os.environ.get('IS_ONLINE_SERVER', '').lower() == 'true':
+    is_online_env = os.environ.get('IS_ONLINE_SERVER', '').lower()
+    if is_online_env == 'true':
+        print(f"[DEBUG] Online server detected by IS_ONLINE_SERVER={is_online_env}")
         return True
     
     # Third check: database type - online servers use PostgreSQL
     database_url = os.environ.get('DATABASE_URL', '')
     if database_url.startswith('postgresql://') or database_url.startswith('postgres://'):
+        print(f"[DEBUG] Online server detected by PostgreSQL DATABASE_URL={database_url[:50]}...")
         return True
     
     # Fourth check: if running locally with SQLite, definitely offline
@@ -98,9 +104,11 @@ def is_online_server():
         not database_url or 
         'maintenance.db' in database_url or
         'maintenance_secure.db' in database_url):
+        print(f"[DEBUG] Offline client detected by SQLite/empty DATABASE_URL={database_url}")
         return False
     
     # Default: assume offline for safety
+    print(f"[DEBUG] Default offline detection with DATABASE_URL={database_url}")
     return False
 
 def is_offline_mode():
@@ -109,17 +117,22 @@ def is_offline_mode():
     This is the inverse of is_online_server() but specifically checks for SQLite usage.
     """
     # If it's the online server, it's not offline mode
-    if is_online_server():
+    online_server_check = is_online_server()
+    if online_server_check:
+        print(f"[DEBUG] is_offline_mode=False because is_online_server=True")
         return False
     
     # Check database type
     database_url = os.environ.get('DATABASE_URL', '')
-    return (
+    is_offline = (
         database_url.startswith('sqlite://') or 
         not database_url or  # No DATABASE_URL means SQLite fallback
         'maintenance.db' in database_url or
         'maintenance_secure.db' in database_url
     )
+    
+    print(f"[DEBUG] is_offline_mode={is_offline} with DATABASE_URL={database_url}")
+    return is_offline
 
 def get_timezone_aware_now():
     """
