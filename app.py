@@ -5128,26 +5128,46 @@ def login():
         remember = request.form.get('remember') == 'on'
         app.logger.debug(f"Login attempt: username={username}, remember={remember}")
         
-        # Add debugging to check database state and handle context issues
+        # Simplified approach: use direct database connection to avoid SQLAlchemy context issues
         try:
             app.logger.debug(f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
-            app.logger.debug(f"Database engines: {hasattr(db, 'engines')}")
             
-            # Ensure we're in proper Flask app context for database operations
-            if not hasattr(db, 'engines') or not db.engines:
-                # Re-initialize database if needed
-                app.logger.warning("Database not properly initialized, reinitializing...")
-                db.init_app(app)
-            
+            # Try the normal SQLAlchemy query first
             user = User.query.filter_by(username_hash=hash_value(username)).first()
+                
         except Exception as e:
-            app.logger.error(f"Database error during login: {e}")
-            # Try one more time with explicit app context
+            app.logger.error(f"SQLAlchemy error during login: {e}")
+            # Fallback to direct database query
             try:
-                with app.app_context():
-                    user = User.query.filter_by(username_hash=hash_value(username)).first()
+                from sqlalchemy import create_engine, text
+                from werkzeug.security import check_password_hash as check_pw_hash
+                
+                engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
+                with engine.connect() as conn:
+                    result = conn.execute(
+                        text("SELECT id, username_hash, password_hash FROM users WHERE username_hash = :hash LIMIT 1"),
+                        {"hash": hash_value(username)}
+                    ).first()
+                    
+                    if result and check_pw_hash(result[2], password):  # Check password directly
+                        # Login successful - create a minimal user object for login_user
+                        user = User.query.get(result[0])  # Get full user object by ID
+                        if not user:
+                            # If that fails too, create a temporary user object
+                            class TempUser:
+                                def __init__(self, user_id):
+                                    self.id = user_id
+                                    self.is_authenticated = True
+                                    self.is_active = True
+                                    self.is_anonymous = False
+                                def get_id(self):
+                                    return str(self.id)
+                            user = TempUser(result[0])
+                    else:
+                        user = None
+                        
             except Exception as e2:
-                app.logger.error(f"Second database error during login: {e2}")
+                app.logger.error(f"Direct database error during login: {e2}")
                 flash('Login system temporarily unavailable. Please try again.', 'danger')
                 return render_template('login.html')
             
