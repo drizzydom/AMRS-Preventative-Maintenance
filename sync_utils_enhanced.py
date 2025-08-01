@@ -86,18 +86,20 @@ def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, i
     """
     try:
         # Import here to avoid circular imports
-        from app import db
+        from app import db, app
         from timezone_utils import is_online_server, is_offline_mode
         
-        # Online servers shouldn't add to sync queue unless forced (for bulk imports)
-        if is_online_server() and not force_add:
-            print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
-            return
-        
-        # If using PostgreSQL but not an online server, don't queue (avoid syncing to self)
-        if not is_offline_mode() and not force_add:
-            print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - not in offline mode")
-            return
+        # Ensure app context for database operations
+        with app.app_context():
+            # Online servers shouldn't add to sync queue unless forced (for bulk imports)
+            if is_online_server() and not force_add:
+                print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - this is the online server")
+                return
+            
+            # If using PostgreSQL but not an online server, don't queue (avoid syncing to self)
+            if not is_offline_mode() and not force_add:
+                print(f"[SYNC_QUEUE] Skipping sync queue for {table_name}:{record_id} - not in offline mode")
+                return
             
         # Use timezone-aware datetime
         now = get_timezone_aware_now()
@@ -457,111 +459,114 @@ def import_audit_completions(completions_data):
 def import_table_data(table_name, table_data):
     """Generic function to import table data with proper date/datetime conversion."""
     try:
-        from app import db
-        from models import User, Role, Site, Machine, Part, AuditTask, MaintenanceRecord
-        from datetime import datetime, date
+        from app import db, app
         
-        model_map = {
-            'users': User,
-            'roles': Role, 
-            'sites': Site,
-            'machines': Machine,
-            'parts': Part,
-            'audit_tasks': AuditTask,
-            'maintenance_records': MaintenanceRecord
-        }
-        
-        if table_name not in model_map:
-            return 0
+        # Ensure app context for all database operations
+        with app.app_context():
+            from models import User, Role, Site, Machine, Part, AuditTask, MaintenanceRecord
+            from datetime import datetime, date
             
-        model_class = model_map[table_name]
-        imported_count = 0
-        
-        for record_data in table_data:
-            # Use a separate try-catch for each record with session management
-            session_rollback_needed = False
-            try:
-                # Convert date/datetime strings to proper Python objects
-                processed_data = {}
-                for key, value in record_data.items():
-                    if value is None:
-                        processed_data[key] = None
-                    elif isinstance(value, str) and key in ['date', 'start_date', 'end_date', 'last_maintenance_date', 'next_maintenance_date']:
-                        # Convert date strings to Python date objects
-                        try:
-                            processed_data[key] = datetime.strptime(value, '%Y-%m-%d').date()
-                        except ValueError:
+            model_map = {
+                'users': User,
+                'roles': Role, 
+                'sites': Site,
+                'machines': Machine,
+                'parts': Part,
+                'audit_tasks': AuditTask,
+                'maintenance_records': MaintenanceRecord
+            }
+            
+            if table_name not in model_map:
+                return 0
+                
+            model_class = model_map[table_name]
+            imported_count = 0
+            
+            for record_data in table_data:
+                # Use a separate try-catch for each record with session management
+                session_rollback_needed = False
+                try:
+                    # Convert date/datetime strings to proper Python objects
+                    processed_data = {}
+                    for key, value in record_data.items():
+                        if value is None:
+                            processed_data[key] = None
+                        elif isinstance(value, str) and key in ['date', 'start_date', 'end_date', 'last_maintenance_date', 'next_maintenance_date']:
+                            # Convert date strings to Python date objects
                             try:
-                                # Try with datetime format and extract date
-                                processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                            except:
-                                processed_data[key] = value  # Keep original if conversion fails
-                    elif isinstance(value, str) and key in ['created_at', 'updated_at', 'completed_at', 'last_login', 'password_reset_expires', 'last_maintenance', 'next_maintenance', 'decommissioned_date']:
-                        # Convert datetime strings to Python datetime objects
-                        try:
-                            processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                        except (ValueError, AttributeError):
-                            # Try alternative datetime format for historical dates
-                            try:
-                                processed_data[key] = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S')
+                                processed_data[key] = datetime.strptime(value, '%Y-%m-%d').date()
                             except ValueError:
-                                processed_data[key] = value  # Keep original if conversion fails
-                    else:
-                        processed_data[key] = value
-                
-                existing = model_class.query.get(processed_data.get('id'))
-                
-                if existing:
-                    # Update if newer (simplified check)
-                    if processed_data.get('updated_at'):
-                        # Update existing record with session.no_autoflush to prevent premature flushes
-                        with db.session.no_autoflush:
-                            for key, value in processed_data.items():
-                                # Only set attributes that actually exist on the model
-                                if hasattr(existing, key) and key != 'id':
-                                    # Check if it's a settable attribute (not a property without setter)
-                                    attr = getattr(existing.__class__, key, None)
-                                    if attr is None or not isinstance(attr, property) or attr.fset is not None:
-                                        setattr(existing, key, value)
-                        imported_count += 1
-                else:
-                    # Create new record using merge to handle conflicts
-                    try:
-                        with db.session.no_autoflush:
-                            # Filter out fields that don't exist on the model
-                            valid_fields = {}
-                            for key, value in processed_data.items():
-                                if hasattr(model_class, key):
-                                    # Check if it's a settable attribute
-                                    attr = getattr(model_class, key, None)
-                                    if attr is None or not isinstance(attr, property) or attr.fset is not None:
-                                        valid_fields[key] = value
-                            
-                            new_record = model_class(**valid_fields)
-                            db.session.merge(new_record)
-                        imported_count += 1
-                    except Exception as create_error:
-                        print(f"[SYNC] Error creating {table_name} record {processed_data.get('id')}: {create_error}")
-                        session_rollback_needed = True
-                        continue
+                                try:
+                                    # Try with datetime format and extract date
+                                    processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
+                                except:
+                                    processed_data[key] = value  # Keep original if conversion fails
+                        elif isinstance(value, str) and key in ['created_at', 'updated_at', 'completed_at', 'last_login', 'password_reset_expires', 'last_maintenance', 'next_maintenance', 'decommissioned_date']:
+                            # Convert datetime strings to Python datetime objects
+                            try:
+                                processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                            except (ValueError, AttributeError):
+                                # Try alternative datetime format for historical dates
+                                try:
+                                    processed_data[key] = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S')
+                                except ValueError:
+                                    processed_data[key] = value  # Keep original if conversion fails
+                        else:
+                            processed_data[key] = value
                     
-            except Exception as e:
-                print(f"[SYNC] Error importing {table_name} record {record_data.get('id')}: {e}")
-                session_rollback_needed = True
-                continue
-            finally:
-                # Handle session rollback if needed
-                if session_rollback_needed:
-                    try:
-                        db.session.rollback()
-                    except:
-                        pass
-        
-        # Commit all successful imports
-        if imported_count > 0:
-            db.session.commit()
-        
-        return imported_count
+                    existing = model_class.query.get(processed_data.get('id'))
+                    
+                    if existing:
+                        # Update if newer (simplified check)
+                        if processed_data.get('updated_at'):
+                            # Update existing record with session.no_autoflush to prevent premature flushes
+                            with db.session.no_autoflush:
+                                for key, value in processed_data.items():
+                                    # Only set attributes that actually exist on the model
+                                    if hasattr(existing, key) and key != 'id':
+                                        # Check if it's a settable attribute (not a property without setter)
+                                        attr = getattr(existing.__class__, key, None)
+                                        if attr is None or not isinstance(attr, property) or attr.fset is not None:
+                                            setattr(existing, key, value)
+                            imported_count += 1
+                    else:
+                        # Create new record using merge to handle conflicts
+                        try:
+                            with db.session.no_autoflush:
+                                # Filter out fields that don't exist on the model
+                                valid_fields = {}
+                                for key, value in processed_data.items():
+                                    if hasattr(model_class, key):
+                                        # Check if it's a settable attribute
+                                        attr = getattr(model_class, key, None)
+                                        if attr is None or not isinstance(attr, property) or attr.fset is not None:
+                                            valid_fields[key] = value
+                                
+                                new_record = model_class(**valid_fields)
+                                db.session.merge(new_record)
+                            imported_count += 1
+                        except Exception as create_error:
+                            print(f"[SYNC] Error creating {table_name} record {processed_data.get('id')}: {create_error}")
+                            session_rollback_needed = True
+                            continue
+                        
+                except Exception as e:
+                    print(f"[SYNC] Error importing {table_name} record {record_data.get('id')}: {e}")
+                    session_rollback_needed = True
+                    continue
+                finally:
+                    # Handle session rollback if needed
+                    if session_rollback_needed:
+                        try:
+                            db.session.rollback()
+                        except:
+                            pass
+            
+            # Commit all successful imports
+            if imported_count > 0:
+                db.session.commit()
+            
+            return imported_count
         
     except Exception as e:
         print(f"[SYNC] Error importing {table_name}: {e}")
