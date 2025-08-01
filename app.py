@@ -3429,22 +3429,29 @@ def audits_page():
                 machine = Machine.query.get(int(machine_id))
                 if machine:
                     audit_task.machines.append(machine)
-                    # Log to sync queue for machine_audit_task association (immediate sync)
-                    add_to_sync_queue_enhanced('machine_audit_task', f'{audit_task.id}_{machine.id}', 'insert', {
-                        'audit_task_id': audit_task.id,
-                        'machine_id': machine.id
-                    }, immediate_sync=True)
             db.session.add(audit_task)
             db.session.commit()
-            # Log to sync queue (immediate sync)
+            
+            # Log to sync queue AFTER commit so audit_task.id is available (immediate sync)
             add_to_sync_queue_enhanced('audit_tasks', audit_task.id, 'insert', {
                 'id': audit_task.id,
                 'name': audit_task.name,
+                'description': audit_task.description,
                 'site_id': audit_task.site_id,
+                'created_by': audit_task.created_by,
                 'interval': audit_task.interval,
                 'custom_interval_days': audit_task.custom_interval_days,
                 'color': audit_task.color
             }, immediate_sync=True)
+            
+            # Log machine associations to sync queue
+            for machine_id in machine_ids:
+                machine = Machine.query.get(int(machine_id))
+                if machine:
+                    add_to_sync_queue_enhanced('machine_audit_task', f'{audit_task.id}_{machine.id}', 'insert', {
+                        'audit_task_id': audit_task.id,
+                        'machine_id': machine.id
+                    }, immediate_sync=True)
             flash('Audit task created successfully.', 'success')
             return redirect(url_for('audits_page'))
         except Exception as e:
