@@ -8236,7 +8236,26 @@ def initialize_database_and_bootstrap():
             print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
 
     # Initialize database with Flask app
-    db.init_app(app)
+    try:
+        # Ensure clean database initialization
+        if hasattr(db, 'app') and db.app:
+            print("[AMRS] Database already has an app registered, reinitializing...")
+            db.app = None
+            db._app_lock.clear()
+        
+        db.init_app(app)
+        print("[AMRS] Database initialization successful")
+        
+        # Verify that the database is properly initialized
+        with app.app_context():
+            print(f"[AMRS] Database engine URL: {db.engine.url}")
+            print(f"[AMRS] Database connection test...")
+            db.engine.connect().close()
+            print("[AMRS] Database connection test successful")
+            
+    except Exception as e:
+        print(f"[AMRS] Database initialization error: {e}")
+        raise
 
 # Perform all database setup within app context
     with app.app_context():
