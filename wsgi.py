@@ -28,13 +28,11 @@ logger.info(f"FLASK_APP: {os.environ.get('FLASK_APP', 'Not set')}")
 logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
 
 # Import the Flask app and SocketIO from render_app.py (which imports from app.py)
-# The render_app.py file already handles auto migration, so we don't need to do it again here
+# The app.py file already handles all database initialization and migration
 from render_app import app, socketio
 
-# Ensure all tables are created before serving requests (redundant but harmless check)
-from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine, Part, MaintenanceRecord
-with app.app_context():
-    db.create_all()
+# The app is now ready to serve requests
+print("WSGI: Application ready to serve requests")
 
 # For gunicorn usage - expose the Flask app
 application = app
