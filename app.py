@@ -5122,7 +5122,17 @@ def login():
         password = request.form.get('password')
         remember = request.form.get('remember') == 'on'
         app.logger.debug(f"Login attempt: username={username}, remember={remember}")
-        user = User.query.filter_by(username_hash=hash_value(username)).first()
+        
+        # Add debugging to check database state
+        try:
+            app.logger.debug(f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
+            app.logger.debug(f"Database engines: {hasattr(db, 'engines')}")
+            user = User.query.filter_by(username_hash=hash_value(username)).first()
+        except Exception as e:
+            app.logger.error(f"Database error during login: {e}")
+            flash('Login system temporarily unavailable. Please try again.', 'danger')
+            return render_template('login.html')
+            
         from security_event_logger import log_security_event
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
