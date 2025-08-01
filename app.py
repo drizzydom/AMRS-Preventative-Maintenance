@@ -6,11 +6,16 @@ from datetime import datetime, timedelta
 from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf, validate_csrf
-from models import db, SecurityEvent, AppSetting
+# Don't import db here - we'll import it after Flask app creation
+from models import SecurityEvent, AppSetting
 from sqlalchemy import or_
 
 # Initialize Flask app at the very top
 app = Flask(__name__, instance_relative_config=True)
+
+# Now import and initialize the database after Flask app creation
+from models import db
+db.init_app(app)
 
 
 # --- Initialize Flask-Mail before using it ---
@@ -8235,27 +8240,9 @@ def initialize_database_and_bootstrap():
             app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
             print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
 
-    # Initialize database with Flask app
-    try:
-        # Ensure clean database initialization
-        if hasattr(db, 'app') and db.app:
-            print("[AMRS] Database already has an app registered, reinitializing...")
-            db.app = None
-            db._app_lock.clear()
-        
-        db.init_app(app)
-        print("[AMRS] Database initialization successful")
-        
-        # Verify that the database is properly initialized
-        with app.app_context():
-            print(f"[AMRS] Database engine URL: {db.engine.url}")
-            print(f"[AMRS] Database connection test...")
-            db.engine.connect().close()
-            print("[AMRS] Database connection test successful")
-            
-    except Exception as e:
-        print(f"[AMRS] Database initialization error: {e}")
-        raise
+    # Database is already initialized at the top of the file
+    # Just verify the configuration is correct
+    print(f"[AMRS] Database already initialized - URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
 
 # Perform all database setup within app context
     with app.app_context():
