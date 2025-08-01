@@ -423,6 +423,9 @@ def attempt_database_sync():
         import_success = import_sync_data_to_database(sync_data, db_path)
         
         if import_success:
+            # Ensure audit tasks have machine associations for proper UI display
+            ensure_audit_task_machine_associations(db_path)
+            
             # Update the app to use the secure database
             update_database_configuration(db_path)
             print("[SYNC] ✅ Database sync completed successfully")
@@ -516,8 +519,74 @@ def import_sync_data_to_database(sync_data, db_path):
         for table_name in ['sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks']:
             if table_name in sync_data:
                 records = sync_data[table_name]
+                if table_name == 'sites':
+                    for site in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO sites (id, name, location, contact_email, enable_notifications, notification_threshold, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            site['id'], site['name'], site.get('location'), site.get('contact_email'),
+                            site.get('enable_notifications', True), site.get('notification_threshold', 30),
+                            site.get('created_at'), site.get('updated_at')
+                        ))
+                elif table_name == 'machines':
+                    for machine in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO machines (id, name, model, serial_number, machine_number, site_id, decommissioned, decommissioned_date, decommissioned_by, decommissioned_reason, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            machine['id'], machine['name'], machine.get('model'), machine.get('serial_number'),
+                            machine.get('machine_number'), machine['site_id'], machine.get('decommissioned', False),
+                            machine.get('decommissioned_date'), machine.get('decommissioned_by'), machine.get('decommissioned_reason'),
+                            machine.get('created_at'), machine.get('updated_at')
+                        ))
+                elif table_name == 'parts':
+                    for part in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO parts (id, name, description, machine_id, maintenance_frequency, maintenance_unit, last_maintenance, next_maintenance, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            part['id'], part['name'], part.get('description'), part['machine_id'],
+                            part.get('maintenance_frequency'), part.get('maintenance_unit'),
+                            part.get('last_maintenance'), part.get('next_maintenance'),
+                            part.get('created_at'), part.get('updated_at')
+                        ))
+                elif table_name == 'audit_tasks':
+                    for task in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO audit_tasks (id, name, description, site_id, created_by, interval, custom_interval_days, color, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            task['id'], task['name'], task.get('description'), task['site_id'],
+                            task.get('created_by'), task.get('interval'), task.get('custom_interval_days'),
+                            task.get('color'), task.get('created_at'), task.get('updated_at')
+                        ))
+                elif table_name == 'maintenance_records':
+                    for record in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO maintenance_records (id, machine_id, part_id, user_id, maintenance_type, description, date, performed_by, status, notes, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            record['id'], record.get('machine_id'), record.get('part_id'), record.get('user_id'),
+                            record.get('maintenance_type'), record.get('description'), record.get('date'),
+                            record.get('performed_by'), record.get('status'), record.get('notes'),
+                            record.get('created_at'), record.get('updated_at')
+                        ))
                 print(f"[SYNC] Imported {len(records)} {table_name}")
                 tables_imported += 1
+        
+        # Import machine_audit_task associations (CRITICAL for proper audit task display)
+        if 'machine_audit_task' in sync_data:
+            associations = sync_data['machine_audit_task']
+            for assoc in associations:
+                cursor.execute('''
+                INSERT OR REPLACE INTO machine_audit_task (machine_id, audit_task_id)
+                VALUES (?, ?)
+                ''', (assoc['machine_id'], assoc['audit_task_id']))
+            print(f"[SYNC] Imported {len(associations)} machine_audit_task associations")
+            tables_imported += 1
+        else:
+            print("[SYNC] ⚠️  No machine_audit_task associations found in sync data - audit tasks may not display properly")
         
         conn.commit()
         conn.close()
@@ -528,6 +597,177 @@ def import_sync_data_to_database(sync_data, db_path):
     except Exception as e:
         print(f"[SYNC] Import error: {e}")
         return False
+
+def ensure_audit_task_machine_associations(db_path):
+    """Ensure that the machine_audit_task table exists but only use server-provided associations.
+    This function does NOT create fallback associations - it only uses data provided by the server."""
+    try:
+        import sqlite3
+        
+        # Connect to secure database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if machine_audit_task table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='machine_audit_task'")
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            # Create the machine_audit_task table structure only
+            cursor.execute('''
+            CREATE TABLE machine_audit_task (
+                machine_id INTEGER NOT NULL,
+                audit_task_id INTEGER NOT NULL,
+                PRIMARY KEY (machine_id, audit_task_id),
+                FOREIGN KEY (machine_id) REFERENCES machines (id),
+                FOREIGN KEY (audit_task_id) REFERENCES audit_tasks (id)
+            )
+            ''')
+            print("[AUDIT] Created machine_audit_task association table")
+            conn.commit()
+        
+        # Check existing associations (only from server sync data)
+        cursor.execute("SELECT COUNT(*) FROM machine_audit_task")
+        existing_associations = cursor.fetchone()[0]
+        
+        if existing_associations > 0:
+            print(f"[AUDIT] ✅ Found {existing_associations} existing audit task-machine associations")
+        else:
+            print("[AUDIT] ⚠️  No audit task-machine associations found from server sync")
+            print("[AUDIT] Audit tasks will only be visible if the server provides explicit associations")
+            print("[AUDIT] Contact your administrator to configure audit task assignments on the server")
+        
+        conn.close()
+        return True
+        
+    except Exception as e:
+        print(f"[AUDIT] Error checking audit task associations: {e}")
+        return False
+
+def create_audit_task_associations(audit_task_id, machine_ids):
+    """Create explicit audit task-machine associations for a specific audit task.
+    This is the controlled way to create associations on the server side.
+    
+    Args:
+        audit_task_id: ID of the audit task
+        machine_ids: List of machine IDs to associate with the audit task
+    
+    Returns:
+        tuple: (success: bool, message: str, associations_created: int)
+    """
+    try:
+        from sqlalchemy import text
+        
+        # Verify audit task exists
+        audit_task = AuditTask.query.get(audit_task_id)
+        if not audit_task:
+            return False, f"Audit task {audit_task_id} not found", 0
+        
+        # Verify machines exist and get their details
+        valid_machines = []
+        for machine_id in machine_ids:
+            machine = Machine.query.get(machine_id)
+            if machine:
+                valid_machines.append(machine)
+            else:
+                print(f"[AUDIT_ASSOC] Warning: Machine {machine_id} not found, skipping")
+        
+        if not valid_machines:
+            return False, "No valid machines found", 0
+        
+        # Ensure machine_audit_task table exists
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        if not inspector.has_table('machine_audit_task'):
+            db.session.execute(text('''
+            CREATE TABLE machine_audit_task (
+                machine_id INTEGER NOT NULL,
+                audit_task_id INTEGER NOT NULL,
+                PRIMARY KEY (machine_id, audit_task_id),
+                FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+                FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id) ON DELETE CASCADE
+            )
+            '''))
+            db.session.commit()
+        
+        # Create associations
+        associations_created = 0
+        for machine in valid_machines:
+            try:
+                db.session.execute(text('''
+                INSERT OR IGNORE INTO machine_audit_task (machine_id, audit_task_id)
+                VALUES (:machine_id, :audit_task_id)
+                '''), {'machine_id': machine.id, 'audit_task_id': audit_task_id})
+                
+                # Check if the association was actually created (not already existing)
+                result = db.session.execute(text('''
+                SELECT COUNT(*) FROM machine_audit_task 
+                WHERE machine_id = :machine_id AND audit_task_id = :audit_task_id
+                '''), {'machine_id': machine.id, 'audit_task_id': audit_task_id}).scalar()
+                
+                if result > 0:
+                    associations_created += 1
+                    print(f"[AUDIT_ASSOC] Associated audit task '{audit_task.name}' with machine '{machine.name}'")
+                    
+            except Exception as e:
+                print(f"[AUDIT_ASSOC] Error associating machine {machine.name}: {e}")
+        
+        db.session.commit()
+        
+        message = f"Created {associations_created} audit task associations for '{audit_task.name}'"
+        if associations_created < len(valid_machines):
+            message += f" ({len(valid_machines) - associations_created} were already associated)"
+            
+        return True, message, associations_created
+        
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Error creating audit task associations: {str(e)}", 0
+
+def remove_audit_task_associations(audit_task_id, machine_ids=None):
+    """Remove audit task-machine associations.
+    
+    Args:
+        audit_task_id: ID of the audit task
+        machine_ids: List of machine IDs to remove associations for. If None, removes all associations for the audit task.
+    
+    Returns:
+        tuple: (success: bool, message: str, associations_removed: int)
+    """
+    try:
+        from sqlalchemy import text
+        
+        # Verify audit task exists
+        audit_task = AuditTask.query.get(audit_task_id)
+        if not audit_task:
+            return False, f"Audit task {audit_task_id} not found", 0
+        
+        associations_removed = 0
+        
+        if machine_ids is None:
+            # Remove all associations for this audit task
+            result = db.session.execute(text('''
+            DELETE FROM machine_audit_task WHERE audit_task_id = :audit_task_id
+            '''), {'audit_task_id': audit_task_id})
+            associations_removed = result.rowcount
+            message = f"Removed all {associations_removed} associations for audit task '{audit_task.name}'"
+        else:
+            # Remove specific machine associations
+            for machine_id in machine_ids:
+                result = db.session.execute(text('''
+                DELETE FROM machine_audit_task 
+                WHERE audit_task_id = :audit_task_id AND machine_id = :machine_id
+                '''), {'audit_task_id': audit_task_id, 'machine_id': machine_id})
+                associations_removed += result.rowcount
+            
+            message = f"Removed {associations_removed} specific associations for audit task '{audit_task.name}'"
+        
+        db.session.commit()
+        return True, message, associations_removed
+        
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Error removing audit task associations: {str(e)}", 0
 
 def create_basic_schema(cursor):
     """Create basic database schema in the secure database."""
@@ -586,6 +826,57 @@ def create_basic_schema(cursor):
             created_at TIMESTAMP,
             updated_at TIMESTAMP,
             FOREIGN KEY (site_id) REFERENCES sites(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS parts (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            machine_id INTEGER,
+            maintenance_frequency INTEGER,
+            maintenance_unit TEXT,
+            last_maintenance TIMESTAMP,
+            next_maintenance TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (machine_id) REFERENCES machines(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS audit_tasks (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            site_id INTEGER,
+            created_by INTEGER,
+            interval TEXT,
+            custom_interval_days INTEGER,
+            color TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id),
+            FOREIGN KEY (created_by) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS machine_audit_task (
+            machine_id INTEGER NOT NULL,
+            audit_task_id INTEGER NOT NULL,
+            PRIMARY KEY (machine_id, audit_task_id),
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS maintenance_records (
+            id INTEGER PRIMARY KEY,
+            machine_id INTEGER,
+            part_id INTEGER,
+            user_id INTEGER,
+            maintenance_type TEXT,
+            description TEXT,
+            date TIMESTAMP,
+            performed_by TEXT,
+            status TEXT,
+            notes TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (part_id) REFERENCES parts(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )'''
     ]
     
@@ -597,6 +888,55 @@ def update_database_configuration(secure_db_path):
     # Update the DATABASE_URL environment variable to point to the secure database
     os.environ['DATABASE_URL'] = f'sqlite:///{secure_db_path}'
     print(f"[CONFIG] Updated database configuration to use: {secure_db_path}")
+
+def ensure_online_server_audit_associations():
+    """Ensure the online server has the machine_audit_task table but only explicit associations.
+    This function creates the table structure but does not automatically create associations."""
+    try:
+        # Only run for online servers
+        from timezone_utils import is_offline_mode
+        if is_offline_mode():
+            return True
+            
+        print("[AUDIT_SYNC] Ensuring online server has audit task association table...")
+        
+        # Check if machine_audit_task table exists
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        
+        if not inspector.has_table('machine_audit_task'):
+            print("[AUDIT_SYNC] Creating machine_audit_task table on online server...")
+            # Create the table using SQLAlchemy
+            db.session.execute(text('''
+            CREATE TABLE machine_audit_task (
+                machine_id INTEGER NOT NULL,
+                audit_task_id INTEGER NOT NULL,
+                PRIMARY KEY (machine_id, audit_task_id),
+                FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+                FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id) ON DELETE CASCADE
+            )
+            '''))
+            db.session.commit()
+            print("[AUDIT_SYNC] ✅ Created machine_audit_task table")
+        
+        # Check if there are any associations (only report, don't create)
+        result = db.session.execute(text('SELECT COUNT(*) FROM machine_audit_task')).scalar()
+        
+        if result == 0:
+            print("[AUDIT_SYNC] ⚠️  No audit task-machine associations configured")
+            print("[AUDIT_SYNC] Administrators should create explicit audit task assignments:")
+            print("[AUDIT_SYNC] 1. Use the admin interface to assign audit tasks to specific machines")
+            print("[AUDIT_SYNC] 2. Or run manual SQL to create associations: INSERT INTO machine_audit_task (machine_id, audit_task_id) VALUES (machine_id, task_id)")
+            print("[AUDIT_SYNC] Without explicit associations, audit tasks will not appear on offline clients")
+        else:
+            print(f"[AUDIT_SYNC] ✅ Found {result} configured audit task-machine associations")
+            print("[AUDIT_SYNC] These associations will be exported to offline clients via sync")
+        
+        return True
+        
+    except Exception as e:
+        print(f"[AUDIT_SYNC] Error checking online server audit associations: {e}")
+        return False
 
 def verify_bootstrap_success():
     """Verify that bootstrap was successful by checking database and credentials."""
@@ -1000,8 +1340,8 @@ def check_persistent_storage():
         print(f"[APP] Using default PostgreSQL database")
     return True
 
-# Call this function before your database setup
-storage_ok = check_persistent_storage()
+# NOTE: Persistent storage check moved to initialize_database_and_bootstrap() function
+# This prevents module-level database URL logging that conflicts with proper database configuration
 
 
 
@@ -5029,7 +5369,7 @@ def api_trigger_manual_sync():
         print("[API] Manual sync trigger requested")
         
         # Check if this is an offline client that should upload to server
-        if should_trigger_sync():
+        if should_trigger_sync(force_override_cooldown=True):
             print("[API] Offline client - triggering enhanced upload")
             # Run enhanced sync upload in a separate thread to avoid blocking
             import threading
@@ -5047,8 +5387,8 @@ def api_trigger_manual_sync():
             
             return jsonify({"status": "triggered", "message": "Enhanced sync upload started"})
         else:
-            # This is the online server - run traditional sync
-            print("[API] Online server - running traditional sync")
+            # This is either an online server or sync is not eligible (cooldown, etc.)
+            print("[API] Not triggering enhanced sync - running traditional sync")
             import threading
             def run_sync():
                 try:
@@ -7934,6 +8274,13 @@ def initialize_database_and_bootstrap():
                     # Ensure sync columns exist
                     ensure_sync_columns()
                     
+                    # Ensure audit task-machine associations exist for sync export
+                    try:
+                        ensure_online_server_audit_associations()
+                        print("[AMRS] Online server audit associations ensured")
+                    except Exception as e:
+                        print(f"[AMRS] Warning: Could not ensure online server audit associations: {e}")
+                    
                     # Run any additional startup tasks  
                     try:
                         assign_colors_to_audit_tasks()
@@ -7964,6 +8311,14 @@ def initialize_database_and_bootstrap():
     # ========================================
     # This section automatically configures offline applications when they start
     from timezone_utils import is_offline_mode
+
+    # Ensure audit task-machine associations exist for proper UI display
+    try:
+        if is_offline_mode():
+            db_path = get_secure_database_path()
+            ensure_audit_task_machine_associations(db_path)
+    except Exception as e:
+        print(f"[AMRS] Warning: Could not ensure audit task associations: {e}")
 
     if is_offline_mode():
         print("\n" + "="*60)

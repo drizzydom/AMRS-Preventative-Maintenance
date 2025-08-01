@@ -27,10 +27,13 @@ sync_worker_lock = threading.Lock()
 _last_sync_attempt = None
 _sync_cooldown_seconds = 60  # Minimum time between sync attempts (increased for performance)
 
-def should_trigger_sync():
+def should_trigger_sync(force_override_cooldown=False):
     """
-    Determine if sync should be triggered based on current environment and timing.
-    Only true offline clients should trigger sync uploads, and with appropriate cooldown.
+    Check if sync should be triggered (for offline clients only).
+    Returns True if this is an offline client that should sync to the online server.
+    
+    Args:
+        force_override_cooldown: If True, ignores cooldown for manual sync triggers
     """
     global _last_sync_attempt
     
@@ -38,22 +41,34 @@ def should_trigger_sync():
     from timezone_utils import is_online_server, is_offline_mode
     
     # Online servers should NOT trigger sync
-    if is_online_server():
+    online_check = is_online_server()
+    print(f"[DEBUG] should_trigger_sync: is_online_server={online_check}")
+    if online_check:
         return False
     
     # If using PostgreSQL but not an online server, don't sync (avoid syncing to self)
-    if not is_offline_mode():
+    offline_check = is_offline_mode()
+    print(f"[DEBUG] should_trigger_sync: is_offline_mode={offline_check}")
+    if not offline_check:
+        print("[DEBUG] should_trigger_sync: Not offline mode, skipping sync")
         return False
     
     # Check if enough time has passed since last sync attempt (cooldown)
-    now = get_timezone_aware_now()
-    if _last_sync_attempt:
-        time_since_last = (now - _last_sync_attempt).total_seconds()
-        if time_since_last < _sync_cooldown_seconds:
-            return False
+    # Skip cooldown check if force_override_cooldown is True (for manual triggers)
+    if not force_override_cooldown:
+        now = get_timezone_aware_now()
+        if _last_sync_attempt:
+            time_since_last = (now - _last_sync_attempt).total_seconds()
+            print(f"[DEBUG] should_trigger_sync: time_since_last={time_since_last}, cooldown={_sync_cooldown_seconds}")
+            if time_since_last < _sync_cooldown_seconds:
+                print("[DEBUG] should_trigger_sync: Still in cooldown period")
+                return False
     
     # Update last sync attempt time
-    _last_sync_attempt = now
+    if not force_override_cooldown:
+        _last_sync_attempt = get_timezone_aware_now()
+    
+    print("[DEBUG] should_trigger_sync: All checks passed, returning True")
     return True
 
 def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, immediate_sync=True, force_add=False):
@@ -141,16 +156,17 @@ def trigger_immediate_sync():
         sync_event.set()
         print("[SYNC] Immediate sync triggered")
     else:
-        print("[SYNC] Skipping immediate sync - this is the online server")
+        print("[SYNC] Skipping immediate sync - not eligible (online server, cooldown, or other reason)")
 
 def trigger_manual_sync():
     """
     Manually trigger a sync operation (e.g., on page load).
     This checks for pending items and uploads them if network is available.
+    Manual sync overrides cooldown restrictions.
     """
-    if not should_trigger_sync():
-        print("[SYNC] Manual sync skipped - this is the online server")
-        return {"status": "skipped", "reason": "online_server"}
+    if not should_trigger_sync(force_override_cooldown=True):
+        print("[SYNC] Manual sync skipped - not eligible (online server or not offline mode)")
+        return {"status": "skipped", "reason": "not_eligible"}
     
     try:
         from app import db, app
