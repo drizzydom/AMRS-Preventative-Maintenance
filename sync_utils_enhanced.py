@@ -582,8 +582,9 @@ def enhanced_upload_pending_sync_queue():
     Enhanced version of upload_pending_sync_queue with better error handling
     and timezone awareness.
     """
+    from app import db, app
+    
     try:
-        from app import db, app
         with app.app_context():
             # Get pending items with timezone-aware queries
             pending_items = db.session.execute(sa_text("""
@@ -630,7 +631,7 @@ def enhanced_upload_pending_sync_queue():
                     print(f"[SYNC] Error parsing payload for sync_queue id {item[0]}: {e}")
                     continue
             
-            # Upload to server
+            # Upload to server (this doesn't need app context)
             success = upload_to_server(upload_payload)
             
             if success:
