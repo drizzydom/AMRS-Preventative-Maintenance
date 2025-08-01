@@ -27,12 +27,12 @@ except Exception as e:
 logger.info(f"FLASK_APP: {os.environ.get('FLASK_APP', 'Not set')}")
 logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
 
-# Run auto migration
-from auto_migrate import run_auto_migration
-run_auto_migration()
-
 # Import the Flask app and SocketIO from render_app.py (which imports from app.py)
 from render_app import app, socketio
+
+# Run auto migration AFTER importing the app
+from auto_migrate import run_auto_migration
+run_auto_migration()
 
 # Ensure all tables are created before serving requests
 from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine, Part, MaintenanceRecord
