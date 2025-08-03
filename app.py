@@ -1,7 +1,196 @@
 
 
+
+# --- ALWAYS use secure SQLite database for offline mode ---
 import os
-import threading
+from pathlib import Path
+import sqlite3
+
+def get_secure_database_path():
+    import platform
+    os_name = platform.system().lower()
+    if os_name == "darwin":
+        base_path = Path.home() / "Library" / "Application Support" / "AMRS_PM"
+    elif os_name == "windows":
+        base_path = Path(os.environ.get('APPDATA', '~')).expanduser() / "AMRS_PM"
+    else:
+        base_path = Path.home() / ".local" / "share" / "AMRS_PM"
+    base_path.mkdir(parents=True, exist_ok=True)
+    return str(base_path / "maintenance_secure.db")
+
+SECURE_DB_PATH = get_secure_database_path()
+os.environ['DATABASE_URL'] = f"sqlite:///{SECURE_DB_PATH}"
+print(f"[BOOT] Using secure database: {SECURE_DB_PATH}")
+
+# --- Ensure schema is created before any data import or hash fix ---
+import sqlite3
+try:
+    conn = sqlite3.connect(SECURE_DB_PATH)
+    cursor = conn.cursor()
+    # Comprehensive schema creation for all tables/columns used in the app
+    schema_sql = [
+        '''CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            permissions TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            full_name TEXT,
+            active BOOLEAN DEFAULT 1,
+            is_admin BOOLEAN DEFAULT 0,
+            role_id INTEGER,
+            last_login TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            reset_token TEXT,
+            reset_token_expiration TIMESTAMP,
+            username_hash TEXT,
+            email_hash TEXT,
+            remember_token TEXT,
+            remember_token_expiration TIMESTAMP,
+            remember_enabled BOOLEAN DEFAULT 0,
+            notification_preferences TEXT,
+            FOREIGN KEY (role_id) REFERENCES roles(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS sites (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            location TEXT,
+            contact_email TEXT,
+            enable_notifications BOOLEAN DEFAULT 1,
+            notification_threshold INTEGER DEFAULT 30,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS machines (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            model TEXT,
+            serial_number TEXT,
+            machine_number TEXT,
+            site_id INTEGER,
+            decommissioned BOOLEAN DEFAULT 0,
+            decommissioned_date TIMESTAMP,
+            decommissioned_by TEXT,
+            decommissioned_reason TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS parts (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            machine_id INTEGER,
+            maintenance_frequency INTEGER,
+            maintenance_unit TEXT,
+            last_maintenance TIMESTAMP,
+            next_maintenance TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (machine_id) REFERENCES machines(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS audit_tasks (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            site_id INTEGER,
+            created_by INTEGER,
+            interval TEXT,
+            custom_interval_days INTEGER,
+            color TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id),
+            FOREIGN KEY (created_by) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS machine_audit_task (
+            machine_id INTEGER NOT NULL,
+            audit_task_id INTEGER NOT NULL,
+            PRIMARY KEY (machine_id, audit_task_id),
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS maintenance_records (
+            id INTEGER PRIMARY KEY,
+            machine_id INTEGER,
+            part_id INTEGER,
+            user_id INTEGER,
+            maintenance_type TEXT,
+            description TEXT,
+            date TIMESTAMP,
+            performed_by TEXT,
+            status TEXT,
+            notes TEXT,
+            comments TEXT,
+            client_id INTEGER,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (part_id) REFERENCES parts(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS audit_task_completions (
+            id INTEGER PRIMARY KEY,
+            audit_task_id INTEGER,
+            machine_id INTEGER,
+            date TIMESTAMP,
+            completed BOOLEAN DEFAULT 0,
+            completed_by INTEGER,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id),
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (completed_by) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS maintenance_files (
+            id INTEGER PRIMARY KEY,
+            maintenance_record_id INTEGER,
+            filename TEXT,
+            filedata BLOB,
+            filepath TEXT,
+            filetype TEXT,
+            filesize INTEGER,
+            thumbnail_path TEXT,
+            uploaded_by INTEGER,
+            uploaded_at TIMESTAMP,
+            FOREIGN KEY (maintenance_record_id) REFERENCES maintenance_records(id),
+            FOREIGN KEY (uploaded_by) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS sync_queue (
+            id INTEGER PRIMARY KEY,
+            table_name TEXT,
+            record_id INTEGER,
+            operation TEXT,
+            payload TEXT,
+            status TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            synced_at TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS app_settings (
+            id INTEGER PRIMARY KEY,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT,
+            updated_at TIMESTAMP
+        )'''
+    ]
+    for sql in schema_sql:
+        cursor.execute(sql)
+    conn.commit()
+    conn.close()
+    print(f"[SCHEMA] Ensured all tables and columns exist in {SECURE_DB_PATH}")
+except Exception as e:
+    print(f"[SCHEMA] Error ensuring schema: {e}")
+
 from datetime import datetime, timedelta
 from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
@@ -179,6 +368,34 @@ def upload_offline_security_events():
     return jsonify({'status': 'ok', 'inserted': inserted}), 200
 
 
+# --- Utility: Fix user hashes in the secure database ---
+import hashlib
+def fix_user_hashes(db_path):
+    import sqlite3
+    def hash_value(value):
+        if not value:
+            return None
+        value = value.strip().lower()
+        return hashlib.sha256(value.encode('utf-8')).hexdigest()
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, username, email FROM users")
+        users = cursor.fetchall()
+        for user_id, username, email in users:
+            username_hash = hash_value(username)
+            email_hash = hash_value(email)
+            cursor.execute(
+                "UPDATE users SET username_hash = ?, email_hash = ? WHERE id = ?",
+                (username_hash, email_hash, user_id)
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"[HASH FIX] Error updating user hashes: {e}")
+    finally:
+        conn.close()
+    print(f"[HASH FIX] Updated hashes for {len(users)} users in {db_path}")
+
 # --- Load environment variables FIRST (before any other imports) ---
 import os
 import sys
@@ -203,6 +420,10 @@ def load_bootstrap_environment():
 
 # Load bootstrap environment before any models are imported
 load_bootstrap_environment()
+try:
+    fix_user_hashes(SECURE_DB_PATH)
+except Exception as e:
+    print(f"[HASH FIX] Error running on startup: {e}")
 
 # Import models AFTER loading bootstrap environment
 from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value, SecurityEvent, AppSetting
@@ -520,8 +741,8 @@ def import_sync_data_to_database(sync_data, db_path):
             print(f"[SYNC] Imported {len(users)} users")
             tables_imported += 1
         
-        # Import other tables if present
-        for table_name in ['sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks']:
+        # Import other tables if present, now including audit_task_completions
+        for table_name in ['sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions']:
             if table_name in sync_data:
                 records = sync_data[table_name]
                 if table_name == 'sites':
@@ -576,6 +797,16 @@ def import_sync_data_to_database(sync_data, db_path):
                             record.get('maintenance_type'), record.get('description'), record.get('date'),
                             record.get('performed_by'), record.get('status'), record.get('notes'),
                             record.get('created_at'), record.get('updated_at')
+                        ))
+                elif table_name == 'audit_task_completions':
+                    for completion in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO audit_task_completions (id, audit_task_id, machine_id, date, completed, completed_by, completed_at, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            completion['id'], completion['audit_task_id'], completion.get('machine_id'),
+                            completion.get('date'), completion.get('completed', False), completion.get('completed_by'),
+                            completion.get('completed_at'), completion.get('created_at'), completion.get('updated_at')
                         ))
                 print(f"[SYNC] Imported {len(records)} {table_name}")
                 tables_imported += 1
@@ -877,14 +1108,43 @@ def create_basic_schema(cursor):
             performed_by TEXT,
             status TEXT,
             notes TEXT,
+            comments TEXT,
+            client_id INTEGER,
             created_at TIMESTAMP,
             updated_at TIMESTAMP,
             FOREIGN KEY (machine_id) REFERENCES machines(id),
             FOREIGN KEY (part_id) REFERENCES parts(id),
             FOREIGN KEY (user_id) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS audit_task_completions (
+            id INTEGER PRIMARY KEY,
+            audit_task_id INTEGER,
+            machine_id INTEGER,
+            date TIMESTAMP,
+            completed BOOLEAN DEFAULT 0,
+            completed_by INTEGER,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id),
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (completed_by) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS maintenance_files (
+            id INTEGER PRIMARY KEY,
+            maintenance_record_id INTEGER,
+            filename TEXT,
+            filedata BLOB,
+            filepath TEXT,
+            filetype TEXT,
+            filesize INTEGER,
+            thumbnail_path TEXT,
+            uploaded_by INTEGER,
+            uploaded_at TIMESTAMP,
+            FOREIGN KEY (maintenance_record_id) REFERENCES maintenance_records(id),
+            FOREIGN KEY (uploaded_by) REFERENCES users(id)
         )'''
     ]
-    
     for sql in schema_sql:
         cursor.execute(sql)
 
@@ -1230,7 +1490,25 @@ def ensure_sync_columns_sqlite():
                         # SQLite does not support IF NOT EXISTS for ADD COLUMN
                         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
                         conn.commit()
-    
+    # Switch SQLAlchemy to use the secure database after bootstrap
+    print(f"[CONFIG] Updating SQLAlchemy database URI to: {secure_db_path}")
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{secure_db_path}"
+    # Re-initialize the db object with the new URI
+    try:
+        db.engine.dispose()
+        db.session.remove()
+        db.init_app(app)
+        print(f"[CONFIG] SQLAlchemy re-initialized with new database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        # Run auto-migration/schema validation on the secure database
+        with app.app_context():
+            print("[CONFIG] Running auto-migration/schema validation on secure database...")
+            try:
+                run_auto_migration()
+                print("[CONFIG] Auto-migration/schema validation completed for secure database.")
+            except Exception as migrate_exc:
+                print(f"[CONFIG] Auto-migration/schema validation failed: {migrate_exc}")
+    except Exception as e:
+        print(f"[CONFIG] Error re-initializing SQLAlchemy: {e}")
     # Ensure sync_queue table has synced_at column
     if inspector.has_table('sync_queue'):
         existing_columns = {col['name'] for col in inspector.get_columns('sync_queue')}
@@ -5128,29 +5406,29 @@ def login():
         remember = request.form.get('remember') == 'on'
         app.logger.debug(f"Login attempt: username={username}, remember={remember}")
         
-        # Simplified approach: use direct database connection to avoid SQLAlchemy context issues
+        # Debug: print login attempt
+        print(f"[LOGIN DEBUG] Login attempt for username: {username}")
+        user = None
         try:
             app.logger.debug(f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
-            
             # Try the normal SQLAlchemy query first
             user = User.query.filter_by(username_hash=hash_value(username)).first()
-                
+            print(f"[LOGIN DEBUG] User found by username_hash: {user}")
         except Exception as e:
             app.logger.error(f"SQLAlchemy error during login: {e}")
             # Fallback to direct database query
             try:
                 from sqlalchemy import create_engine, text
                 from werkzeug.security import check_password_hash as check_pw_hash
-                
                 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
                 with engine.connect() as conn:
                     result = conn.execute(
                         text("SELECT id, username_hash, password_hash FROM users WHERE username_hash = :hash LIMIT 1"),
                         {"hash": hash_value(username)}
                     ).first()
-                    
+                    print(f"[LOGIN DEBUG] Raw DB result: {result}")
                     if result and check_pw_hash(result[2], password):  # Check password directly
-                        # Login successful - create a minimal user object for login_user
+                        print(f"[LOGIN DEBUG] Password check passed for user_id {result[0]}")
                         user = User.query.get(result[0])  # Get full user object by ID
                         if not user:
                             # If that fails too, create a temporary user object
@@ -5164,14 +5442,23 @@ def login():
                                     return str(self.id)
                             user = TempUser(result[0])
                     else:
+                        print(f"[LOGIN DEBUG] Password check failed or user not found in fallback query.")
                         user = None
-                        
             except Exception as e2:
                 app.logger.error(f"Direct database error during login: {e2}")
+                print(f"[LOGIN DEBUG] Direct DB error: {e2}")
                 flash('Login system temporarily unavailable. Please try again.', 'danger')
                 return render_template('login.html')
             
         from security_event_logger import log_security_event
+        # Debug: print password hash and check result
+        if user:
+            try:
+                print(f"[LOGIN DEBUG] Password hash in DB: {getattr(user, 'password_hash', None)}")
+                pw_check = check_password_hash(user.password_hash, password)
+                print(f"[LOGIN DEBUG] Password check result: {pw_check}")
+            except Exception as e:
+                print(f"[LOGIN DEBUG] Error during password check: {e}")
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
             user.set_remember_preference(remember)
@@ -8273,7 +8560,11 @@ else:
 
 # Initialize database with Flask app after configuration is complete
 db.init_app(app)
-print(f"[AMRS] Database initialized successfully - URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
+try:
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', None)
+    print(f"[AMRS] Database initialized successfully - URI: {db_uri}")
+except Exception as db_uri_exc:
+    print(f"[AMRS] Could not retrieve SQLALCHEMY_DATABASE_URI: {db_uri_exc}")
 
 # Perform all database setup within app context immediately on import
 with app.app_context():
@@ -8318,6 +8609,64 @@ with app.app_context():
         # Create tables if needed
         db.create_all()
         print("[AMRS] Database tables ensured")
+        # --- Generalized auto-migration: ensure all required columns exist in all critical tables ---
+        try:
+            import sqlite3
+            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+            if db_uri.startswith('sqlite:///'):
+                db_path = db_uri.replace('sqlite:///', '')
+                conn = sqlite3.connect(db_path)
+                c = conn.cursor()
+                table_columns = {
+                    'security_events': {
+                        'id': 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                        'timestamp': 'DATETIME',
+                        'event_type': 'VARCHAR(64)',
+                        'user_id': 'INTEGER',
+                        'username': 'VARCHAR(255)',
+                        'ip_address': 'VARCHAR(64)',
+                        'location': 'VARCHAR(255)',
+                        'details': 'TEXT',
+                        'is_critical': 'BOOLEAN'
+                    },
+                    'parts': {
+                        'id': 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                        'name': 'VARCHAR(255)',
+                        'description': 'TEXT',
+                        'machine_id': 'INTEGER',
+                        'maintenance_frequency': 'INTEGER',
+                        'maintenance_unit': 'VARCHAR(32)',
+                        'maintenance_days': 'INTEGER',
+                        'last_maintenance': 'DATETIME',
+                        'next_maintenance': 'DATETIME',
+                        'created_at': 'DATETIME',
+                        'updated_at': 'DATETIME'
+                    },
+                    'sync_queue': {
+                        'id': 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                        'table_name': 'VARCHAR(64)',
+                        'record_id': 'INTEGER',
+                        'operation': 'VARCHAR(32)',
+                        'payload': 'TEXT',
+                        'created_at': 'DATETIME',
+                        'status': 'VARCHAR(32)'
+                    },
+                    # Add more tables and columns as needed
+                }
+                for table, required_columns in table_columns.items():
+                    try:
+                        c.execute(f"PRAGMA table_info({table});")
+                        columns = [row[1] for row in c.fetchall()]
+                        for col, coltype in required_columns.items():
+                            if col not in columns:
+                                print(f"[AMRS] Adding missing column {col} to {table} table...")
+                                c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype};")
+                                conn.commit()
+                    except Exception as e:
+                        print(f"[AMRS] Could not check/add columns in {table}: {e}")
+                conn.close()
+        except Exception as e:
+            print(f"[AMRS] Generalized auto-migration error: {e}")
         
         # Ensure sync_queue and app_settings tables exist
         try:
@@ -8491,6 +8840,8 @@ def initialize_bootstrap_only():
 
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')
+    print(f"[AMRS] Launching app with database URI: {db_uri}")
     # Initialize bootstrap operations - database is already initialized above
     offline_mode = initialize_bootstrap_only()
     
