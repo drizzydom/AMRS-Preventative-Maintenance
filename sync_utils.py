@@ -39,6 +39,16 @@ def import_json_to_sqlite(json_path, db_path):
     
     conn = sqlite3.connect(abs_db_path)
     c = conn.cursor()
+    # --- Ensure security_events.user_id column exists ---
+    try:
+        c.execute("PRAGMA table_info(security_events);")
+        columns = [row[1] for row in c.fetchall()]
+        if 'user_id' not in columns:
+            print("[sync_utils] Adding missing user_id column to security_events table...")
+            c.execute("ALTER TABLE security_events ADD COLUMN user_id INTEGER;")
+            conn.commit()
+    except Exception as e:
+        print(f"[sync_utils] Could not check/add user_id column in security_events: {e}")
     # Import users
     for u in data.get('users', []):
         try:
