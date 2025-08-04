@@ -1,7 +1,48 @@
+
 from flask_sqlalchemy import SQLAlchemy
+db = SQLAlchemy()
+from datetime import datetime
+
+class OfflineSecurityEvent(db.Model):
+    __tablename__ = 'offline_security_events'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    event_type = db.Column(db.String(64), nullable=False)
+    user_id = db.Column(db.Integer, nullable=True)
+    username = db.Column(db.String(255), nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    location = db.Column(db.String(255), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    is_critical = db.Column(db.Boolean, default=False)
+    synced = db.Column(db.Boolean, default=False, index=True)
+class AppSetting(db.Model):
+    __tablename__ = 'app_settings'
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.String(255), nullable=True)
+
+    @staticmethod
+    def get(key, default=None):
+        setting = AppSetting.query.filter_by(key=key).first()
+        return setting.value if setting else default
+
+    @staticmethod
+
+    def set(key, value):
+        setting = AppSetting.query.filter_by(key=key).first()
+        if setting:
+            setting.value = value
+        else:
+            setting = AppSetting(key=key, value=value)
+            db.session.add(setting)
+        db.session.commit()
+
+# --- Security Event Logging Model ---
+# (Moved below User class)
+
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from datetime import datetime, timedelta
+from datetime import timedelta
 import uuid
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 from sqlalchemy.types import JSON as SA_JSON
@@ -13,18 +54,47 @@ import hashlib
 
 # --- Application-level encryption utilities ---
 # The encryption key MUST be set as an environment variable in production
-FERNET_KEY = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
-if not FERNET_KEY:
-    # Instead of generating a key, show an error message recommending proper setup
-    print("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
-    print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
-    print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
-    print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
-    # For development/testing, use a temporary key
-    print("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
-    FERNET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode()
+def get_fernet_key():
+    """Get the Fernet encryption key, checking environment multiple times if needed."""
+    key = os.environ.get('USER_FIELD_ENCRYPTION_KEY')
+    if not key:
+        # Try to load from keyring if not in environment
+        try:
+            import keyring
+            import platform
+            
+            # Get the appropriate service name
+            os_name = platform.system().lower()
+            if os_name == "windows":
+                service = "amrs_pm_windows"
+            elif os_name == "darwin":  # macOS
+                service = "amrs_pm_macos"
+            elif os_name == "linux":
+                service = "amrs_pm_linux"
+            else:
+                service = "amrs_pm_unknown"
+            
+            key = keyring.get_password(service, 'USER_FIELD_ENCRYPTION_KEY')
+            if key:
+                os.environ['USER_FIELD_ENCRYPTION_KEY'] = key
+                print("[ENCRYPTION] ✅ Loaded encryption key from keyring")
+                return key
+        except Exception:
+            pass  # If keyring fails, continue with fallback
+        
+        # Instead of generating a key, show an error message recommending proper setup
+        print("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
+        print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
+        print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
+        print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
+        # For development/testing, use a temporary key
+        print("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
+        key = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    
+    return key
 
 # Initialize Fernet cipher with the key
+FERNET_KEY = get_fernet_key()
 fernet = Fernet(FERNET_KEY)
 
 def encrypt_value(value):
@@ -50,8 +120,6 @@ def hash_value(value):
         return None
     return hashlib.sha256(value.lower().encode()).hexdigest()
 
-db = SQLAlchemy()
-
 # Define the association table for many-to-many relationship between User and Site
 user_site = db.Table(
     'user_site',
@@ -70,9 +138,9 @@ class User(UserMixin, db.Model):
     """User model for authentication and authorization"""
     __tablename__ = 'users'  # Explicit table name for PostgreSQL conventions
     id = db.Column(db.Integer, primary_key=True)
-    _username = db.Column('username', db.Text, unique=True, nullable=False, index=True)
+    _username = db.Column('username', db.String(1024), unique=True, nullable=False, index=True)
     username_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    _email = db.Column('email', db.Text, unique=True, nullable=False)
+    _email = db.Column('email', db.String(1024), unique=True, nullable=False)
     email_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
@@ -92,14 +160,11 @@ class User(UserMixin, db.Model):
         nullable=True,
         default=None
     )
-    
     # Define the relationship with Role
     role = db.relationship('Role', backref='users', lazy='joined')
-    
     # Define the many-to-many relationship with Site
     sites = db.relationship('Site', secondary=user_site, lazy='subquery',
                           backref=db.backref('users', lazy=True))
-    
     # Define the one-to-many relationship with MaintenanceRecord
     maintenance_records = db.relationship('MaintenanceRecord', backref='user', lazy=True)
 
@@ -133,28 +198,26 @@ class User(UserMixin, db.Model):
         except:
             pass
         return f"User #{self.id}"
-    
+
     def set_password(self, password):
         """Set the password hash"""
         self.password_hash = generate_password_hash(password)
-    
+
     def check_password(self, password):
         """Check the password against the stored hash"""
         return check_password_hash(self.password_hash, password)
-    
+
     def has_permission(self, permission):
         """Check if user has a specific permission"""
         # Admin users have all permissions
         if self.is_admin:
             return True
-        
         # Users with no role have no permissions
         if not self.role:
             return False
-        
         # Check if the user's role has the permission
         return self.role.has_permission(permission)
-    
+
     def get_notification_preferences(self):
         default = {
             'enable_email': True,
@@ -173,7 +236,7 @@ class User(UserMixin, db.Model):
     def set_notification_preferences(self, prefs):
         self.notification_preferences = prefs
         db.session.commit()
-    
+
     def generate_remember_token(self):
         """Generate a new remember token for persistent authentication"""
         import secrets
@@ -182,44 +245,58 @@ class User(UserMixin, db.Model):
         # Set token expiration to 30 days from now
         self.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
         return token
-    
+
     def verify_remember_token(self, token):
         """Verify if the provided remember token is valid and not expired"""
         if not self.remember_token or not self.remember_token_expiration:
             return False
-        
         # Check if token matches and hasn't expired
         if self.remember_token == token and datetime.utcnow() < self.remember_token_expiration:
             return True
-        
         return False
-    
+
     def clear_remember_token(self):
         """Clear the remember token (for logout or security purposes)"""
         self.remember_token = None
         self.remember_token_expiration = None
-    
+
     def set_remember_preference(self, enabled):
         """Set user's preference for remember me functionality"""
         self.remember_enabled = enabled
         if not enabled:
             # If user disables remember me, clear any existing tokens
             self.clear_remember_token()
-    
+
     @classmethod
     def find_by_remember_token(cls, token):
         """Find a user by their remember token if it's valid"""
         if not token:
             return None
-            
         user = cls.query.filter_by(remember_token=token).first()
         if user and user.verify_remember_token(token):
             return user
-        
         return None
-    
+
     def __repr__(self):
         return f'<User {self.username}>'
+
+# --- Security Event Logging Model ---
+class SecurityEvent(db.Model):
+    __tablename__ = 'security_events'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    event_type = db.Column(db.String(64), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    username = db.Column(db.String(255), nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    location = db.Column(db.String(255), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    is_critical = db.Column(db.Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('security_events', lazy=True))
+
+    def __repr__(self):
+        return f'<SecurityEvent {self.event_type} at {self.timestamp}>'
 
 class Role(db.Model):
     """Role model for user permissions"""
@@ -415,6 +492,25 @@ class AuditTask(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     machines = db.relationship('Machine', secondary=machine_audit_task, backref='audit_tasks')
     completions = db.relationship('AuditTaskCompletion', backref='audit_task', lazy=True, cascade="all, delete-orphan")
+
+    def to_dict(self, include_machines=True):
+        data = {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'site_id': self.site_id,
+            'created_by': self.created_by,
+            'interval': self.interval,
+            'custom_interval_days': self.custom_interval_days,
+            'color': self.color,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'machine_ids': [m.id for m in self.machines] if hasattr(self, 'machines') else [],
+        }
+        if include_machines:
+            # Include full machine objects for template rendering
+            data['machines'] = [m for m in self.machines] if hasattr(self, 'machines') else []
+        return data
 
 class AuditTaskCompletion(db.Model):
     __tablename__ = 'audit_task_completions'

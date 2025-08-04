@@ -56,16 +56,28 @@ def migrate_sqlite_schema(db_path):
                 cursor.execute("ALTER TABLE machines ADD COLUMN serial_number VARCHAR(50)")
                 migrations_applied += 1
         
-        # User table migrations (ensure hash fields can be NULL)
+        # User table migrations (ensure hash fields can be NULL and columns are large enough)
         if 'users' in tables_info:
             user_columns = tables_info['users']
-            
             # Add missing full_name column
             if 'full_name' not in user_columns:
                 logger.info("Adding full_name column to users table")
                 cursor.execute("ALTER TABLE users ADD COLUMN full_name VARCHAR(100)")
                 migrations_applied += 1
-            
+            # Ensure username column is large enough
+            if 'username' in user_columns:
+                col_info = user_columns['username']
+                if col_info[2].upper() != 'VARCHAR(1024)' and col_info[2].upper() != 'TEXT':
+                    logger.info("Altering username column to VARCHAR(1024)")
+                    # SQLite doesn't support ALTER COLUMN, so recreate table is needed in production
+                    # For now, log a warning
+                    logger.warning("Manual migration required: alter users.username to VARCHAR(1024)")
+            # Ensure email column is large enough
+            if 'email' in user_columns:
+                col_info = user_columns['email']
+                if col_info[2].upper() != 'VARCHAR(1024)' and col_info[2].upper() != 'TEXT':
+                    logger.info("Altering email column to VARCHAR(1024)")
+                    logger.warning("Manual migration required: alter users.email to VARCHAR(1024)")
             # Check if username_hash has NOT NULL constraint
             if 'username_hash' in user_columns:
                 col_info = user_columns['username_hash']
@@ -73,7 +85,6 @@ def migrate_sqlite_schema(db_path):
                     logger.info("Removing NOT NULL constraint from username_hash column")
                     # SQLite doesn't support ALTER COLUMN, so we need to recreate the table
                     # This was already handled in the previous manual fix
-            
             # Check if email_hash has NOT NULL constraint  
             if 'email_hash' in user_columns:
                 col_info = user_columns['email_hash']

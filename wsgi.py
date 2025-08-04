@@ -16,7 +16,7 @@ try:
     if not os.path.exists(data_dir):
         logger.warning(f"Data directory {data_dir} does not exist!")
     else:
-        for subdir in ['db', 'uploads']:  # Removed 'backups'
+        for subdir in ['db', 'uploads']:
             full_path = os.path.join(data_dir, subdir)
             if not os.path.exists(full_path):
                 os.makedirs(full_path, exist_ok=True)
@@ -27,17 +27,18 @@ except Exception as e:
 logger.info(f"FLASK_APP: {os.environ.get('FLASK_APP', 'Not set')}")
 logger.info(f"DATA_DIR: {os.environ.get('DATA_DIR', '/var/data')}")
 
-from auto_migrate import run_auto_migration
-run_auto_migration()
+# Import the Flask app and SocketIO from render_app.py (which imports from app.py)
+# The app.py file already handles all database initialization and migration
+from render_app import app, socketio
 
-# Import the Flask app from render_app.py (which imports from app.py)
-from render_app import app
+# The app is now ready to serve requests
+print("WSGI: Application ready to serve requests")
 
-# Ensure all tables are created before serving requests
-from models import db, AuditTask, AuditTaskCompletion, User, Role, Site, Machine, Part, MaintenanceRecord
-with app.app_context():
-    db.create_all()
+# For gunicorn usage - expose the Flask app
+application = app
 
 if __name__ == "__main__":
+    # Direct run for testing
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    logger.info(f"[AMRS] Starting SocketIO server on 0.0.0.0:{port}")
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)

@@ -7,13 +7,12 @@ import os
 import sys
 print("Initializing render_app.py for Render deployment...")
 
-from auto_migrate import run_auto_migration
-run_auto_migration()
-
-# Import the app from the main application
+# Import the app and socketio from the main application
+# The app.py file handles all database initialization and migration
 try:
-    from app import app
-    print("Successfully imported app from app.py")
+    from app import app, socketio
+    print("Successfully imported app and socketio from app.py")
+    print("Database initialization and migration completed by app.py")
 except ImportError as e:
     print(f"Error importing from app.py: {e}")
     print(f"Python path: {sys.path}")

@@ -8,14 +8,14 @@ import jwt
 import datetime
 from flask_login import current_user, login_required
 import os
-from app import app, db
-from app import User, Site, Machine, Part, MaintenanceLog
+from timezone_utils import get_timezone_aware_now, convert_utc_to_eastern
+
 
 # Create blueprint for API routes
 api_bp = Blueprint('api', __name__)
 
 # Secret key for JWT tokens
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', app.config['SECRET_KEY'])
+
 
 # Token expiration time (in minutes)
 TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
@@ -48,6 +48,10 @@ def token_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
+from app import db
+from app import User, Site, Machine, Part, MaintenanceRecord
+from app import Role
+from app import AuditTask, AuditTaskCompletion
 @api_bp.route('/login', methods=['POST'])
 def login():
     """API endpoint for user authentication"""
@@ -67,7 +71,7 @@ def login():
     # Generate JWT token
     token = jwt.encode({
         'user_id': user.id,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+        'exp': get_timezone_aware_now() + datetime.timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     }, JWT_SECRET_KEY)
     
     # Return token and user info
@@ -86,7 +90,7 @@ def login():
 @token_required
 def get_dashboard(current_user):
     """API endpoint to get dashboard data"""
-    now = datetime.datetime.utcnow()
+    now = get_timezone_aware_now()  # Use timezone-aware datetime
     
     # Get all parts
     parts = Part.query.all()
@@ -336,7 +340,7 @@ def record_maintenance(current_user):
         return jsonify({'error': 'Access denied'}), 403
     
     # Update part maintenance information
-    maintenance_date = datetime.datetime.utcnow()
+    maintenance_date = get_timezone_aware_now()  # Use timezone-aware datetime
     performed_by = current_user.display_name
     
     # Update part
@@ -345,8 +349,8 @@ def record_maintenance(current_user):
     part.update_next_maintenance()
     db.session.commit()
     
-    # Create maintenance log entry
-    log = MaintenanceLog(
+    # Create maintenance record entry
+    log = MaintenanceRecord(
         machine_id=machine.id,
         part_id=part.id,
         performed_by=performed_by,
@@ -363,16 +367,59 @@ def record_maintenance(current_user):
         'next_maintenance': part.next_maintenance.isoformat()
     })
 
+# Sync endpoint moved to app.py to avoid duplication
+# The main sync endpoint with both GET and POST support is in app.py
+
 # Add a health check endpoint
 @api_bp.route('/health', methods=['GET'])
 def health_check():
     """Simple health check endpoint for the Electron app to verify server status"""
     return jsonify({
         'status': 'ok',
-        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'timestamp': get_timezone_aware_now().isoformat(),
         'version': '1.0.0'
     })
 
+# Diagnostic endpoint to verify sync data structure
+@api_bp.route('/sync/debug', methods=['GET'])
+def sync_debug():
+    """Debug endpoint to check what sync data looks like"""
+    from sqlalchemy import inspect, text
+    
+    debug_info = {
+        'timestamp': get_timezone_aware_now().isoformat(),
+        'has_machine_audit_task_table': False,
+        'machine_audit_task_count': 0,
+        'raw_query_test': None,
+        'fix_version': 'v2.0_debug'  # This will tell us if the new code is deployed
+    }
+    
+    try:
+        inspector = inspect(db.engine)
+        debug_info['has_machine_audit_task_table'] = inspector.has_table('machine_audit_task')
+        
+        if debug_info['has_machine_audit_task_table']:
+            # Test the raw query
+            result = db.session.execute(text('SELECT audit_task_id, machine_id FROM machine_audit_task LIMIT 3'))
+            rows = result.fetchall()
+            debug_info['machine_audit_task_count'] = len(rows)
+            debug_info['sample_data'] = [{'audit_task_id': row[0], 'machine_id': row[1]} for row in rows]
+            debug_info['raw_query_test'] = 'success'
+        else:
+            debug_info['raw_query_test'] = 'table_not_found'
+            
+    except Exception as e:
+        debug_info['raw_query_test'] = f'error: {str(e)}'
+    
+    return jsonify(debug_info)
+
 # Register blueprint with app
-def register_api():
-    app.register_blueprint(api_bp, url_prefix='/api')
+def register_api(flask_app=None):
+    """Register the API blueprint with the Flask app"""
+    # Import app/db/models here to avoid circular import
+    from app import app as default_app, db, User, Site, Machine, Part, MaintenanceRecord, Role, AuditTask, AuditTaskCompletion
+    global JWT_SECRET_KEY
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', default_app.config['SECRET_KEY'])
+    if flask_app is None:
+        flask_app = default_app
+    flask_app.register_blueprint(api_bp, url_prefix='/api')

@@ -3,9 +3,11 @@ services:
     name: amrs-maintenance
     env: python
     buildCommand: pip install -r requirements.txt && python3 ensure_decommission_fields.py
-    startCommand: gunicorn app:app
+    startCommand: python wsgi.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
       - key: FLASK_APP
         value: app.py
+      - key: RENDER
+        value: "true"

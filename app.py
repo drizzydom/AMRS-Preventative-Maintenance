@@ -1,4 +1,1201 @@
 
+
+import os
+import threading
+from datetime import datetime, timedelta
+from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify
+from flask_login import login_required, current_user
+from flask_wtf.csrf import generate_csrf, validate_csrf
+# Don't import db here - we'll import it after Flask app creation
+from models import SecurityEvent, AppSetting
+from sqlalchemy import or_
+
+# Initialize Flask app at the very top
+app = Flask(__name__, instance_relative_config=True)
+
+# Import the database instance but don't initialize it yet
+from models import db
+# Database will be initialized after configuration is set up
+
+
+# --- Initialize Flask-Mail before using it ---
+from flask_mail import Mail
+mail = Mail(app)
+
+
+# --- Start Security Event Email Batcher on App Startup (inside app context) ---
+@app.before_first_request
+def start_security_event_batcher():
+    try:
+        from security_event_batcher import SecurityEventBatcher
+        admin_email = os.environ.get('ADMIN_EMAIL') or app.config.get('MAIL_DEFAULT_SENDER')
+        if admin_email:
+            batcher = SecurityEventBatcher(mail, admin_email)
+            batcher.start()
+            print('[STARTUP] SecurityEventBatcher started.')
+        else:
+            print('[STARTUP] SecurityEventBatcher not started: No admin email set.')
+    except Exception as e:
+        print(f'[STARTUP] Error starting SecurityEventBatcher: {e}')
+
+
+# --- Security Event Log Retention Policy ---
+import threading
+from datetime import datetime, timedelta
+from models import SecurityEvent, db
+
+def delete_old_security_events():
+    retention_days = int(getattr(current_app.config, 'SECURITY_EVENT_LOG_RETENTION_DAYS', 90))
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    num_deleted = SecurityEvent.query.filter(SecurityEvent.timestamp < cutoff).delete()
+    if num_deleted:
+        db.session.commit()
+        print(f"[SECURITY LOG RETENTION] Deleted {num_deleted} security events older than {retention_days} days.")
+
+def start_security_event_retention_job():
+    def job():
+        while True:
+            try:
+                with current_app.app_context():
+                    delete_old_security_events()
+            except Exception as e:
+                print(f"[SECURITY LOG RETENTION] Error: {e}")
+            time.sleep(24 * 3600)  # Run once per day
+    t = threading.Thread(target=job, daemon=True)
+    t.start()
+
+# Start the retention job after app is initialized
+@app.before_first_request
+def start_retention_job():
+    start_security_event_retention_job()
+
+    # Sync offline security events on app startup
+    try:
+        from security_event_logger import sync_offline_security_events
+        sync_offline_security_events()
+    except Exception as e:
+        print(f"[OFFLINE SECURITY SYNC] Error during startup sync: {e}")
+    
+    # NOTE: Bootstrap trigger moved to initialize_database_and_bootstrap() function
+    # This prevents double execution and ensures proper app context
+        try:
+            print("[APP] Triggering initial database sync after successful bootstrap...")
+            # Import sync_db function for initial data download
+            import subprocess
+            import sys
+            
+            # Check if we have required credentials
+            online_url = os.environ.get('AMRS_ONLINE_URL')
+            admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+            admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+            
+            if online_url and admin_username and admin_password:
+                # Try sync_db.py script for comprehensive data download
+                try:
+                    script_path = os.path.join(BASE_DIR, 'sync_db.py')
+                    if os.path.exists(script_path):
+                        print("[APP] Running sync_db.py for initial data sync...")
+                        result = subprocess.run([
+                            sys.executable, script_path,
+                            '--url', online_url.strip('"\''),
+                            '--username', admin_username,
+                            '--password', admin_password
+                        ], capture_output=True, text=True, timeout=120)
+                        
+                        if result.returncode == 0:
+                            print("[APP] Initial database sync completed successfully")
+                        else:
+                            print(f"[APP] Initial database sync failed: {result.stderr}")
+                    else:
+                        print("[APP] sync_db.py not found, skipping initial sync")
+                        
+                except subprocess.TimeoutExpired:
+                    print("[APP] Initial database sync timed out")
+                except Exception as sync_error:
+                    print(f"[APP] Error during initial database sync: {sync_error}")
+            else:
+                print("[APP] Missing credentials for initial database sync")
+                
+        except Exception as e:
+            print(f"[APP] Error setting up initial sync: {e}")
+    else:
+        print("[APP] Bootstrap was not successful or not attempted - skipping initial sync")
+from flask import request, render_template, redirect, url_for, flash, current_app
+from flask_login import login_required, current_user
+
+
+# --- API endpoint to receive offline security events from clients ---
+from flask import request, jsonify
+from models import SecurityEvent, db
+import datetime
+
+@app.route('/api/security-events/upload-offline', methods=['POST'])
+def upload_offline_security_events():
+    """
+    Receives a batch of offline security events from a client and inserts them into the SecurityEvent table.
+    Requires HTTP Basic Auth with admin credentials.
+    """
+    # Basic Auth
+    auth = request.authorization
+    import os
+    admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+    admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+    if not auth or not admin_username or not admin_password:
+        return jsonify({'error': 'Authentication required'}), 401
+    if auth.username != admin_username or auth.password != admin_password:
+        return jsonify({'error': 'Invalid credentials'}), 403
+
+    events = request.get_json(force=True)
+    if not isinstance(events, list):
+        return jsonify({'error': 'Invalid payload'}), 400
+    inserted = 0
+    for e in events:
+        try:
+            # Prevent duplicate insertions by checking for unique (timestamp, event_type, user_id, details)
+            exists = SecurityEvent.query.filter_by(
+                timestamp=datetime.datetime.fromisoformat(e['timestamp']) if e.get('timestamp') else None,
+                event_type=e.get('event_type'),
+                user_id=e.get('user_id'),
+                details=e.get('details')
+            ).first()
+            if exists:
+                continue
+            event = SecurityEvent(
+                event_type=e.get('event_type'),
+                user_id=e.get('user_id'),
+                username=e.get('username'),
+                ip_address=e.get('ip_address'),
+                location=e.get('location'),
+                details=e.get('details'),
+                is_critical=e.get('is_critical', False),
+                timestamp=datetime.datetime.fromisoformat(e['timestamp']) if e.get('timestamp') else datetime.datetime.utcnow()
+            )
+            db.session.add(event)
+            inserted += 1
+        except Exception as ex:
+            print(f"[SECURITY EVENT UPLOAD] Error processing event: {ex}")
+            continue
+    db.session.commit()
+    return jsonify({'status': 'ok', 'inserted': inserted}), 200
+
+
+# --- Load environment variables FIRST (before any other imports) ---
+import os
+import sys
+import json as _json
+from dotenv import load_dotenv
+
+# Get the directory of this file and load .env immediately
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+dotenv_path = os.path.join(BASE_DIR, '.env')
+load_dotenv(dotenv_path)
+print(f"[APP] Loaded .env from: {dotenv_path}")
+
+# Load bootstrap environment variables from keyring (BEFORE importing models)
+def load_bootstrap_environment():
+    """Load bootstrap environment variables from keyring storage to prevent encryption key errors."""
+    try:
+        from load_bootstrap_env import load_bootstrap_env
+        return load_bootstrap_env()
+    except Exception as e:
+        print(f"[APP] Note: Could not load bootstrap environment: {e}")
+        return False
+
+# Load bootstrap environment before any models are imported
+load_bootstrap_environment()
+
+# Import models AFTER loading bootstrap environment
+from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value, SecurityEvent, AppSetting
+
+# --- Load and bootstrap secrets from keyring or remote if missing ---
+def get_secure_storage_service():
+    """Get the appropriate secure storage service name based on OS."""
+    import platform
+    os_name = platform.system().lower()
+    
+    if os_name == "windows":
+        return "amrs_pm_windows"
+    elif os_name == "darwin":  # macOS
+        return "amrs_pm_macos"
+    elif os_name == "linux":
+        return "amrs_pm_linux"
+    else:
+        return "amrs_pm_unknown"
+
+def test_secure_storage():
+    """Test secure storage functionality and provide platform-specific notes."""
+    import platform
+    os_name = platform.system()
+    
+    print(f"[STORAGE] Testing secure storage on {os_name}...")
+    
+    try:
+        import keyring
+        service = get_secure_storage_service()
+        
+        # Test write/read/delete
+        test_key = "test_bootstrap_key"
+        test_value = "test_bootstrap_value"
+        
+        keyring.set_password(service, test_key, test_value)
+        retrieved = keyring.get_password(service, test_key)
+        
+        if retrieved == test_value:
+            print(f"[STORAGE] ✅ Secure storage working on {os_name}")
+            keyring.delete_password(service, test_key)  # Cleanup
+            
+            # Platform-specific notes
+            if os_name == "Darwin":  # macOS
+                print("[STORAGE] 📝 macOS Note: Using Keychain Access for secure storage")
+                print("[STORAGE] 📝 Windows Deployment: Will use Windows Credential Manager")
+            elif os_name == "Windows":
+                print("[STORAGE] 📝 Windows Note: Using Windows Credential Manager")
+            elif os_name == "Linux":
+                print("[STORAGE] 📝 Linux Note: Using Secret Service API (GNOME Keyring)")
+                
+            return True
+        else:
+            print(f"[STORAGE] ❌ Secure storage test failed: {retrieved} != {test_value}")
+            return False
+            
+    except Exception as e:
+        print(f"[STORAGE] ❌ Secure storage error: {e}")
+        return False
+
+def bootstrap_secrets_from_remote():
+    """
+    Enhanced bootstrap function that downloads secrets and triggers database sync.
+    This is the main entry point for offline applications to get fully configured.
+    """
+    try:
+        import keyring
+        import requests
+        import sqlite3
+        import json
+        from pathlib import Path
+        
+        # Test secure storage first
+        if not test_secure_storage():
+            print("[BOOTSTRAP] Warning: Secure storage test failed, continuing anyway...")
+        
+        KEYRING_SERVICE = get_secure_storage_service()
+        KEYRING_KEYS = [
+            "USER_FIELD_ENCRYPTION_KEY",
+            "RENDER_EXTERNAL_URL", 
+            "SYNC_URL",
+            "SYNC_USERNAME",
+            "AMRS_ONLINE_URL",
+            "AMRS_ADMIN_USERNAME",
+            "AMRS_ADMIN_PASSWORD",
+            "MAIL_SERVER",
+            "MAIL_PORT",
+            "MAIL_USE_TLS",
+            "MAIL_USERNAME",
+            "MAIL_PASSWORD",
+            "MAIL_DEFAULT_SENDER",
+            "SECRET_KEY",
+            "BOOTSTRAP_SECRET_TOKEN",
+        ]
+        
+        loaded_any = False
+        missing_keys = []
+        
+        print(f"[BOOTSTRAP] Starting comprehensive bootstrap process...")
+        print(f"[BOOTSTRAP] Secure storage service: {KEYRING_SERVICE}")
+        
+        # First, try to load all secrets from keyring
+        for key in KEYRING_KEYS:
+            value = keyring.get_password(KEYRING_SERVICE, key)
+            if value:
+                os.environ[key] = value
+                loaded_any = True
+            else:
+                missing_keys.append(key)
+        
+        # Always attempt bootstrap if we have credentials, even if some secrets exist
+        bootstrap_url = os.environ.get("BOOTSTRAP_URL")
+        bootstrap_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
+        
+        bootstrap_attempted = False
+        if bootstrap_url and bootstrap_token:
+            try:
+                print(f"[BOOTSTRAP] Downloading configuration from: {bootstrap_url}")
+                resp = requests.post(
+                    bootstrap_url,
+                    headers={"Authorization": f"Bearer {bootstrap_token}"},
+                    timeout=15
+                )
+                
+                if resp.status_code == 200:
+                    secrets = resp.json()
+                    print(f"[BOOTSTRAP] Retrieved {len(secrets)} secrets from remote")
+                    
+                    # Store ALL secrets from response
+                    stored_count = 0
+                    for k, v in secrets.items():
+                        if k in KEYRING_KEYS and v:
+                            try:
+                                keyring.set_password(KEYRING_SERVICE, k, v)
+                                os.environ[k] = v
+                                stored_count += 1
+                                print(f"[BOOTSTRAP] Stored secret: {k}")
+                            except Exception as store_error:
+                                print(f"[BOOTSTRAP] Failed to store {k}: {store_error}")
+                    
+                    print(f"[BOOTSTRAP] ✅ Configuration downloaded and stored ({stored_count} secrets)")
+                    bootstrap_attempted = True
+                    
+                else:
+                    print(f"[BOOTSTRAP] Configuration download failed: {resp.status_code} {resp.text}")
+                    
+            except Exception as e:
+                print(f"[BOOTSTRAP] Configuration download error: {e}")
+        
+        # Now attempt database sync if we have the necessary credentials
+        sync_success = attempt_database_sync()
+        
+        if bootstrap_attempted or loaded_any:
+            if sync_success:
+                print("[BOOTSTRAP] ✅ Complete bootstrap successful - configuration + database sync completed")
+            else:
+                print("[BOOTSTRAP] ⚠️  Partial bootstrap - configuration downloaded but database sync failed")
+            return True
+        else:
+            print("[BOOTSTRAP] ❌ Bootstrap failed - no configuration available")
+            return False
+            
+    except ImportError as e:
+        print(f"[BOOTSTRAP] Missing required packages: {e}")
+        return False
+    except Exception as e:
+        print(f"[BOOTSTRAP] Bootstrap error: {e}")
+        return False
+
+def attempt_database_sync():
+    """
+    Attempt to download and import database from online server.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        import requests
+        import sqlite3
+        import json
+        from pathlib import Path
+        
+        # Get sync credentials from environment (now loaded from bootstrap)
+        sync_url = os.environ.get('SYNC_URL') or os.environ.get('AMRS_ONLINE_URL')
+        sync_username = os.environ.get('SYNC_USERNAME') or os.environ.get('AMRS_ADMIN_USERNAME')
+        sync_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        
+        if not all([sync_url, sync_username, sync_password]):
+            print("[SYNC] Missing sync credentials - skipping database sync")
+            return False
+        
+        # Clean up URL
+        clean_url = sync_url.rstrip('/')
+        if clean_url.endswith('/api'):
+            clean_url = clean_url[:-4]
+        
+        print(f"[SYNC] Downloading database from: {clean_url}")
+        
+        # Create session and login
+        session = requests.Session()
+        
+        # Try to login
+        login_resp = session.post(f"{clean_url}/login", data={
+            'username': sync_username,
+            'password': sync_password
+        }, timeout=30)
+        
+        if login_resp.status_code != 200:
+            print(f"[SYNC] Login failed: {login_resp.status_code}")
+            return False
+        
+        # Download sync data
+        data_resp = session.get(f"{clean_url}/api/sync/data", timeout=60)
+        if data_resp.status_code != 200:
+            print(f"[SYNC] Data download failed: {data_resp.status_code}")
+            return False
+        
+        sync_data = data_resp.json()
+        print(f"[SYNC] Downloaded data: {list(sync_data.keys())}")
+        
+        # Get secure database path
+        db_path = get_secure_database_path()
+        print(f"[SYNC] Importing to secure database: {db_path}")
+        
+        # Import data into secure database
+        import_success = import_sync_data_to_database(sync_data, db_path)
+        
+        if import_success:
+            # Ensure audit tasks have machine associations for proper UI display
+            ensure_audit_task_machine_associations(db_path)
+            
+            # Update the app to use the secure database
+            update_database_configuration(db_path)
+            print("[SYNC] ✅ Database sync completed successfully")
+            return True
+        else:
+            print("[SYNC] ❌ Database import failed")
+            return False
+            
+    except Exception as e:
+        print(f"[SYNC] Database sync error: {e}")
+        return False
+
+def get_secure_database_path():
+    """Get platform-appropriate secure location for database storage."""
+    import platform
+    from pathlib import Path
+    
+    os_name = platform.system().lower()
+    
+    if os_name == "windows":
+        # Windows: Use %APPDATA%\AMRS_PM\
+        base_path = Path(os.environ.get('APPDATA', '~')).expanduser()
+        secure_dir = base_path / "AMRS_PM"
+    elif os_name == "darwin":  # macOS
+        # macOS: Use ~/Library/Application Support/AMRS_PM/
+        base_path = Path.home() / "Library" / "Application Support"
+        secure_dir = base_path / "AMRS_PM"
+    else:  # Linux and others
+        # Linux: Use ~/.local/share/AMRS_PM/
+        base_path = Path.home() / ".local" / "share"
+        secure_dir = base_path / "AMRS_PM"
+    
+    # Create directory if it doesn't exist
+    secure_dir.mkdir(parents=True, exist_ok=True)
+    
+    db_path = secure_dir / "maintenance_secure.db"
+    print(f"[STORAGE] Secure database location: {db_path}")
+    
+    return str(db_path)
+
+def import_sync_data_to_database(sync_data, db_path):
+    """Import downloaded sync data into the secure database."""
+    try:
+        import sqlite3
+        
+        # Connect to secure database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Create tables if they don't exist (basic schema)
+        create_basic_schema(cursor)
+        
+        # Import data
+        tables_imported = 0
+        
+        # Import roles first (they're referenced by users)
+        if 'roles' in sync_data:
+            roles = sync_data['roles']
+            for role in roles:
+                cursor.execute('''
+                INSERT OR REPLACE INTO roles (id, name, description, permissions, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    role['id'], role['name'], role['description'], 
+                    role['permissions'], role['created_at'], role['updated_at']
+                ))
+            print(f"[SYNC] Imported {len(roles)} roles")
+            tables_imported += 1
+        
+        # Import users
+        if 'users' in sync_data:
+            users = sync_data['users']
+            for user in users:
+                cursor.execute('''
+                INSERT OR REPLACE INTO users 
+                (id, username, email, password_hash, full_name, active, is_admin, role_id, 
+                 created_at, updated_at, username_hash, email_hash, remember_token, 
+                 remember_token_expiration, remember_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    user['id'], user['username'], user['email'], user['password_hash'],
+                    user.get('full_name'), user['active'], user['is_admin'], user['role_id'],
+                    user['created_at'], user['updated_at'], user.get('username_hash'),
+                    user.get('email_hash'), user.get('remember_token'),
+                    user.get('remember_token_expiration'), user.get('remember_enabled', False)
+                ))
+            print(f"[SYNC] Imported {len(users)} users")
+            tables_imported += 1
+        
+        # Import other tables if present
+        for table_name in ['sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks']:
+            if table_name in sync_data:
+                records = sync_data[table_name]
+                if table_name == 'sites':
+                    for site in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO sites (id, name, location, contact_email, enable_notifications, notification_threshold, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            site['id'], site['name'], site.get('location'), site.get('contact_email'),
+                            site.get('enable_notifications', True), site.get('notification_threshold', 30),
+                            site.get('created_at'), site.get('updated_at')
+                        ))
+                elif table_name == 'machines':
+                    for machine in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO machines (id, name, model, serial_number, machine_number, site_id, decommissioned, decommissioned_date, decommissioned_by, decommissioned_reason, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            machine['id'], machine['name'], machine.get('model'), machine.get('serial_number'),
+                            machine.get('machine_number'), machine['site_id'], machine.get('decommissioned', False),
+                            machine.get('decommissioned_date'), machine.get('decommissioned_by'), machine.get('decommissioned_reason'),
+                            machine.get('created_at'), machine.get('updated_at')
+                        ))
+                elif table_name == 'parts':
+                    for part in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO parts (id, name, description, machine_id, maintenance_frequency, maintenance_unit, last_maintenance, next_maintenance, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            part['id'], part['name'], part.get('description'), part['machine_id'],
+                            part.get('maintenance_frequency'), part.get('maintenance_unit'),
+                            part.get('last_maintenance'), part.get('next_maintenance'),
+                            part.get('created_at'), part.get('updated_at')
+                        ))
+                elif table_name == 'audit_tasks':
+                    for task in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO audit_tasks (id, name, description, site_id, created_by, interval, custom_interval_days, color, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            task['id'], task['name'], task.get('description'), task['site_id'],
+                            task.get('created_by'), task.get('interval'), task.get('custom_interval_days'),
+                            task.get('color'), task.get('created_at'), task.get('updated_at')
+                        ))
+                elif table_name == 'maintenance_records':
+                    for record in records:
+                        cursor.execute('''
+                        INSERT OR REPLACE INTO maintenance_records (id, machine_id, part_id, user_id, maintenance_type, description, date, performed_by, status, notes, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            record['id'], record.get('machine_id'), record.get('part_id'), record.get('user_id'),
+                            record.get('maintenance_type'), record.get('description'), record.get('date'),
+                            record.get('performed_by'), record.get('status'), record.get('notes'),
+                            record.get('created_at'), record.get('updated_at')
+                        ))
+                print(f"[SYNC] Imported {len(records)} {table_name}")
+                tables_imported += 1
+        
+        # Import machine_audit_task associations (CRITICAL for proper audit task display)
+        if 'machine_audit_task' in sync_data:
+            associations = sync_data['machine_audit_task']
+            for assoc in associations:
+                cursor.execute('''
+                INSERT OR REPLACE INTO machine_audit_task (machine_id, audit_task_id)
+                VALUES (?, ?)
+                ''', (assoc['machine_id'], assoc['audit_task_id']))
+            print(f"[SYNC] Imported {len(associations)} machine_audit_task associations")
+            tables_imported += 1
+        else:
+            print("[SYNC] ⚠️  No machine_audit_task associations found in sync data - audit tasks may not display properly")
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"[SYNC] Successfully imported {tables_imported} tables to secure database")
+        return True
+        
+    except Exception as e:
+        print(f"[SYNC] Import error: {e}")
+        return False
+
+def ensure_audit_task_machine_associations(db_path):
+    """Ensure that the machine_audit_task table exists but only use server-provided associations.
+    This function does NOT create fallback associations - it only uses data provided by the server."""
+    try:
+        import sqlite3
+        
+        # Connect to secure database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if machine_audit_task table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='machine_audit_task'")
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            # Create the machine_audit_task table structure only
+            cursor.execute('''
+            CREATE TABLE machine_audit_task (
+                machine_id INTEGER NOT NULL,
+                audit_task_id INTEGER NOT NULL,
+                PRIMARY KEY (machine_id, audit_task_id),
+                FOREIGN KEY (machine_id) REFERENCES machines (id),
+                FOREIGN KEY (audit_task_id) REFERENCES audit_tasks (id)
+            )
+            ''')
+            print("[AUDIT] Created machine_audit_task association table")
+            conn.commit()
+        
+        # Check existing associations (only from server sync data)
+        cursor.execute("SELECT COUNT(*) FROM machine_audit_task")
+        existing_associations = cursor.fetchone()[0]
+        
+        if existing_associations > 0:
+            print(f"[AUDIT] ✅ Found {existing_associations} existing audit task-machine associations")
+        else:
+            print("[AUDIT] ⚠️  No audit task-machine associations found from server sync")
+            print("[AUDIT] Audit tasks will only be visible if the server provides explicit associations")
+            print("[AUDIT] Contact your administrator to configure audit task assignments on the server")
+        
+        conn.close()
+        return True
+        
+    except Exception as e:
+        print(f"[AUDIT] Error checking audit task associations: {e}")
+        return False
+
+def create_audit_task_associations(audit_task_id, machine_ids):
+    """Create explicit audit task-machine associations for a specific audit task.
+    This is the controlled way to create associations on the server side.
+    
+    Args:
+        audit_task_id: ID of the audit task
+        machine_ids: List of machine IDs to associate with the audit task
+    
+    Returns:
+        tuple: (success: bool, message: str, associations_created: int)
+    """
+    try:
+        from sqlalchemy import text
+        
+        # Verify audit task exists
+        audit_task = AuditTask.query.get(audit_task_id)
+        if not audit_task:
+            return False, f"Audit task {audit_task_id} not found", 0
+        
+        # Verify machines exist and get their details
+        valid_machines = []
+        for machine_id in machine_ids:
+            machine = Machine.query.get(machine_id)
+            if machine:
+                valid_machines.append(machine)
+            else:
+                print(f"[AUDIT_ASSOC] Warning: Machine {machine_id} not found, skipping")
+        
+        if not valid_machines:
+            return False, "No valid machines found", 0
+        
+        # Ensure machine_audit_task table exists
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        if not inspector.has_table('machine_audit_task'):
+            db.session.execute(text('''
+            CREATE TABLE machine_audit_task (
+                machine_id INTEGER NOT NULL,
+                audit_task_id INTEGER NOT NULL,
+                PRIMARY KEY (machine_id, audit_task_id),
+                FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+                FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id) ON DELETE CASCADE
+            )
+            '''))
+            db.session.commit()
+        
+        # Create associations
+        associations_created = 0
+        for machine in valid_machines:
+            try:
+                db.session.execute(text('''
+                INSERT OR IGNORE INTO machine_audit_task (machine_id, audit_task_id)
+                VALUES (:machine_id, :audit_task_id)
+                '''), {'machine_id': machine.id, 'audit_task_id': audit_task_id})
+                
+                # Check if the association was actually created (not already existing)
+                result = db.session.execute(text('''
+                SELECT COUNT(*) FROM machine_audit_task 
+                WHERE machine_id = :machine_id AND audit_task_id = :audit_task_id
+                '''), {'machine_id': machine.id, 'audit_task_id': audit_task_id}).scalar()
+                
+                if result > 0:
+                    associations_created += 1
+                    print(f"[AUDIT_ASSOC] Associated audit task '{audit_task.name}' with machine '{machine.name}'")
+                    
+            except Exception as e:
+                print(f"[AUDIT_ASSOC] Error associating machine {machine.name}: {e}")
+        
+        db.session.commit()
+        
+        message = f"Created {associations_created} audit task associations for '{audit_task.name}'"
+        if associations_created < len(valid_machines):
+            message += f" ({len(valid_machines) - associations_created} were already associated)"
+            
+        return True, message, associations_created
+        
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Error creating audit task associations: {str(e)}", 0
+
+def remove_audit_task_associations(audit_task_id, machine_ids=None):
+    """Remove audit task-machine associations.
+    
+    Args:
+        audit_task_id: ID of the audit task
+        machine_ids: List of machine IDs to remove associations for. If None, removes all associations for the audit task.
+    
+    Returns:
+        tuple: (success: bool, message: str, associations_removed: int)
+    """
+    try:
+        from sqlalchemy import text
+        
+        # Verify audit task exists
+        audit_task = AuditTask.query.get(audit_task_id)
+        if not audit_task:
+            return False, f"Audit task {audit_task_id} not found", 0
+        
+        associations_removed = 0
+        
+        if machine_ids is None:
+            # Remove all associations for this audit task
+            result = db.session.execute(text('''
+            DELETE FROM machine_audit_task WHERE audit_task_id = :audit_task_id
+            '''), {'audit_task_id': audit_task_id})
+            associations_removed = result.rowcount
+            message = f"Removed all {associations_removed} associations for audit task '{audit_task.name}'"
+        else:
+            # Remove specific machine associations
+            for machine_id in machine_ids:
+                result = db.session.execute(text('''
+                DELETE FROM machine_audit_task 
+                WHERE audit_task_id = :audit_task_id AND machine_id = :machine_id
+                '''), {'audit_task_id': audit_task_id, 'machine_id': machine_id})
+                associations_removed += result.rowcount
+            
+            message = f"Removed {associations_removed} specific associations for audit task '{audit_task.name}'"
+        
+        db.session.commit()
+        return True, message, associations_removed
+        
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Error removing audit task associations: {str(e)}", 0
+
+def create_basic_schema(cursor):
+    """Create basic database schema in the secure database."""
+    schema_sql = [
+        '''CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            permissions TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            full_name TEXT,
+            active BOOLEAN DEFAULT 1,
+            is_admin BOOLEAN DEFAULT 0,
+            role_id INTEGER,
+            last_login TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            reset_token TEXT,
+            reset_token_expiration TIMESTAMP,
+            username_hash TEXT,
+            email_hash TEXT,
+            remember_token TEXT,
+            remember_token_expiration TIMESTAMP,
+            remember_enabled BOOLEAN DEFAULT 0,
+            notification_preferences TEXT,
+            FOREIGN KEY (role_id) REFERENCES roles(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS sites (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            location TEXT,
+            contact_email TEXT,
+            enable_notifications BOOLEAN DEFAULT 1,
+            notification_threshold INTEGER DEFAULT 30,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS machines (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            model TEXT,
+            serial_number TEXT,
+            machine_number TEXT,
+            site_id INTEGER,
+            decommissioned BOOLEAN DEFAULT 0,
+            decommissioned_date TIMESTAMP,
+            decommissioned_by TEXT,
+            decommissioned_reason TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS parts (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            machine_id INTEGER,
+            maintenance_frequency INTEGER,
+            maintenance_unit TEXT,
+            last_maintenance TIMESTAMP,
+            next_maintenance TIMESTAMP,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (machine_id) REFERENCES machines(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS audit_tasks (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            site_id INTEGER,
+            created_by INTEGER,
+            interval TEXT,
+            custom_interval_days INTEGER,
+            color TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id),
+            FOREIGN KEY (created_by) REFERENCES users(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS machine_audit_task (
+            machine_id INTEGER NOT NULL,
+            audit_task_id INTEGER NOT NULL,
+            PRIMARY KEY (machine_id, audit_task_id),
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS maintenance_records (
+            id INTEGER PRIMARY KEY,
+            machine_id INTEGER,
+            part_id INTEGER,
+            user_id INTEGER,
+            maintenance_type TEXT,
+            description TEXT,
+            date TIMESTAMP,
+            performed_by TEXT,
+            status TEXT,
+            notes TEXT,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (machine_id) REFERENCES machines(id),
+            FOREIGN KEY (part_id) REFERENCES parts(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )'''
+    ]
+    
+    for sql in schema_sql:
+        cursor.execute(sql)
+
+def update_database_configuration(secure_db_path):
+    """Update the application to use the secure database."""
+    # Update the DATABASE_URL environment variable to point to the secure database
+    os.environ['DATABASE_URL'] = f'sqlite:///{secure_db_path}'
+    print(f"[CONFIG] Updated database configuration to use: {secure_db_path}")
+
+def ensure_online_server_audit_associations():
+    """Ensure the online server has the machine_audit_task table but only explicit associations.
+    This function creates the table structure but does not automatically create associations."""
+    try:
+        # Only run for online servers
+        from timezone_utils import is_offline_mode
+        if is_offline_mode():
+            return True
+            
+        print("[AUDIT_SYNC] Ensuring online server has audit task association table...")
+        
+        # Check if machine_audit_task table exists
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        
+        if not inspector.has_table('machine_audit_task'):
+            print("[AUDIT_SYNC] Creating machine_audit_task table on online server...")
+            # Create the table using SQLAlchemy
+            db.session.execute(text('''
+            CREATE TABLE machine_audit_task (
+                machine_id INTEGER NOT NULL,
+                audit_task_id INTEGER NOT NULL,
+                PRIMARY KEY (machine_id, audit_task_id),
+                FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+                FOREIGN KEY (audit_task_id) REFERENCES audit_tasks(id) ON DELETE CASCADE
+            )
+            '''))
+            db.session.commit()
+            print("[AUDIT_SYNC] ✅ Created machine_audit_task table")
+        
+        # Check if there are any associations (only report, don't create)
+        result = db.session.execute(text('SELECT COUNT(*) FROM machine_audit_task')).scalar()
+        
+        if result == 0:
+            print("[AUDIT_SYNC] ⚠️  No audit task-machine associations configured")
+            print("[AUDIT_SYNC] Administrators should create explicit audit task assignments:")
+            print("[AUDIT_SYNC] 1. Use the admin interface to assign audit tasks to specific machines")
+            print("[AUDIT_SYNC] 2. Or run manual SQL to create associations: INSERT INTO machine_audit_task (machine_id, audit_task_id) VALUES (machine_id, task_id)")
+            print("[AUDIT_SYNC] Without explicit associations, audit tasks will not appear on offline clients")
+        else:
+            print(f"[AUDIT_SYNC] ✅ Found {result} configured audit task-machine associations")
+            print("[AUDIT_SYNC] These associations will be exported to offline clients via sync")
+        
+        return True
+        
+    except Exception as e:
+        print(f"[AUDIT_SYNC] Error checking online server audit associations: {e}")
+        return False
+
+def verify_bootstrap_success():
+    """Verify that bootstrap was successful by checking database and credentials."""
+    try:
+        import keyring
+        
+        service = get_secure_storage_service()
+        
+        # Check essential credentials
+        essential_keys = ['AMRS_ADMIN_USERNAME', 'AMRS_ADMIN_PASSWORD', 'USER_FIELD_ENCRYPTION_KEY']
+        missing = []
+        
+        for key in essential_keys:
+            if not keyring.get_password(service, key):
+                missing.append(key)
+        
+        if missing:
+            print(f"[VERIFY] ❌ Missing essential credentials: {missing}")
+            return False
+        
+        # Check database
+        db_path = get_secure_database_path()
+        if not os.path.exists(db_path):
+            print(f"[VERIFY] ❌ Secure database not found: {db_path}")
+            return False
+        
+        # Check if database has users
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users WHERE active = 1")
+        user_count = cursor.fetchone()[0]
+        conn.close()
+        
+        if user_count == 0:
+            print("[VERIFY] ❌ No active users in secure database")
+            return False
+        
+        print(f"[VERIFY] ✅ Bootstrap verification passed - {user_count} users available")
+        return True
+        
+    except Exception as e:
+        print(f"[VERIFY] Bootstrap verification error: {e}")
+        return False
+
+# NOTE: Bootstrap will be called later in initialize_database_and_bootstrap() function
+# This prevents double execution of the bootstrap process
+
+# Import enhanced sync utilities
+from datetime import datetime, timedelta, date
+from timezone_utils import get_timezone_aware_now, get_eastern_date, is_online_server
+from sync_utils_enhanced import (
+    add_to_sync_queue_enhanced, 
+    trigger_manual_sync, 
+    start_enhanced_sync_worker,
+    cleanup_expired_sync_queue_enhanced,
+    should_trigger_sync
+)
+
+# --- Background Sync Worker ---
+# --- Register secure secrets bootstrap endpoint after app is created ---
+# (Keep all previous imports and code here)
+import requests
+import threading
+import time
+
+# NOTE: Bootstrap trigger moved to initialize_database_and_bootstrap() function
+# This prevents double execution and ensures proper app context
+
+def upload_pending_sync_queue():
+    """Upload all pending sync_queue items to the server and mark them as synced if successful."""
+    from sqlalchemy import text as sa_text
+    with app.app_context():
+        pending_items = db.session.execute(sa_text("SELECT id, table_name, record_id, operation, payload FROM sync_queue WHERE status = 'pending' ORDER BY created_at ASC")).fetchall()
+        if not pending_items:
+            print("[SYNC] No pending changes to upload.")
+            return
+        print(f"[SYNC] Uploading {len(pending_items)} pending changes from sync_queue...")
+        # Prepare upload payload grouped by table
+        upload_payload = {}
+        for item in pending_items:
+            table = item[1]  # table_name
+            if table not in upload_payload:
+                upload_payload[table] = []
+            try:
+                record = _json.loads(item[4])  # payload
+                record['__operation__'] = item[3]  # operation
+                record['__sync_queue_id__'] = item[0]  # id
+                upload_payload[table].append(record)
+            except Exception as e:
+                print(f"[SYNC] Error parsing payload for sync_queue id {item[0]}: {e}")
+                continue
+        # Upload to server
+        online_url = os.environ.get('AMRS_ONLINE_URL')
+        admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+        admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        if not online_url or not admin_username or not admin_password:
+            print("[SYNC] Missing AMRS_ONLINE_URL or AMRS_ADMIN_USERNAME/AMRS_ADMIN_PASSWORD; cannot upload changes.")
+            return
+        clean_url = online_url.strip('"\'').rstrip('/')
+        if clean_url.endswith('/api'):
+            clean_url = clean_url[:-4]
+        try:
+            resp = requests.post(
+                f"{clean_url}/api/sync/data",
+                json=upload_payload,
+                headers={"Content-Type": "application/json"},
+                auth=(admin_username, admin_password),
+                timeout=30
+            )
+            if resp.status_code == 200:
+                ids = [item[0] for item in pending_items]
+                # Fix SQLite IN clause syntax - use named parameters
+                if ids:
+                    placeholders = ','.join([f':id_{i}' for i in range(len(ids))])
+                    query = f"UPDATE sync_queue SET status = 'synced', synced_at = :now WHERE id IN ({placeholders})"
+                    params = {'now': datetime.utcnow()}
+                    for i, id_val in enumerate(ids):
+                        params[f'id_{i}'] = id_val
+                    db.session.execute(sa_text(query), params)
+                    db.session.commit()
+                    print(f"[SYNC] Successfully uploaded and marked {len(ids)} sync_queue items as synced.")
+            else:
+                print(f"[SYNC] Upload failed: {resp.status_code} {resp.text}")
+                # Don't mark items as failed immediately - they'll be retried later
+        except requests.exceptions.ConnectionError as e:
+            print(f"[SYNC] Connection error during upload (desktop clients may be offline): {e}")
+        except requests.exceptions.Timeout as e:
+            print(f"[SYNC] Timeout during upload: {e}")
+        except Exception as e:
+            print(f"[SYNC] Exception during upload: {e}")
+            # For any other exception, ensure we don't crash the sync worker
+
+# Note: Enhanced sync worker will be started after app initialization
+
+
+# --- SocketIO event for triggering sync ---
+# (Moved below app creation for correct initialization)
+# --- Ensure users.username and users.email columns are large enough on Render (PostgreSQL) ---
+def ensure_large_user_columns():
+    """Ensure users.username and users.email columns are at least VARCHAR(1024) on PostgreSQL."""
+    try:
+        from sqlalchemy import text
+        engine = db.engine
+        with engine.connect() as conn:
+            # Check column sizes
+            result = conn.execute(text("""
+                SELECT column_name, character_maximum_length
+                FROM information_schema.columns
+                WHERE table_name = 'users' AND column_name IN ('username', 'email')
+            """))
+            needs_update = []
+            for row in result:
+                if row['character_maximum_length'] is not None and row['character_maximum_length'] < 1024:
+                    needs_update.append(row['column_name'])
+            for col in needs_update:
+                print(f"[SCHEMA] Altering users.{col} to VARCHAR(1024)...")
+                try:
+                    conn.execute(text(f"ALTER TABLE users ALTER COLUMN {col} TYPE VARCHAR(1024);"))
+                    print(f"[SCHEMA] users.{col} column updated to VARCHAR(1024)")
+                except Exception as e:
+                    print(f"[SCHEMA] Error updating users.{col}: {e}")
+    except Exception as e:
+        print(f"[SCHEMA] Error ensuring large user columns: {e}")
+
+# --- Utility: Add change to sync_queue ---
+from sqlalchemy.exc import SQLAlchemyError
+
+def fix_postgresql_sequence(table_name):
+    """
+    Fix PostgreSQL sequence for a table to avoid ID conflicts.
+    This ensures the next auto-generated ID will be higher than any existing IDs.
+    """
+    try:
+        # Only run on PostgreSQL (not SQLite)
+        if 'postgresql' in str(db.engine.url).lower():
+            from sqlalchemy import text
+            # Get the maximum ID from the table
+            result = db.session.execute(text(f"SELECT MAX(id) FROM {table_name}")).scalar()
+            if result:
+                # Set sequence to max_id + 1
+                sequence_name = f"{table_name}_id_seq"
+                db.session.execute(text(f"SELECT setval('{sequence_name}', {result})"))
+                db.session.commit()
+                print(f"[SEQUENCE] Fixed {sequence_name} to start from {result + 1}")
+    except Exception as e:
+        print(f"[SEQUENCE] Error fixing sequence for {table_name}: {e}")
+        # Don't let sequence errors break the main functionality
+        pass
+
+def check_desktop_clients_available():
+    """
+    Check if desktop client sync is configured and working.
+    Returns True if sync configuration is available, False otherwise.
+    This prevents immediate sync attempts when sync is not properly configured.
+    """
+    try:
+        # Check if sync environment variables are configured
+        online_url = os.environ.get('AMRS_ONLINE_URL')
+        admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
+        admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        
+        # If sync is not configured, don't attempt immediate sync
+        if not online_url or not admin_username or not admin_password:
+            return False
+            
+        # Always return True for now - let the background worker handle failures gracefully
+        # This ensures items are queued properly regardless of current connectivity
+        return True
+        
+    except Exception as e:
+        print(f"[SYNC] Error checking desktop client availability: {e}")
+        return False
+
+def notify_desktop_clients_of_changes():
+    """
+    Notify desktop clients that changes are available for download.
+    This could be expanded to use webhooks, push notifications, etc.
+    """
+    try:
+        print("[SYNC] Audit task completion changes available for desktop client sync")
+        notify_clients_of_sync()
+    except Exception as e:
+        print(f"[SYNC] Error notifying desktop clients: {e}")
+
+def add_to_sync_queue(table_name, record_id, operation, payload_dict):
+    """
+    DEPRECATED: Use add_to_sync_queue_enhanced instead.
+    This function is kept for compatibility but redirects to the enhanced version.
+    """
+    try:
+        # Redirect to enhanced sync queue to avoid duplicate systems
+        add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, immediate_sync=False)
+        print(f"[SYNC_QUEUE] Redirected {operation} for {table_name}:{record_id} to enhanced sync queue.")
+    except Exception as e:
+        print(f"[SYNC_QUEUE] Error redirecting to enhanced sync: {e}")
+        # Don't fail, just log the error
+        print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
+# --- Sync Queue Cleanup: Remove records older than 144 hours (6 days) ---
+def cleanup_expired_sync_queue():
+    from sqlalchemy import text as sa_text
+    from datetime import datetime, timedelta
+    """Delete sync_queue records older than 144 hours (6 days)."""
+    try:
+        cutoff = datetime.utcnow() - timedelta(hours=144)
+        # Works for both SQLite and PostgreSQL
+        db.session.execute(sa_text("""
+            DELETE FROM sync_queue WHERE created_at < :cutoff
+        """), {"cutoff": cutoff})
+        db.session.commit()
+        print(f"[SYNC_QUEUE] Cleaned up expired sync_queue records older than {cutoff}.")
+    except Exception as e:
+        print(f"[SYNC_QUEUE] Error cleaning up expired sync_queue records: {e}")
+
 # Whitelist allowed table and column names for schema changes
 ALLOWED_TABLES = {'users', 'roles', 'sites', 'machines', 'parts', 'maintenance_records', 'audit_tasks', 'audit_task_completions', 'machine_audit_task'}
 ALLOWED_COLUMNS = {
@@ -33,11 +1230,23 @@ def ensure_sync_columns_sqlite():
                         # SQLite does not support IF NOT EXISTS for ADD COLUMN
                         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
                         conn.commit()
+    
+    # Ensure sync_queue table has synced_at column
+    if inspector.has_table('sync_queue'):
+        existing_columns = {col['name'] for col in inspector.get_columns('sync_queue')}
+        if 'synced_at' not in existing_columns:
+            print("[SYNC] Adding synced_at to sync_queue (SQLite)...")
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE sync_queue ADD COLUMN synced_at TIMESTAMP"))
+                conn.commit()
+    
     print("[SYNC] Sync columns ensured in SQLite.")
 
 
+# --- Flask-SocketIO for Real-Time Sync ---
+from flask_socketio import SocketIO, emit
+
 # Standard library imports
-import os
 import sys
 import random
 import string
@@ -45,7 +1254,6 @@ import logging
 import signal
 import argparse
 import calendar
-from datetime import datetime, timedelta, date
 from functools import wraps
 import traceback
 from io import BytesIO
@@ -68,7 +1276,6 @@ from sqlalchemy import inspect
 import smtplib
 from jinja2 import Environment, FileSystemLoader
 import csv
-import json
 import requests
 
 # Local imports
@@ -76,11 +1283,10 @@ from models import db, User, Role, Site, Machine, Part, MaintenanceRecord, Audit
 from auto_migrate import run_auto_migration
 
 # Patch is_admin property to User class immediately after import
-@property
 def is_admin(self):
-    """Add is_admin property to User class for template compatibility"""
+    """Add is_admin property to User class for template compatibility (read-only)"""
     return is_admin_user(self)
-User.is_admin = is_admin
+User.is_admin = property(is_admin)
 
 # Then patch the Site class directly as a monkey patch
 # This must be outside any function to execute immediately
@@ -139,11 +1345,287 @@ def check_persistent_storage():
         print(f"[APP] Using default PostgreSQL database")
     return True
 
-# Call this function before your database setup
-storage_ok = check_persistent_storage()
+# NOTE: Persistent storage check moved to initialize_database_and_bootstrap() function
+# This prevents module-level database URL logging that conflicts with proper database configuration
+
+
+
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
+
+# Register SQLAlchemy with Flask app after config
+from models import db
+
+# NOTE: Database configuration will be handled later in a single consolidated section
+# NOTE: Database initialization and auto-migration will be handled later in consolidated section
+
+# Now import the rest of the models and other local modules
+from models import User, Role, Site, Machine, Part, MaintenanceRecord, AuditTask, AuditTaskCompletion, MaintenanceFile, encrypt_value, hash_value
+from auto_migrate import run_auto_migration
+
+# --- Register secure secrets bootstrap endpoint after app is created ---
+
+# --- Security Event Logger import ---
+from security_event_logger import log_security_event
+
+@app.route('/api/bootstrap-secrets', methods=['POST'])
+def bootstrap_secrets():
+    """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
+    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
+    auth_header = request.headers.get('Authorization', '')
+    remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    
+    if not expected_token or auth_header != f"Bearer {expected_token}":
+        log_security_event(
+            event_type="bootstrap_secrets_denied",
+            details=f"Denied bootstrap secrets from {remote_addr}: invalid or missing token",
+            is_critical=True
+        )
+        abort(403)
+        
+    log_security_event(
+        event_type="bootstrap_secrets_success", 
+        details=f"Bootstrap secrets successfully retrieved from {remote_addr}",
+        is_critical=False
+    )
+    
+    # Only return the secrets needed for offline sync/bootstrap
+    return jsonify({
+        "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
+        "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
+        "SYNC_URL": os.environ.get("SYNC_URL"),
+        "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
+        "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
+        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
+        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
+    })
+
+
+# Initialize SocketIO after app is created
+import os
+from flask_socketio import SocketIO, emit, disconnect
+from flask import request
+
+# Determine async mode based on environment and availability
+def get_async_mode():
+    """Determine the best async mode based on environment and available packages"""
+    # Check if we're in production (Render)
+    if os.environ.get('RENDER'):
+        try:
+            import eventlet
+            return 'eventlet'
+        except ImportError:
+            try:
+                import gevent
+                return 'gevent'
+            except ImportError:
+                return 'threading'
+    else:
+        # Local development - use threading for compatibility
+        return 'threading'
+
+async_mode = get_async_mode()
+print(f"[SocketIO] Using async_mode: {async_mode}")
+
+# Memory-optimized SocketIO configuration with fallback handling
+# Dynamic CORS configuration based on environment
+cors_origins = [
+    "http://localhost:10000", 
+    "http://127.0.0.1:10000",
+    "http://localhost:5000", 
+    "http://127.0.0.1:5000"
+]
+
+# Add production URL if running on Render
+render_external_url = os.environ.get('RENDER_EXTERNAL_URL')
+if render_external_url:
+    cors_origins.append(render_external_url)
+    print(f"[SocketIO] Added Render URL to CORS: {render_external_url}")
+
+# For development/testing, also allow common patterns
+if os.environ.get('FLASK_ENV') == 'development' or os.environ.get('DEBUG'):
+    cors_origins.extend([
+        "https://amrs-maintenance.onrender.com",
+        "https://amrs-pm-test.onrender.com",
+        "*"  # Allow all origins in development (use with caution)
+    ])
+    print("[SocketIO] Added development CORS origins")
+
+print(f"[SocketIO] CORS allowed origins: {cors_origins}")
+
+try:
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins=cors_origins,
+        async_mode=async_mode,
+        ping_timeout=120,  # Increased from 60 to handle slower connections
+        ping_interval=60,  # Increased from 25 to reduce network traffic
+        max_http_buffer_size=1024*1024,  # 1MB max message size
+        allow_upgrades=True,
+        transports=['polling', 'websocket'],  # Prefer polling first, then upgrade
+        engineio_logger=False,  # Reduce verbose logging
+        socketio_logger=False   # Reduce verbose logging
+    )
+    print(f"[SocketIO] Successfully initialized with {async_mode} mode")
+except Exception as e:
+    print(f"[SocketIO ERROR] Failed to initialize with {async_mode}: {e}")
+    # Fallback to basic threading mode with conservative settings
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins=cors_origins,
+        async_mode='threading',
+        ping_timeout=120,
+        ping_interval=60,
+        transports=['polling'],  # Only use polling in fallback mode
+        engineio_logger=False,
+        socketio_logger=False
+    )
+    print("[SocketIO] Fallback to basic threading mode")
+
+# Connection tracking for memory management
+active_connections = set()
+
+# --- SocketIO event handlers with robust error handling ---
+@socketio.on('connect')
+def handle_connect():
+    try:
+        client_id = request.sid
+        active_connections.add(client_id)
+        # Get client info for better debugging
+        client_info = {
+            'ip': request.environ.get('REMOTE_ADDR', 'unknown'),
+            'user_agent': request.environ.get('HTTP_USER_AGENT', 'unknown')[:100]
+        }
+        print(f"[SocketIO] Client connected: {client_id} from {client_info['ip']} (Total: {len(active_connections)})")
+        
+        # For offline clients, trigger sync only when needed (not on every page load)
+        from timezone_utils import is_online_server
+        if not is_online_server():
+            # Check if we should trigger sync (avoids constant syncing)
+            if should_trigger_sync():
+                print(f"[SocketIO] Offline client - sync needed, performing reconnection sync")
+                
+                # Import sync functions
+                from sync_utils_enhanced import trigger_reconnection_sync
+                
+                # Trigger sync in background to avoid blocking page load
+                try:
+                    sync_result = trigger_reconnection_sync()
+                    
+                    if sync_result.get("status") == "success":
+                        total_changes = sync_result.get("total_changes", 0)
+                        if total_changes > 0:
+                            print(f"[SocketIO] Reconnection sync successful: {total_changes} changes processed")
+                    elif sync_result.get("status") == "no_changes":
+                        print(f"[SocketIO] Reconnection sync: No changes needed")
+                    else:
+                        print(f"[SocketIO] Reconnection sync result: {sync_result.get('status')}")
+                except Exception as e:
+                    print(f"[SocketIO] Warning: Background sync failed: {e}")
+            else:
+                print(f"[SocketIO] Offline client - sync not needed (recent sync completed)")
+        else:
+            print(f"[SocketIO] Online client connected - no sync needed")
+        
+        emit('connected', {
+            'message': 'Connected to AMRS sync server', 
+            'client_id': client_id,
+            'server_time': str(datetime.utcnow())
+        })
+    except Exception as e:
+        print(f"[SocketIO ERROR] Error in connect handler: {e}")
+
+@socketio.on('disconnect')
+def handle_disconnect(reason=None):
+    try:
+        client_id = request.sid
+        active_connections.discard(client_id)
+        disconnect_reason = reason or 'unknown'
+        print(f"[SocketIO] Client disconnected: {client_id} (reason: {disconnect_reason}) (Total: {len(active_connections)})")
+    except Exception as e:
+        print(f"[SocketIO ERROR] Error in disconnect handler: {e}")
+
+@socketio.on('ping')
+def handle_ping():
+    """Handle client ping to maintain connection health"""
+    try:
+        emit('pong', {'timestamp': str(datetime.utcnow())})
+    except Exception as e:
+        print(f"[SocketIO ERROR] Error in ping handler: {e}")
+
+@socketio.on('connect_error')
+def handle_connect_error(data):
+    """Handle connection errors"""
+    print(f"[SocketIO] Connection error: {data}")
+
+@socketio.on_error_default
+def default_error_handler(e):
+    """Handle any unhandled SocketIO errors"""
+    try:
+        print(f"[SocketIO ERROR] Unhandled error: {e}")
+        # Log additional context
+        import traceback
+        print(f"[SocketIO ERROR] Traceback: {traceback.format_exc()}")
+    except Exception as log_error:
+        print(f"[SocketIO ERROR] Failed to log error: {log_error}")
+    # Don't re-raise to prevent crashes
+
+# Function to emit sync event to all clients with robust error handling
+def notify_clients_of_sync():
+    if not active_connections:
+        print("[SocketIO] No active connections, skipping sync notification")
+        return
+    
+    print(f"[SocketIO] Emitting sync event to {len(active_connections)} clients...")
+    try:
+        # Emit with acknowledgment to detect failed connections
+        socketio.emit('sync', {
+            'message': 'Data changed, please sync.', 
+            'timestamp': str(datetime.utcnow()),
+            'server_id': os.environ.get('RENDER_SERVICE_NAME', 'local-server')
+        })
+        print(f"[SocketIO] Sync event sent successfully")
+    except Exception as e:
+        print(f"[SocketIO ERROR] Failed to emit sync event: {e}")
+        # Don't clear all connections immediately - let cleanup handle it
+        print(f"[SocketIO] Will clean up stale connections in next cleanup cycle")
+
+# Improved cleanup function with better error handling
+def cleanup_stale_connections():
+    """Remove connections that are no longer active"""
+    if not active_connections:
+        return
+        
+    stale_count = 0
+    for client_id in list(active_connections):
+        try:
+            # Try to emit a small test message to verify connection
+            socketio.emit('heartbeat', {'test': True}, room=client_id, timeout=5)
+        except Exception:
+            active_connections.discard(client_id)
+            stale_count += 1
+    
+    if stale_count > 0:
+        print(f"[SocketIO] Cleaned up {stale_count} stale connections")
+
+# Background cleanup task
+import threading
+import time
+
+def background_cleanup():
+    """Background thread to periodically clean up stale connections"""
+    while True:
+        try:
+            time.sleep(300)  # Clean up every 5 minutes
+            cleanup_stale_connections()
+        except Exception as e:
+            print(f"[SocketIO ERROR] Background cleanup failed: {e}")
+
+# Start background cleanup thread
+cleanup_thread = threading.Thread(target=background_cleanup, daemon=True)
+cleanup_thread.start()
+print("[SocketIO] Started background connection cleanup thread")
 
 # Load configuration from config.py for secure local database
 app.config.from_object('config.Config')
@@ -239,13 +1721,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Get the directory of this file
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-
-# Define dotenv_path before using it
-dotenv_path = os.path.join(BASE_DIR, '.env')
-load_dotenv(dotenv_path)
-
 # Ensure .env file exists
 def ensure_env_file():
     if not os.path.exists(dotenv_path):
@@ -280,12 +1755,9 @@ print(f"[APP] Working directory: {os.getcwd()}")
 print(f"[APP] Base directory: {BASE_DIR}")
 
 # --- Ensure sync_queue table exists on startup ---
-try:
-    import add_sync_queue_table
-    add_sync_queue_table.upgrade()
-    print('[STARTUP] Ensured sync_queue table exists.')
-except Exception as e:
-    print(f'[STARTUP] Error ensuring sync_queue table: {e}')
+
+# NOTE: Table creation moved to initialize_database_and_bootstrap() function
+# This prevents circular imports and ensures proper app context
 
 try:
     # Import cache configuration
@@ -320,6 +1792,8 @@ def is_render():
     return os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 def auto_sync_offline_db():
+    # Clean up expired sync queue records before syncing
+    cleanup_expired_sync_queue()
     """Automatically synchronize the local SQLite database with the online database using two-way sync."""
     if is_render():
         print("[SYNC] Running on Render - no offline sync needed")
@@ -434,6 +1908,12 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         # Import online data into local database
         import_online_data_to_local(online_data, local_cursor)
         local_conn.commit()
+        # Force SQLAlchemy to reload all ORM relationships and associations after import
+        try:
+            from models import db
+            db.session.remove()
+        except Exception as e:
+            print(f"[SYNC] Could not remove SQLAlchemy session: {e}")
         
         # Step 3: Get local changes to upload
         print("[SYNC] Preparing local changes for upload...")
@@ -460,7 +1940,7 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
         update_last_sync_timestamp(local_cursor)
         
         # Fix password hashes for known users after sync
-        fix_common_user_passwords(local_cursor)
+        # (Function fix_common_user_passwords is not defined; skipping call to avoid error)
         
         local_conn.commit()
         local_conn.close()
@@ -474,13 +1954,18 @@ def perform_bidirectional_sync(session, online_url, local_db_path, username, pas
 def import_online_data_to_local(online_data, cursor):
     """Import downloaded online data into the local SQLite database."""
     try:
+        # Debug: List all tables received from online
+        print(f"[SYNC] Tables received from online: {list(online_data.keys())}")
+        # Ensure audit_tasks is always present in the import, even if empty
+        if 'audit_tasks' not in online_data:
+            print("[SYNC] WARNING: 'audit_tasks' not found in online data. Adding empty list.")
+            online_data['audit_tasks'] = []
         # Import each table's data
         for table_name, records in online_data.items():
             if table_name not in ALLOWED_TABLES:
+                print(f"[SYNC] Skipping table not in ALLOWED_TABLES: {table_name}")
                 continue
-                
             print(f"[SYNC] Importing {len(records)} records for table {table_name}")
-            
             for record in records:
                 # Handle soft deletes by checking deleted_at
                 if record.get('deleted_at'):
@@ -492,8 +1977,11 @@ def import_online_data_to_local(online_data, cursor):
                     """, (record['deleted_at'], record['id']))
                 else:
                     # Insert or update record
-                    upsert_record_sqlite(table_name, record, cursor)
-                    
+                    try:
+                        upsert_record_sqlite(table_name, record, cursor)
+                    except Exception as e:
+                        print(f"[SYNC] Error upserting record in {table_name}: {e}")
+                        print(f"[SYNC] Record data: {record}")
     except Exception as e:
         print(f"[SYNC] Error importing online data: {str(e)}")
         raise
@@ -690,70 +2178,8 @@ def get_online_db_config():
 
 
 # --- Main DB selection logic ---
-if is_render():
-    # On Render: always use the online (PostgreSQL) database
-    try:
-        print("[AMRS] Detected Render environment. Configuring production database...")
-        configure_database(app)
-    except Exception as e:
-        print(f"[APP] Error configuring database: {str(e)}")
-        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-    print("[AMRS] ONLINE MODE: Using configured database URI (Render)")
-else:
-    # On local device: default to offline mode (local SQLite), unless OFFLINE_MODE=0 is explicitly set
-    offline_mode = os.environ.get("OFFLINE_MODE") != "0"  # Default to offline unless OFFLINE_MODE=0
-    if offline_mode:
-        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-        print(f"[AMRS] LOCAL OFFLINE MODE: Using local database at {db_path}")
-    else:
-        try:
-            print("[AMRS] LOCAL ONLINE MODE: Configuring online database...")
-            configure_database(app)
-        except Exception as e:
-            print(f"[APP] Error configuring database: {str(e)}")
-            app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
-        print("[AMRS] LOCAL ONLINE MODE: Using configured database URI")
+# NOTE: Database configuration moved to consolidated section later in file
 
-# Initialize database
-print("[APP] Initializing SQLAlchemy...")
-db.init_app(app)
-
-    # --- Ensure schema exists before import if needed (for offline mode) ---
-if not is_render() and offline_mode:
-    from sqlalchemy import create_engine, inspect as sa_inspect
-    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-    engine = create_engine(f"sqlite:///{db_path}")
-    inspector = sa_inspect(engine)
-    with app.app_context():
-        if not inspector.has_table('users'):
-            print("[AMRS] SQLite schema not found. Creating tables before import...")
-            db.create_all()
-        else:
-            print("[AMRS] SQLite schema already exists. Skipping table creation.")
-        
-        # Run SQLite schema migration to ensure compatibility with online database
-        try:
-            from sqlite_schema_migration import migrate_sqlite_schema
-            print("[AMRS] Running SQLite schema migration...")
-            migrations_applied = migrate_sqlite_schema(db_path)
-            if migrations_applied > 0:
-                print(f"[AMRS] Applied {migrations_applied} schema migrations")
-            else:
-                print("[AMRS] SQLite schema is up to date")
-        except Exception as e:
-            print(f"[AMRS] Warning: Schema migration failed: {e}")
-        
-        ensure_sync_columns_sqlite()
-        
-        # Perform automatic two-way sync
-        print("[AMRS] Starting automatic two-way synchronization...")
-        sync_success = auto_sync_offline_db()
-        if sync_success:
-            print("[AMRS] Two-way sync completed successfully")
-        else:
-            print("[AMRS] Two-way sync completed with errors - continuing in offline mode")
 # --- Ensure timestamp columns exist on Render launch for future sync compatibility ---
 def ensure_sync_columns():
     """Ensure all tables have created_at, updated_at, and deleted_at columns for sync."""
@@ -772,16 +2198,17 @@ def ensure_sync_columns():
                     for col_name, col_type in sync_columns:
                         if col_name not in existing_columns:
                             print(f"[SYNC] Adding {col_name} to {table}...")
-                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                            # SQLite doesn't support IF NOT EXISTS in ALTER TABLE, so we check first
+                            if 'sqlite' in str(db.engine.url):
+                                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                            else:
+                                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
                             conn.commit()
         print("[SYNC] Sync columns ensured.")
     except Exception as e:
         print(f"[SYNC] Error ensuring sync columns: {e}")
 
-# Call ensure_sync_columns on Render launch
-if is_render():
-    with app.app_context():
-        ensure_sync_columns()
+# Note: ensure_sync_columns() is called later during proper database initialization
 
 # Initialize Flask-Login
 print("[APP] Initializing Flask-Login...")
@@ -794,7 +2221,14 @@ login_manager.login_message_category = 'info'  # Flash message category for logi
 @login_manager.user_loader
 def load_user(user_id):
     # This must return None or a User object
-    return db.session.get(User, int(user_id)) if user_id else None
+    try:
+        from flask import has_app_context
+        if not has_app_context() or not user_id:
+            return None
+        return db.session.get(User, int(user_id))
+    except Exception as e:
+        app.logger.debug(f"Error loading user {user_id}: {e}")
+        return None
 
 # Standardized function to check admin status
 def is_admin_user(user):
@@ -839,6 +2273,14 @@ def user_can_see_all_sites(user):
 def check_db_connection():
     """Check if database connection is working and reconnect if needed."""
     try:
+        # Check if we have a Flask app context
+        try:
+            from flask import has_app_context
+            if not has_app_context():
+                return False
+        except:
+            return False
+            
         with db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
@@ -1009,8 +2451,13 @@ def initialize_db_connection():
     except Exception as e:
         print(f"[APP] Database connection error: {e}")
 
-# --- Default admin creation logic ---
+# --- Default admin creation logic (for online server first launch only) ---
 def add_default_admin_if_needed():
+    """
+    Create a default admin user if needed.
+    This should ONLY run on the online server during its first launch.
+    Packaged/offline applications should never create admin users - they get users via sync.
+    """
     try:
         admin_username = os.environ.get('DEFAULT_ADMIN_USERNAME')
         admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL')
@@ -1064,17 +2511,171 @@ def add_default_admin_if_needed():
     except Exception as e:
         print(f"[APP] Error creating/updating default admin: {e}")
 
+
 # --- Function to assign colors to audit tasks that don't have them ---
 def assign_colors_to_audit_tasks():
     """
     Assign unique colors to audit tasks using site-specific color wheels.
-    
-    This function:
     1. Finds tasks without colors and assigns them new ones
     2. Detects and fixes tasks with duplicate colors within the same site
     3. Ensures each site has its own independent color wheel (sites can reuse colors)
     4. Handles all task types that are visualized in the UI
     """
+    from models import AuditTask, Site, db
+    from sqlalchemy.orm import joinedload
+    # Define a color palette (extend as needed)
+    color_palette = [
+        '#FF5733', '#33FF57', '#3357FF', '#F39C12', '#8E44AD', '#16A085',
+        '#E67E22', '#2ECC71', '#3498DB', '#E74C3C', '#1ABC9C', '#9B59B6',
+        '#34495E', '#27AE60', '#2980B9', '#C0392B', '#F1C40F', '#7F8C8D',
+        '#D35400', '#BDC3C7', '#2C3E50', '#95A5A6', '#FF33A1', '#33FFF6',
+    ]
+    # Check if Site has an audit_tasks relationship
+    if hasattr(Site, 'audit_tasks'):
+        # Query all sites with their audit tasks
+        sites = Site.query.options(joinedload('audit_tasks')).all()
+        for site in sites:
+            used_colors = set()
+            audit_tasks = getattr(site, 'audit_tasks', [])
+            # Collect used colors for this site
+            for task in audit_tasks:
+                if getattr(task, 'color', None):
+                    used_colors.add(task.color)
+            # Assign colors to tasks without one
+            for task in audit_tasks:
+                if not getattr(task, 'color', None):
+                    for color in color_palette:
+                        if color not in used_colors:
+                            task.color = color
+                            used_colors.add(color)
+                            break
+            # Optionally, fix duplicate colors (rare)
+            color_count = {}
+            for task in audit_tasks:
+                color = getattr(task, 'color', None)
+                if color:
+                    color_count[color] = color_count.get(color, 0) + 1
+            for color, count in color_count.items():
+                if count > 1:
+                    tasks_with_color = [t for t in audit_tasks if getattr(t, 'color', None) == color]
+                    for t in tasks_with_color[1:]:
+                        for new_color in color_palette:
+                            if new_color not in used_colors:
+                                t.color = new_color
+                                used_colors.add(new_color)
+                                break
+    else:
+        # Fallback: group audit tasks by site_id
+        from collections import defaultdict
+        tasks_by_site = defaultdict(list)
+        all_tasks = AuditTask.query.all()
+        for task in all_tasks:
+            site_id = getattr(task, 'site_id', None)
+            if site_id is not None:
+                tasks_by_site[site_id].append(task)
+        for site_id, audit_tasks in tasks_by_site.items():
+            used_colors = set()
+            for task in audit_tasks:
+                if getattr(task, 'color', None):
+                    used_colors.add(task.color)
+            for task in audit_tasks:
+                if not getattr(task, 'color', None):
+                    for color in color_palette:
+                        if color not in used_colors:
+                            task.color = color
+                            used_colors.add(color)
+                            break
+            color_count = {}
+            for task in audit_tasks:
+                color = getattr(task, 'color', None)
+                if color:
+                    color_count[color] = color_count.get(color, 0) + 1
+            for color, count in color_count.items():
+                if count > 1:
+                    tasks_with_color = [t for t in audit_tasks if getattr(t, 'color', None) == color]
+                    for t in tasks_with_color[1:]:
+                        for new_color in color_palette:
+                            if new_color not in used_colors:
+                                t.color = new_color
+                                used_colors.add(new_color)
+                                break
+    db.session.commit()
+    color_palette = [
+        '#FF5733', '#33FF57', '#3357FF', '#F39C12', '#8E44AD', '#16A085',
+        '#E67E22', '#2ECC71', '#3498DB', '#E74C3C', '#1ABC9C', '#9B59B6',
+        '#34495E', '#27AE60', '#2980B9', '#C0392B', '#F1C40F', '#7F8C8D',
+        '#D35400', '#BDC3C7', '#2C3E50', '#95A5A6', '#FF33A1', '#33FFF6',
+    ]
+    # Check if Site has an audit_tasks relationship
+    if hasattr(Site, 'audit_tasks'):
+        # Query all sites with their audit tasks
+        sites = Site.query.options(joinedload('audit_tasks')).all()
+        for site in sites:
+            used_colors = set()
+            audit_tasks = getattr(site, 'audit_tasks', [])
+            # Collect used colors for this site
+            for task in audit_tasks:
+                if getattr(task, 'color', None):
+                    used_colors.add(task.color)
+            # Assign colors to tasks without one
+            for task in audit_tasks:
+                if not getattr(task, 'color', None):
+                    for color in color_palette:
+                        if color not in used_colors:
+                            task.color = color
+                            used_colors.add(color)
+                            break
+            # Optionally, fix duplicate colors (rare)
+            color_count = {}
+            for task in audit_tasks:
+                color = getattr(task, 'color', None)
+                if color:
+                    color_count[color] = color_count.get(color, 0) + 1
+            for color, count in color_count.items():
+                if count > 1:
+                    tasks_with_color = [t for t in audit_tasks if getattr(t, 'color', None) == color]
+                    for t in tasks_with_color[1:]:
+                        for new_color in color_palette:
+                            if new_color not in used_colors:
+                                t.color = new_color
+                                used_colors.add(new_color)
+                                break
+    else:
+        # Fallback: group audit tasks by site_id
+        from collections import defaultdict
+        tasks_by_site = defaultdict(list)
+        all_tasks = AuditTask.query.all()
+        for task in all_tasks:
+            site_id = getattr(task, 'site_id', None)
+            if site_id is not None:
+                tasks_by_site[site_id].append(task)
+        for site_id, audit_tasks in tasks_by_site.items():
+            used_colors = set()
+            for task in audit_tasks:
+                if getattr(task, 'color', None):
+                    used_colors.add(task.color)
+            for task in audit_tasks:
+                if not getattr(task, 'color', None):
+                    for color in color_palette:
+                        if color not in used_colors:
+                            task.color = color
+                            used_colors.add(color)
+                            break
+            color_count = {}
+            for task in audit_tasks:
+                color = getattr(task, 'color', None)
+                if color:
+                    color_count[color] = color_count.get(color, 0) + 1
+            for color, count in color_count.items():
+                if count > 1:
+                    tasks_with_color = [t for t in audit_tasks if getattr(t, 'color', None) == color]
+                    for t in tasks_with_color[1:]:
+                        for new_color in color_palette:
+                            if new_color not in used_colors:
+                                t.color = new_color
+                                used_colors.add(new_color)
+                                break
+    db.session.commit()
     try:
         # Get all audit tasks
         all_tasks = AuditTask.query.all()
@@ -1103,34 +2704,22 @@ def assign_colors_to_audit_tasks():
             # First pass: Identify tasks with no color or duplicate colors
             for task in site_tasks:
                 if task.color is None:
-                    # No color assigned yet
                     tasks_to_update.append(task)
                 elif task.color in used_colors:
-                    # Duplicate color detected
                     tasks_to_update.append(task)
                 else:
-                    # Valid unique color
                     used_colors.add(task.color)
-            
+
             # Second pass: Assign new colors to tasks needing updates
             if tasks_to_update:
-                # Calculate evenly distributed colors based on total number of tasks at this site
-                total_tasks = len(site_tasks)
-                
-                for task in tasks_to_update:
-                    # Find an unused position in the color wheel
-                    for i in range(total_tasks * 2):  # Double the range to ensure we find an available color
-                        # Calculate a potential hue value with even distribution
-                        hue = int((i * 360) / total_tasks) % 360
-                        # Create a color with good contrast and brightness
-                        potential_color = f"hsl({hue}, 70%, 50%)"
-                        
-                        # Use this color if it's not already in use
-                        if potential_color not in used_colors:
-                            task.color = potential_color
-                            used_colors.add(potential_color)
-                            tasks_updated += 1
-                            break
+                color_palette = [
+                    '#FF5733', '#33FF57', '#3357FF', '#F1C40F', '#8E44AD', '#1ABC9C', '#E67E22', '#2ECC71', '#E74C3C', '#3498DB'
+                ]
+                for idx, task in enumerate(tasks_to_update):
+                    color = color_palette[idx % len(color_palette)]
+                    task.color = color
+                    used_colors.add(color)
+                    tasks_updated += 1
             
             # Verify we don't have any duplicate colors after updates
             check_colors = {}
@@ -1158,17 +2747,7 @@ def assign_colors_to_audit_tasks():
         import traceback
         print(traceback.format_exc())
 
-# --- Move all startup DB logic inside a single app context ---
-with app.app_context():
-    try:
-        run_auto_migration()  # Ensure columns exist before any queries
-        print("[STARTUP] Auto-migration completed successfully")
-    except Exception as e:
-        print(f'[AUTO_MIGRATE ERROR] Critical migration failed: {e}')
-        print("App startup may fail due to missing database columns")
-        # Don't exit here, but log the critical error
-        import traceback
-        print(traceback.format_exc())
+# NOTE: All database initialization moved to consolidated section at end of file
     try:
         # --- Ensure audit_tasks.color column exists ---
         from sqlalchemy import text
@@ -1220,12 +2799,8 @@ with app.app_context():
             ).all()
             
             # Also get users with is_admin=True as a fallback
+            # is_admin is now a property, not a column; skip this filter
             admin_flag_users = []
-            try:
-                # Try to query is_admin column if it exists
-                admin_flag_users = User.query.filter_by(is_admin=True).all()
-            except:
-                print("[APP] is_admin column not available, skipping that filter")
             
             # Combine the lists without duplicates
             all_admin_users = list({user.id: user for user in admin_users + admin_flag_users}.values())
@@ -1244,8 +2819,13 @@ with app.app_context():
         db.session.rollback()
         print(f"[APP] Error fixing admin users: {e}")
     
-    # Then run the default admin creation logic
-    add_default_admin_if_needed()
+    # Only run default admin creation for the online server (never for offline/packaged applications)
+    from timezone_utils import is_online_server
+    if is_online_server():
+        print("[APP] Running default admin creation (online server - first launch)")
+        add_default_admin_if_needed()
+    else:
+        print("[APP] Skipping default admin creation - offline/packaged application (users will be synced from online server)")
     
     # Standard integrity checks
     try:
@@ -1276,11 +2856,8 @@ with app.app_context():
             print("[STARTUP] Healthcheck FAILED: Database is not ready.")
     except Exception as e:
         print(f"[STARTUP] Healthcheck error: {e}")
-    initialize_db_connection()
-    ensure_db_schema()
-    ensure_maintenance_records_schema()
-    assign_colors_to_audit_tasks()  # Add colors to any audit tasks that don't have them yet
-    db.create_all()
+    
+# NOTE: Database initialization moved to consolidated section at end of file
 
 # Add database connection check before requests
 @app.before_request
@@ -1290,9 +2867,9 @@ def ensure_db_connection():
     if request.path.startswith('/static/') or request.path == '/health-check':
         return
         
-    # Check DB connection for routes that need it
-    if request.endpoint not in ['static', 'health_check'] and not check_db_connection():
-        return jsonify({'error': 'Database connection failure'}), 500
+    # Temporarily disable database connection checks to avoid context issues
+    # TODO: Re-enable once all database operations have proper context handling
+    return
 
 # Helper: Always allow admins to access any page
 @app.before_request
@@ -1384,30 +2961,7 @@ def url_for_safe(endpoint, **values):
         return url_for(endpoint, **values)
     except Exception as e:
         app.logger.warning(f"URL building error for endpoint '{endpoint}': {e}")
-        
-        # Simple fallbacks for common routes
-        if endpoint == 'manage_machines':
-            return '/machines'
-        elif endpoint == 'manage_sites':
-            return '/sites'  
-        elif endpoint == 'manage_parts':
-            return '/parts'
-        elif endpoint == 'manage_users':
-            return '/admin/users'
-        elif endpoint == 'manage_roles':  # Add fallback for 'manage_roles'
-            return '/admin/roles'
-        elif endpoint == 'admin_roles':  # Add fallback for 'admin_roles' as well
-            return '/admin/roles'
-        elif endpoint == 'update_maintenance' and 'part_id' in values:
-            return f'/update-maintenance/{values["part_id"]}'
-        elif endpoint == 'machine_history' and 'machine_id' in values:
-            return f'/machine-history/{values["machine_id"]}'
-        elif endpoint == 'admin_dashboard':
-            return '/admin'
-        elif endpoint.startswith('admin_'):
-            return '/admin'
-        else:
-            return '/dashboard'
+        return "#"
 
 def get_all_permissions():
     """Return a dictionary of all available permissions."""
@@ -1552,77 +3106,28 @@ def dashboard():
             for machine in site.machines:
                 if show_decommissioned or not machine.decommissioned:
                     for part in machine.parts:
-                        # Skip parts without next_maintenance date or with None value
                         if not part.next_maintenance:
                             continue
-                            
-                        try:
-                            # Ensure next_maintenance is a datetime object
-                            if isinstance(part.next_maintenance, str):
-                                # Try to parse string to datetime
-                                try:
-                                    part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d %H:%M:%S')
-                                except ValueError:
-                                    try:
-                                        part.next_maintenance = datetime.strptime(part.next_maintenance, '%Y-%m-%d')
-                                    except ValueError:
-                                        app.logger.warning(f"Invalid date format for part {part.id}: {part.next_maintenance}")
-                                        continue  # Skip invalid date strings
-                            
-                            # Double-check that next_maintenance is still not None after parsing
-                            if not part.next_maintenance:
-                                continue
-                                
-                            # Calculate days until maintenance
-                            try:
-                                days_until = (part.next_maintenance - now).days
-                            except (TypeError, AttributeError) as calc_error:
-                                app.logger.warning(f"Error calculating days for part {part.id}: {calc_error}")
-                                continue
-                            
-                            # Ensure days_until is an integer (it should be from timedelta.days)
-                            if days_until is None or not isinstance(days_until, int):
-                                app.logger.warning(f"Invalid days_until calculation for part {part.id}: {days_until}")
-                                continue
-                                
-                            if days_until < 0:
-                                site_overdue.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                                if site in sites:  # Only count for displayed sites
-                                    overdue_count += 1
-                                all_overdue.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                            elif days_until <= 30:
-                                site_due_soon.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                                if site in sites:  # Only count for displayed sites
-                                    due_soon_count += 1
-                                all_due_soon.append({
-                                    'part': part,
-                                    'machine': machine,
-                                    'site': site,
-                                    'days_until': days_until
-                                })
-                            else:
-                                if site in sites:  # Only count for displayed sites
-                                    ok_count += 1
-                                    
-                        except (TypeError, AttributeError) as e:
-                            # Skip parts with invalid maintenance dates
-                            app.logger.warning(f"Invalid maintenance date for part {part.id}: {e}")
-                            continue
+                        days_until = (part.next_maintenance - now).days
+                        
+                        # Create a dictionary with all needed information for the template
+                        part_info = {
+                            'part': part,
+                            'machine': machine,
+                            'site': site,
+                            'days_until': days_until
+                        }
+                        
+                        if days_until < 0:
+                            site_overdue.append(part_info)
+                            all_overdue.append(part_info)
+                            overdue_count += 1
+                        elif days_until <= 30:  # Due soon threshold
+                            site_due_soon.append(part_info)
+                            all_due_soon.append(part_info)
+                            due_soon_count += 1
+                        else:
+                            ok_count += 1
             
             # Store site-specific data
             site_part_highlights[site.id] = {
@@ -1633,6 +3138,7 @@ def dashboard():
                 'overdue': len(site_overdue),
                 'due_soon': len(site_due_soon)
             }
+        
         total_parts = len(parts)
         all_overdue_total = len(all_overdue)
         all_due_soon_total = len(all_due_soon)
@@ -1654,6 +3160,7 @@ def dashboard():
                               now=now,
                               show_decommissioned=show_decommissioned,
                               decommissioned_count=decommissioned_count)
+                              
     except Exception as e:
         import traceback
         app.logger.error(f"Dashboard error: {str(e)}")
@@ -1679,6 +3186,28 @@ def dashboard():
                               show_decommissioned=False,
                               decommissioned_count=0)
 
+# --- Admin Security Event Log Viewer ---
+@app.route('/admin/security-logs', methods=['GET'])
+@login_required
+def admin_security_logs():
+    if not is_admin_user(current_user):
+        flash('You do not have permission to view security logs.', 'danger')
+        return redirect(url_for('admin'))
+    # Get filter parameters
+    event_type = request.args.get('event_type')
+    username = request.args.get('username')
+    days = request.args.get('days', type=int, default=30)
+    query = SecurityEvent.query
+    if event_type:
+        query = query.filter(SecurityEvent.event_type == event_type)
+    if username:
+        query = query.filter(SecurityEvent.username == username)
+    if days:
+        since = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(SecurityEvent.timestamp >= since)
+    logs = query.order_by(SecurityEvent.timestamp.desc()).limit(500).all()
+    return render_template('admin_security_logs.html', logs=logs, event_type=event_type, username=username, days=days)
+
 @app.route('/admin')
 @login_required
 def admin():
@@ -1687,11 +3216,9 @@ def admin():
     if not is_admin_user(current_user):
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
-    
     try:
         # Get comprehensive database statistics
         stats = get_database_stats()
-        
         # Create URLs for admin navigation - provide ALL possible links needed by template
         admin_links = {
             'users': url_for('admin_users'),
@@ -1707,7 +3234,8 @@ def admin():
             'bulk_import': url_for('bulk_import'),
             'debug_info': url_for('debug_info')
         }
-        
+        # Security event logging toggle state
+        security_logging_enabled = AppSetting.get('security_event_logging_enabled', '1') == '1'
         return render_template('admin.html',
                               stats=stats,
                               admin_links=admin_links,
@@ -1724,7 +3252,9 @@ def admin():
                               overdue_count=stats.get('maintenance_overdue', 0),
                               due_soon_count=stats.get('maintenance_due_soon', 0),
                               ok_count=stats.get('maintenance_ok', 0),
-                              now=datetime.now())
+                              now=datetime.now(),
+                              security_logging_enabled=security_logging_enabled,
+                              csrf_token=generate_csrf)
     except Exception as e:
         app.logger.error(f"Error in admin dashboard: {e}")
         flash('Error loading admin dashboard. Some statistics may be unavailable.', 'warning')
@@ -1744,23 +3274,27 @@ def admin():
                               overdue_count=0,
                               due_soon_count=0,
                               ok_count=0,
-                              now=datetime.now())
-        
-        # Render admin dashboard view with safe navigation links
-        return render_template('admin.html',
-                              user_count=user_count,
-                              roles_count=roles_count,
-                              site_count=site_count,
-                              sites_count=sites_count,  # Include both variables
-                              machine_count=machine_count,
-                              part_count=part_count,
-                              admin_links=admin_links,
-                              section='dashboard',
-                              active_section='dashboard')
-    except Exception as e:
-        app.logger.error(f"Error in admin route: {e}")
-        flash('An error occurred while loading the admin dashboard.', 'danger')
-        return redirect('/dashboard')  # Use direct URL instead of url_for to avoid potential circular errors
+                              now=datetime.now(),
+                              security_logging_enabled=True,
+                              csrf_token=generate_csrf)
+
+# --- Admin: Toggle Security Logging ---
+@app.route('/admin/toggle-security-logging', methods=['POST'])
+@login_required
+def toggle_security_logging():
+    if not is_admin_user(current_user):
+        flash('You do not have permission to perform this action.', 'danger')
+        return redirect(url_for('admin'))
+    try:
+        validate_csrf(request.form.get('csrf_token'))
+    except Exception:
+        flash('Invalid CSRF token.', 'danger')
+        return redirect(url_for('admin'))
+    enabled = AppSetting.get('security_event_logging_enabled', '1') == '1'
+    new_value = '0' if enabled else '1'
+    AppSetting.set('security_event_logging_enabled', new_value)
+    flash(f'Security event logging has been {"enabled" if new_value == "1" else "disabled"}.', 'success')
+    return redirect(url_for('admin'))
 
 @app.route('/admin/audit-history')
 @login_required
@@ -1830,16 +3364,18 @@ def audits_page():
                 can_delete_audits = 'audits.delete' in permissions
                 can_complete_audits = 'audits.complete' in permissions
 
-    # Restrict sites for non-admins
+
+    # Always re-query audit_tasks and sites from the database to ensure relationships are hydrated after sync/import
+    from sqlalchemy.orm import joinedload
     if current_user.is_admin:
-        audit_tasks = AuditTask.query.all()
-        sites = Site.query.all()
+        audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).all()
+        sites = Site.query.options(joinedload(Site.machines)).all()
     else:
         user_site_ids = [site.id for site in current_user.sites]
-        audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(user_site_ids)).all()
-        sites = current_user.sites
+        audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).filter(AuditTask.site_id.in_(user_site_ids)).all()
+        sites = Site.query.options(joinedload(Site.machines)).filter(Site.id.in_(user_site_ids)).all()
 
-    today = date.today()
+    today = get_eastern_date()  # Use timezone-aware date
     completions = {(c.audit_task_id, c.machine_id): c for c in AuditTaskCompletion.query.filter_by(date=today).all()}
     
     # Build a dict: (task_id, machine_id) -> next_eligible_date
@@ -1912,6 +3448,27 @@ def audits_page():
                     audit_task.machines.append(machine)
             db.session.add(audit_task)
             db.session.commit()
+            
+            # Log to sync queue AFTER commit so audit_task.id is available (immediate sync)
+            add_to_sync_queue_enhanced('audit_tasks', audit_task.id, 'insert', {
+                'id': audit_task.id,
+                'name': audit_task.name,
+                'description': audit_task.description,
+                'site_id': audit_task.site_id,
+                'created_by': audit_task.created_by,
+                'interval': audit_task.interval,
+                'custom_interval_days': audit_task.custom_interval_days,
+                'color': audit_task.color
+            }, immediate_sync=True)
+            
+            # Log machine associations to sync queue
+            for machine_id in machine_ids:
+                machine = Machine.query.get(int(machine_id))
+                if machine:
+                    add_to_sync_queue_enhanced('machine_audit_task', f'{audit_task.id}_{machine.id}', 'insert', {
+                        'audit_task_id': audit_task.id,
+                        'machine_id': machine.id
+                    }, immediate_sync=True)
             flash('Audit task created successfully.', 'success')
             return redirect(url_for('audits_page'))
         except Exception as e:
@@ -1926,25 +3483,113 @@ def audits_page():
                 key = f'complete_{task.id}_{machine.id}'
                 if key in request.form:
                     # Check if already completed today
-                    if completions.get((task.id, machine.id)) and completions.get((task.id, machine.id)).completed:
+                    existing_completion = completions.get((task.id, machine.id))
+                    if existing_completion and existing_completion.completed:
                         continue
                     # Strictly enforce interval: only allow if no previous completion or today >= next eligible date
                     next_eligible = eligibility.get((task.id, machine.id))
                     if next_eligible is not None and today < next_eligible:
                         continue  # Not eligible yet
+                    
                     # Only record completion if eligible (either no previous completion or today >= next_eligible)
-                    completion = AuditTaskCompletion(
-                        audit_task_id=task.id,
-                        machine_id=machine.id,
-                        date=today,
-                        completed=True,
-                        completed_by=current_user.id,
-                        completed_at=datetime.now()
-                    )
-                    db.session.add(completion)
+                    if existing_completion:
+                        # Update existing completion record
+                        existing_completion.completed = True
+                        existing_completion.completed_by = current_user.id
+                        existing_completion.completed_at = get_timezone_aware_now()  # Use timezone-aware datetime
+                        completion = existing_completion
+                        
+                        # Log to sync queue for updated completion (immediate sync)
+                        add_to_sync_queue_enhanced('audit_task_completions', completion.id, 'update', {
+                            'id': completion.id,
+                            'audit_task_id': completion.audit_task_id,
+                            'machine_id': completion.machine_id,
+                            'date': str(completion.date),
+                            'completed': completion.completed,
+                            'completed_by': completion.completed_by,
+                            'completed_at': completion.completed_at.isoformat() if completion.completed_at else None
+                        }, immediate_sync=True)
+                    else:
+                        # Check for any existing completion for this task/machine/date combination
+                        # This handles cases where completions exist but weren't in our initial query
+                        existing_any = AuditTaskCompletion.query.filter_by(
+                            audit_task_id=task.id,
+                            machine_id=machine.id,
+                            date=today
+                        ).first()
+                        
+                        if existing_any:
+                            # Update the existing record
+                            existing_any.completed = True
+                            existing_any.completed_by = current_user.id
+                            existing_any.completed_at = get_timezone_aware_now()  # Use timezone-aware datetime
+                            completion = existing_any
+                            
+                            # Log to sync queue for updated completion (immediate sync)
+                            add_to_sync_queue_enhanced('audit_task_completions', completion.id, 'update', {
+                                'id': completion.id,
+                                'audit_task_id': completion.audit_task_id,
+                                'machine_id': completion.machine_id,
+                                'date': str(completion.date),
+                                'completed': completion.completed,
+                                'completed_by': completion.completed_by,
+                                'completed_at': completion.completed_at.isoformat() if completion.completed_at else None
+                            }, immediate_sync=True)
+                        else:
+                            # Create new completion record with robust conflict handling
+                            # First, fix PostgreSQL sequence to prevent ID conflicts
+                            try:
+                                if 'postgresql' in str(db.engine.url).lower():
+                                    from sqlalchemy import text
+                                    # Get max ID and update sequence
+                                    max_id = db.session.execute(text("SELECT COALESCE(MAX(id), 0) FROM audit_task_completions")).scalar()
+                                    if max_id:
+                                        db.session.execute(text(f"SELECT setval('audit_task_completions_id_seq', {max_id + 1})"))
+                                        db.session.commit()
+                            except Exception as seq_error:
+                                print(f"[AUDIT] Could not fix sequence: {seq_error}")
+                            
+                            # Now create the completion record
+                            completion = AuditTaskCompletion(
+                                audit_task_id=task.id,
+                                machine_id=machine.id,
+                                date=today,
+                                completed=True,
+                                completed_by=current_user.id,
+                                completed_at=get_timezone_aware_now()  # Use timezone-aware datetime
+                            )
+                            
+                            # Try add first, if it fails due to ID conflict, use merge
+                            try:
+                                db.session.add(completion)
+                                db.session.flush()  # This will trigger the ID assignment and potential conflict
+                            except Exception as add_error:
+                                if "duplicate key" in str(add_error).lower() or "unique constraint" in str(add_error).lower():
+                                    print(f"[AUDIT] ID conflict detected, using merge: {add_error}")
+                                    db.session.rollback()
+                                    # Use merge as fallback
+                                    completion = db.session.merge(completion)
+                                    db.session.flush()  # Ensure the merge is processed
+                                else:
+                                    raise add_error
+                    
+                    # Log to sync queue immediately after successful completion creation (immediate sync)
+                    if completion and hasattr(completion, 'id'):
+                        add_to_sync_queue_enhanced('audit_task_completions', completion.id, 'insert', {
+                            'id': completion.id,
+                            'audit_task_id': completion.audit_task_id,
+                            'machine_id': completion.machine_id,
+                            'date': str(completion.date),
+                            'completed': completion.completed,
+                            'completed_by': completion.completed_by,
+                            'completed_at': completion.completed_at.isoformat() if completion.completed_at else None
+                        }, immediate_sync=True)
+                    
                     updated += 1
         if updated:
             db.session.commit()
+            # Notify desktop clients that audit completion changes are available
+            notify_desktop_clients_of_changes()
             flash(f'{updated} audit task(s) checked off successfully.', 'success')
         else:
             flash('No eligible audit tasks were checked off. Some checkoffs are not yet eligible.', 'warning')
@@ -2456,6 +4101,7 @@ def audit_history_print():
 @app.route('/admin/users', methods=['GET', 'POST'])
 @login_required
 def admin_users():
+    from security_event_logger import log_security_event
     """User management page."""
     # Use standardized admin check
     if not is_admin_user(current_user):
@@ -2464,6 +4110,11 @@ def admin_users():
     
     # Handle form submission for creating a new user
     if request.method == 'POST':
+        log_security_event(
+            event_type="admin_user_change",
+            details=f"Admin user change by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            is_critical=True
+        )
         try:
             username = request.form.get('username')
             email = request.form.get('email')
@@ -2502,7 +4153,14 @@ def admin_users():
             # Add user to database
             db.session.add(new_user)
             db.session.commit()
-            
+            # Log to sync queue
+            add_to_sync_queue_enhanced('users', new_user.id, 'insert', {
+                'id': new_user.id,
+                'username': new_user.username,
+                'email': new_user.email,
+                'full_name': new_user.full_name,
+                'role_id': new_user.role_id
+            }, immediate_sync=False)
             flash(f'User "{username}" created successfully.', 'success')
             return redirect('/admin/users')
         except Exception as e:
@@ -2554,6 +4212,7 @@ def admin_users():
 @app.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def edit_user(user_id):
+    from security_event_logger import log_security_event
     """Edit an existing user - admin only"""
     if not is_admin_user(current_user):
         flash('You do not have permission to edit users.', 'danger')
@@ -2568,6 +4227,11 @@ def edit_user(user_id):
     sites = Site.query.all()
     
     if request.method == 'POST':
+        log_security_event(
+            event_type="admin_user_edit",
+            details=f"User {user_id} edited by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            is_critical=True
+        )
         try:
             username = request.form.get('username')
             email = request.form.get('email')
@@ -2627,10 +4291,23 @@ def edit_user(user_id):
             
             # Force immediate commit to database
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue_enhanced('users', user.id, 'update', {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'full_name': user.full_name,
+                'role_id': user.role_id
+            })
+            # Log all site assignments for this user
+            for site in user.sites:
+                add_to_sync_queue_enhanced('user_sites', f'{user.id}_{site.id}', 'update', {
+                    'user_id': user.id,
+                    'site_id': site.id
+                })
             # Log role change for debugging
             app.logger.info(f"User {user.username} role changed: {old_role_name} -> {new_role_name}")
             flash(f'User "{username}" updated successfully. Role changed from "{old_role_name}" to "{new_role_name}".', 'success')
-            
             # Force session clear before redirect to ensure fresh data on next page load
             db.session.expire_all()
             return redirect(url_for('admin_users'))
@@ -2651,6 +4328,7 @@ def edit_user(user_id):
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
 def admin_roles():
+    from security_event_logger import log_security_event
     """Redirect or render the roles management page."""
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
@@ -2658,6 +4336,11 @@ def admin_roles():
     
     # Handle form submission for creating a new role
     if request.method == 'POST':
+        log_security_event(
+            event_type="admin_role_change",
+            details=f"Role change by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            is_critical=True
+        )
         try:
             name = request.form.get('name')
             description = request.form.get('description', '')
@@ -2683,7 +4366,13 @@ def admin_roles():
             # Add role to database
             db.session.add(new_role)
             db.session.commit()
-            
+            # Log to sync queue
+            add_to_sync_queue_enhanced('roles', new_role.id, 'insert', {
+                'id': new_role.id,
+                'name': new_role.name,
+                'description': new_role.description,
+                'permissions': new_role.permissions
+            })
             flash(f'Role "{name}" created successfully.', 'success')
             return redirect(url_for('admin_roles'))
         except Exception as e:
@@ -2723,6 +4412,8 @@ def delete_machine(machine_id):
         else:
             db.session.delete(machine)
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue_enhanced('machines', machine_id, 'delete', {'id': machine_id})
             flash(f'Machine "{machine.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_machines'))
@@ -2744,6 +4435,8 @@ def delete_part(part_id):
         # Delete the part
         db.session.delete(part)
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue_enhanced('parts', part_id, 'delete', {'id': part_id})
         flash(f'Part "{part.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_parts'))
@@ -2771,6 +4464,8 @@ def delete_site(site_id):
         else:
             db.session.delete(site)
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue_enhanced('sites', site_id, 'delete', {'id': site_id})
             flash(f'Site "{site.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_sites'))
@@ -2852,8 +4547,9 @@ def delete_role(role_id):
         else:
             db.session.delete(role)
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue_enhanced('roles', role_id, 'delete', {'id': role_id})
             flash(f'Role "{role.name}" has been deleted successfully.', 'success')
-        
         return redirect('/admin/roles')
     except Exception as e:
         db.session.rollback()
@@ -2887,6 +4583,8 @@ def delete_user(user_id):
             
         db.session.delete(user)
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue_enhanced('users', user_id, 'delete', {'id': user_id})
         flash(f'User "{user.username}" has been deleted successfully.', 'success')
         
         return redirect('/admin/users')
@@ -3013,6 +4711,20 @@ def maintenance_page():
                         part.next_maintenance = maintenance_date + delta
                         db.session.add(part)
                     db.session.commit()
+                    # Log to sync queue
+                    add_to_sync_queue_enhanced('maintenance_records', new_record.id, 'insert', {
+                        'id': new_record.id,
+                        'machine_id': new_record.machine_id,
+                        'part_id': new_record.part_id,
+                        'user_id': new_record.user_id,
+                        'maintenance_type': new_record.maintenance_type,
+                        'description': new_record.description,
+                        'date': str(new_record.date),
+                        'performed_by': new_record.performed_by,
+                        'status': new_record.status,
+                        'notes': new_record.notes,
+                        'client_id': new_record.client_id
+                    })
                     flash('Maintenance record and files added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
                 except ValueError:
@@ -3064,6 +4776,19 @@ def update_maintenance_alt():
         )
         db.session.add(maintenance_record)
         db.session.commit()
+        # Log to sync queue: maintenance record insert and part update (immediate sync)
+        add_to_sync_queue_enhanced('maintenance_records', maintenance_record.id, 'insert', {
+            'id': maintenance_record.id,
+            'part_id': maintenance_record.part_id,
+            'user_id': maintenance_record.user_id,
+            'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
+            'comments': maintenance_record.comments
+        }, immediate_sync=True)
+        add_to_sync_queue_enhanced('parts', part.id, 'update', {
+            'id': part.id,
+            'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+            'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
+        }, immediate_sync=True)
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
         referrer = request.referrer
         if referrer:
@@ -3111,6 +4836,21 @@ def update_maintenance(part_id):
         )
         db.session.add(maintenance_record)
         db.session.commit()
+        # Log to sync queue: maintenance record insert and part update
+        add_to_sync_queue_enhanced('maintenance_records', maintenance_record.id, 'insert', {
+            'id': maintenance_record.id,
+            'part_id': maintenance_record.part_id,
+            'user_id': maintenance_record.user_id,
+            'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
+            'comments': maintenance_record.comments,
+            'description': maintenance_record.description,
+            'machine_id': maintenance_record.machine_id
+        })
+        add_to_sync_queue_enhanced('parts', part.id, 'update', {
+            'id': part.id,
+            'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+            'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
+        })
         flash(f'Maintenance for "{part.name}" has been updated successfully.', 'success')
         referrer = request.referrer
         if referrer:
@@ -3190,6 +4930,11 @@ def user_profile():
                 # Update password
                 user.password_hash = generate_password_hash(new_password)
                 db.session.commit()
+                # Log to sync queue
+                add_to_sync_queue_enhanced('users', user.id, 'update', {
+                    'id': user.id,
+                    'password_hash': user.password_hash
+                })
                 flash('Password updated successfully!', 'success')
                 return redirect(url_for('user_profile'))
                 
@@ -3229,6 +4974,11 @@ def user_profile():
                     else:
                         user.password_hash = generate_password_hash(new_password)
                         db.session.commit()
+                        # Log to sync queue
+                        add_to_sync_queue_enhanced('users', user.id, 'update', {
+                            'id': user.id,
+                            'password_hash': user.password_hash
+                        })
                         flash('Password updated successfully', 'success')
                 
                 return redirect(url_for('user_profile'))
@@ -3263,6 +5013,13 @@ def update_profile():
             user.full_name = request.form.get('full_name')
         
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue_enhanced('users', user.id, 'update', {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'full_name': user.full_name
+        })
         flash('Profile updated successfully.', 'success')
         return redirect(url_for('user_profile'))
     except Exception as e:
@@ -3349,6 +5106,11 @@ def update_notification_preferences():
     if hasattr(user, 'set_notification_preferences'):
         user.set_notification_preferences(prefs)
         db.session.commit()  # Ensure changes are saved
+        # Log to sync queue
+        add_to_sync_queue_enhanced('users', user.id, 'update', {
+            'id': user.id,
+            'notification_preferences': prefs
+        })
         flash('Notification preferences updated successfully.', 'success')
     else:
         flash('Unable to save notification preferences.', 'danger')
@@ -3360,22 +5122,71 @@ def login():
     """Handle userlogin."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         remember = request.form.get('remember') == 'on'
-        # Add debug for login attempts
         app.logger.debug(f"Login attempt: username={username}, remember={remember}")
-        user = User.query.filter_by(username_hash=hash_value(username)).first()
+        
+        # Simplified approach: use direct database connection to avoid SQLAlchemy context issues
+        try:
+            app.logger.debug(f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
+            
+            # Try the normal SQLAlchemy query first
+            user = User.query.filter_by(username_hash=hash_value(username)).first()
+                
+        except Exception as e:
+            app.logger.error(f"SQLAlchemy error during login: {e}")
+            # Fallback to direct database query
+            try:
+                from sqlalchemy import create_engine, text
+                from werkzeug.security import check_password_hash as check_pw_hash
+                
+                engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
+                with engine.connect() as conn:
+                    result = conn.execute(
+                        text("SELECT id, username_hash, password_hash FROM users WHERE username_hash = :hash LIMIT 1"),
+                        {"hash": hash_value(username)}
+                    ).first()
+                    
+                    if result and check_pw_hash(result[2], password):  # Check password directly
+                        # Login successful - create a minimal user object for login_user
+                        user = User.query.get(result[0])  # Get full user object by ID
+                        if not user:
+                            # If that fails too, create a temporary user object
+                            class TempUser:
+                                def __init__(self, user_id):
+                                    self.id = user_id
+                                    self.is_authenticated = True
+                                    self.is_active = True
+                                    self.is_anonymous = False
+                                def get_id(self):
+                                    return str(self.id)
+                            user = TempUser(result[0])
+                    else:
+                        user = None
+                        
+            except Exception as e2:
+                app.logger.error(f"Direct database error during login: {e2}")
+                flash('Login system temporarily unavailable. Please try again.', 'danger')
+                return render_template('login.html')
+            
+        from security_event_logger import log_security_event
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
-            # Set remember preference and token
             user.set_remember_preference(remember)
+            log_security_event(
+                event_type="login_success",
+                details=f"Login from IP: {request.remote_addr} (username: {username})"
+            )
+            # Detect new device/IP (simple version: always log, can be improved)
+            log_security_event(
+                event_type="login_new_device_or_ip",
+                details=f"Login from new device/IP: {request.remote_addr} (username: {username})"
+            )
             if remember:
                 token = user.generate_remember_token()
                 db.session.commit()
-                # Set cookie for persistent login (30 days)
                 resp = redirect(request.args.get('next') or url_for('dashboard'))
                 resp.set_cookie('remember_token', token, max_age=30*24*60*60, httponly=True, samesite='Lax')
                 app.logger.debug(f"Remember token set for user_id={user.id}")
@@ -3391,44 +5202,80 @@ def login():
                 app.logger.debug(f"Login failed: Invalid password for username={username}")
             else:
                 app.logger.debug(f"Login failed: No user found with username={username}")
+            log_security_event(
+                event_type="login_failed",
+                details=f"Failed login attempt for username: {username} from IP: {request.remote_addr}"
+            )
             flash('Invalid username or password', 'danger')
-    
     return render_template('login.html')
+
 
 @app.route('/logout')
 @login_required
 def logout():
     """Handle user logout."""
+    from security_event_logger import log_security_event
+    remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    user_id = getattr(current_user, 'id', None)
+    username = getattr(current_user, 'username', None)
+    event_context = {
+        'ip': remote_addr,
+        'user_agent': request.headers.get('User-Agent', ''),
+    }
+    log_security_event(
+        event_type="logout",
+        user_id=user_id,
+        username=username,
+        context=event_context,
+        message="User logged out."
+    )
     logout_user()
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
-
 def forgot_password():
     """Handle password reset request."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
+
     if request.method == 'POST':
         email = request.form.get('email')
         user = User.query.filter_by(email_hash=hash_value(email)).first()
-        
+        remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+        event_context = {
+            'ip': remote_addr,
+            'user_agent': request.headers.get('User-Agent', ''),
+            'email': email,
+        }
         if user:
             # Generate a password reset token
             reset_token = secrets.token_urlsafe(32)
             expires = datetime.now() + timedelta(hours=24)
-            
             # Store token in database
             user.reset_token = reset_token
             user.reset_token_expiration = expires
             db.session.commit()
-            
+            # Log password reset request (success)
+            log_security_event(
+                event_type="password_reset_requested",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset requested. Token generated."
+            )
             # In a production app, you would send an email with the reset link
-            # For now, just flash a message with the token (for demonstration)
             reset_url = url_for('reset_password', token=reset_token, _external=True)
             flash(f'Password reset link: {reset_url}', 'info')
-            
+        else:
+            # Log password reset request (unknown email)
+            log_security_event(
+                event_type="password_reset_requested_unknown_email",
+                user_id=None,
+                username=None,
+                context=event_context,
+                message="Password reset requested for unknown email."
+            )
         # Always show this message to prevent user enumeration
         flash('If an account with that email exists, a password reset link has been sent.', 'info')
         return redirect(url_for('login'))
@@ -3471,18 +5318,45 @@ def reset_password(token):
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     user = User.query.filter_by(reset_token=token).first()
-    
+    remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    event_context = {
+        'ip': remote_addr,
+        'user_agent': request.headers.get('User-Agent', ''),
+        'token': token,
+        'user_id': getattr(user, 'id', None) if user else None,
+    }
     # Check if token is valid and not expired
     if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
+        log_security_event(
+            event_type="password_reset_token_invalid",
+            user_id=None,
+            username=None,
+            context=event_context,
+            message="Password reset link invalid or expired."
+        )
         flash('The password reset link is invalid or has expired.', 'danger')
         return redirect(url_for('forgot_password'))
     if request.method == 'POST':
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
         if not password or len(password) < 8:
+            log_security_event(
+                event_type="password_reset_failed_short_password",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset failed: password too short."
+            )
             flash('Password must be at least 8 characters long.', 'danger')
             return redirect(url_for('reset_password', token=token))
         elif password != confirm_password:
+            log_security_event(
+                event_type="password_reset_failed_mismatch",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset failed: passwords do not match."
+            )
             flash('Passwords do not match.', 'danger')
             return redirect(url_for('reset_password', token=token))
         else:
@@ -3491,6 +5365,13 @@ def reset_password(token):
             user.reset_token = None
             user.reset_token_expiration = None
             db.session.commit()
+            log_security_event(
+                event_type="password_reset_success",
+                user_id=user.id,
+                username=getattr(user, 'username', None),
+                context=event_context,
+                message="Password reset successful."
+            )
             flash('Your password has been updated. Please log in.', 'success')
             return redirect(url_for('login'))
     return render_template('reset_password.html', token=token) if os.path.exists(os.path.join('templates', 'reset_password.html')) else '''
@@ -3541,11 +5422,57 @@ def sync_status():
         # Basic information about the server state
         return jsonify({
             'status': 'online',
-            'server_time': datetime.now().isoformat(),
-            'version': '1.0.0'
+            'server_time': get_timezone_aware_now().isoformat(),
+            'version': '1.0.0',
+            'timezone': 'America/New_York'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/sync/trigger', methods=['POST'])
+def api_trigger_manual_sync():
+    """API endpoint to trigger manual sync."""
+    try:
+        print("[API] Manual sync trigger requested")
+        
+        # Check if this is an offline client that should upload to server
+        if should_trigger_sync(force_override_cooldown=True):
+            print("[API] Offline client - triggering enhanced upload")
+            # Run enhanced sync upload in a separate thread to avoid blocking
+            import threading
+            def run_enhanced_sync():
+                try:
+                    from sync_utils_enhanced import enhanced_upload_pending_sync_queue
+                    result = enhanced_upload_pending_sync_queue()
+                    print(f"[API] Enhanced upload completed: {result}")
+                except Exception as sync_error:
+                    print(f"[API] Enhanced upload failed: {sync_error}")
+            
+            # Start sync in background
+            sync_thread = threading.Thread(target=run_enhanced_sync, daemon=True)
+            sync_thread.start()
+            
+            return jsonify({"status": "triggered", "message": "Enhanced sync upload started"})
+        else:
+            # This is either an online server or sync is not eligible (cooldown, etc.)
+            print("[API] Not triggering enhanced sync - running traditional sync")
+            import threading
+            def run_sync():
+                try:
+                    result = trigger_manual_sync()
+                    print(f"[API] Manual sync completed: {result}")
+                except Exception as sync_error:
+                    print(f"[API] Manual sync failed: {sync_error}")
+            
+            # Start sync in background to prevent SocketIO blocking
+            sync_thread = threading.Thread(target=run_sync, daemon=True)
+            sync_thread.start()
+            
+            return jsonify({"status": "triggered", "message": "Sync started in background"})
+            
+    except Exception as e:
+        print(f"[API] Manual sync trigger error: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
 
 
@@ -3554,23 +5481,53 @@ def check_api_auth():
     """Check authentication for API endpoints - supports both session and basic auth."""
     # Check session-based authentication first
     if current_user.is_authenticated and is_admin_user(current_user):
+        print(f"[API AUTH] Session auth successful for user: {current_user.username}")
         return True
     
     # Check basic authentication for API access
     auth = request.authorization
     if auth and auth.username and auth.password:
+        print(f"[API AUTH] Attempting basic auth for username: {auth.username}")
         try:
-            # Try both encrypted and plain username lookups for compatibility
+            # Try encrypted username lookup first
             user = User.query.filter_by(_username=encrypt_value(auth.username)).first()
             if not user:
+                print(f"[API AUTH] No user found with encrypted username, trying plain username")
                 # Fallback to plain username lookup (for older records)
                 user = User.query.filter_by(username=auth.username).first()
             
-            if user and user.check_password(auth.password) and is_admin_user(user):
-                return True
+            if not user:
+                print(f"[API AUTH] No direct match found, checking all users for decryption match")
+                # If no direct match, try to find user by decrypting all usernames
+                all_users = User.query.all()
+                for candidate_user in all_users:
+                    try:
+                        # Try to decrypt the stored username and see if it matches
+                        if candidate_user.username == auth.username:
+                            user = candidate_user
+                            print(f"[API AUTH] Found user via decryption match: {auth.username}")
+                            break
+                    except:
+                        # Skip users whose usernames can't be decrypted
+                        continue
+            
+            if user:
+                print(f"[API AUTH] Found user: {user.username}, checking password and admin status")
+                password_valid = user.check_password(auth.password)
+                is_admin = is_admin_user(user)
+                print(f"[API AUTH] Password valid: {password_valid}, Is admin: {is_admin}")
+                
+                if password_valid and is_admin:
+                    print(f"[API AUTH] Basic auth successful for user: {user.username}")
+                    return True
+            else:
+                print(f"[API AUTH] No user found for username: {auth.username}")
         except Exception as e:
             print(f"[API AUTH] Error checking basic auth: {e}")
+    else:
+        print(f"[API AUTH] No basic auth credentials provided")
     
+    print(f"[API AUTH] Authentication failed")
     return False
 
 # --- SYNC ENDPOINT FOR OFFLINE USAGE ---
@@ -3581,9 +5538,33 @@ def sync_data():
         return jsonify({'error': 'Unauthorized'}), 403
     if request.method == 'GET':
         try:
-            # Collect all relevant data
+            # Import datetime at function scope for availability throughout
+            from datetime import datetime
+            
+            # Check for incremental sync parameter
+            since_timestamp = request.args.get('since')
+            is_incremental = since_timestamp is not None
+            
+            if is_incremental:
+                try:
+                    # Parse the timestamp for filtering
+                    since_dt = datetime.fromisoformat(since_timestamp.replace('Z', '+00:00'))
+                    print(f"[SYNC] Incremental sync request since: {since_dt}")
+                except (ValueError, TypeError) as e:
+                    print(f"[SYNC] Invalid timestamp format: {since_timestamp}, falling back to full sync")
+                    is_incremental = False
+                    since_dt = None
+            else:
+                since_dt = None
+                print("[SYNC] Full sync request (no timestamp)")
+            
+            # Collect all relevant data with optional timestamp filtering
             users = []
-            for u in User.query.all():
+            user_query = User.query
+            if is_incremental and since_dt:
+                user_query = user_query.filter(User.updated_at > since_dt)
+            
+            for u in user_query.all():
                 user_data = {
                     'id': u.id,
                     'username': u.username,  # Use decrypted value for compatibility
@@ -3608,6 +5589,12 @@ def sync_data():
                     user_data['password_reset_required'] = True
                 
                 users.append(user_data)
+            
+            roles = []
+            role_query = Role.query
+            if is_incremental and since_dt:
+                role_query = role_query.filter(Role.updated_at > since_dt)
+            
             roles = [
                 {
                     'id': r.id,
@@ -3617,8 +5604,14 @@ def sync_data():
                     'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
                     'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
                 }
-                for r in Role.query.all()
+                for r in role_query.all()
             ]
+            
+            sites = []
+            site_query = Site.query
+            if is_incremental and since_dt:
+                site_query = site_query.filter(Site.updated_at > since_dt)
+            
             sites = [
                 {
                     'id': s.id,
@@ -3630,8 +5623,14 @@ def sync_data():
                     'created_at': s.created_at.isoformat() if getattr(s, 'created_at', None) else None,
                     'updated_at': s.updated_at.isoformat() if getattr(s, 'updated_at', None) else None,
                 }
-                for s in Site.query.all()
+                for s in site_query.all()
             ]
+            
+            machines = []
+            machine_query = Machine.query
+            if is_incremental and since_dt:
+                machine_query = machine_query.filter(Machine.updated_at > since_dt)
+            
             machines = [
                 {
                     'id': m.id,
@@ -3647,8 +5646,14 @@ def sync_data():
                     'created_at': m.created_at.isoformat() if getattr(m, 'created_at', None) else None,
                     'updated_at': m.updated_at.isoformat() if getattr(m, 'updated_at', None) else None,
                 }
-                for m in Machine.query.all()
+                for m in machine_query.all()
             ]
+            
+            parts = []
+            part_query = Part.query
+            if is_incremental and since_dt:
+                part_query = part_query.filter(Part.updated_at > since_dt)
+            
             parts = [
                 {
                     'id': p.id,
@@ -3663,8 +5668,14 @@ def sync_data():
                     'created_at': p.created_at.isoformat() if getattr(p, 'created_at', None) else None,
                     'updated_at': p.updated_at.isoformat() if getattr(p, 'updated_at', None) else None,
                 }
-                for p in Part.query.all()
+                for p in part_query.all()
             ]
+            
+            maintenance_records = []
+            maintenance_query = MaintenanceRecord.query
+            if is_incremental and since_dt:
+                maintenance_query = maintenance_query.filter(MaintenanceRecord.updated_at > since_dt)
+            
             maintenance_records = [
                 {
                     'id': r.id,
@@ -3681,9 +5692,14 @@ def sync_data():
                     'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
                     'updated_at': r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None,
                 }
-                for r in MaintenanceRecord.query.all()
+                for r in maintenance_query.all()
             ]
             # Add audit tasks and completions for comprehensive sync
+            audit_tasks = []
+            audit_task_query = AuditTask.query
+            if is_incremental and since_dt:
+                audit_task_query = audit_task_query.filter(AuditTask.updated_at > since_dt)
+            
             audit_tasks = [
                 {
                     'id': t.id,
@@ -3697,8 +5713,14 @@ def sync_data():
                     'created_at': t.created_at.isoformat() if getattr(t, 'created_at', None) else None,
                     'updated_at': t.updated_at.isoformat() if getattr(t, 'updated_at', None) else None,
                 }
-                for t in AuditTask.query.all()
+                for t in audit_task_query.all()
             ]
+            
+            audit_task_completions = []
+            completion_query = AuditTaskCompletion.query
+            if is_incremental and since_dt:
+                completion_query = completion_query.filter(AuditTaskCompletion.updated_at > since_dt)
+            
             audit_task_completions = [
                 {
                     'id': c.id,
@@ -3712,8 +5734,21 @@ def sync_data():
                     'created_at': c.created_at.isoformat() if getattr(c, 'created_at', None) else None,
                     'updated_at': c.updated_at.isoformat() if getattr(c, 'updated_at', None) else None,
                 }
-                for c in AuditTaskCompletion.query.all()
+                for c in completion_query.all()
             ]
+            
+            # Add machine_audit_task associations - CRITICAL for audit task sync
+            from sqlalchemy import inspect, text
+            machine_audit_task = []
+            inspector = inspect(db.engine)
+            if inspector.has_table('machine_audit_task'):
+                try:
+                    result = db.session.execute(text('SELECT audit_task_id, machine_id FROM machine_audit_task'))
+                    machine_audit_task = [{'audit_task_id': row[0], 'machine_id': row[1]} for row in result.fetchall()]
+                except Exception as e:
+                    app.logger.error(f"Error fetching machine_audit_task associations: {e}")
+                    machine_audit_task = []
+            
             # Optionally add audit tasks, completions, etc.
             data = {
                 'users': users,
@@ -3724,7 +5759,34 @@ def sync_data():
                 'maintenance_records': maintenance_records,
                 'audit_tasks': audit_tasks,
                 'audit_task_completions': audit_task_completions,
+                'machine_audit_task': machine_audit_task,
             }
+            
+            # Add sync metadata for debugging
+            sync_metadata = {
+                'sync_type': 'incremental' if is_incremental else 'full',
+                'since_timestamp': since_timestamp if is_incremental else None,
+                'server_timestamp': datetime.now().isoformat(),
+                'record_counts': {
+                    'users': len(users),
+                    'roles': len(roles),
+                    'sites': len(sites),
+                    'machines': len(machines),
+                    'parts': len(parts),
+                    'maintenance_records': len(maintenance_records),
+                    'audit_tasks': len(audit_tasks),
+                    'audit_task_completions': len(audit_task_completions),
+                    'machine_audit_task': len(machine_audit_task),
+                }
+            }
+            data['_sync_metadata'] = sync_metadata
+            
+            # Log the sync request for debugging
+            total_records = sum(sync_metadata['record_counts'].values())
+            print(f"[SYNC] {sync_metadata['sync_type'].title()} sync served: {total_records} records total")
+            if is_incremental:
+                print(f"[SYNC] Incremental sync since {since_timestamp}: {sync_metadata['record_counts']}")
+            
             return jsonify(data)
         except Exception as e:
             app.logger.error(f"Error in sync_data: {e}")
@@ -3732,6 +5794,9 @@ def sync_data():
     elif request.method == 'POST':
         # Accept pushed data from offline client and merge into DB
         try:
+            # Import datetime at function scope for availability throughout POST section
+            from datetime import datetime
+            
             data = request.get_json(force=True)
             # --- Users ---
             for u in data.get('users', []):
@@ -3741,12 +5806,12 @@ def sync_data():
                     user.email = u['email']
                     user.full_name = u.get('full_name')  # Add full_name sync
                     user.role_id = u['role_id']
-                    user.is_admin = u.get('is_admin', False)
+                    # user.is_admin = u.get('is_admin', False)  # Removed: is_admin is a read-only property
                     user.active = u.get('active', True)
                 else:
                     user = User(
                         id=u['id'], full_name=u.get('full_name'),  # Add full_name sync
-                        role_id=u['role_id'], is_admin=u.get('is_admin', False), active=u.get('active', True)
+                        role_id=u['role_id'], active=u.get('active', True)  # Removed: is_admin is a read-only property
                     )
                     user.username = u['username']
                     user.email = u['email']
@@ -3804,24 +5869,40 @@ def sync_data():
                     db.session.add(part)
             # --- Maintenance Records ---
             for r in data.get('maintenance_records', []):
-                record = MaintenanceRecord.query.get(r['id'])
-                if record:
-                    record.machine_id = r['machine_id']
-                    record.part_id = r['part_id']
-                    record.user_id = r['user_id']
-                    record.maintenance_type = r['maintenance_type']
-                    record.description = r['description']
-                    record.date = r['date']
-                    record.performed_by = r['performed_by']
-                    record.status = r['status']
-                    record.notes = r['notes']
-                else:
-                    record = MaintenanceRecord(
-                        id=r['id'], machine_id=r['machine_id'], part_id=r['part_id'], user_id=r['user_id'],
-                        maintenance_type=r['maintenance_type'], description=r['description'], date=r['date'],
-                        performed_by=r['performed_by'], status=r['status'], notes=r['notes']
-                    )
-                    db.session.add(record)
+                # Use merge for upsert behavior to avoid ID conflicts
+                record = MaintenanceRecord(
+                    id=r['id'], machine_id=r['machine_id'], part_id=r['part_id'], user_id=r['user_id'],
+                    maintenance_type=r['maintenance_type'], description=r['description'], date=r['date'],
+                    performed_by=r['performed_by'], status=r['status'], notes=r['notes']
+                )
+                db.session.merge(record)
+            
+            # --- Audit Task Completions ---
+            for atc in data.get('audit_task_completions', []):
+                # Use merge for upsert behavior to avoid ID conflicts
+                completion = AuditTaskCompletion(
+                    id=atc['id'],
+                    audit_task_id=atc['audit_task_id'],
+                    machine_id=atc['machine_id'],
+                    completed_by=atc.get('user_id'),  # Use completed_by instead of user_id
+                    date=datetime.fromisoformat(atc['date']) if atc.get('date') else None,
+                    completed=atc.get('completed', False),
+                    completed_at=datetime.fromisoformat(atc['completed_at']) if atc.get('completed_at') else None
+                )
+                merged_completion = db.session.merge(completion)
+                db.session.flush()  # Ensure ID is available
+                
+                # Add to sync queue for tracking (without immediate sync to avoid loop)
+                add_to_sync_queue_enhanced('audit_task_completions', merged_completion.id, 'update', {
+                    'id': merged_completion.id,
+                    'audit_task_id': merged_completion.audit_task_id,
+                    'machine_id': merged_completion.machine_id,
+                    'date': str(merged_completion.date) if merged_completion.date else None,
+                    'completed': merged_completion.completed,
+                    'completed_by': merged_completion.completed_by,
+                    'completed_at': merged_completion.completed_at.isoformat() if merged_completion.completed_at else None
+                }, immediate_sync=False, force_add=True)
+            
             db.session.commit()
             return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200
         except Exception as e:
@@ -3831,7 +5912,6 @@ def sync_data():
 
 @app.route('/health-check')
 def health_check():
-
     """Basic healthcheck endpoint."""
     try:
         # Update to use connection-based execute pattern
@@ -3841,6 +5921,53 @@ def health_check():
     except Exception as e:
         app.logger.error(f"Health check failed: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/memory-status')
+def memory_status():
+    """Memory and connection monitoring endpoint."""
+    try:
+        import psutil
+        import gc
+        
+        # Get process memory info
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        memory_percent = process.memory_percent()
+        
+        # Get Python garbage collection stats
+        gc_stats = gc.get_stats()
+        gc_count = gc.get_count()
+        
+        status = {
+            'memory': {
+                'rss_mb': round(memory_info.rss / 1024 / 1024, 2),
+                'vms_mb': round(memory_info.vms / 1024 / 1024, 2),
+                'percent': round(memory_percent, 2)
+            },
+            'socketio': {
+                'active_connections': len(active_connections),
+                'connection_ids': list(active_connections)
+            },
+            'gc': {
+                'stats': gc_stats,
+                'count': gc_count
+            },
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify(status), 200
+    except ImportError:
+        # Fallback if psutil is not available
+        return jsonify({
+            'socketio': {
+                'active_connections': len(active_connections),
+                'connection_ids': list(active_connections)
+            },
+            'timestamp': datetime.utcnow().isoformat(),
+            'note': 'Install psutil for detailed memory monitoring'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -3946,6 +6073,12 @@ def manage_sites():
     if request.method == 'POST':
         # Only admins can create sites
         if not is_admin_user(current_user):
+            from security_event_logger import log_security_event
+            log_security_event(
+                event_type="privilege_escalation_attempt",
+                details=f"Non-admin user {getattr(current_user, 'username', None)} attempted to create a site.",
+                is_critical=True
+            )
             flash('You do not have permission to create sites.', 'danger')
             return redirect(url_for('manage_sites'))
             
@@ -4033,6 +6166,21 @@ def edit_site(site_id):
                         site.users.append(user)
             
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue_enhanced('sites', site.id, 'update', {
+                'id': site.id,
+                'name': site.name,
+                'location': site.location,
+                'contact_email': site.contact_email,
+                'notification_threshold': site.notification_threshold,
+                'enable_notifications': site.enable_notifications
+            })
+            # Log all user assignments for this site
+            for user in site.users:
+                add_to_sync_queue_enhanced('site_users', f'{site.id}_{user.id}', 'update', {
+                    'site_id': site.id,
+                    'user_id': user.id
+                })
             flash(f'Site "{site.name}" has been updated successfully.', 'success')
             return redirect(url_for('manage_sites'))
         except Exception as e:
@@ -4077,6 +6225,12 @@ def manage_machines():
         if site_id:
             # Verify user can access this site
             if not user_can_see_all_sites(current_user) and site_id not in site_ids:
+                from security_event_logger import log_security_event
+                log_security_event(
+                    event_type="suspicious_activity",
+                    details=f"User {getattr(current_user, 'username', None)} attempted to access unauthorized site {site_id} in machines management.",
+                    is_critical=True
+                )
                 flash('You do not have access to this site.', 'danger')
                 return redirect(url_for('manage_machines'))
                 
@@ -4222,6 +6376,17 @@ def edit_machine(machine_id):
                         app.logger.info(f"Updated decommission reason for '{machine.name}': {new_reason}")
             
             db.session.commit()
+            # Log to sync queue
+            add_to_sync_queue_enhanced('machines', machine.id, 'update', {
+                'id': machine.id,
+                'name': machine.name,
+                'model': machine.model,
+                'machine_number': machine.machine_number,
+                'serial_number': machine.serial_number,
+                'site_id': machine.site_id,
+                'decommissioned': getattr(machine, 'decommissioned', False),
+                'decommissioned_reason': getattr(machine, 'decommissioned_reason', ''),
+            })
             flash(f'Machine "{machine.name}" has been updated successfully.', 'success')
             return redirect(url_for('manage_machines'))
         except Exception as e:
@@ -4260,6 +6425,12 @@ def manage_parts():
             # Verify user can access this machine
             machine = Machine.query.get(machine_id)
             if not machine or (not user_can_see_all_sites(current_user) and machine.site_id not in site_ids):
+                from security_event_logger import log_security_event
+                log_security_event(
+                    event_type="suspicious_activity",
+                    details=f"User {getattr(current_user, 'username', None)} attempted to access unauthorized machine {machine_id} in parts management.",
+                    is_critical=True
+                )
                 flash('You do not have access to this machine.', 'danger')
                 return redirect(url_for('manage_parts'))
             
@@ -4426,6 +6597,15 @@ def edit_part(part_id):
         part.maintenance_frequency = request.form.get('maintenance_frequency', part.maintenance_frequency)
         part.maintenance_unit = request.form.get('maintenance_unit', part.maintenance_unit)
         db.session.commit()
+        # Log to sync queue
+        add_to_sync_queue_enhanced('parts', part.id, 'update', {
+            'id': part.id,
+            'name': part.name,
+            'description': part.description,
+            'machine_id': part.machine_id,
+            'maintenance_frequency': part.maintenance_frequency,
+            'maintenance_unit': part.maintenance_unit
+        })
         flash('Part updated successfully.', 'success')
         return redirect(url_for('manage_parts'))
     
@@ -5389,7 +7569,7 @@ def bulk_import():
                 reader = csv.DictReader(stream.splitlines())
                 data = list(reader)
             elif ext == 'json':
-                data = json.load(file.stream)
+                data = _json.load(file.stream)
                 if not isinstance(data, list):
                     flash('JSON must be an array of objects.', 'danger')
                     return redirect(url_for('bulk_import'))
@@ -6038,29 +8218,284 @@ def enhanced_server_error(e):
 
 
 
-# --- OFFLINE/ONLINE DATABASE SWITCH ---
-import sqlalchemy
-offline_mode = os.environ.get("OFFLINE_MODE", "0") == "1"
-if offline_mode:
-    # Use local SQLite database for offline mode
-    db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    # Rebind the db engine if already initialized
-    if hasattr(db, 'engine'):
-        db.engine.dispose()
-        db.__init__(app)
-    print("[AMRS] Running in OFFLINE MODE: using local maintenance.db")
+# --- CONSOLIDATED DATABASE CONFIGURATION ---
+# Initialize database configuration immediately on import
+
+print("[AMRS] Starting consolidated database configuration...")
+
+# Determine environment and database type
+POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
+is_render_env = os.environ.get('RENDER') or os.environ.get('RENDER_SERVICE_NAME')
+
+# Use the same offline detection as the rest of the application
+from timezone_utils import is_offline_mode as detect_offline_mode
+offline_mode = detect_offline_mode()
+
+# Check if DATABASE_URL is actually PostgreSQL
+is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
+
+# Configure database based on environment
+if is_render_env:
+    # Render environment: always use PostgreSQL
+    if is_postgresql_url:
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print("[AMRS] RENDER MODE: Using PostgreSQL database")
+    else:
+        print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
+        exit(1)
+elif offline_mode:
+    # Local offline mode: use secure bootstrap database if available, otherwise local SQLite
+    secure_db_path = get_secure_database_path()
+    
+    if os.path.exists(secure_db_path):
+        # Use the existing secure database from previous bootstrap
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{secure_db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        print(f"[AMRS] OFFLINE MODE: Using existing secure database: {secure_db_path}")
+    else:
+        # Fallback to local database
+        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        print(f"[AMRS] OFFLINE MODE: Using local SQLite fallback at {db_path}")
 else:
-    print("[AMRS] Running in ONLINE MODE: using configured database URI")
+    # Local online mode: use PostgreSQL if available, fallback to SQLite
+    if is_postgresql_url:
+        app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print("[AMRS] LOCAL ONLINE MODE: Using PostgreSQL database")
+    else:
+        db_path = os.path.join(os.path.dirname(__file__), "maintenance.db")
+        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print(f"[AMRS] LOCAL FALLBACK MODE: Using SQLite at {db_path}")
+
+# Initialize database with Flask app after configuration is complete
+db.init_app(app)
+print(f"[AMRS] Database initialized successfully - URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')}")
+
+# Perform all database setup within app context immediately on import
+with app.app_context():
+    try:
+        # First run comprehensive schema validation and migration
+        print("[AMRS] Running comprehensive schema validation...")
+        from schema_validator import validate_and_migrate_schema, verify_schema_integrity
+        
+        # Get the database path from current configuration
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if 'sqlite:///' in db_uri:
+            db_path = db_uri.replace('sqlite:///', '')
+            print(f"[AMRS] Validating schema for SQLite database: {db_path}")
+            
+            # Run schema validation and migration
+            success, results = validate_and_migrate_schema(db_path, verbose=False)
+            if success:
+                print(f"[AMRS] ✅ Schema validation completed: {results['tables_created']} tables created, {results['columns_added']} columns added")
+                
+                # Verify schema integrity
+                valid, issues = verify_schema_integrity(db_path, verbose=False)
+                if not valid:
+                    print(f"[AMRS] ⚠️  Schema issues detected: {len(issues)} remaining issues")
+                    for issue in issues[:3]:  # Show first 3 issues
+                        print(f"[AMRS]   • {issue}")
+                else:
+                    print("[AMRS] ✅ Schema integrity verified - all required columns present")
+            else:
+                print(f"[AMRS] ❌ Schema validation failed: {results.get('error', 'Unknown error')}")
+        else:
+            print("[AMRS] Skipping schema validation for non-SQLite database")
+        
+        # Run legacy auto-migration for any remaining fixes
+        print("[AMRS] Running legacy auto-migration...")
+        try:
+            run_auto_migration()
+            print("[AMRS] Auto-migration completed successfully")
+        except Exception as e:
+            print(f"[AMRS] Warning: Auto-migration failed: {e}")
+            print("[AMRS] Continuing without auto-migration...")
+        
+        # Create tables if needed
+        db.create_all()
+        print("[AMRS] Database tables ensured")
+        
+        # Ensure sync_queue and app_settings tables exist
+        try:
+            import add_sync_queue_table
+            add_sync_queue_table.upgrade()
+            print('[AMRS] Ensured sync_queue table exists')
+        except Exception as e:
+            print(f'[AMRS] Warning: Could not ensure sync_queue table: {e}')
+        
+        try:
+            import migrate_app_settings
+            migrate_app_settings.upgrade()
+            print('[AMRS] Ensured app_settings table exists')
+        except Exception as e:
+            print(f'[AMRS] Warning: Could not ensure app_settings table: {e}')
+        
+        # Additional setup for online servers
+        if not offline_mode:
+            try:
+                # Ensure sync columns exist
+                ensure_sync_columns()
+                print('[AMRS] Ensured sync columns exist')
+                
+                # Ensure audit task-machine associations exist for sync export
+                try:
+                    ensure_online_server_audit_associations()
+                    print("[AMRS] Online server audit associations ensured")
+                except Exception as e:
+                    print(f"[AMRS] Warning: Could not ensure online server audit associations: {e}")
+                
+                # Run any additional startup tasks  
+                try:
+                    assign_colors_to_audit_tasks()
+                    print("[AMRS] Audit task colors assigned")
+                except Exception as e:
+                    print(f"[AMRS] Warning: Could not assign audit task colors: {e}")
+                
+                print("[AMRS] Online mode database setup completed")
+            except Exception as e:
+                print(f"[AMRS] Warning: Online mode setup error: {e}")
+    
+    except Exception as e:
+        print(f"[AMRS] Error during database setup: {e}")
+        import traceback
+        traceback.print_exc()
+
+print("[AMRS] Database initialization and setup completed")
+
+def initialize_bootstrap_only():
+    """Run bootstrap operations only - database is already initialized above."""
+    print("[AMRS] Running bootstrap operations...")
+    
+    # Use the same offline detection as above
+    offline_mode = detect_offline_mode()
+    
+    # Initialize sync worker for offline clients only (after all setup is complete)
+    if offline_mode:
+        try:
+            start_enhanced_sync_worker()
+            print("[AMRS] Enhanced sync worker started for offline mode")
+        except Exception as e:
+            print(f"[AMRS] Warning: Failed to start sync worker: {e}")
+
+    print("[AMRS] Bootstrap operations completed")
+
+    # ========================================
+    # AUTOMATIC BOOTSTRAP AND SYNC FOR OFFLINE APPLICATIONS
+    # ========================================
+    # This section automatically configures offline applications when they start
+    from timezone_utils import is_offline_mode
+
+    # Ensure audit task-machine associations exist for proper UI display
+    try:
+        if is_offline_mode():
+            db_path = get_secure_database_path()
+            ensure_audit_task_machine_associations(db_path)
+    except Exception as e:
+        print(f"[AMRS] Warning: Could not ensure audit task associations: {e}")
+
+    if is_offline_mode():
+        print("\n" + "="*60)
+        print("🚀 AUTOMATIC BOOTSTRAP FOR OFFLINE APPLICATION")
+        print("="*60)
+        
+        try:
+            # Verify and complete bootstrap if needed
+            if not verify_bootstrap_success():
+                print("[AUTO-BOOTSTRAP] Bootstrap verification failed, attempting full bootstrap...")
+                bootstrap_success = bootstrap_secrets_from_remote()
+                
+                if bootstrap_success:
+                    print("[AUTO-BOOTSTRAP] ✅ Bootstrap completed successfully")
+                    
+                    # Update database configuration to use secure database
+                    secure_db_path = get_secure_database_path()
+                    if os.path.exists(secure_db_path):
+                        # Reinitialize database connection with secure database
+                        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{secure_db_path}'
+                        
+                        # Reinitialize the database
+                        with app.app_context():
+                            db.engine.dispose()  # Close old connections
+                            # db.init_app(app) - Already initialized, just dispose and recreate
+                            db.create_all()      # Ensure all tables exist
+                        
+                        print(f"[AUTO-BOOTSTRAP] ✅ Switched to secure database: {secure_db_path}")
+                    else:
+                        print("[AUTO-BOOTSTRAP] ⚠️  Bootstrap completed but secure database not found")
+                else:
+                    print("[AUTO-BOOTSTRAP] ❌ Bootstrap failed - application will use local configuration")
+            else:
+                print("[AUTO-BOOTSTRAP] ✅ Bootstrap verification passed - application ready")
+                
+                # Ensure we're using the secure database
+                secure_db_path = get_secure_database_path()
+                current_db = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+                
+                if secure_db_path not in current_db:
+                    print("[AUTO-BOOTSTRAP] Updating to use secure database...")
+                    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{secure_db_path}'
+                    
+                    with app.app_context():
+                        db.engine.dispose()
+                        # db.init_app(app) - Already initialized, just dispose
+                        
+                    print(f"[AUTO-BOOTSTRAP] ✅ Using secure database: {secure_db_path}")
+            
+            # Final verification
+            print("\n📋 BOOTSTRAP STATUS SUMMARY:")
+            print("-" * 40)
+            
+            # Check credentials
+            import keyring
+            service = get_secure_storage_service()
+            creds_available = bool(keyring.get_password(service, 'AMRS_ADMIN_USERNAME'))
+            print(f"🔑 Credentials Available: {'✅' if creds_available else '❌'}")
+            
+            # Check database
+            secure_db_path = get_secure_database_path()
+            db_available = os.path.exists(secure_db_path)
+            print(f"💾 Secure Database: {'✅' if db_available else '❌'}")
+            
+            if db_available:
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(secure_db_path)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM users WHERE active = 1")
+                    user_count = cursor.fetchone()[0]
+                    conn.close()
+                    print(f"👥 Active Users: {user_count}")
+                    
+                    if user_count > 0:
+                        print("\n🎉 OFFLINE APPLICATION READY!")
+                        print("Users can now login with their online credentials")
+                    else:
+                        print("\n⚠️  DATABASE SYNC NEEDED")
+                        print("No users found - database sync may have failed")
+                except Exception as e:
+                    print(f"❌ Database check error: {e}")
+            
+            print("="*60)
+            
+        except Exception as e:
+            print(f"[AUTO-BOOTSTRAP] Error during automatic bootstrap: {e}")
+            print("[AUTO-BOOTSTRAP] Application will continue with local configuration")
+    else:
+        print("[BOOTSTRAP] Online server mode - skipping automatic bootstrap")
+    
+    return offline_mode  # Return offline_mode for use in socketio.run
 
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
-    # Run the Flask app locally with the same settings as Render
-    # Use the PORT environment variable if set, otherwise default to 10000 (or 5000 for Flask default)
+    # Initialize bootstrap operations - database is already initialized above
+    offline_mode = initialize_bootstrap_only()
+    
+    # Run the Flask app with SocketIO for WebSocket support
     port = int(os.environ.get("PORT", 10000))
-    # Use debug mode only if FLASK_ENV=development
     debug = os.environ.get("FLASK_ENV", "production") == "development"
-    # Use 127.0.0.1 for offline mode, 0.0.0.0 for online
     host = "127.0.0.1" if offline_mode else "0.0.0.0"
-    app.run(host=host, port=port, debug=debug)
+    socketio.run(app, host=host, port=port, debug=debug)

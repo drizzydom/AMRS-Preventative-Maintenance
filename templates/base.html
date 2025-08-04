@@ -715,5 +715,10 @@
     });
     </script>
     <!-- End Dark Mode Toggle -->
+    
+    <!-- Auto-sync for offline clients -->
+    {% include 'includes/auto_sync.html' %}
+    <!-- Real-time sync via Socket.IO -->
+    {% include 'includes/socket_sync.html' %}
 </body>
 </html>
