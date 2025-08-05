@@ -9040,12 +9040,23 @@ print("[AMRS] Starting consolidated database configuration...")
 POSTGRESQL_DATABASE_URI = os.environ.get('DATABASE_URL')
 is_render_env = os.environ.get('RENDER') or os.environ.get('RENDER_SERVICE_NAME')
 
+print(f"[DEBUG] DATABASE_URL value: {POSTGRESQL_DATABASE_URI}")
+print(f"[DEBUG] RENDER env: {os.environ.get('RENDER')}")
+print(f"[DEBUG] is_render_env: {is_render_env}")
+
 # Use the same offline detection as the rest of the application
-from timezone_utils import is_offline_mode as detect_offline_mode
-offline_mode = detect_offline_mode()
+try:
+    from timezone_utils import is_offline_mode as detect_offline_mode
+    offline_mode = detect_offline_mode()
+    print(f"[DEBUG] offline_mode: {offline_mode}")
+except ImportError as e:
+    print(f"[DEBUG] Could not import timezone_utils: {e}")
+    print("[DEBUG] Assuming online mode due to import error")
+    offline_mode = False
 
 # Check if DATABASE_URL is actually PostgreSQL
 is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
+print(f"[DEBUG] is_postgresql_url: {is_postgresql_url}")
 
 # Configure database based on environment
 if is_render_env:
@@ -9056,7 +9067,13 @@ if is_render_env:
         print("[AMRS] RENDER MODE: Using PostgreSQL database")
     else:
         print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
-        exit(1)
+        print(f"[AMRS] DEBUG: DATABASE_URL = '{POSTGRESQL_DATABASE_URI}'")
+        print(f"[AMRS] DEBUG: is_postgresql_url = {is_postgresql_url}")
+        # Don't exit here - let the app try to continue with SQLite fallback
+        print("[AMRS] FALLBACK: Attempting to use SQLite database")
+        secure_db_path = get_secure_database_path()
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{secure_db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 elif offline_mode:
     # Local offline mode: use secure bootstrap database if available, otherwise local SQLite
     secure_db_path = get_secure_database_path()
