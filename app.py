@@ -1,6 +1,11 @@
 # === CRITICAL: Apply SQLAlchemy datetime parsing patch FIRST ===
 # This must be imported before any SQLAlchemy operations to fix Python 3.11.0 compatibility
-import sqlalchemy_datetime_patch
+try:
+    import sqlalchemy_datetime_patch
+    print("[PATCH] SQLAlchemy datetime patch applied successfully")
+except ImportError as e:
+    print(f"[PATCH] SQLAlchemy datetime patch not available: {e}")
+    # Continue without patch - may cause issues on Python 3.11.0 with certain datetime formats
 
 # --- ALWAYS use secure SQLite database for offline mode ---
 import os
