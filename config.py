@@ -35,6 +35,20 @@ class Config:
     # Security event log retention (in days)
     SECURITY_EVENT_LOG_RETENTION_DAYS = int(os.environ.get('SECURITY_EVENT_LOG_RETENTION_DAYS', 90))  # Default: 90 days
 
+    # Synchronization server settings
+    AMRS_ONLINE_URL = os.environ.get('AMRS_ONLINE_URL') or 'https://test.accuratemachinerepair.com'
+    BOOTSTRAP_URL = os.environ.get('BOOTSTRAP_URL') or 'https://test.accuratemachinerepair.com/bootstrap'
+    
+    # Display current sync server configuration
+    @classmethod
+    def get_sync_info(cls):
+        """Get current synchronization server information"""
+        return {
+            'server_url': cls.AMRS_ONLINE_URL,
+            'bootstrap_url': cls.BOOTSTRAP_URL,
+            'environment': 'TEST' if 'test.' in cls.AMRS_ONLINE_URL else 'PRODUCTION'
+        }
+
 
 class DevelopmentConfig(Config):
     """Development configuration - enables debug mode and detailed error messages"""
@@ -68,6 +82,10 @@ class ProductionConfig(Config):
     # Mail settings for production
     MAIL_DEBUG = False
     MAIL_SUPPRESS_SEND = False
+
+    # Production sync server settings
+    AMRS_ONLINE_URL = os.environ.get('AMRS_ONLINE_URL') or 'https://api.accuratemachinerepair.com'
+    BOOTSTRAP_URL = os.environ.get('BOOTSTRAP_URL') or 'https://api.accuratemachinerepair.com/bootstrap'
 
 
 class TestingConfig(Config):
