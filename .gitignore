@@ -9,6 +9,7 @@ build/
 *.egg-info/
 # Keep electron_app directory in git
 electron_app/
+python/
 
 # Unit test / coverage reports
 htmlcov/
@@ -69,3 +70,8 @@ venv/.DS_Store
 secret_config.py
 desktop_bootstrap_secrets.py
 check_keyring_secrets.py
+.env.bootstrap
+embedded_bootstrap_credentials.py
+windows-python.zip
+linux-python.tar.gz
+macos-python.tar.gz
