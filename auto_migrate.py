@@ -1,3 +1,48 @@
+def ensure_sync_queue_table(engine):
+    """Ensure the sync_queue table and all required columns exist."""
+    inspector = inspect(engine)
+    table_name = 'sync_queue'
+    required_columns = {
+        'id': 'INTEGER PRIMARY KEY',
+        'table_name': 'VARCHAR(64) NOT NULL',
+        'record_id': 'VARCHAR(64) NOT NULL',
+        'operation': "VARCHAR(16) NOT NULL",  # 'insert', 'update', 'delete'
+        'payload': 'TEXT NOT NULL',  # JSON string of the record data
+        'timestamp': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'synced': 'BOOLEAN DEFAULT FALSE',
+        'error_message': 'TEXT',
+    }
+    tables = inspector.get_table_names()
+    if table_name not in tables:
+        # Create the table from scratch
+        with engine.connect() as conn:
+            trans = conn.begin()
+            try:
+                conn.execute(text(f'''
+                    CREATE TABLE {table_name} (
+                        id INTEGER PRIMARY KEY,
+                        table_name VARCHAR(64) NOT NULL,
+                        record_id VARCHAR(64) NOT NULL,
+                        operation VARCHAR(16) NOT NULL,
+                        payload TEXT NOT NULL,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        synced BOOLEAN DEFAULT FALSE,
+                        error_message TEXT
+                    )
+                '''))
+                trans.commit()
+                logger.info(f"[AUTO_MIGRATE] Created table {table_name}")
+            except Exception as e:
+                trans.rollback()
+                logger.error(f"[AUTO_MIGRATE] Error creating {table_name} table: {e}")
+                raise
+    else:
+        # Table exists, check for missing columns
+        existing_columns = [col['name'] for col in inspector.get_columns(table_name)]
+        for col, coltype in required_columns.items():
+            if col not in existing_columns:
+                add_column_if_not_exists(engine, table_name, col, coltype)
+        logger.info(f"[AUTO_MIGRATE] Ensured all columns exist in {table_name}")
 from models import db
 import sqlalchemy
 from sqlalchemy import inspect, text
@@ -119,22 +164,12 @@ def run_auto_migration():
         
         # Add your new database migrations here
         create_maintenance_files_table(engine)
+        ensure_sync_queue_table(engine)
         # Run data fixes
         run_data_fix(engine, fix_audit_completions_timestamps, 
                     "Fix audit completion records with missing timestamps")
-        
-        # Explicitly run the color column migration from the dedicated script
-        try:
-            # Import and run the dedicated color column migration
-            from add_audit_task_color_column import add_audit_task_color_column
-            add_audit_task_color_column()
-            logger.info("[AUTO_MIGRATE] Ran dedicated audit_task color column migration")
-        except Exception as e:
-            logger.error(f"[AUTO_MIGRATE] Error running audit_task color column migration: {e}")
-        
         # Example of how to add more fixes:
         # run_data_fix(engine, fix_another_issue_function, "Description of the fix")
-        
         logger.info("[AUTO_MIGRATE] Auto-migration complete.")
 
 if __name__ == "__main__":

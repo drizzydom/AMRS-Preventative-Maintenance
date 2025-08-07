@@ -3,6 +3,50 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 from datetime import datetime
 
+def safe_parse_datetime_field(dt_field):
+    """Safely parse a datetime field that might be a string or datetime object."""
+    if dt_field is None:
+        return None
+    
+    # If it's already a datetime object, return it
+    if isinstance(dt_field, datetime):
+        return dt_field
+    
+    # If it's a string, try to parse it with comprehensive handling
+    if isinstance(dt_field, str):
+        try:
+            # First try the standard fromisoformat - this should handle microseconds
+            return datetime.fromisoformat(dt_field)
+        except ValueError:
+            # If that fails, try different approaches
+            try:
+                # Try parsing with microseconds explicitly
+                if '.' in dt_field and 'T' in dt_field:
+                    return datetime.strptime(dt_field, '%Y-%m-%dT%H:%M:%S.%f')
+                elif '.' in dt_field:
+                    return datetime.strptime(dt_field, '%Y-%m-%d %H:%M:%S.%f')
+                else:
+                    # No microseconds, try standard formats
+                    if 'T' in dt_field:
+                        return datetime.strptime(dt_field, '%Y-%m-%dT%H:%M:%S')
+                    else:
+                        return datetime.strptime(dt_field, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                try:
+                    # Fallback: import and use the robust datetime utility
+                    from datetime_utils import safe_parse_datetime
+                    result = safe_parse_datetime(dt_field)
+                    if result:
+                        return result
+                except ImportError:
+                    pass
+                
+                print(f"[DATETIME PARSE] Failed to parse datetime field: {dt_field}")
+                return None
+    
+    # If it's neither string nor datetime, return None
+    return None
+
 class OfflineSecurityEvent(db.Model):
     __tablename__ = 'offline_security_events'
     id = db.Column(db.Integer, primary_key=True)
@@ -77,7 +121,7 @@ def get_fernet_key():
             key = keyring.get_password(service, 'USER_FIELD_ENCRYPTION_KEY')
             if key:
                 os.environ['USER_FIELD_ENCRYPTION_KEY'] = key
-                print("[ENCRYPTION] ✅ Loaded encryption key from keyring")
+                print("[ENCRYPTION] SUCCESS: Loaded encryption key from keyring")
                 return key
         except Exception:
             pass  # If keyring fails, continue with fallback
@@ -134,6 +178,35 @@ machine_audit_task = Table(
     Column('machine_id', Integer, ForeignKey('machines.id'), primary_key=True)
 )
 
+# Custom DateTime type that handles microseconds properly
+from sqlalchemy.types import TypeDecorator, DateTime as SQLADateTime
+from datetime import datetime
+
+class SafeDateTime(TypeDecorator):
+    """Custom DateTime type that safely parses datetime strings with microseconds"""
+    impl = SQLADateTime
+    cache_ok = True
+    
+    def process_result_value(self, value, dialect):
+        """Process values coming FROM the database"""
+        if value is None:
+            return value
+        if isinstance(value, str):
+            # Use our safe parsing function
+            from datetime_utils import safe_parse_datetime
+            return safe_parse_datetime(value)
+        return value
+    
+    def process_bind_param(self, value, dialect):
+        """Process values going TO the database"""
+        if value is None:
+            return value
+        if isinstance(value, str):
+            # Use our safe parsing function
+            from datetime_utils import safe_parse_datetime
+            return safe_parse_datetime(value)
+        return value
+
 class User(UserMixin, db.Model):
     """User model for authentication and authorization"""
     __tablename__ = 'users'  # Explicit table name for PostgreSQL conventions
@@ -146,14 +219,14 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
-    last_login = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login = db.Column(SafeDateTime)
+    created_at = db.Column(SafeDateTime, default=datetime.utcnow)
+    updated_at = db.Column(SafeDateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     reset_token = db.Column(db.String(100), default=None)
-    reset_token_expiration = db.Column(db.DateTime, default=None)
+    reset_token_expiration = db.Column(SafeDateTime, default=None)
     # Remember me token fields for persistent authentication
     remember_token = db.Column(db.String(100), default=None)
-    remember_token_expiration = db.Column(db.DateTime, default=None)
+    remember_token_expiration = db.Column(SafeDateTime, default=None)
     remember_enabled = db.Column(db.Boolean, default=False)  # User preference for remember me
     notification_preferences = db.Column(
         PG_JSON().with_variant(SA_JSON(), 'sqlite'),
@@ -250,8 +323,14 @@ class User(UserMixin, db.Model):
         """Verify if the provided remember token is valid and not expired"""
         if not self.remember_token or not self.remember_token_expiration:
             return False
+        
+        # Safely parse the expiration datetime
+        expiration_dt = safe_parse_datetime_field(self.remember_token_expiration)
+        if not expiration_dt:
+            return False
+            
         # Check if token matches and hasn't expired
-        if self.remember_token == token and datetime.utcnow() < self.remember_token_expiration:
+        if self.remember_token == token and datetime.utcnow() < expiration_dt:
             return True
         return False
 
