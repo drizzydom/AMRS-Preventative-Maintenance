@@ -869,8 +869,8 @@ def cleanup_expired_sync_queue_enhanced():
         from app import db
         
         # Use timezone-aware cutoff time
-        cutoff = get_timezone_aware_now() - timedelta(hours=144)  # 6 days
-        
+        cutoff = get_timezone_aware_now() - timedelta(hours=168)  # 7 days
+
         deleted_count = db.session.execute(sa_text("""
             DELETE FROM sync_queue WHERE created_at < :cutoff AND status = 'synced'
         """), {"cutoff": cutoff}).rowcount
