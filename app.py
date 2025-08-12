@@ -1767,13 +1767,13 @@ def add_to_sync_queue(table_name, record_id, operation, payload_dict):
         print(f"[SYNC_QUEUE] Error redirecting to enhanced sync: {e}")
         # Don't fail, just log the error
         print(f"[SYNC_QUEUE] Error adding to sync_queue: {e}")
-# --- Sync Queue Cleanup: Remove records older than 144 hours (6 days) ---
+# --- Sync Queue Cleanup: Remove records older than 168 hours (7 days) ---
 def cleanup_expired_sync_queue():
     from sqlalchemy import text as sa_text
     from datetime import datetime, timedelta
-    """Delete sync_queue records older than 144 hours (6 days)."""
+    """Delete sync_queue records older than 168 hours (7 days)."""
     try:
-        cutoff = datetime.utcnow() - timedelta(hours=144)
+        cutoff = datetime.utcnow() - timedelta(hours=168)
         # Works for both SQLite and PostgreSQL
         db.session.execute(sa_text("""
             DELETE FROM sync_queue WHERE created_at < :cutoff
