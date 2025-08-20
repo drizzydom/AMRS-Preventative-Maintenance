@@ -5334,11 +5334,23 @@ def maintenance_page():
                 except ValueError:
                     flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
         
-        return render_template('maintenance.html', 
-                              maintenance_records=maintenance_records,
-                              machines=machines,
-                              parts=parts,
-                              sites=sites)
+        # Ensure all context variables are strings for template/JS compatibility
+        site_id = request.args.get('site_id') or request.form.get('site_id') or ''
+        machine_id = request.args.get('machine_id') or request.form.get('machine_id') or ''
+        part_id = request.args.get('part_id') or request.form.get('part_id') or ''
+        site_id = str(site_id) if site_id else ''
+        machine_id = str(machine_id) if machine_id else ''
+        part_id = str(part_id) if part_id else ''
+        return render_template(
+            'maintenance.html',
+            maintenance_records=maintenance_records,
+            machines=machines,
+            parts=parts,
+            sites=sites,
+            site_id=site_id,
+            machine_id=machine_id,
+            part_id=part_id
+        )
     except Exception as e:
         app.logger.error(f"Error in maintenance_page: {e}")
         print("[MAINTENANCE ERROR] Exception occurred in maintenance_page:")
