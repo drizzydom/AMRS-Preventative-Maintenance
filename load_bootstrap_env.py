@@ -103,7 +103,9 @@ def load_bootstrap_env():
             'AMRS_ONLINE_URL',
             'RENDER_EXTERNAL_URL',
             'BOOTSTRAP_URL',
-            'BOOTSTRAP_SECRET_TOKEN'
+            'BOOTSTRAP_SECRET_TOKEN',
+            'B2_KEY_ID',
+            'B2_BUCKET'
         ]
         
         loaded_count = 0
