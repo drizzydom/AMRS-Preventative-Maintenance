@@ -165,12 +165,25 @@ def maintenance():
     """Maintenance page"""
     db = get_db()
     cursor = db.cursor()
-    
+
     # Get all sites for filter
     cursor.execute('SELECT id, name FROM site ORDER BY name')
     sites = [dict(row) for row in cursor.fetchall()]
-    
-    return render_template('maintenance.html', sites=sites)
+
+    # Get dropdown prepopulation values from query params
+    site_id = request.args.get('site_id', '')
+    machine_id = request.args.get('machine_id', '')
+    part_id = request.args.get('part_id', '')
+
+    # You may want to fetch machines/parts for initial population if needed
+    # For now, just pass the IDs for JS filtering
+    return render_template(
+        'maintenance.html',
+        sites=sites,
+        site_id=site_id,
+        machine_id=machine_id,
+        part_id=part_id
+    )
 
 # API routes
 @app.route('/api/health')

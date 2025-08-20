@@ -64,7 +64,7 @@ instance/*.db
 # Backup files
 backups/
 *.bak
-
+.github/
 venv/.DS_Store
 .DS_Store
 secret_config.py
@@ -75,3 +75,10 @@ embedded_bootstrap_credentials.py
 windows-python.zip
 linux-python.tar.gz
 macos-python.tar.gz
+memory-bank/activeContext.md
+memory-bank/architect.md
+memory-bank/decisionLog.md
+memory-bank/productContext.md
+memory-bank/progress.md
+memory-bank/projectBrief.md
+memory-bank/systemPatterns.md

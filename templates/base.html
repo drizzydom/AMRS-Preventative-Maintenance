@@ -527,7 +527,7 @@
                         {# Record Maintenance - requires maintenance.record permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.record' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('maintenance_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                            <a href="{{ url_for('maintenance_page', site_id=request.args.get('site_id', ''), machine_id=request.args.get('machine_id', ''), part_id=request.args.get('part_id', '')) }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
                                 <i class="sidebar-icon fas fa-tools"></i>
                                 <span class="sidebar-link-text">Record Maintenance</span>
                             </a>
@@ -644,7 +644,7 @@
                     <span class="text-muted">© {{ now.year if now else 2025 }} Accurate Machine Repair, LLC</span>
                 </div>
                 <div>
-                    <span class="text-muted">Version 1.2</span>
+                    <span class="text-muted">Version 1.4.1</span>
                 </div>
             </div>
         </div>

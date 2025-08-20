@@ -261,8 +261,8 @@
                 <div>
                     <div class="info-row">
                         <div class="info-label">Technician:</div>
-                        <div class="info-value">
-                                                        {{ record.performed_by or (record.user.display_name if record.user else 'N/A') }}
+                            <div class="info-value">
+                                {{ record.performed_by or (record.user.display_name if record.user else 'N/A') }}
                         </div>
                     </div>
                     {% if record.client_id %}
