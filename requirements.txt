@@ -40,3 +40,6 @@ cryptography
 flask-socketio==5.3.6
 eventlet==0.33.3
 python-socketio==5.10.0
+ # Update server dependencies
+ flask
+ pyyaml
