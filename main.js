@@ -267,7 +267,7 @@ function createSplashScreen() {
     </head>
     <body>
         <div class="logo">🔧 AMRS Maintenance Tracker</div>
-        <div class="version">Version 1.0.0</div>
+    <div class="version">Version 1.4.1</div>
         <div class="loading-container">
             <div class="spinner"></div>
             <div class="loading-bar">
