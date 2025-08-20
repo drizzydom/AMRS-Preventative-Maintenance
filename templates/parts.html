@@ -68,7 +68,11 @@
                                   <i class="fas fa-check-circle"></i> Record
                               </button>
                           </form>
-                          
+                          {% if part.machine and part.machine.site %}
+                          <a href="{{ url_for('maintenance_page') }}?site_id={{ part.machine.site.id|string }}&machine_id={{ part.machine.id|string }}&part_id={{ part.id|string }}" class="btn btn-sm btn-outline-secondary" title="Go to Maintenance Page">
+                              <i class="fas fa-tools"></i> Maintain
+                          </a>
+                          {% endif %}
                           {% if can_edit %}
                           <a href="{{ url_for('edit_part', part_id=part.id) }}" class="btn btn-sm btn-secondary">Edit</a>
                           {% endif %}

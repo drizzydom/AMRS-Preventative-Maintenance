@@ -62,7 +62,7 @@
           <td>{{ record.date|to_eastern('%Y-%m-%d') }}</td>
           <td>{{ record.machine.name if record.machine else '' }}{% if record.machine and record.machine.machine_number %} ({{ record.machine.machine_number }}){% elif record.machine and record.machine.serial_number %} (SN: {{ record.machine.serial_number }}){% endif %}</td>
           <td>{{ record.part.name if record.part else '' }}</td>
-          <td>{{ record.performed_by or (record.user.display_name if record.user else '') }}</td>
+          <td>{{ record.user.display_name if record.user else (record.performed_by or '') }}</td>
           <td class="hide-sm">{{ record.description or '' }}</td>
           <td class="hide-sm">{{ record.notes or record.comments or '' }}</td>
           <td class="text-center">

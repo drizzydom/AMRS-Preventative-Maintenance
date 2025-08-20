@@ -61,6 +61,30 @@
   margin-bottom: 48px !important; /* Match footer height */
 }
 
+/* Ultra-short screens: shrink footer and adjust content margin */
+@media (max-height: 500px) {
+  .footer {
+    height: 32px !important;
+    font-size: 0.85rem !important;
+  }
+  .content-container {
+    margin-bottom: 32px !important;
+  }
+}
+
+/* Ultra-large screens: keep footer readable and spaced */
+@media (min-width: 1800px) {
+  .footer {
+    font-size: 1.1rem !important;
+    padding-left: 260px !important;
+  }
+  .footer .container-fluid {
+    max-width: 1400px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
 /* Make sure very long pages still show the footer at the bottom */
 html, body {
   min-height: 100vh;
