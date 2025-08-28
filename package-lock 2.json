@@ -1,12 +1,12 @@
 {
   "name": "amrs-preventative-maintenance",
-  "version": "1.4.0",
+  "version": "1.4.5",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "amrs-preventative-maintenance",
-      "version": "1.4.0",
+  "version": "1.4.4",
       "license": "ISC",
       "dependencies": {
         "canvas": "^3.1.0",
@@ -2496,7 +2496,7 @@
       "license": "MIT"
     },
     "node_modules/end-of-stream": {
-      "version": "1.4.4",
+  "version": "1.4.5",
       "resolved": "https://registry.npmjs.org/end-of-stream/-/end-of-stream-1.4.4.tgz",
       "integrity": "sha512-+uw1inIHVPQoaVuHzRyXd21icM+cnt4CzD5rW+NC1wjOUSTOs+Te7FOv7AhN7vS9x/oIyhLP5PR1H+phQAHu5Q==",
       "license": "MIT",

@@ -50,7 +50,7 @@
                             <label for="user_ids" class="form-label">Assign Users</label>
                             <select class="form-select" id="user_ids" name="user_ids" multiple>
                                 {% for user in users %}
-                                <option value="{{ user.id }}" {% if user.id in assigned_users %}selected{% endif %}>{{ user.username }} ({{ user.email }})</option>
+                                <option value="{{ user.id }}" {% if user.id in assigned_users %}selected{% endif %}>{{ user.display_name }} ({{ user.email }})</option>
                                 {% endfor %}
                             </select>
                             <div class="form-text">Hold Ctrl/Cmd to select multiple users</div>
