@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Profile - {{ current_user.username }}{% endblock %}
+{% block title %}Profile - {{ current_user.display_name }}{% endblock %}
 
 {% block header_title %}My Profile{% endblock %}
 
@@ -26,7 +26,7 @@
                 <form method="POST" action="{{ url_for('update_profile') }}">
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
-                        <input type="text" class="form-control" id="username" value="{{ current_user.username }}" readonly disabled>
+                        <input type="text" class="form-control" id="username" value="{{ current_user.display_name }}" readonly disabled>
                         <small class="form-text text-muted">Username cannot be changed</small>
                     </div>
                     

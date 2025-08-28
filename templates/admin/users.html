@@ -29,7 +29,7 @@
                         <td>
                             <div class="user-info">
                                 <div class="text-muted small">
-                                    <div class="fw-bold username-field"><span class="fw-medium">Username:</span> {{ user.username }}</div>
+                                    <div class="fw-bold username-field"><span class="fw-medium">Username:</span> {{ user.display_name }}</div>
                                     {% if user.email %}
                                     <div><span class="fw-medium">Email:</span> {{ user.email }}</div>
                                     {% endif %}
@@ -80,7 +80,7 @@
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <div class="modal-body">
-                                    <p>Are you sure you want to delete the user "{{ user.username }}"?</p>
+                                    <p>Are you sure you want to delete the user "{{ user.display_name }}"?</p>
                                     <p><strong>Warning:</strong> This action cannot be undone.</p>
                                 </div>
                                 <div class="modal-footer">
