@@ -420,7 +420,9 @@ app = Flask(__name__, instance_relative_config=True)
 
 # --- Update Server Endpoints (merged from update_server.py) ---
 import yaml
-import subprocess
+from b2sdk.v2 import InMemoryAccountInfo, B2Api
+from b2sdk.exception import B2Error
+import time
 
 B2_KEY_ID = os.environ.get("B2_KEY_ID")
 B2_APP_KEY = os.environ.get("B2_APP_KEY")
@@ -429,14 +431,38 @@ SIGNED_URL_TTL = int(os.environ.get("SIGNED_URL_TTL", "600"))
 UPDATES_API_KEY = os.environ.get("UPDATES_API_KEY")
 BOOTSTRAP_URL = os.environ.get("BOOTSTRAP_URL", "https://your-bootstrap-url.example.com")
 
-def authorize_b2():
-    cmd = ["b2", "authorize-account", B2_KEY_ID, B2_APP_KEY]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+# Initialize B2 API client
+b2_api = None
+b2_bucket_obj = None
+
+def get_b2_api():
+    global b2_api, b2_bucket_obj
+    if b2_api is None:
+        try:
+            info = InMemoryAccountInfo()
+            b2_api = B2Api(info)
+            b2_api.authorize_account("production", B2_KEY_ID, B2_APP_KEY)
+            b2_bucket_obj = b2_api.get_bucket_by_name(B2_BUCKET)
+            print(f"[B2] Successfully initialized B2 API for bucket: {B2_BUCKET}")
+        except B2Error as e:
+            print(f"[B2] Error initializing B2 API: {e}")
+            raise
+    return b2_api, b2_bucket_obj
 
 def get_signed_url(bucket, filename, ttl=SIGNED_URL_TTL):
-    cmd = ["b2", "get-download-url-with-auth", bucket, filename]
-    p = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    return p.stdout.strip()
+    try:
+        _, bucket_obj = get_b2_api()
+        # Get file info
+        file_info = bucket_obj.get_file_info_by_name(filename)
+        # Generate signed download URL
+        download_url = bucket_obj.get_download_url_by_name(filename)
+        # For signed URLs, we need to add authorization
+        auth_token = b2_api.account_info.get_auth_token()
+        signed_url = f"{download_url}?Authorization={auth_token}"
+        return signed_url
+    except B2Error as e:
+        print(f"[B2] Error getting signed URL for {filename}: {e}")
+        raise
 
 @app.route("/latest.yml")
 def latest_yml():
@@ -447,14 +473,16 @@ def latest_yml():
     release_date = os.environ.get("RELEASE_DATE")
     filenames = os.environ.get("RELEASE_FILES", "Accurate-Machine-Repair-Maintenance-Tracker-Win10-Setup-1.4.0.exe")
     filenames = [f.strip() for f in filenames.split(",") if f.strip()]
-    authorize_b2()
+    
     files_entries = []
     for fname in filenames:
         try:
             signed = get_signed_url(B2_BUCKET, fname)
-        except subprocess.CalledProcessError as e:
-            return Response(f"Error generating signed URL for {fname}: {e.stderr}", status=500)
-        files_entries.append({"url": signed})
+            files_entries.append({"url": signed})
+        except Exception as e:
+            print(f"[B2] Error generating signed URL for {fname}: {e}")
+            return Response(f"Error generating signed URL for {fname}: {str(e)}", status=500)
+    
     y = {"version": version, "files": files_entries}
     if release_date:
         y["releaseDate"] = release_date
