@@ -4,6 +4,47 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const net = require('net');
 const os = require('os');
+const { autoUpdater } = require('electron-updater');
+const { ipcMain } = require('electron');
+
+// --- Electron Updater Integration ---
+// Listen for update events
+app.on('ready', () => {
+    // Check for updates after app is ready
+    autoUpdater.checkForUpdatesAndNotify();
+});
+
+autoUpdater.on('update-available', (info) => {
+    writeLog(`[AutoUpdate] Update available: ${info.version}`);
+    if (mainWindow) {
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Update Available',
+            message: `A new version (${info.version}) is available and will be downloaded automatically.`,
+            buttons: ['OK']
+        });
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    writeLog(`[AutoUpdate] Update downloaded: ${info.version}`);
+    if (mainWindow) {
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Update Ready',
+            message: `Update ${info.version} has been downloaded. The application will now restart to install the update.`,
+            buttons: ['Restart Now']
+        }).then(() => {
+            autoUpdater.quitAndInstall();
+        });
+    } else {
+        autoUpdater.quitAndInstall();
+    }
+});
+
+autoUpdater.on('error', (err) => {
+    writeLog(`[AutoUpdate] Error: ${err == null ? 'unknown' : err.message}`);
+});
 
 let mainWindow;
 let splashWindow;
@@ -1197,6 +1238,32 @@ function createMenu() {
     Menu.setApplicationMenu(menu);
 }
 
+// --- Add Developer Menu for Manual Update Check ---
+function createDeveloperMenu() {
+    const template = [
+        {
+            label: 'Developer',
+            submenu: [
+                {
+                    label: 'Check for Updates',
+                    click: () => {
+                        writeLog('[DevMenu] Manual update check triggered');
+                        autoUpdater.checkForUpdates();
+                    }
+                },
+                {
+                    label: 'Toggle DevTools',
+                    click: () => {
+                        if (mainWindow) mainWindow.webContents.toggleDevTools();
+                    }
+                }
+            ]
+        }
+    ];
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+}
+
 // App event handlers
 app.whenReady().then(async () => {
     writeLog('[Electron] App ready, initializing application...');
@@ -1211,6 +1278,7 @@ app.whenReady().then(async () => {
     // Create application menu
     updateSplashStatus('Setting up application menu...', 8);
     createMenu();
+    createDeveloperMenu();
     
     // Add detailed debugging for production issues
     writeLog(`[Electron] Current working directory: ${process.cwd()}`);
@@ -1310,4 +1378,10 @@ process.on('SIGTERM', () => {
     console.log('[Electron] Received SIGTERM, shutting down...');
     stopFlaskServer();
     app.quit();
+});
+
+// IPC for renderer-triggered update check
+ipcMain.on('check-for-updates', () => {
+    writeLog('[IPC] Renderer requested update check');
+    autoUpdater.checkForUpdates();
 });
