@@ -36,7 +36,7 @@
                 <tbody>
                     {% for user in users %}
                     <tr>
-                        <td>{{ user.username }}</td>
+                        <td>{{ user.display_name }}</td>
                         <td>
                             {% if user.full_name %}
                             <div class="multi-line-name">
@@ -62,7 +62,7 @@
                                         data-bs-toggle="modal" 
                                         data-bs-target="#deleteUserModal"
                                         data-user-id="{{ user.id }}" 
-                                        data-username="{{ user.username }}">
+                                        data-username="{{ user.display_name }}">
                                     Delete
                                 </button>
                                 {% endif %}
