@@ -1,6 +1,6 @@
 {
   "name": "amrs-preventative-maintenance",
-  "version": "1.4.1",
+  "version": "1.4.5",
   "description": "Accurate Machine Repair Maintenance Tracker with Offline Sync",
   "main": "main.js",
   "scripts": {

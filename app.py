@@ -407,7 +407,7 @@ except Exception as e:
     print(f"[SCHEMA] Error ensuring schema: {e}")
 
 from datetime import datetime, timedelta
-from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify
+from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify, Response, abort
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf, validate_csrf
 # Don't import db here - we'll import it after Flask app creation
@@ -415,7 +415,67 @@ from models import SecurityEvent, AppSetting
 from sqlalchemy import or_
 
 # Initialize Flask app at the very top
+
 app = Flask(__name__, instance_relative_config=True)
+
+# --- Update Server Endpoints (merged from update_server.py) ---
+import yaml
+import subprocess
+
+B2_KEY_ID = os.environ.get("B2_KEY_ID")
+B2_APP_KEY = os.environ.get("B2_APP_KEY")
+B2_BUCKET = os.environ.get("B2_BUCKET")
+SIGNED_URL_TTL = int(os.environ.get("SIGNED_URL_TTL", "600"))
+UPDATES_API_KEY = os.environ.get("UPDATES_API_KEY")
+BOOTSTRAP_URL = os.environ.get("BOOTSTRAP_URL", "https://your-bootstrap-url.example.com")
+
+def authorize_b2():
+    cmd = ["b2", "authorize-account", B2_KEY_ID, B2_APP_KEY]
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def get_signed_url(bucket, filename, ttl=SIGNED_URL_TTL):
+    cmd = ["b2", "get-download-url-with-auth", bucket, filename]
+    p = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return p.stdout.strip()
+
+@app.route("/latest.yml")
+def latest_yml():
+    api_key = request.headers.get("X-API-KEY") or request.args.get("api_key")
+    if UPDATES_API_KEY and api_key != UPDATES_API_KEY:
+        abort(401)
+    version = os.environ.get("APP_VERSION", "1.4.5")
+    release_date = os.environ.get("RELEASE_DATE")
+    filenames = os.environ.get("RELEASE_FILES", "Accurate-Machine-Repair-Maintenance-Tracker-Win10-Setup-1.4.0.exe")
+    filenames = [f.strip() for f in filenames.split(",") if f.strip()]
+    authorize_b2()
+    files_entries = []
+    for fname in filenames:
+        try:
+            signed = get_signed_url(B2_BUCKET, fname)
+        except subprocess.CalledProcessError as e:
+            return Response(f"Error generating signed URL for {fname}: {e.stderr}", status=500)
+        files_entries.append({"url": signed})
+    y = {"version": version, "files": files_entries}
+    if release_date:
+        y["releaseDate"] = release_date
+    body = yaml.safe_dump(y, sort_keys=False)
+    return Response(body, mimetype="text/yaml")
+
+@app.route("/bootstrap-config")
+def bootstrap_config():
+    api_key = request.headers.get("X-API-KEY") or request.args.get("api_key")
+    if UPDATES_API_KEY and api_key != UPDATES_API_KEY:
+        abort(401)
+    config = {
+        "bootstrap_url": BOOTSTRAP_URL,
+        "update_server_url": request.url_root,
+        "venv_packages": os.environ.get("VENV_PACKAGES", ""),
+        "b2_key_id": os.environ.get("B2_KEY_ID", ""),
+        "b2_bucket": os.environ.get("B2_BUCKET", ""),
+        "app_version": os.environ.get("APP_VERSION", ""),
+        "release_file": os.environ.get("RELEASE_FILE", "")
+    }
+    return jsonify(config)
 
 # Import the database instance but don't initialize it yet
 from models import db

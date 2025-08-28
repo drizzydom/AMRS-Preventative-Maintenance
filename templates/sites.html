@@ -117,7 +117,7 @@
                         <label for="user_ids" class="form-label">Assign Users</label>
                         <select multiple class="form-select" id="user_ids" name="user_ids">
                             {% for user in users %}
-                            <option value="{{ user.id }}">{{ user.username }} ({{ user.full_name or 'No Name' }})</option>
+                            <option value="{{ user.id }}">{{ user.display_name }} ({{ user.full_name or 'No Name' }})</option>
                             {% endfor %}
                         </select>
                         <div class="form-text">Hold Ctrl/Cmd to select multiple users</div>
