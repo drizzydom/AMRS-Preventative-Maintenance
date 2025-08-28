@@ -14,6 +14,14 @@ app.on('ready', () => {
     autoUpdater.checkForUpdatesAndNotify();
 });
 
+autoUpdater.on('checking-for-update', () => {
+    writeLog(`[AutoUpdate] Checking for updates...`);
+});
+
+autoUpdater.on('update-not-available', (info) => {
+    writeLog(`[AutoUpdate] Update not available - current version is latest`);
+});
+
 autoUpdater.on('update-available', (info) => {
     writeLog(`[AutoUpdate] Update available: ${info.version}`);
     if (mainWindow) {
@@ -1263,6 +1271,21 @@ function createDeveloperMenu() {
     const menu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(menu);
 }
+
+// Configure autoUpdater
+autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: 'http://localhost:10000/'
+});
+
+app.on('ready', () => {
+    // Automatic update check on startup
+    setTimeout(() => {
+        writeLog('[AutoUpdate] Checking for updates on startup');
+        autoUpdater.checkForUpdatesAndNotify();
+    }, 5000); // Wait 5 seconds after app is ready
+    createDeveloperMenu();
+});
 
 // App event handlers
 app.whenReady().then(async () => {
