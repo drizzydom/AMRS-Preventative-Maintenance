@@ -9411,18 +9411,16 @@ except ImportError as e:
 is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
 print(f"[DEBUG] is_postgresql_url: {is_postgresql_url}")
 
-# Configure database based on environment
+# --- PATCH: Always use PostgreSQL on Render if DATABASE_URL is set ---
 if is_render_env:
-    # Render environment: always use PostgreSQL
-    if is_postgresql_url:
+    if POSTGRESQL_DATABASE_URI:
         app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        print("[AMRS] RENDER MODE: Using PostgreSQL database")
+        print("[AMRS] RENDER MODE: Using PostgreSQL database (forced by DATABASE_URL)")
     else:
         print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
         print(f"[AMRS] DEBUG: DATABASE_URL = '{POSTGRESQL_DATABASE_URI}'")
         print(f"[AMRS] DEBUG: is_postgresql_url = {is_postgresql_url}")
-        # Don't exit here - let the app try to continue with SQLite fallback
         print("[AMRS] FALLBACK: Attempting to use SQLite database")
         secure_db_path = get_secure_database_path()
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{secure_db_path}"
