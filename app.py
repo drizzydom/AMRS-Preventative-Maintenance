@@ -10,6 +10,10 @@ except ImportError as e:
     print(f"[PATCH] SQLAlchemy datetime patch not available: {e}")
     # Continue without patch - may cause issues on Python 3.11.0 with certain datetime formats
 
+# --- DEBUG: Print DATABASE_URL at startup ---
+import os
+print("[DEBUG] DATABASE_URL at startup:", os.environ.get("DATABASE_URL"))
+
 # --- ALWAYS use secure SQLite database for offline mode ---
 import os
 from pathlib import Path
