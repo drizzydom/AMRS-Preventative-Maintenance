@@ -420,9 +420,7 @@ app = Flask(__name__, instance_relative_config=True)
 
 # --- Update Server Endpoints (merged from update_server.py) ---
 import yaml
-from b2sdk.v2 import InMemoryAccountInfo, B2Api
-from b2sdk.exception import B2Error
-import time
+import subprocess
 
 B2_KEY_ID = os.environ.get("B2_KEY_ID")
 B2_APP_KEY = os.environ.get("B2_APP_KEY")
@@ -431,12 +429,25 @@ SIGNED_URL_TTL = int(os.environ.get("SIGNED_URL_TTL", "600"))
 UPDATES_API_KEY = os.environ.get("UPDATES_API_KEY")
 BOOTSTRAP_URL = os.environ.get("BOOTSTRAP_URL", "https://your-bootstrap-url.example.com")
 
-# Initialize B2 API client
+# Try to use B2 SDK, fall back to CLI if not available
+try:
+    from b2sdk.v2 import InMemoryAccountInfo, B2Api
+    from b2sdk.exception import B2Error
+    B2_SDK_AVAILABLE = True
+    print("[B2] B2 SDK available - using API")
+except ImportError:
+    B2_SDK_AVAILABLE = False
+    print("[B2] B2 SDK not available - falling back to CLI")
+
+# Initialize B2 API client (only if SDK is available)
 b2_api = None
 b2_bucket_obj = None
 
 def get_b2_api():
     global b2_api, b2_bucket_obj
+    if not B2_SDK_AVAILABLE:
+        raise Exception("B2 SDK not available")
+    
     if b2_api is None:
         try:
             info = InMemoryAccountInfo()
@@ -444,12 +455,12 @@ def get_b2_api():
             b2_api.authorize_account("production", B2_KEY_ID, B2_APP_KEY)
             b2_bucket_obj = b2_api.get_bucket_by_name(B2_BUCKET)
             print(f"[B2] Successfully initialized B2 API for bucket: {B2_BUCKET}")
-        except B2Error as e:
+        except Exception as e:
             print(f"[B2] Error initializing B2 API: {e}")
             raise
     return b2_api, b2_bucket_obj
 
-def get_signed_url(bucket, filename, ttl=SIGNED_URL_TTL):
+def get_signed_url_sdk(bucket, filename, ttl=SIGNED_URL_TTL):
     try:
         _, bucket_obj = get_b2_api()
         # Get file info
@@ -460,34 +471,238 @@ def get_signed_url(bucket, filename, ttl=SIGNED_URL_TTL):
         auth_token = b2_api.account_info.get_auth_token()
         signed_url = f"{download_url}?Authorization={auth_token}"
         return signed_url
-    except B2Error as e:
+    except Exception as e:
         print(f"[B2] Error getting signed URL for {filename}: {e}")
         raise
 
+def get_signed_url_cli(bucket, filename, ttl=SIGNED_URL_TTL):
+    try:
+        # Authorize first
+        cmd = ["b2", "authorize-account", B2_KEY_ID, B2_APP_KEY]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Get signed URL
+        cmd = ["b2", "get-download-url-with-auth", bucket, filename]
+        p = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return p.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"[B2] CLI error getting signed URL for {filename}: {e.stderr}")
+        raise
+
+def get_signed_url(bucket, filename, ttl=SIGNED_URL_TTL):
+    if B2_SDK_AVAILABLE and B2_KEY_ID and B2_APP_KEY:
+        try:
+            return get_signed_url_sdk(bucket, filename, ttl)
+        except Exception as e:
+            print(f"[B2] SDK failed, falling back to CLI: {e}")
+            return get_signed_url_cli(bucket, filename, ttl)
+    else:
+        return get_signed_url_cli(bucket, filename, ttl)
+
+def get_latest_available_version():
+    """
+    Determine the latest version available for download.
+    This function should check what installer files actually exist on the server/storage.
+    """
+    print("[UPDATE] Checking for latest available version...")
+    
+    # Method 1: Check environment variable for latest available version
+    latest_from_env = os.environ.get("LATEST_AVAILABLE_VERSION")
+    if latest_from_env:
+        print(f"[UPDATE] Using latest version from environment: {latest_from_env}")
+        return latest_from_env
+    
+    # Method 2: Check a versions.json file that lists available versions
+    versions_file_path = os.path.join(os.path.dirname(__file__), 'versions.json')
+    if os.path.exists(versions_file_path):
+        try:
+            import json
+            with open(versions_file_path, 'r') as f:
+                versions_data = json.load(f)
+                latest_version = versions_data.get('latest')
+                if latest_version:
+                    print(f"[UPDATE] Using latest version from versions.json: {latest_version}")
+                    return latest_version
+        except Exception as e:
+            print(f"[UPDATE] Error reading versions.json: {e}")
+    
+    # Method 3: Try to check B2 bucket for available files (if configured)
+    # This would require listing bucket contents and parsing filenames
+    # For now, we'll skip this as it requires additional B2 permissions
+    
+    # Method 4: Default to current app version (no update available)
+    try:
+        # Get current app version as fallback
+        package_json_path = os.path.join(os.path.dirname(__file__), 'package.json')
+        app_package_json_path = os.path.join(os.path.dirname(__file__), 'app-package.json')
+        
+        current_version = None
+        if os.path.exists(package_json_path):
+            with open(package_json_path, 'r') as f:
+                package_data = json.load(f)
+                current_version = package_data.get('version')
+        elif os.path.exists(app_package_json_path):
+            with open(app_package_json_path, 'r') as f:
+                package_data = json.load(f)
+                current_version = package_data.get('version')
+        
+        if current_version:
+            print(f"[UPDATE] No remote version info available, using current version: {current_version}")
+            return current_version
+            
+    except Exception as e:
+        print(f"[UPDATE] Error getting current version: {e}")
+    
+    # Final fallback
+    fallback_version = "1.4.4"
+    print(f"[UPDATE] Using fallback version: {fallback_version}")
+    return fallback_version
+
 @app.route("/latest.yml")
 def latest_yml():
-    api_key = request.headers.get("X-API-KEY") or request.args.get("api_key")
-    if UPDATES_API_KEY and api_key != UPDATES_API_KEY:
-        abort(401)
-    version = os.environ.get("APP_VERSION", "1.4.5")
-    release_date = os.environ.get("RELEASE_DATE")
-    filenames = os.environ.get("RELEASE_FILES", "Accurate-Machine-Repair-Maintenance-Tracker-Win10-Setup-1.4.0.exe")
-    filenames = [f.strip() for f in filenames.split(",") if f.strip()]
+    print(f"[UPDATE] Request to /latest.yml from {request.remote_addr}")
+    print(f"[UPDATE] User-Agent: {request.headers.get('User-Agent', 'Unknown')}")
     
-    files_entries = []
-    for fname in filenames:
+    # For update checking, we need to serve the NEWER version information
+    # Instead of reading from bundled file, get current version from the app itself
+    
+    # Try to read the current version from package.json or environment
+    current_version = None
+    
+    # Method 1: Try to read from package.json if available
+    package_json_path = os.path.join(os.path.dirname(__file__), 'package.json')
+    if os.path.exists(package_json_path):
         try:
-            signed = get_signed_url(B2_BUCKET, fname)
-            files_entries.append({"url": signed})
+            import json
+            with open(package_json_path, 'r') as f:
+                package_data = json.load(f)
+                current_version = package_data.get('version')
+                print(f"[UPDATE] Found current version from package.json: {current_version}")
         except Exception as e:
-            print(f"[B2] Error generating signed URL for {fname}: {e}")
-            return Response(f"Error generating signed URL for {fname}: {str(e)}", status=500)
+            print(f"[UPDATE] Error reading package.json: {e}")
     
-    y = {"version": version, "files": files_entries}
-    if release_date:
-        y["releaseDate"] = release_date
-    body = yaml.safe_dump(y, sort_keys=False)
-    return Response(body, mimetype="text/yaml")
+    # Method 1b: Try to read from app-package.json (bundled version)
+    if not current_version:
+        app_package_json_path = os.path.join(os.path.dirname(__file__), 'app-package.json')
+        if os.path.exists(app_package_json_path):
+            try:
+                import json
+                with open(app_package_json_path, 'r') as f:
+                    package_data = json.load(f)
+                    current_version = package_data.get('version')
+                    print(f"[UPDATE] Found current version from app-package.json: {current_version}")
+            except Exception as e:
+                print(f"[UPDATE] Error reading app-package.json: {e}")
+    
+    # Method 2: Fall back to environment variable
+    if not current_version:
+        current_version = os.environ.get("APP_VERSION", "1.4.4")
+        print(f"[UPDATE] Using version from environment/default: {current_version}")
+    
+    # Determine the latest available version from the server
+    # This should check what versions are actually available for download
+    latest_available_version = get_latest_available_version()
+    
+    print(f"[UPDATE] App version: {current_version}")
+    print(f"[UPDATE] Latest available version: {latest_available_version}")
+    
+    # Only serve update info if there's actually a newer version available
+    from packaging import version as version_parser
+    
+    try:
+        if version_parser.parse(latest_available_version) > version_parser.parse(current_version):
+            print(f"[UPDATE] Update available: {latest_available_version} > {current_version}")
+            target_version = latest_available_version
+        else:
+            print(f"[UPDATE] No update needed: {latest_available_version} <= {current_version}")
+            # Return current version to indicate no update
+            target_version = current_version
+    except Exception as e:
+        print(f"[UPDATE] Error comparing versions: {e}")
+        # If we can't compare, assume no update to be safe
+        target_version = current_version
+    
+    print(f"[UPDATE] Serving version info: target={target_version}")
+    
+    # Generate the update metadata
+    latest_yml_content = f"""version: {target_version}
+files:
+  - url: https://your-b2-bucket.s3.amazonaws.com/Accurate-Machine-Repair-Maintenance-Tracker-Win10-Setup-{target_version}.exe
+    sha512: target-version-sha512-hash-placeholder
+    size: 140000000
+path: Accurate-Machine-Repair-Maintenance-Tracker-Win10-Setup-{target_version}.exe
+sha512: target-version-sha512-hash-placeholder
+releaseDate: '{datetime.now().isoformat()}Z'
+"""
+    
+    print(f"[UPDATE] Serving update latest.yml content:")
+    print(latest_yml_content)
+    
+    return Response(latest_yml_content.strip(), mimetype="text/yaml", headers={
+        'Content-Type': 'text/yaml',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+    })
+
+@app.route("/update-test")
+def update_test():
+    """Test endpoint to verify update server is reachable and check version detection"""
+    
+    # Test version detection logic
+    current_version = None
+    package_json_path = os.path.join(os.path.dirname(__file__), 'package.json')
+    app_package_json_path = os.path.join(os.path.dirname(__file__), 'app-package.json')
+    
+    if os.path.exists(package_json_path):
+        try:
+            import json
+            with open(package_json_path, 'r') as f:
+                package_data = json.load(f)
+                current_version = package_data.get('version')
+        except Exception as e:
+            current_version = f"Error reading package.json: {e}"
+    elif os.path.exists(app_package_json_path):
+        try:
+            import json
+            with open(app_package_json_path, 'r') as f:
+                package_data = json.load(f)
+                current_version = package_data.get('version')
+        except Exception as e:
+            current_version = f"Error reading app-package.json: {e}"
+    else:
+        current_version = "No package.json or app-package.json found"
+    
+    # Test latest.yml path
+    latest_yml_path = os.path.join(os.path.dirname(__file__), 'latest.yml')
+    latest_yml_exists = os.path.exists(latest_yml_path)
+    
+    # Test versions.json path
+    versions_json_path = os.path.join(os.path.dirname(__file__), 'versions.json')
+    versions_json_exists = os.path.exists(versions_json_path)
+    
+    # Get latest available version
+    latest_available = get_latest_available_version()
+    
+    return jsonify({
+        "status": "ok",
+        "message": "Update server is reachable",
+        "current_time": datetime.now().isoformat(),
+        "version_detection": {
+            "package_json_path": package_json_path,
+            "package_json_exists": os.path.exists(package_json_path),
+            "app_package_json_path": app_package_json_path,
+            "app_package_json_exists": os.path.exists(app_package_json_path),
+            "detected_version": current_version,
+            "env_app_version": os.environ.get("APP_VERSION", "not set"),
+            "latest_yml_path": latest_yml_path,
+            "latest_yml_exists": latest_yml_exists,
+            "versions_json_path": versions_json_path,
+            "versions_json_exists": versions_json_exists,
+            "latest_available_version": latest_available,
+            "update_needed": latest_available != current_version if current_version else False
+        }
+    })
 
 @app.route("/bootstrap-config")
 def bootstrap_config():
