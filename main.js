@@ -8,22 +8,48 @@ const { autoUpdater } = require('electron-updater');
 const { ipcMain } = require('electron');
 
 // --- Electron Updater Integration ---
-// Listen for update events
-app.on('ready', () => {
-    // Check for updates after app is ready
+// Flag to track if we've already checked for updates
+let hasCheckedForUpdates = false;
+// Track if update check was triggered manually
+let manualUpdateCheck = false;
+
+const UPDATE_FEED_URL = 'https://f005.backblazeb2.com/file/amrs-pm-updates/';
+
+// Function to safely check for updates
+function checkForUpdatesWhenReady() {
+    if (hasCheckedForUpdates && !manualUpdateCheck) {
+        writeLog(`[AutoUpdate] Already checked for updates, skipping duplicate check`);
+        return;
+    }
+    writeLog(`[AutoUpdate] Attempting to check for updates...`);
+    writeLog(`[AutoUpdate] Feed URL: ${UPDATE_FEED_URL}`);
+    writeLog(`[AutoUpdate] Current version: ${app.getVersion()}`);
+    autoUpdater.setFeedURL({ url: UPDATE_FEED_URL });
     autoUpdater.checkForUpdatesAndNotify();
-});
+}
 
 autoUpdater.on('checking-for-update', () => {
     writeLog(`[AutoUpdate] Checking for updates...`);
+    writeLog(`[AutoUpdate] Making request to: ${UPDATE_FEED_URL}latest.yml`);
 });
 
 autoUpdater.on('update-not-available', (info) => {
     writeLog(`[AutoUpdate] Update not available - current version is latest`);
+    writeLog(`[AutoUpdate] Response info: ${JSON.stringify(info, null, 2)}`);
+    if (manualUpdateCheck && mainWindow) {
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'No Updates Available',
+            message: 'Your application is already up to date.',
+            buttons: ['OK']
+        });
+    }
+    manualUpdateCheck = false;
 });
 
 autoUpdater.on('update-available', (info) => {
     writeLog(`[AutoUpdate] Update available: ${info.version}`);
+    writeLog(`[AutoUpdate] Update info: ${JSON.stringify(info, null, 2)}`);
     if (mainWindow) {
         dialog.showMessageBox(mainWindow, {
             type: 'info',
@@ -36,6 +62,7 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-downloaded', (info) => {
     writeLog(`[AutoUpdate] Update downloaded: ${info.version}`);
+    writeLog(`[AutoUpdate] Download info: ${JSON.stringify(info, null, 2)}`);
     if (mainWindow) {
         dialog.showMessageBox(mainWindow, {
             type: 'info',
@@ -52,6 +79,25 @@ autoUpdater.on('update-downloaded', (info) => {
 
 autoUpdater.on('error', (err) => {
     writeLog(`[AutoUpdate] Error: ${err == null ? 'unknown' : err.message}`);
+    writeLog(`[AutoUpdate] Error stack: ${err ? err.stack : 'No stack trace'}`);
+    writeLog(`[AutoUpdate] Error details: ${JSON.stringify(err, null, 2)}`);
+    
+    // Try to get more specific error information
+    if (err && err.code) {
+        writeLog(`[AutoUpdate] Error code: ${err.code}`);
+    }
+    if (err && err.errno) {
+        writeLog(`[AutoUpdate] Error errno: ${err.errno}`);
+    }
+    
+    if (mainWindow) {
+        dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            title: 'Update Check Failed',
+            message: `Failed to check for updates: ${err ? err.message : 'Unknown error'}. Check the logs for more details.`,
+            buttons: ['OK']
+        });
+    }
 });
 
 let mainWindow;
@@ -1018,6 +1064,12 @@ async function startFlaskServer() {
                 if (progressEstimator) {
                     clearInterval(progressEstimator);
                 }
+                
+                // Flask server is ready - schedule update check for after app is fully initialized
+                setTimeout(() => {
+                    writeLog('[AutoUpdate] Flask server ready, scheduling update check...');
+                    checkForUpdatesWhenReady();
+                }, 5000); // Wait 5 seconds for full app initialization
             } else if ((logLine.includes('Loading security keyring') || logLine.includes('keyring')) && !keyringPhaseStarted) {
                 keyringPhaseStarted = true;
                 currentEstimatedProgress = 35;
@@ -1256,7 +1308,12 @@ function createDeveloperMenu() {
                     label: 'Check for Updates',
                     click: () => {
                         writeLog('[DevMenu] Manual update check triggered');
-                        autoUpdater.checkForUpdates();
+                        if (hasCheckedForUpdates) {
+                            // Reset the flag to allow manual checks
+                            hasCheckedForUpdates = false;
+                            writeLog('[DevMenu] Reset auto-update flag for manual check');
+                        }
+                        autoUpdater.checkForUpdatesAndNotify();
                     }
                 },
                 {
@@ -1273,23 +1330,36 @@ function createDeveloperMenu() {
 }
 
 // Configure autoUpdater
+writeLog('[AutoUpdate] Configuring autoUpdater...');
 autoUpdater.setFeedURL({
     provider: 'generic',
-    url: 'http://localhost:10000/'
+    url: 'https://f005.backblazeb2.com/file/amrs-pm-updates/', // Friendly Backblaze B2 URL
+    channel: 'latest'  // Explicitly specify the channel
 });
 
-app.on('ready', () => {
-    // Automatic update check on startup
-    setTimeout(() => {
-        writeLog('[AutoUpdate] Checking for updates on startup');
-        autoUpdater.checkForUpdatesAndNotify();
-    }, 5000); // Wait 5 seconds after app is ready
-    createDeveloperMenu();
-});
+// Set autoUpdater options for better debugging
+autoUpdater.autoDownload = true; // Automatically download updates
+autoUpdater.autoInstallOnAppQuit = true; // Install on quit
+
+writeLog(`[AutoUpdate] Feed URL set to: https://f005.backblazeb2.com/file/amrs-pm-updates/`);
+writeLog(`[AutoUpdate] Channel: latest`);
+writeLog(`[AutoUpdate] autoDownload: ${autoUpdater.autoDownload}`);
+writeLog(`[AutoUpdate] autoInstallOnAppQuit: ${autoUpdater.autoInstallOnAppQuit}`);
+
+// Enhanced logging and debugging for auto-updater
+autoUpdater.logger = {
+    info: (msg) => writeLog(`[AutoUpdate] ${msg}`),
+    warn: (msg) => writeLog(`[AutoUpdate WARNING] ${msg}`),
+    error: (msg) => writeLog(`[AutoUpdate ERROR] ${msg}`),
+    debug: (msg) => writeLog(`[AutoUpdate DEBUG] ${msg}`)
+};
 
 // App event handlers
 app.whenReady().then(async () => {
     writeLog('[Electron] App ready, initializing application...');
+    
+    // Create developer menu immediately
+    createDeveloperMenu();
     
     // Create splash screen first
     createSplashScreen();
@@ -1314,6 +1384,10 @@ app.whenReady().then(async () => {
         setTimeout(() => {
             closeSplashScreen();
             createWindow();
+            
+            // Note: Update check is now triggered from Flask server ready event
+            writeLog('[Electron] Main window created, update check will happen automatically when Flask confirms ready');
+            
         }, 1500); // Slightly longer delay to show "Application ready!" message
     } else {
         writeLog('[Electron] Failed to start Flask backend');
@@ -1406,5 +1480,7 @@ process.on('SIGTERM', () => {
 // IPC for renderer-triggered update check
 ipcMain.on('check-for-updates', () => {
     writeLog('[IPC] Renderer requested update check');
-    autoUpdater.checkForUpdates();
+    manualUpdateCheck = true;
+    hasCheckedForUpdates = false; // Allow manual check even after auto check
+    checkForUpdatesWhenReady();
 });

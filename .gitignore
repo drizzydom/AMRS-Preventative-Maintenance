@@ -11,6 +11,9 @@ build/
 electron_app/
 python/
 
+# Generated files
+latest.yml
+
 # Unit test / coverage reports
 htmlcov/
 .tox/

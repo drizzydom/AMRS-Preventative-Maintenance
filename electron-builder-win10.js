@@ -19,11 +19,26 @@ module.exports = {
     createStartMenuShortcut: true,
     shortcutName: "Accurate Machine Repair Maintenance Tracker (Win10+)"
   },
+  asarUnpack: [
+    "package.json",
+    "app-package.json",
+    "latest.yml",
+    "versions.json",
+    "**/*.yml",
+    "**/*.yaml", 
+    "**/*.py",
+    "requirements.txt"
+  ],
   files: [
     "main.js",
     "preload.js",
     "splash-preload.js",
     "app.py",
+    "package.json",
+    "app-package.json",
+    "latest.yml",
+    "versions.json",
+    "*.yml",
     "requirements.txt",
     "config.py",
     "models.py",

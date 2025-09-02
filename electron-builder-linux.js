@@ -12,11 +12,23 @@ module.exports = {
     artifactName: "Accurate-Machine-Repair-Maintenance-Tracker-Linux-${version}.${ext}",
     icon: "assets/icon.png"
   },
+  asarUnpack: [
+    "package.json",
+    "app-package.json",
+    "latest.yml",
+    "versions.json",
+    "**/*.py",
+    "requirements.txt"
+  ],
   files: [
     "main.js",
     "preload.js",
     "splash-preload.js",
     "app.py",
+    "package.json",
+    "app-package.json",
+    "latest.yml",
+    "versions.json",
     "requirements.txt",
     "models.py",
     "sqlalchemy_datetime_patch.py",
