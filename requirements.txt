@@ -2,6 +2,8 @@
 Flask-Limiter==3.5.1
 # For secure cross-platform secret storage
 keyring==25.2.0
+# For version comparison
+packaging==21.3
 blinker==1.9.0
 click==8.1.7
 colorama==0.4.6
@@ -39,5 +41,7 @@ pytest-cov
 cryptography
 flask-socketio==5.3.6
 eventlet==0.33.3
-psutil==5.9.0
 python-socketio==5.10.0
+ # Update server dependencies
+ flask
+ pyyaml

@@ -8,8 +8,8 @@ from sqlalchemy import Column, String, Table, MetaData
 def upgrade():
     # Use SQLAlchemy MetaData to check and create the tables if missing
     engine = db.engine
-    metadata = MetaData(bind=engine)
-    metadata.reflect()
+    metadata = MetaData()
+    metadata.reflect(bind=engine)
     # Create app_settings table if missing
     if 'app_settings' not in metadata.tables:
         app_settings = Table(
@@ -44,8 +44,8 @@ def upgrade():
 
 def downgrade():
     engine = db.engine
-    metadata = MetaData(bind=engine)
-    metadata.reflect()
+    metadata = MetaData()
+    metadata.reflect(bind=engine)
     # Drop offline_security_events table if exists
     if 'offline_security_events' in metadata.tables:
         offline_security_events = metadata.tables['offline_security_events']

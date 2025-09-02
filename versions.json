@@ -1,0 +1,8 @@
+{
+  "latest": "1.4.5",
+  "available": [
+    "1.4.5"
+  ],
+  "notes": "This file controls what version the update server advertises as the latest available. Update this when you deploy new versions.",
+  "lastUpdated": "2025-09-02T20:50:59.323Z"
+}

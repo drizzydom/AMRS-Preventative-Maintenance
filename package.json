@@ -1,103 +1,89 @@
 {
   "name": "amrs-preventative-maintenance",
-  "version": "1.0.0",
-  "description": "AMRS Maintenance Tracker",
-  "main": "electron_app/main.js",
+  "version": "1.4.5",
+  "description": "Accurate Machine Repair Maintenance Tracker with Offline Sync",
+  "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "prepack": "npm run generate:latest",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "predist": "npm run generate:latest",
+    "dist": "electron-builder",
+    "prebuild:win": "npm run generate:latest",
+    "build:win": "electron-builder --win",
+    "generate:latest": "node generate-latest-yml.js --bundled",
+    "generate:package": "node generate-latest-yml.js --copy-package",
+    "update:available": "node generate-latest-yml.js --update-available",
+    "set:latest": "node generate-latest-yml.js --set-latest --version",
+    "auto:version": "node generate-latest-yml.js --update-available",
+    "prebuild:win10": "npm run generate:package && npm run generate:latest",
+    "postbuild:win10": "npm run auto:version",
+    "prebuild:mac": "npm run generate:package && npm run generate:latest",
+    "postbuild:mac": "npm run auto:version",
+    "prebuild:linux": "npm run generate:package && npm run generate:latest",
+    "postbuild:linux": "npm run auto:version",
+    "build:win10": "npm run install:electron28 && electron-builder --config electron-builder-win10.js --win",
+    "build:mac": "npm run install:electron28 && electron-builder --config electron-builder-macos.js --mac",
+    "build:linux": "npm run install:electron28 && electron-builder --config electron-builder-linux.js --linux",
+    "build:all": "npm run build:win10 && npm run build:mac && npm run build:linux",
+    "install:electron28": "npm install electron@28.3.3"
   },
   "build": {
-    "appId": "com.amrs.maintenancetracker",
-    "productName": "AMRS Maintenance Tracker",
+    "appId": "com.accuratemachinerepair.maintenancetracker",
+    "productName": "Accurate Machine Repair Maintenance Tracker",
     "directories": {
       "output": "dist"
     },
     "files": [
-      "electron_app/**/*",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
-      "!**/node_modules/*.d.ts",
-      "!**/node_modules/.bin",
-      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
-      "!.editorconfig",
-      "!**/._*",
-      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,__pycache__,thumbs.db,.gitignore,.gitattributes}",
-      "!**/node_modules/**/*",
-      "!**/__pycache__/*"
+      "**/*",
+      "!venv/**/*",
+      "!node_modules/**/*",
+      "!dist/**/*",
+      "!.git/**/*",
+      "!**/__pycache__/**/*",
+      "!**/*.pyc",
+      "!**/*.pyo",
+      "!.env",
+      "!*.log"
     ],
     "extraResources": [
       {
-        "from": "venv",
-        "to": "venv",
+        "from": "python",
+        "to": "python",
         "filter": [
-          "**/*",
-          "!**/__pycache__/*",
-          "!**/*.pyc"
+          "**/*"
         ]
-      },
-      {
-        "from": "app.py",
-        "to": "app.py"
-      },
-      {
-        "from": "app-launcher.py",
-        "to": "app-launcher.py"
-      },
-      {
-        "from": "static",
-        "to": "static"
-      },
-      {
-        "from": "templates",
-        "to": "templates"
-      },
-      {
-        "from": "modules",
-        "to": "modules"
-      },
-      {
-        "from": "requirements.txt",
-        "to": "requirements.txt"
-      },
-      {
-        "from": "flask-launcher.py",
-        "to": "flask-launcher.py"
-      },
-      {
-        "from": "models.py",
-        "to": "models.py"
-      },
-      {
-        "from": "auto_migrate.py",
-        "to": "auto_migrate.py"
       }
     ],
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "drizzydom",
-        "repo": "AMRS-Preventative-Maintenance"
-      }
-    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.business"
+    },
     "win": {
       "target": [
-        "nsis"
-      ],
-      "icon": "electron_app/icons/app.png",
-      "compression": "store"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": "AppImage"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^28.0.0",
+    "electron": "^28.3.3",
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
@@ -105,5 +91,14 @@
     "electron-log": "^5.3.3",
     "electron-updater": "^6.6.2",
     "icon-gen": "^5.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drizzydom/AMRS-Preventative-Maintenance.git"
+  },
+  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/drizzydom/AMRS-Preventative-Maintenance/issues"
+  },
+  "homepage": "https://github.com/drizzydom/AMRS-Preventative-Maintenance#readme"
 }

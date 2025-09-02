@@ -34,6 +34,31 @@
     }
 }
 
+/* Ultra-short screens: reduce padding and font size for content */
+@media (max-height: 500px) {
+    .container-fluid {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    .page-header, .page-content {
+        font-size: 0.95rem !important;
+    }
+}
+
+/* Ultra-large screens: center content and increase max width */
+@media (min-width: 1800px) {
+    .content-container {
+        max-width: 1400px !important;
+        margin-left: 260px !important;
+        margin-right: auto !important;
+    }
+    .container-fluid {
+        max-width: 1400px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+}
+
 /* ==== VERTICAL SPACING FIXES ==== */
 /* Reset all margins and padding to prevent content from being pushed down */
 body {

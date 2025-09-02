@@ -1,3 +1,6 @@
+:root {
+  --footer-height: 48px; /* Default, adjust as needed for your bottom bar */
+}
 /**
  * SIDEBAR LAYOUT STYLES
  * Defines consistent sidebar dimensions and styling
@@ -6,12 +9,15 @@
 
 /* Set consistent sidebar width and positioning */
 .sidebar {
+  padding-bottom: calc(var(--footer-height) + 48px) !important; /* Further increased space for full visibility above bottom bar */
   width: 200px;
   position: fixed;
   left: 0;
   top: 48px; /* Match navbar height */
-  height: calc(100vh - 48px); /* Full height minus navbar */
-  overflow-y: auto; /* Allow scrolling */
+  height: calc(100vh - 48px - var(--footer-height)); /* Full height minus navbar and footer */
+  overflow-y: auto; /* Always allow vertical scrolling */
+  overscroll-behavior-y: contain;
+  max-height: calc(100vh - 48px);
   background-color: #5E5E5E; /* AMRS secondary gray */
   color: #ffffff;
   z-index: 1030;
@@ -109,6 +115,43 @@ html body .sidebar {
   }
 }
 
+/* Ultra-short screens: reduce sidebar height and enable scrolling */
+@media (max-height: 500px) {
+  .sidebar {
+  height: calc(100vh - 48px - var(--footer-height)) !important; /* Reduce for footer and extra space */
+    min-height: 120px !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain !important;
+    max-height: calc(100vh - 48px - 32px) !important;
+  }
+  .footer {
+    height: 32px !important;
+    font-size: 0.85rem !important;
+  }
+  .content-container {
+    margin-bottom: 32px !important;
+  }
+}
+
+/* Ultra-large screens: keep sidebar width reasonable, center content */
+@media (min-width: 1800px) {
+  .sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+  }
+  .sidebar-container {
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+  }
+  .content-container {
+    max-width: 1400px !important;
+    margin-left: 260px !important;
+    margin-right: auto !important;
+  }
+}
+
 /* Make sure it's visible on mobile */
 @media (max-width: 991.98px) {
   #hamburger-btn {
@@ -148,7 +191,7 @@ html body .sidebar {
     top: 48px;
     left: -280px; /* Start off-screen */
     width: 280px; /* Slightly wider on mobile */
-    height: calc(100vh - 96px); /* Account for footer */
+    height: calc(100vh - 48px - var(--footer-height)); /* Account for footer dynamically */
     z-index: 1040;
     transition: left 0.3s ease;
     visibility: hidden; /* Hide by default */
