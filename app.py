@@ -268,8 +268,14 @@ def run_comprehensive_datetime_fix(cursor):
     return datetime_fix_count
 
 SECURE_DB_PATH = get_secure_database_path()
-os.environ['DATABASE_URL'] = f"sqlite:///{SECURE_DB_PATH}"
-print(f"[BOOT] Using secure database: {SECURE_DB_PATH}")
+
+# Only set DATABASE_URL to SQLite if not already set to PostgreSQL
+existing_db_url = os.environ.get('DATABASE_URL', '')
+if not (existing_db_url.startswith('postgresql://') or existing_db_url.startswith('postgres://')):
+    os.environ['DATABASE_URL'] = f"sqlite:///{SECURE_DB_PATH}"
+    print(f"[BOOT] Using secure database: {SECURE_DB_PATH}")
+else:
+    print(f"[BOOT] Using existing DATABASE_URL: {existing_db_url}")
 
 # --- Ensure schema is created before any data import or hash fix ---
 import sqlite3
