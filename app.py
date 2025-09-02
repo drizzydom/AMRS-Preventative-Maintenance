@@ -4051,23 +4051,25 @@ def dashboard():
         all_overdue_total = len(all_overdue)
         all_due_soon_total = len(all_due_soon)
         
-        return render_template('dashboard.html', 
-                              sites=sites,
-                              all_sites=all_sites,
-                              site_filter=site_filter,
-                              site_part_highlights=site_part_highlights,
-                              site_part_totals=site_part_totals,
-                              all_overdue=all_overdue[:10],  # Limit to top 10 for performance
-                              all_due_soon=all_due_soon[:10],
-                              all_overdue_total=all_overdue_total,
-                              all_due_soon_total=all_due_soon_total,
-                              overdue_count=overdue_count, 
-                              due_soon_count=due_soon_count, 
-                              ok_count=ok_count, 
-                              total_parts=total_parts, 
-                              now=now,
-                              show_decommissioned=show_decommissioned,
-                              decommissioned_count=decommissioned_count)
+    app_version = os.environ.get("APP_VERSION", "")
+    return render_template('dashboard.html', 
+                  sites=sites,
+                  all_sites=all_sites,
+                  site_filter=site_filter,
+                  site_part_highlights=site_part_highlights,
+                  site_part_totals=site_part_totals,
+                  all_overdue=all_overdue[:10],  # Limit to top 10 for performance
+                  all_due_soon=all_due_soon[:10],
+                  all_overdue_total=all_overdue_total,
+                  all_due_soon_total=all_due_soon_total,
+                  overdue_count=overdue_count, 
+                  due_soon_count=due_soon_count, 
+                  ok_count=ok_count, 
+                  total_parts=total_parts, 
+                  now=now,
+                  show_decommissioned=show_decommissioned,
+                  decommissioned_count=decommissioned_count,
+                  app_version=app_version)
                               
     except Exception as e:
         import traceback
@@ -4075,24 +4077,26 @@ def dashboard():
         app.logger.error(f"Dashboard error traceback: {traceback.format_exc()}")
         # Instead of redirecting, show a minimal dashboard with an error message
         flash(f'Error loading dashboard data: {str(e)}', 'error')
-        return render_template('dashboard.html', 
-                              sites=[],
-                              all_sites=[],
-                              site_filter='all',
-                              site_part_highlights={},
-                              site_part_totals={},
-                              all_overdue=[],
-                              all_due_soon=[],
-                              all_overdue_total=0,
-                              all_due_soon_total=0,
-                              overdue_count=0, 
-                              due_soon_count=0, 
-                              ok_count=0, 
-                              total_parts=0,
-                              error=True,  # Flag to show error message in template
-                              now=datetime.now(),
-                              show_decommissioned=False,
-                              decommissioned_count=0)
+    app_version = os.environ.get("APP_VERSION", "")
+    return render_template('dashboard.html', 
+                  sites=[],
+                  all_sites=[],
+                  site_filter='all',
+                  site_part_highlights={},
+                  site_part_totals={},
+                  all_overdue=[],
+                  all_due_soon=[],
+                  all_overdue_total=0,
+                  all_due_soon_total=0,
+                  overdue_count=0, 
+                  due_soon_count=0, 
+                  ok_count=0, 
+                  total_parts=0,
+                  error=True,  # Flag to show error message in template
+                  now=datetime.now(),
+                  show_decommissioned=False,
+                  decommissioned_count=0,
+                  app_version=app_version)
 
 # --- Admin Security Event Log Viewer ---
 @app.route('/admin/security-logs', methods=['GET'])
