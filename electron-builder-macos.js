@@ -20,11 +20,23 @@ module.exports = {
   },
   dmg: {
   },
+  asarUnpack: [
+    "package.json",
+    "app-package.json",
+    "latest.yml",
+    "versions.json",
+    "**/*.py",
+    "requirements.txt"
+  ],
   files: [
     "main.js",
     "preload.js",
     "splash-preload.js",
     "app.py",
+    "package.json",
+    "app-package.json",
+    "latest.yml",
+    "versions.json",
     "requirements.txt",
     "config.py",
     "models.py",
