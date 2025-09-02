@@ -1,6 +1,9 @@
 # === CRITICAL: Apply SQLAlchemy datetime parsing patch FIRST ===
 # This must be imported before any SQLAlchemy operations to fix Python 3.11.0 compatibility
 try:
+    pass
+except Exception as e:
+    print(f"Exception occurred: {e}")
     import sqlalchemy_datetime_patch
     print("[PATCH] SQLAlchemy datetime patch applied successfully")
 except ImportError as e:
@@ -4051,26 +4054,26 @@ def dashboard():
         all_overdue_total = len(all_overdue)
         all_due_soon_total = len(all_due_soon)
         
-    app_version = os.environ.get("APP_VERSION", "")
-    return render_template('dashboard.html', 
-                  sites=sites,
-                  all_sites=all_sites,
-                  site_filter=site_filter,
-                  site_part_highlights=site_part_highlights,
-                  site_part_totals=site_part_totals,
-                  all_overdue=all_overdue[:10],  # Limit to top 10 for performance
-                  all_due_soon=all_due_soon[:10],
-                  all_overdue_total=all_overdue_total,
-                  all_due_soon_total=all_due_soon_total,
-                  overdue_count=overdue_count, 
-                  due_soon_count=due_soon_count, 
-                  ok_count=ok_count, 
-                  total_parts=total_parts, 
-                  now=now,
-                  show_decommissioned=show_decommissioned,
-                  decommissioned_count=decommissioned_count,
-                  app_version=app_version)
-                              
+        app_version = os.environ.get("APP_VERSION", "")
+        return render_template('dashboard.html',
+                      sites=sites,
+                      all_sites=all_sites,
+                      site_filter=site_filter,
+                      site_part_highlights=site_part_highlights,
+                      site_part_totals=site_part_totals,
+                      all_overdue=all_overdue[:10],  # Limit to top 10 for performance
+                      all_due_soon=all_due_soon[:10],
+                      all_overdue_total=all_overdue_total,
+                      all_due_soon_total=all_due_soon_total,
+                      overdue_count=overdue_count, 
+                      due_soon_count=due_soon_count, 
+                      ok_count=ok_count, 
+                      total_parts=total_parts, 
+                      now=now,
+                      show_decommissioned=show_decommissioned,
+                      decommissioned_count=decommissioned_count,
+                      app_version=app_version)
+
     except Exception as e:
         import traceback
         app.logger.error(f"Dashboard error: {str(e)}")

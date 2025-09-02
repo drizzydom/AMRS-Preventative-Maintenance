@@ -1366,14 +1366,14 @@ app.whenReady().then(async () => {
     updateSplashStatus('Initializing application...', 5);
     
     // Small delay to show initial message
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Create application menu
-    updateSplashStatus('Setting up application menu...', 8);
-    createMenu();
-    createDeveloperMenu();
-    
-    // Add detailed debugging for production issues
+            setTimeout(() => {
+                // Start periodic update checks every 30 minutes
+                writeLog('[AutoUpdate] Starting periodic update checks (every 30 minutes)');
+                setInterval(() => {
+                    writeLog('[AutoUpdate] Periodic update check triggered');
+                    checkForUpdatesWhenReady();
+                }, 1800000); // 30 minutes in ms
+            }, 10000); // Start periodic checks 10s after main window is shown
     writeLog(`[Electron] Current working directory: ${process.cwd()}`);
     writeLog(`[Electron] __dirname: ${__dirname}`);
     writeLog(`[Electron] Platform: ${process.platform}`);
