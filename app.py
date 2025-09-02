@@ -10,6 +10,33 @@ except ImportError as e:
     print(f"[PATCH] SQLAlchemy datetime patch not available: {e}")
     # Continue without patch - may cause issues on Python 3.11.0 with certain datetime formats
 
+    # --- DEBUG: SQLAlchemy URI and User Table Existence Checks ---
+    import os
+    try:
+        # Print SQLAlchemy URI from config
+        print("[DEBUG] app.config['SQLALCHEMY_DATABASE_URI']:", os.environ.get('DATABASE_URL'))
+        # Try to import db and User
+        from models import db, User
+        # Check if User table exists using SQLAlchemy inspector
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        print("[DEBUG] Tables in database:", tables)
+        if 'users' in tables:
+            print("[DEBUG] 'users' table exists.")
+            # Check columns in users table
+            columns = [col['name'] for col in inspector.get_columns('users')]
+            print("[DEBUG] Columns in 'users' table:", columns)
+            # Try to query for a user record
+            user_record = db.session.query(User).first()
+            if user_record:
+                print(f"[DEBUG] First user record: id={user_record.id}, username={user_record.username}, username_hash={getattr(user_record, 'username_hash', None)}, password_hash={getattr(user_record, 'password_hash', None)}")
+            else:
+                print("[DEBUG] No user records found in 'users' table.")
+        else:
+            print("[DEBUG] 'users' table does NOT exist!")
+    except Exception as e:
+        print(f"[DEBUG] Error during SQLAlchemy/user table checks: {e}")
 # --- DEBUG: Print DATABASE_URL at startup ---
 import os
 print("[DEBUG] DATABASE_URL at startup:", os.environ.get("DATABASE_URL"))
