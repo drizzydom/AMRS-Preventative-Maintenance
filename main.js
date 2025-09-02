@@ -244,7 +244,7 @@ function createSplashScreen() {
         }
     });
 
-    // Create splash screen HTML content
+    // Create splash screen HTML content with dynamic version
     const splashHTML = `
     <!DOCTYPE html>
     <html>
@@ -362,7 +362,7 @@ function createSplashScreen() {
     </head>
     <body>
         <div class="logo">🔧 AMRS Maintenance Tracker</div>
-    <div class="version">Version 1.4.1</div>
+        <div class="version">Version ${require('electron').app.getVersion()}</div>
         <div class="loading-container">
             <div class="spinner"></div>
             <div class="loading-bar">
