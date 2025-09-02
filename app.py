@@ -10,6 +10,37 @@ except ImportError as e:
     print(f"[PATCH] SQLAlchemy datetime patch not available: {e}")
     # Continue without patch - may cause issues on Python 3.11.0 with certain datetime formats
 
+    # --- DEBUG: SQLAlchemy URI and User Table Existence Checks ---
+    import os
+    try:
+        # Print SQLAlchemy URI from config
+        print("[DEBUG] app.config['SQLALCHEMY_DATABASE_URI']:", os.environ.get('DATABASE_URL'))
+        # Try to import db and User
+        from models import db, User
+        # Check if User table exists using SQLAlchemy inspector
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        print("[DEBUG] Tables in database:", tables)
+        if 'users' in tables:
+            print("[DEBUG] 'users' table exists.")
+            # Check columns in users table
+            columns = [col['name'] for col in inspector.get_columns('users')]
+            print("[DEBUG] Columns in 'users' table:", columns)
+            # Try to query for a user record
+            user_record = db.session.query(User).first()
+            if user_record:
+                print(f"[DEBUG] First user record: id={user_record.id}, username={user_record.username}, username_hash={getattr(user_record, 'username_hash', None)}, password_hash={getattr(user_record, 'password_hash', None)}")
+            else:
+                print("[DEBUG] No user records found in 'users' table.")
+        else:
+            print("[DEBUG] 'users' table does NOT exist!")
+    except Exception as e:
+        print(f"[DEBUG] Error during SQLAlchemy/user table checks: {e}")
+# --- DEBUG: Print DATABASE_URL at startup ---
+import os
+print("[DEBUG] DATABASE_URL at startup:", os.environ.get("DATABASE_URL"))
+
 # --- ALWAYS use secure SQLite database for offline mode ---
 import os
 from pathlib import Path
@@ -237,8 +268,14 @@ def run_comprehensive_datetime_fix(cursor):
     return datetime_fix_count
 
 SECURE_DB_PATH = get_secure_database_path()
-os.environ['DATABASE_URL'] = f"sqlite:///{SECURE_DB_PATH}"
-print(f"[BOOT] Using secure database: {SECURE_DB_PATH}")
+
+# Only set DATABASE_URL to SQLite if not already set to PostgreSQL
+existing_db_url = os.environ.get('DATABASE_URL', '')
+if not (existing_db_url.startswith('postgresql://') or existing_db_url.startswith('postgres://')):
+    os.environ['DATABASE_URL'] = f"sqlite:///{SECURE_DB_PATH}"
+    print(f"[BOOT] Using secure database: {SECURE_DB_PATH}")
+else:
+    print(f"[BOOT] Using existing DATABASE_URL: {existing_db_url}")
 
 # --- Ensure schema is created before any data import or hash fix ---
 import sqlite3
@@ -9380,18 +9417,16 @@ except ImportError as e:
 is_postgresql_url = POSTGRESQL_DATABASE_URI and ('postgresql://' in POSTGRESQL_DATABASE_URI or 'postgres://' in POSTGRESQL_DATABASE_URI)
 print(f"[DEBUG] is_postgresql_url: {is_postgresql_url}")
 
-# Configure database based on environment
+# --- PATCH: Always use PostgreSQL on Render if DATABASE_URL is set ---
 if is_render_env:
-    # Render environment: always use PostgreSQL
-    if is_postgresql_url:
+    if POSTGRESQL_DATABASE_URI:
         app.config['SQLALCHEMY_DATABASE_URI'] = POSTGRESQL_DATABASE_URI
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        print("[AMRS] RENDER MODE: Using PostgreSQL database")
+        print("[AMRS] RENDER MODE: Using PostgreSQL database (forced by DATABASE_URL)")
     else:
         print("[AMRS] ERROR: RENDER environment but no DATABASE_URL found!")
         print(f"[AMRS] DEBUG: DATABASE_URL = '{POSTGRESQL_DATABASE_URI}'")
         print(f"[AMRS] DEBUG: is_postgresql_url = {is_postgresql_url}")
-        # Don't exit here - let the app try to continue with SQLite fallback
         print("[AMRS] FALLBACK: Attempting to use SQLite database")
         secure_db_path = get_secure_database_path()
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{secure_db_path}"
