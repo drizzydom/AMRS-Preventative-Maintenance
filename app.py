@@ -8622,6 +8622,41 @@ def bulk_import():
                             # Handle the date format from JSON (e.g., "2025-01-16 00:00:00")
                             date_str = record['date'].split(' ')[0]  # Remove time part
                             record['date'] = date_str
+                            # --- NEW: Import Historical_Maintenance records ---
+                            historical = part_data.get('Historical_Maintenance', [])
+                            for hist in historical:
+                                hist_date = hist.get('Date', '').strip()
+                                hist_type = hist.get('Maintenance Type', '').strip()
+                                hist_technician = hist.get('Technician', '').strip()
+                                hist_notes = hist.get('Notes', '').strip()
+                                hist_status = hist.get('Status', 'completed').strip()
+                                # Use Maintenance Type for description, add Technician if present
+                                hist_description = hist_type
+                                if hist_technician:
+                                    hist_description += f" | Completed by: {hist_technician}"
+                                if hist_notes:
+                                    hist_description += f" | Notes: {hist_notes}"
+                                # Clean up date format
+                                if hist_date:
+                                    try:
+                                        hist_date = hist_date.split(' ')[0]
+                                    except:
+                                        pass
+                                hist_record = {
+                                    'machine_name': machine_name,
+                                    'part_name': part_name,
+                                    'maintenance_type': hist_type or 'Historical',
+                                    'description': hist_description,
+                                    'date': hist_date,
+                                    'performed_by': hist_technician or 'System Import',
+                                    'status': hist_status,
+                                    'notes': hist_notes,
+                                    # Frequency/unit not always present in historical, use defaults
+                                    'maintenance_frequency': part_data.get('maintenance_frequency', 30),
+                                    'maintenance_unit': part_data.get('maintenance_unit', 'day')
+                                }
+                                if hist_record['machine_name'] and hist_record['part_name']:
+                                    records.append(hist_record)
                         except:
                             record['date'] = ''
                     
