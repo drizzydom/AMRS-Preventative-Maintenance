@@ -5195,7 +5195,6 @@ def edit_user(user_id):
             if existing_user:
                 flash(f'Username "{username}" is already taken.', 'danger')
                 return redirect(url_for('edit_user', user_id=user_id))
-                
             # Check if email already exists for another user  
             existing_user = User.query.filter(User.email == email, User.id != user_id).first()
             if existing_user:
@@ -8625,7 +8624,7 @@ def bulk_import():
                             # --- NEW: Import Historical_Maintenance records ---
                             historical = part_data.get('Historical_Maintenance', [])
                             for hist in historical:
-                                hist_date = hist.get('Date', '').strip()
+                                hist_date = hist.get('Last PM Done', '').strip()
                                 hist_type = hist.get('Maintenance Type', '').strip()
                                 hist_technician = hist.get('Technician', '').strip()
                                 hist_notes = hist.get('Notes', '').strip()
