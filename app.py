@@ -42,43 +42,6 @@ import os
 print("[DEBUG] DATABASE_URL at startup:", os.environ.get("DATABASE_URL"))
 
 
-# --- TEMPORARY CLEANUP: Delete all maintenance records for user 'dmoriello' on Render.com ---
-# REMOVE THIS BLOCK WHEN NO LONGER NEEDED
-import os
-import sqlite3
-def delete_dmoriello_maintenance_records():
-    try:
-        # Use the main database path logic
-        db_path = os.environ.get('DATABASE_URL', '')
-        if db_path.startswith('sqlite:///'):
-            db_path = db_path.replace('sqlite:///', '')
-        elif db_path.startswith('sqlite:'):
-            db_path = db_path.replace('sqlite:', '')
-        else:
-            # Fallback to secure db path
-            from pathlib import Path
-            db_path = str(Path.home() / 'AMRS_PM' / 'maintenance_secure.db')
-        db = sqlite3.connect(db_path)
-        db.row_factory = sqlite3.Row
-        cursor = db.cursor()
-        # Find user id for 'dmoriello'
-        cursor.execute("SELECT id FROM users WHERE username = ?", ("dmoriello",))
-        row = cursor.fetchone()
-        if row:
-            user_id = row["id"]
-            cursor.execute("DELETE FROM maintenance_records WHERE user_id = ?", (user_id,))
-            deleted_count = cursor.rowcount
-            db.commit()
-            print(f"[CLEANUP] Deleted {deleted_count} maintenance records for user 'dmoriello'.")
-        else:
-            print("[CLEANUP] No user 'dmoriello' found. No records deleted.")
-        db.close()
-    except Exception as e:
-        print(f"[CLEANUP] Error during dmoriello maintenance record cleanup: {e}")
-
-# Only run this on Render.com
-if os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
-    delete_dmoriello_maintenance_records()
 
 # --- ALWAYS use secure SQLite database for offline mode ---
 from pathlib import Path
