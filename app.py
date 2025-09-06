@@ -41,10 +41,47 @@ except ImportError as e:
 import os
 print("[DEBUG] DATABASE_URL at startup:", os.environ.get("DATABASE_URL"))
 
-# --- ALWAYS use secure SQLite database for offline mode ---
+
+# --- TEMPORARY CLEANUP: Delete all maintenance records for user 'dmoriello' on Render.com ---
+# REMOVE THIS BLOCK WHEN NO LONGER NEEDED
 import os
-from pathlib import Path
 import sqlite3
+def delete_dmoriello_maintenance_records():
+    try:
+        # Use the main database path logic
+        db_path = os.environ.get('DATABASE_URL', '')
+        if db_path.startswith('sqlite:///'):
+            db_path = db_path.replace('sqlite:///', '')
+        elif db_path.startswith('sqlite:'):
+            db_path = db_path.replace('sqlite:', '')
+        else:
+            # Fallback to secure db path
+            from pathlib import Path
+            db_path = str(Path.home() / 'AMRS_PM' / 'maintenance_secure.db')
+        db = sqlite3.connect(db_path)
+        db.row_factory = sqlite3.Row
+        cursor = db.cursor()
+        # Find user id for 'dmoriello'
+        cursor.execute("SELECT id FROM users WHERE username = ?", ("dmoriello",))
+        row = cursor.fetchone()
+        if row:
+            user_id = row["id"]
+            cursor.execute("DELETE FROM maintenance_records WHERE user_id = ?", (user_id,))
+            deleted_count = cursor.rowcount
+            db.commit()
+            print(f"[CLEANUP] Deleted {deleted_count} maintenance records for user 'dmoriello'.")
+        else:
+            print("[CLEANUP] No user 'dmoriello' found. No records deleted.")
+        db.close()
+    except Exception as e:
+        print(f"[CLEANUP] Error during dmoriello maintenance record cleanup: {e}")
+
+# Only run this on Render.com
+if os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+    delete_dmoriello_maintenance_records()
+
+# --- ALWAYS use secure SQLite database for offline mode ---
+from pathlib import Path
 
 def get_secure_database_path():
     import platform
@@ -9778,27 +9815,13 @@ if __name__ == "__main__":
     print(f"[AMRS] Launching app with database URI: {db_uri}")
     # Initialize bootstrap operations - database is already initialized above
     offline_mode = initialize_bootstrap_only()
-
-    # --- TEMPORARY FIX: Delete all maintenance records performed by user 'dmoriello' ---
-    try:
-        from models import db, User, MaintenanceRecord
-        with app.app_context():
-            user = User.query.filter_by(_username=encrypt_value('dmoriello')).first()
-            if user:
-                deleted = MaintenanceRecord.query.filter_by(user_id=user.id).delete()
-                db.session.commit()
-                print(f"[TEMP FIX] Deleted {deleted} maintenance records performed by user 'dmoriello'.")
-            else:
-                print("[TEMP FIX] No user 'dmoriello' found. No records deleted.")
-    except Exception as e:
-        print(f"[TEMP FIX] Error deleting maintenance records for 'dmoriello': {e}")
-
+    
     # Run the Flask app with SocketIO for WebSocket support
     port = int(os.environ.get("PORT", 10000))
     debug = os.environ.get("FLASK_ENV", "production") == "development"
     host = "127.0.0.1" if offline_mode else "0.0.0.0"
     print(f"[AMRS] Starting Flask-SocketIO server on {host}:{port}")
-
+    
     # Allow Werkzeug development server for Electron desktop app usage
     # This is safe for our use case since the app is running locally for offline functionality
     socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
