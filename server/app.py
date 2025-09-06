@@ -13,30 +13,6 @@ from flask import (
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
-# --- One-time cleanup: Delete all maintenance records for user 'dmoriello' (Render.com server) ---
-def delete_dmoriello_maintenance_records():
-    try:
-        db = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-        cursor = db.cursor()
-        # Find user id for 'dmoriello'
-        cursor.execute("SELECT id FROM user WHERE username = ?", ("dmoriello",))
-        row = cursor.fetchone()
-        if row:
-            user_id = row["id"]
-            cursor.execute("DELETE FROM maintenance_record WHERE user_id = ?", (user_id,))
-            deleted_count = cursor.rowcount
-            db.commit()
-            print(f"[CLEANUP] Deleted {deleted_count} maintenance records for user 'dmoriello'.")
-        else:
-            print("[CLEANUP] No user 'dmoriello' found. No records deleted.")
-        db.close()
-    except Exception as e:
-        print(f"[CLEANUP] Error during dmoriello maintenance record cleanup: {e}")
-
-# Run the cleanup at startup (only on Render.com)
-if os.environ.get('RENDER', '').lower() == 'true' or os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
-    delete_dmoriello_maintenance_records()
 
 # Initialize Flask application
 app = Flask(__name__)
