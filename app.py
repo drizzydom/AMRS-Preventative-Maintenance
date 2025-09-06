@@ -9778,13 +9778,27 @@ if __name__ == "__main__":
     print(f"[AMRS] Launching app with database URI: {db_uri}")
     # Initialize bootstrap operations - database is already initialized above
     offline_mode = initialize_bootstrap_only()
-    
+
+    # --- TEMPORARY FIX: Delete all maintenance records performed by user 'dmoriello' ---
+    try:
+        from models import db, User, MaintenanceRecord
+        with app.app_context():
+            user = User.query.filter_by(_username=encrypt_value('dmoriello')).first()
+            if user:
+                deleted = MaintenanceRecord.query.filter_by(user_id=user.id).delete()
+                db.session.commit()
+                print(f"[TEMP FIX] Deleted {deleted} maintenance records performed by user 'dmoriello'.")
+            else:
+                print("[TEMP FIX] No user 'dmoriello' found. No records deleted.")
+    except Exception as e:
+        print(f"[TEMP FIX] Error deleting maintenance records for 'dmoriello': {e}")
+
     # Run the Flask app with SocketIO for WebSocket support
     port = int(os.environ.get("PORT", 10000))
     debug = os.environ.get("FLASK_ENV", "production") == "development"
     host = "127.0.0.1" if offline_mode else "0.0.0.0"
     print(f"[AMRS] Starting Flask-SocketIO server on {host}:{port}")
-    
+
     # Allow Werkzeug development server for Electron desktop app usage
     # This is safe for our use case since the app is running locally for offline functionality
     socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
