@@ -4621,6 +4621,132 @@ def audit_history_page():
         flash('You do not have permission to access audit history.', 'danger')
         return redirect(url_for('dashboard'))
 
+    @app.route('/maintenance/multi', methods=['POST'])
+    @login_required
+    def maintenance_multi():
+        """Handle multi-part maintenance submission from the modal."""
+        try:
+            part_ids = request.form.getlist('part_ids')
+            machine_id = request.form.get('machine_id')
+            maintenance_type = request.form.get('maintenance_type')
+            description = request.form.get('description')
+            date_str = request.form.get('date')
+            performed_by = request.form.get('performed_by', '')
+            status = request.form.get('status', 'completed')
+            notes = request.form.get('notes', '')
+            client_id = request.form.get('client_id')
+            user_id = current_user.id
+
+            # Validate required fields
+            if not part_ids or not machine_id or not maintenance_type or not description or not date_str:
+                flash('All fields and at least one part must be selected!', 'danger')
+                return redirect(url_for('maintenance_page'))
+
+            try:
+                maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
+            except ValueError:
+                flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
+                return redirect(url_for('maintenance_page'))
+
+            created_records = []
+            # --- Save uploaded files once ---
+            files = request.files.getlist('maintenance_files')
+            import os
+            from werkzeug.utils import secure_filename
+            upload_folder = get_upload_folder_path()
+            saved_files = []  # List of dicts: {filename, filepath, filetype, filesize}
+            for file in files:
+                if file and file.filename:
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(upload_folder, filename)
+                    # Ensure unique filename
+                    base, ext = os.path.splitext(filename)
+                    counter = 1
+                    while os.path.exists(filepath):
+                        filename = f"{base}_{counter}{ext}"
+                        filepath = os.path.join(upload_folder, filename)
+                        counter += 1
+                    file.save(filepath)
+                    filetype = file.mimetype
+                    filesize = os.path.getsize(filepath)
+                    saved_files.append({
+                        'filename': filename,
+                        'filepath': filepath,
+                        'filetype': filetype,
+                        'filesize': filesize
+                    })
+
+            for part_id in part_ids:
+                try:
+                    part = Part.query.get(int(part_id))
+                    if not part:
+                        continue
+                    new_record = MaintenanceRecord(
+                        machine_id=machine_id,
+                        part_id=part.id,
+                        user_id=user_id,
+                        maintenance_type=maintenance_type,
+                        description=description,
+                        date=maintenance_date,
+                        performed_by=performed_by,
+                        status=status,
+                        notes=notes,
+                        client_id=client_id if client_id else None
+                    )
+                    db.session.add(new_record)
+
+                    # Link all saved files to this record
+                    for f in saved_files:
+                        maintenance_file = MaintenanceFile(
+                            maintenance_record=new_record,
+                            filename=f['filename'],
+                            filepath=f['filepath'],
+                            filetype=f['filetype'],
+                            filesize=f['filesize']
+                        )
+                        db.session.add(maintenance_file)
+
+                    # Update part's last_maintenance and next_maintenance
+                    part.last_maintenance = maintenance_date
+                    freq = part.maintenance_frequency or 1
+                    unit = part.maintenance_unit or 'day'
+                    if unit == 'week':
+                        delta = timedelta(weeks=freq)
+                    elif unit == 'month':
+                        delta = timedelta(days=freq * 30)
+                    elif unit == 'year':
+                        delta = timedelta(days=freq * 365)
+                    else:
+                        delta = timedelta(days=freq)
+                    part.next_maintenance = maintenance_date + delta
+                    db.session.add(part)
+                    created_records.append(new_record)
+                except Exception as e:
+                    app.logger.error(f"Error creating maintenance record for part {part_id}: {e}")
+                    continue
+            db.session.commit()
+            # Log to sync queue for each record
+            for rec in created_records:
+                add_to_sync_queue_enhanced('maintenance_records', rec.id, 'insert', {
+                    'id': rec.id,
+                    'machine_id': rec.machine_id,
+                    'part_id': rec.part_id,
+                    'user_id': rec.user_id,
+                    'maintenance_type': rec.maintenance_type,
+                    'description': rec.description,
+                    'date': str(rec.date),
+                    'performed_by': rec.performed_by,
+                    'status': rec.status,
+                    'notes': rec.notes,
+                    'client_id': rec.client_id
+                })
+            flash(f'Maintenance recorded for {len(created_records)} part(s).', 'success')
+            return redirect(url_for('maintenance_page'))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error in maintenance_multi: {e}")
+            flash('An error occurred while recording multi-part maintenance.', 'danger')
+            return redirect(url_for('maintenance_page'))
     from calendar import monthrange
     today = datetime.now().date()
     # --- Parse month/year from month_year param ---
@@ -8488,12 +8614,12 @@ def bulk_import():
             except Exception as e:
                 app.logger.warning(f"Failed to parse date '{date_str}': {e}")
         
-        # If we couldn't parse the date, use a reasonable default (30 days ago)
+        # If we couldn't parse the date, use a reasonable default (3 years ago)
         # This prevents all maintenance from showing as "today"
         if date_obj is None:
             if date_str:
-                app.logger.warning(f"Could not parse maintenance date '{date_str}', using 30 days ago as fallback")
-            date_obj = datetime.now() - timedelta(days=30)
+                app.logger.warning(f"Could not parse maintenance date '{date_str}', using 3 years ago as fallback")
+            date_obj = datetime.now() - timedelta(days=3*365)
         
         maintenance_type = maintenance_data.get('maintenance_type', 'Scheduled')
         description = maintenance_data.get('description', '').strip()
