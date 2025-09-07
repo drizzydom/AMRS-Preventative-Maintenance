@@ -1,0 +1,98 @@
+<!-- Modal for Multi-Part Maintenance -->
+<div class="modal fade" id="multiPartModal" tabindex="-1" aria-labelledby="multiPartModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="multiPartModalLabel">Record Maintenance for Multiple Parts</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="multiPartForm" method="post" action="{{ url_for('multi_part_maintenance') }}">
+        <div class="modal-body">
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label for="multi_site_id" class="form-label">Site <span class="text-danger">*</span></label>
+              <select class="form-select" id="multi_site_id" name="site_id" required>
+                <option value="">Select Site</option>
+                {% for site in sites %}
+                <option value="{{ site.id }}">{{ site.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="multi_machine_id" class="form-label">Machine <span class="text-danger">*</span></label>
+              <select class="form-select" id="multi_machine_id" name="machine_id" required disabled>
+                <option value="">Select Machine</option>
+                {% for machine in machines %}
+                <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="multi_part_ids" class="form-label">Parts <span class="text-danger">*</span></label>
+              <select class="form-select" id="multi_part_ids" name="part_ids" multiple required disabled>
+                {% for part in parts %}
+                <option value="{{ part.id }}" data-machine="{{ part.machine_id }}">{{ part.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Hold Ctrl (Windows) or Cmd (Mac) to select multiple parts.</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label for="multi_date" class="form-label">Date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="multi_date" name="date" value="{{ now|to_eastern('%Y-%m-%d') }}" required>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="multi_maintenance_type" class="form-label">Maintenance Type <span class="text-danger">*</span></label>
+              <select class="form-select" id="multi_maintenance_type" name="maintenance_type" required>
+                <option value="">Select Type</option>
+                <option value="Routine">Routine</option>
+                <option value="Repair">Repair</option>
+                <option value="Inspection">Inspection</option>
+                <option value="Upgrade">Upgrade</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="multi_description" class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="multi_description" name="description" rows="2" required></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="multi_notes" class="form-label">Notes</label>
+            <textarea class="form-control" id="multi_notes" name="notes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">Record Maintenance for Selected Parts</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Enable/disable machine/part selects based on site/machine selection
+$(function() {
+  $('#multi_site_id').on('change', function() {
+    var siteId = $(this).val();
+    $('#multi_machine_id').prop('disabled', !siteId);
+    $('#multi_machine_id option').each(function() {
+      var show = !siteId || $(this).data('site') == siteId || $(this).val() == '';
+      $(this).toggle(show);
+    });
+    $('#multi_machine_id').val('');
+    $('#multi_part_ids').prop('disabled', true).val([]);
+  });
+  $('#multi_machine_id').on('change', function() {
+    var machineId = $(this).val();
+    $('#multi_part_ids').prop('disabled', !machineId);
+    $('#multi_part_ids option').each(function() {
+      var show = !machineId || $(this).data('machine') == machineId;
+      $(this).toggle(show);
+    });
+    $('#multi_part_ids').val([]);
+  });
+});
+</script>
