@@ -110,27 +110,33 @@ def import_excel(file_path):
                 continue
                 
             # Parse maintenance frequency and date
+
             try:
                 maintenance_frequency = int(row.get('maintenance_frequency', 7))
                 last_maintenance_str = row.get('last_maintenance')
+                from datetime import timedelta
+                today = datetime.utcnow()
+                five_years_ago = today - timedelta(days=5*365)
+                min_valid_date = datetime(2010, 1, 1)
                 if last_maintenance_str:
                     if isinstance(last_maintenance_str, str):
                         last_maintenance = datetime.strptime(last_maintenance_str, '%Y-%m-%d')
                     else:
                         last_maintenance = last_maintenance_str  # Assume it's already a datetime
                 else:
-                    last_maintenance = datetime.utcnow()
+                    last_maintenance = five_years_ago
             except Exception as e:
                 stats['errors'].append(f"Error parsing maintenance info for {part_name}: {str(e)}")
                 continue
-                
-            # Create new part
+
+            # Always create the part, but only set last_maintenance if valid
+            valid_maintenance = last_maintenance >= min_valid_date
             new_part = Part(
                 name=part_name,
                 description=row.get('description', ''),
                 machine_id=machine.id,
                 maintenance_frequency=maintenance_frequency,
-                last_maintenance=last_maintenance
+                last_maintenance=last_maintenance if valid_maintenance else None
             )
             new_part.update_next_maintenance()
             db.session.add(new_part)
