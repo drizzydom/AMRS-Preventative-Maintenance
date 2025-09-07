@@ -93,7 +93,7 @@ def get_dashboard(current_user):
     now = get_timezone_aware_now()  # Use timezone-aware datetime
     
     # Get all parts
-    parts = Part.query.all()
+    parts = Part.query.filter(Part.created_at >= datetime(2010, 1, 1)).all()
     
     # Count parts by status
     overdue_count = 0
@@ -217,7 +217,10 @@ def get_machine(current_user, machine_id):
         return jsonify({'error': 'Access denied'}), 403
     
     # Get all parts for this machine
-    parts = Part.query.filter_by(machine_id=machine.id).all()
+    parts = Part.query.filter(
+        Part.machine_id == machine.id,
+        Part.created_at >= datetime(2010, 1, 1)
+    ).all()
     now = datetime.datetime.utcnow()
     parts_data = []
     
@@ -264,7 +267,7 @@ def get_parts(current_user):
     status_filter = request.args.get('status')
     
     # Start with base query
-    query = Part.query
+    query = Part.query.filter(Part.created_at >= datetime(2010, 1, 1))
     
     # Filter by machine if provided
     if machine_id:
