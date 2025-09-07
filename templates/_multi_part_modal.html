@@ -29,12 +29,12 @@
             </div>
             <div class="col-md-4 mb-3">
               <label for="multi_part_ids" class="form-label">Parts <span class="text-danger">*</span></label>
-              <select class="form-select" id="multi_part_ids" name="part_ids" multiple required disabled>
+              <select class="form-select" id="multi_part_ids" name="part_ids" multiple required disabled style="user-select: none;">
                 {% for part in parts %}
                 <option value="{{ part.id }}" data-machine="{{ part.machine_id }}">{{ part.name }}</option>
                 {% endfor %}
               </select>
-              <div class="form-text">Hold Ctrl (Windows) or Cmd (Mac) to select multiple parts.</div>
+              <div class="form-text">Click to select or deselect multiple parts. No need to hold Ctrl or Cmd.</div>
             </div>
           </div>
           <div class="row">
@@ -93,6 +93,16 @@ $(function() {
       $(this).toggle(show);
     });
     $('#multi_part_ids').val([]);
+  });
+
+  // Click-to-toggle for multi-select (no Ctrl/Cmd needed)
+  $('#multi_part_ids').on('mousedown', 'option', function(e) {
+    e.preventDefault();
+    var select = $(this).parent();
+    var option = $(this);
+    option.prop('selected', !option.prop('selected'));
+    select.focus();
+    return false;
   });
 });
 </script>

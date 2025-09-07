@@ -94,6 +94,7 @@ def index():
         JOIN machine m ON p.machine_id = m.id
         JOIN site s ON m.site_id = s.id
         LEFT JOIN user u ON mr.user_id = u.id
+        WHERE mr.timestamp >= '2010-01-01'
         ORDER BY mr.timestamp DESC
         LIMIT 10
     """)
@@ -226,6 +227,10 @@ def get_parts():
             JOIN machine m ON p.machine_id = m.id
             JOIN site s ON m.site_id = s.id
             WHERE 1=1
+                AND (
+                    p.last_maintenance IS NULL
+                    OR p.last_maintenance >= '2010-01-01'
+                )
         """
         params = []
         
@@ -294,10 +299,14 @@ def record_maintenance():
         cursor = db.cursor()
         
         # Record maintenance
+        # Only allow recording maintenance for current or future dates (2010 or later)
+        now = datetime.now()
+        if now < datetime(2010, 1, 1):
+            return jsonify({"error": "Cannot record maintenance before 2010-01-01"}), 400
         cursor.execute("""
             INSERT INTO maintenance_record (part_id, user_id, timestamp, notes)
             VALUES (?, ?, ?, ?)
-        """, (part_id, session.get('user_id'), datetime.now(), notes))
+        """, (part_id, session.get('user_id'), now, notes))
         
         # Update last maintenance date
         cursor.execute("""
