@@ -3971,6 +3971,9 @@ def dashboard():
             for site in all_sites:
                 for machine in site.machines:
                     machine.parts = [p for p in machine.parts if p.created_at and p.created_at >= datetime(2010, 1, 1)]
+                    # Remove maintenance records before 2010 from each part
+                    if hasattr(machine, 'maintenance_records'):
+                        machine.maintenance_records = [r for r in machine.maintenance_records if r.date and r.date >= datetime(2010, 1, 1)]
         else:
             # Check if user has any site assignments first
             if not hasattr(current_user, 'sites') or not current_user.sites:
@@ -4047,6 +4050,10 @@ def dashboard():
                 Part.machine_id.in_(machine_ids),
                 Part.created_at >= datetime(2010, 1, 1)
             ).all()
+            # Remove maintenance records before 2010 from each part
+            for part in parts:
+                if hasattr(part, 'maintenance_records'):
+                    part.maintenance_records = [r for r in part.maintenance_records if r.date and r.date >= datetime(2010, 1, 1)]
         
         # Process parts for maintenance status
         now = datetime.now()
