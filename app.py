@@ -4266,11 +4266,13 @@ def admin_audit_history():
     if not is_admin_user(current_user):
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
-    completions = AuditTaskCompletion.query.filter_by(completed=True).order_by(AuditTaskCompletion.completed_at.desc()).all()
+    completions = AuditTaskCompletion.query.filter_by(completed=True).filter(AuditTaskCompletion.completed_at >= datetime(2010, 1, 1)).order_by(AuditTaskCompletion.completed_at.desc()).all()
     audit_tasks = {t.id: t for t in AuditTask.query.all()}
     machines = {m.id: m for m in Machine.query.all()}
     users = {u.id: u for u in User.query.all()}
-    return render_template('admin/audit_history.html', completions=completions, audit_tasks=audit_tasks, machines=machines, users=users)
+    # Fix available_months for dropdown: (year, month) tuples
+    available_months = sorted(set((c.completed_at.year, c.completed_at.month) for c in completions if c.completed_at))
+    return render_template('admin/audit_history.html', completions=completions, audit_tasks=audit_tasks, machines=machines, users=users, available_months=available_months)
 
 @app.route('/admin/excel-import', methods=['GET'])
 @login_required
@@ -5635,7 +5637,7 @@ def part_history_route(part_id):
         abort(404)
     machine = part.machine
     site = part.machine.site if part.machine else None
-    maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+    maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).filter(MaintenanceRecord.date >= datetime(2010, 1, 1)).order_by(MaintenanceRecord.date.desc()).all()
     return render_template('part_history.html', part=part, machine=machine, site=site, maintenance_records=maintenance_records, now=datetime.now())
 
 # --- MAINTENANCE DATE UPDATE AND HISTORY FIXES ---
@@ -5646,7 +5648,7 @@ def part_history(part_id):
         abort(404)
     machine = part.machine
     site = part.machine.site if part.machine else None
-    maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+    maintenance_records = MaintenanceRecord.query.filter_by(part_id=part_id).filter(MaintenanceRecord.date >= datetime(2010, 1, 1)).order_by(MaintenanceRecord.date.desc()).all()
     return render_template('part_history.html', part=part, machine=machine, site=site, maintenance_records=maintenance_records, now=datetime.now())
 
 @app.route('/machine/<int:machine_id>/history')
@@ -5656,9 +5658,9 @@ def machine_history_view(machine_id):
     if not machine:
         abort(404)
     site = machine.site
-    parts = Part.query.filter_by(machine_id=machine_id).all()
+    parts = Part.query.filter_by(machine_id=machine_id).filter(Part.created_at >= datetime(2010, 1, 1)).all()
     # Gather all maintenance records for all parts in this machine
-    maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).order_by(MaintenanceRecord.date.desc()).all()
+    maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).filter(MaintenanceRecord.date >= datetime(2010, 1, 1)).order_by(MaintenanceRecord.date.desc()).all()
     return render_template('machine_history.html', machine=machine, site=site, parts=parts, maintenance_records=maintenance_records, now=datetime.now())
 
 @app.route('/site/<int:site_id>/history')
@@ -5670,9 +5672,9 @@ def site_history(site_id):
     machines = Machine.query.filter_by(site_id=site_id).all()
     parts = []
     for machine in machines:
-        parts.extend(Part.query.filter_by(machine_id=machine.id).all())
+        parts.extend(Part.query.filter_by(machine_id=machine.id).filter(Part.created_at >= datetime(2010, 1, 1)).all())
     # Gather all maintenance records for all parts in this site
-    maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).order_by(MaintenanceRecord.date.desc()).all()
+    maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_([p.id for p in parts])).filter(MaintenanceRecord.date >= datetime(2010, 1, 1)).order_by(MaintenanceRecord.date.desc()).all()
     return render_template('site_history.html', site=site, machines=machines, parts=parts, maintenance_records=maintenance_records, now=datetime.now())
 # --- END MAINTENANCE HISTORY FIXES ---
 
@@ -5750,7 +5752,6 @@ def delete_user(user_id):
 @login_required
 def maintenance_page():
     try:
-        # Allow admins and users with 'maintenance.record' permission to see all sites
         def has_maintenance_record_permission(user):
             if getattr(user, 'is_admin', False):
                 return True
@@ -5761,24 +5762,21 @@ def maintenance_page():
         if current_user.is_admin or has_maintenance_record_permission(current_user):
             sites = Site.query.all()
         else:
-            # fallback: only assigned sites
             sites = getattr(current_user, 'sites', [])
+        if sites is None:
+            sites = []
 
-        # Get all machines, parts, and sites for the form
         site_ids = [site.id for site in sites] if sites else []
         machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all() if site_ids else []
         machine_ids = [machine.id for machine in machines] if machines else []
-        parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all() if machine_ids else []
-        
-        # Get all maintenance records with related data
-        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_(machine_ids)).order_by(MaintenanceRecord.date.desc()).all() if machine_ids else []
-        
-        # Handle form submission for adding new maintenance records
+        parts = Part.query.filter(Part.machine_id.in_(machine_ids), Part.created_at >= datetime(2010, 1, 1)).all() if machine_ids else []
+        maintenance_records = MaintenanceRecord.query.filter(MaintenanceRecord.machine_id.in_(machine_ids), MaintenanceRecord.date >= datetime(2010, 1, 1)).order_by(MaintenanceRecord.date.desc()).all() if machine_ids else []
+
         if request.method == 'POST':
             machine_id = request.form.get('machine_id')
             part_id = request.form.get('part_id')
             user_id = current_user.id
-            maintenance_type =request.form.get('maintenance_type')
+            maintenance_type = request.form.get('maintenance_type')
             description = request.form.get('description')
             date_str = request.form.get('date')
             performed_by = request.form.get('performed_by', '')
@@ -5787,7 +5785,6 @@ def maintenance_page():
             client_id = request.form.get('client_id')
             parts_used = request.form.getlist('parts_used')
 
-            # Validate and cast to int
             try:
                 machine_id = int(machine_id)
                 part_id = int(part_id)
@@ -5796,7 +5793,6 @@ def maintenance_page():
                 flash('Invalid machine, part, or user selection.', 'danger')
                 return redirect(url_for('maintenance_page'))
 
-            # Validate required fields
             if not machine_id or not part_id or not user_id or not maintenance_type or not description or not date_str:
                 flash('Machine, part, user, maintenance type, description, and date are required!', 'danger')
                 return redirect(url_for('maintenance_page'))
@@ -5817,7 +5813,6 @@ def maintenance_page():
                     )
                     db.session.add(new_record)
 
-                    # Save uploaded files
                     files = request.files.getlist('maintenance_files')
                     import os
                     from werkzeug.utils import secure_filename
@@ -5826,7 +5821,6 @@ def maintenance_page():
                         if file and file.filename:
                             filename = secure_filename(file.filename)
                             filepath = os.path.join(upload_folder, filename)
-                            # Ensure unique filename
                             base, ext = os.path.splitext(filename)
                             counter = 1
                             while os.path.exists(filepath):
@@ -5845,7 +5839,6 @@ def maintenance_page():
                             )
                             db.session.add(maintenance_file)
 
-                    # Update part's last_maintenance and next_maintenance
                     part = Part.query.get(part_id)
                     if part:
                         part.last_maintenance = maintenance_date
@@ -5862,7 +5855,6 @@ def maintenance_page():
                         part.next_maintenance = maintenance_date + delta
                         db.session.add(part)
                     db.session.commit()
-                    # Log to sync queue
                     add_to_sync_queue_enhanced('maintenance_records', new_record.id, 'insert', {
                         'id': new_record.id,
                         'machine_id': new_record.machine_id,
@@ -5880,8 +5872,7 @@ def maintenance_page():
                     return redirect(url_for('maintenance_page'))
                 except ValueError:
                     flash('Invalid date format! Use YYYY-MM-DD.', 'danger')
-        
-        # Ensure all context variables are strings for template/JS compatibility
+
         site_id = request.args.get('site_id') or request.form.get('site_id') or ''
         machine_id = request.args.get('machine_id') or request.form.get('machine_id') or ''
         part_id = request.args.get('part_id') or request.form.get('part_id') or ''
@@ -5898,6 +5889,13 @@ def maintenance_page():
             machine_id=machine_id,
             part_id=part_id
         )
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_page: {e}")
+        print("[MAINTENANCE ERROR] Exception occurred in maintenance_page:")
+        import traceback
+        traceback.print_exc()
+        flash('An error occurred while loading maintenance records.', 'danger')
+        return redirect(url_for('dashboard'))
     except Exception as e:
         app.logger.error(f"Error in maintenance_page: {e}")
         print("[MAINTENANCE ERROR] Exception occurred in maintenance_page:")
