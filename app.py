@@ -4065,6 +4065,14 @@ def dashboard():
         site_part_highlights = {}
         site_part_totals = {}
         
+        # Helper: get most recent valid maintenance record after 2010
+        def get_latest_maintenance(part):
+            if hasattr(part, 'maintenance_records'):
+                valid = [r for r in part.maintenance_records if r.date and r.date >= datetime(2010, 1, 1)]
+                if valid:
+                    return max(valid, key=lambda r: r.date)
+            return None
+        
         # Process each site for the template
         for site in all_sites:
             site_overdue = []
@@ -4073,30 +4081,38 @@ def dashboard():
             for machine in site.machines:
                 if show_decommissioned or not machine.decommissioned:
                     for part in machine.parts:
-                        if not part.next_maintenance:
-                            continue
-                        days_until = (part.next_maintenance - now).days
-                        
-                        # Create a dictionary with all needed information for the template
-                        part_info = {
-                            'part': part,
-                            'machine': machine,
-                            'site': site,
-                            'days_until': days_until
-                        }
-                        
-                        if days_until < 0:
-                            site_overdue.append(part_info)
-                            all_overdue.append(part_info)
-                            overdue_count += 1
-                        elif days_until <= 30:  # Due soon threshold
-                            site_due_soon.append(part_info)
-                            all_due_soon.append(part_info)
-                            due_soon_count += 1
+                        latest_record = get_latest_maintenance(part)
+                        if latest_record and part.next_maintenance:
+                            days_until = (part.next_maintenance - now).days
+                            part_info = {
+                                'part': part,
+                                'machine': machine,
+                                'site': site,
+                                'days_until': days_until,
+                                'has_maintenance': True
+                            }
+                            if days_until < 0:
+                                site_overdue.append(part_info)
+                                all_overdue.append(part_info)
+                                overdue_count += 1
+                            elif days_until <= 30:
+                                site_due_soon.append(part_info)
+                                all_due_soon.append(part_info)
+                                due_soon_count += 1
+                            else:
+                                ok_count += 1
                         else:
-                            ok_count += 1
+                            # No valid maintenance after 2010
+                            part_info = {
+                                'part': part,
+                                'machine': machine,
+                                'site': site,
+                                'days_until': None,
+                                'has_maintenance': False
+                            }
+                            # These are not counted as overdue/due soon/ok
             
-            # Store site-specific data
+            # Store site-specific data, include all parts
             site_part_highlights[site.id] = {
                 'overdue': site_overdue[:5],  # Limit to top 5 for highlights
                 'due_soon': site_due_soon[:5]
