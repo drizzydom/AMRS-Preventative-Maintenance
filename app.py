@@ -3970,6 +3970,7 @@ def dashboard():
             all_sites = Site.query.options(joinedload(Site.machines).joinedload(Machine.parts)).all()
             for site in all_sites:
                 for machine in site.machines:
+                    # Always include all parts created after 2010, even if no maintenance records
                     machine.parts = [p for p in machine.parts if p.created_at and p.created_at >= datetime(2010, 1, 1)]
                     # Remove maintenance records before 2010 from each part
                     if hasattr(machine, 'maintenance_records'):
@@ -4050,7 +4051,7 @@ def dashboard():
                 Part.machine_id.in_(machine_ids),
                 Part.created_at >= datetime(2010, 1, 1)
             ).all()
-            # Remove maintenance records before 2010 from each part
+            # Do NOT filter out parts from any machine, always include all valid parts
             for part in parts:
                 if hasattr(part, 'maintenance_records'):
                     part.maintenance_records = [r for r in part.maintenance_records if r.date and r.date >= datetime(2010, 1, 1)]
