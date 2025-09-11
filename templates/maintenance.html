@@ -47,7 +47,7 @@
                         </div>
                         <div class="col-md-3 mb-3">
                             <label for="machine_id" class="form-label">Machine <span class="text-danger">*</span></label>
-                            <select class="form-select" id="machine_id" name="machine_id" required disabled>
+                            <select class="form-select" id="machine_id" name="machine_id" required>
                                     <option value="">Select Machine</option>
                                     {% for machine in machines %}
                                     <option value="{{ machine.id }}" data-site="{{ machine.site_id }}" {% if machine.id|string == machine_id %}selected{% endif %}>{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</option>
@@ -57,7 +57,7 @@
                         </div>
                         <div class="col-md-3 mb-3">
                             <label for="part_id" class="form-label">Part <span class="text-danger">*</span></label>
-                            <select class="form-select" id="part_id" name="part_id" required disabled>
+                            <select class="form-select" id="part_id" name="part_id" required>
                                     <option value="">Select Part</option>
                                     {% for part in parts %}
                                     <option value="{{ part.id }}" data-machine="{{ part.machine_id }}" {% if part.id|string == part_id %}selected{% endif %}>{{ part.name }}</option>
@@ -93,130 +93,128 @@
                     </div>
                     <div class="mb-3">
                         <label for="maintenance_files" class="form-label">Attach Files (Images or PDFs)</label>
-                        <input class="form-control" type="file" id="maintenance_files" name="maintenance_files" accept="image/*,application/pdf" multiple>
-                        <div class="form-text">You may upload multiple images (JPG, PNG, WebP) or PDFs. Max 5MB per file.</div>
-    </form>
+						<input class="form-control" type="file" id="maintenance_files" name="maintenance_files" accept="image/*,application/pdf" multiple>
+						<div class="form-text">You may upload multiple images (JPG, PNG, WebP) or PDFs. Max 5MB per file.</div>
 
                     </div>
                     <div class="text-end">
-                        <button type="submit" class="btn btn-success">
-                            <i class="fas fa-check-circle me-1"></i> Record Maintenance
-                        </button>
-                    </div>
-                </form>
-{% block scripts %}
-{{ super() }}
-<script>
-// Dropdown logic for site, machine, part
-document.addEventListener('DOMContentLoaded', function() {
-    var siteSelect = document.getElementById('site_id');
-    var machineSelect = document.getElementById('machine_id');
-    var partSelect = document.getElementById('part_id');
-    var machineHelp = document.getElementById('machine-help');
-    var partHelp = document.getElementById('part-help');
+                        {% block scripts %}
+                        {{ super() }}
+                        <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            var siteSelect = document.getElementById('site_id');
+                            var machineSelect = document.getElementById('machine_id');
+                            var partSelect = document.getElementById('part_id');
+                            var machineHelp = document.getElementById('machine-help');
+                            var partHelp = document.getElementById('part-help');
 
-    // Cache original options for filtering
-    const machineOptions = [];
-    for (let i = 0; i < machineSelect.options.length; i++) {
-        machineOptions.push({
-            value: machineSelect.options[i].value,
-            text: machineSelect.options[i].text,
-            siteId: machineSelect.options[i].getAttribute('data-site')
-        });
-    }
-    const partOptions = [];
-    for (let i = 0; i < partSelect.options.length; i++) {
-        partOptions.push({
-            value: partSelect.options[i].value,
-            text: partSelect.options[i].text,
-            machineId: partSelect.options[i].getAttribute('data-machine')
-        });
-    }
+                            // Cache original options for filtering
+                            const machineOptions = [];
+                            for (let i = 0; i < machineSelect.options.length; i++) {
+                                machineOptions.push({
+                                    value: machineSelect.options[i].value,
+                                    text: machineSelect.options[i].text,
+                                    siteId: machineSelect.options[i].getAttribute('data-site')
+                                });
+                            }
+                            const partOptions = [];
+                            for (let i = 0; i < partSelect.options.length; i++) {
+                                partOptions.push({
+                                    value: partSelect.options[i].value,
+                                    text: partSelect.options[i].text,
+                                    machineId: partSelect.options[i].getAttribute('data-machine')
+                                });
+                            }
 
-    const initialSiteId = "{{ site_id|default('') }}";
-    const initialMachineId = "{{ machine_id|default('') }}";
-    const initialPartId = "{{ part_id|default('') }}";
+                            const initialSiteId = "{{ site_id|default('') }}";
+                            const initialMachineId = "{{ machine_id|default('') }}";
+                            const initialPartId = "{{ part_id|default('') }}";
 
-    function updateMachineDropdown(siteId) {
-        machineSelect.innerHTML = '<option value="">Select Machine</option>';
-        machineSelect.disabled = !siteId;
-        let machineCount = 0;
-        for (const option of machineOptions) {
-            if (option.value && option.siteId === siteId) {
-                const newOption = document.createElement('option');
-                newOption.value = option.value;
-                newOption.text = option.text;
-                newOption.setAttribute('data-site', option.siteId);
-                machineSelect.add(newOption);
-                machineCount++;
-            }
-        }
-        if (machineCount > 0) {
-            machineHelp.textContent = `${machineCount} machines available`;
-        } else {
-            machineHelp.textContent = "No machines available for this site";
-            machineSelect.disabled = true;
-        }
-        partHelp.textContent = "Please select a machine first";
-        updatePartDropdown(''); // Reset part dropdown
-    }
+                            function updateMachineDropdown(siteId) {
+                                machineSelect.innerHTML = '<option value="">Select Machine</option>';
+                                machineSelect.disabled = !siteId;
+                                let machineCount = 0;
+                                for (const option of machineOptions) {
+                                    if (option.value && option.siteId === siteId) {
+                                        const newOption = document.createElement('option');
+                                        newOption.value = option.value;
+                                        newOption.text = option.text;
+                                        newOption.setAttribute('data-site', option.siteId);
+                                        machineSelect.add(newOption);
+                                        machineCount++;
+                                    }
+                                }
+                                if (machineCount > 0) {
+                                    machineHelp.textContent = `${machineCount} machines available`;
+                                } else {
+                                    machineHelp.textContent = "No machines available for this site";
+                                    machineSelect.disabled = true;
+                                }
+                                partHelp.textContent = "Please select a machine first";
+                                updatePartDropdown(''); // Reset part dropdown
+                            }
 
-    function updatePartDropdown(machineId) {
-        partSelect.innerHTML = '<option value="">Select Part</option>';
-        partSelect.disabled = !machineId;
-        let partCount = 0;
-        for (const option of partOptions) {
-            if (option.value && option.machineId === machineId) {
-                const newOption = document.createElement('option');
-                newOption.value = option.value;
-                newOption.text = option.text;
-                newOption.setAttribute('data-machine', option.machineId);
-                partSelect.add(newOption);
-                partCount++;
-            }
-        }
-        if (partCount > 0) {
-            partHelp.textContent = `${partCount} parts available`;
-        } else {
-            partHelp.textContent = "No parts available for this machine";
-            partSelect.disabled = true;
-        }
-    }
+                            function updatePartDropdown(machineId) {
+                                partSelect.innerHTML = '<option value="">Select Part</option>';
+                                partSelect.disabled = !machineId;
+                                let partCount = 0;
+                                for (const option of partOptions) {
+                                    if (option.value && option.machineId === machineId) {
+                                        const newOption = document.createElement('option');
+                                        newOption.value = option.value;
+                                        newOption.text = option.text;
+                                        newOption.setAttribute('data-machine', option.machineId);
+                                        partSelect.add(newOption);
+                                        partCount++;
+                                    }
+                                }
+                                if (partCount > 0) {
+                                    partHelp.textContent = `${partCount} parts available`;
+                                } else {
+                                    partHelp.textContent = "No parts available for this machine";
+                                    partSelect.disabled = true;
+                                }
+                            }
 
-    siteSelect.addEventListener('change', function() {
-        updateMachineDropdown(this.value);
-    });
+                            siteSelect.addEventListener('change', function() {
+                                updateMachineDropdown(this.value);
+                            });
 
-    machineSelect.addEventListener('change', function() {
-        updatePartDropdown(this.value);
-    });
+                            machineSelect.addEventListener('change', function() {
+                                updatePartDropdown(this.value);
+                            });
 
-    // On page load, always update machine and part dropdowns based on initial values
-    if (initialSiteId) {
-        siteSelect.value = initialSiteId;
-        updateMachineDropdown(initialSiteId);
-        if (initialMachineId) {
-            machineSelect.value = initialMachineId;
-            updatePartDropdown(initialMachineId);
-            if (initialPartId) {
-                partSelect.value = initialPartId;
-            }
-        }
-    } else {
-        // If no site is pre-selected, ensure machine dropdown is disabled
-        machineSelect.disabled = true;
-        partSelect.disabled = true;
-    }
-});
+                            // On page load, always update machine and part dropdowns based on initial values
+                            if (initialSiteId) {
+                                siteSelect.value = initialSiteId;
+                                updateMachineDropdown(initialSiteId);
+                                if (initialMachineId) {
+                                    machineSelect.value = initialMachineId;
+                                    updatePartDropdown(initialMachineId);
+                                    if (initialPartId) {
+                                        partSelect.value = initialPartId;
+                                    }
+                                }
+                            } else {
+                                // If no site is pre-selected, ensure machine dropdown is disabled
+                                machineSelect.disabled = true;
+                                partSelect.disabled = true;
+                            }
 
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col">
-        <div class="card">
+                            // Set up the maintenance modal
+                            const recordMaintenanceModal = document.getElementById('recordMaintenanceModal');
+                            if (recordMaintenanceModal) {
+                                recordMaintenanceModal.addEventListener('show.bs.modal', function(event) {
+                                    const button = event.relatedTarget;
+                                    const partId = button.getAttribute('data-part-id');
+                                    const partName = button.getAttribute('data-part-name');
+                                    document.getElementById('maintenance-part-id').value = partId;
+                                    document.getElementById('maintenance-part-name').value = partName;
+                                });
+                            }
+                        });
+                        </script>
+                        {% endblock %}
             <div class="card-header bg-danger text-white">
                 <h5 class="card-title mb-0">
                     <i class="fas fa-exclamation-triangle me-2"></i> Overdue Maintenance ({{ overdue_parts|length }})
