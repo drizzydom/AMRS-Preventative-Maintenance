@@ -97,33 +97,6 @@
                         <div class="form-text">You may upload multiple images (JPG, PNG, WebP) or PDFs. Max 5MB per file.</div>
     </form>
 
-    {% block scripts %}
-    {{ super() }}
-    <script>
-    // Enable/disable machine/part selects based on site/machine selection (on page load)
-    document.addEventListener('DOMContentLoaded', function() {
-        var siteSelect = document.getElementById('site_id');
-        var machineSelect = document.getElementById('machine_id');
-        var partSelect = document.getElementById('part_id');
-        if (siteSelect && siteSelect.value) {
-            machineSelect.disabled = false;
-            for (var i = 0; i < machineSelect.options.length; i++) {
-                var opt = machineSelect.options[i];
-                if (!opt.value) continue;
-                opt.style.display = (opt.getAttribute('data-site') == siteSelect.value) ? '' : 'none';
-            }
-            if (machineSelect.value) {
-                partSelect.disabled = false;
-                for (var j = 0; j < partSelect.options.length; j++) {
-                    var popt = partSelect.options[j];
-                    if (!popt.value) continue;
-                    popt.style.display = (popt.getAttribute('data-machine') == machineSelect.value) ? '' : 'none';
-                }
-            }
-        }
-    });
-    </script>
-    {% endblock %}
                     </div>
                     <div class="text-end">
                         <button type="submit" class="btn btn-success">
