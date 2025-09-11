@@ -104,5 +104,26 @@ $(function() {
     select.focus();
     return false;
   });
+
+  // On modal open, if site/machine are pre-selected, enable and filter dropdowns
+  $('#multiPartModal').on('shown.bs.modal', function() {
+    var siteSelect = $('#multi_site_id');
+    var machineSelect = $('#multi_machine_id');
+    var partSelect = $('#multi_part_ids');
+    if (siteSelect.val()) {
+      machineSelect.prop('disabled', false);
+      machineSelect.find('option').each(function() {
+        var show = !siteSelect.val() || $(this).data('site') == siteSelect.val() || $(this).val() == '';
+        $(this).toggle(show);
+      });
+      if (machineSelect.val()) {
+        partSelect.prop('disabled', false);
+        partSelect.find('option').each(function() {
+          var show = !machineSelect.val() || $(this).data('machine') == machineSelect.val();
+          $(this).toggle(show);
+        });
+      }
+    }
+  });
 });
 </script>
