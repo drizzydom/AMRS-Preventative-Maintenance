@@ -371,25 +371,10 @@
             });
         }
 
-        // Site selection change handler
-        siteSelect.addEventListener('change', function() {
-            const siteId = this.value;
 
-            // Reset machine dropdown
+        function updateMachineDropdown(siteId) {
             machineSelect.innerHTML = '<option value="">Select Machine</option>';
             machineSelect.disabled = !siteId;
-
-            // Reset part dropdown
-            partSelect.innerHTML = '<option value="">Select Part</option>';
-            partSelect.disabled = true;
-
-            if (!siteId) {
-                machineHelp.textContent = "Please select a site first";
-                partHelp.textContent = "Please select a machine first";
-                return;
-            }
-
-            // Add filtered machine options
             let machineCount = 0;
             for (const option of machineOptions) {
                 if (option.value && option.siteId === siteId) {
@@ -401,32 +386,19 @@
                     machineCount++;
                 }
             }
-
-            // Update help text
             if (machineCount > 0) {
                 machineHelp.textContent = `${machineCount} machines available`;
             } else {
                 machineHelp.textContent = "No machines available for this site";
                 machineSelect.disabled = true;
             }
-
             partHelp.textContent = "Please select a machine first";
-        });
+            updatePartDropdown(''); // Reset part dropdown
+        }
 
-        // Machine selection change handler
-        machineSelect.addEventListener('change', function() {
-            const machineId = this.value;
-
-            // Reset part dropdown
+        function updatePartDropdown(machineId) {
             partSelect.innerHTML = '<option value="">Select Part</option>';
             partSelect.disabled = !machineId;
-
-            if (!machineId) {
-                partHelp.textContent = "Please select a machine first";
-                return;
-            }
-
-            // Add filtered part options
             let partCount = 0;
             for (const option of partOptions) {
                 if (option.value && option.machineId === machineId) {
@@ -438,15 +410,38 @@
                     partCount++;
                 }
             }
-
-            // Update help text
             if (partCount > 0) {
                 partHelp.textContent = `${partCount} parts available`;
             } else {
                 partHelp.textContent = "No parts available for this machine";
                 partSelect.disabled = true;
             }
+        }
+
+        siteSelect.addEventListener('change', function() {
+            updateMachineDropdown(this.value);
         });
+
+        machineSelect.addEventListener('change', function() {
+            updatePartDropdown(this.value);
+        });
+
+        // On page load, if a site is pre-selected, populate machines and parts
+        if (initialSiteId) {
+            siteSelect.value = initialSiteId;
+            updateMachineDropdown(initialSiteId);
+            if (initialMachineId) {
+                setTimeout(function() {
+                    machineSelect.value = initialMachineId;
+                    updatePartDropdown(initialMachineId);
+                    if (initialPartId) {
+                        setTimeout(function() {
+                            partSelect.value = initialPartId;
+                        }, 100);
+                    }
+                }, 100);
+            }
+        }
 
         // --- Enhancement: Prepopulate dropdowns if values are present ---
     // Already declared above
