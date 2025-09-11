@@ -97,31 +97,13 @@
 						<div class="form-text">You may upload multiple images (JPG, PNG, WebP) or PDFs. Max 5MB per file.</div>
 
                     </div>
-                    <div class="text-end">
-                        {% block scripts %}
-                        {{ super() }}
-                        </script>
-                            var machineSelect = document.getElementById('machine_id');
-                            var partSelect = document.getElementById('part_id');
-                            var machineHelp = document.getElementById('machine-help');
-                            var partHelp = document.getElementById('part-help');
+						<div class="text-end">
+							<button type="submit" class="btn btn-success">
+								<i class="fas fa-check-circle me-1"></i> Record Maintenance
+							</button>
+						</div>
 
-                            // Cache original options for filtering
-                            const machineOptions = [];
-                            for (let i = 0; i < machineSelect.options.length; i++) {
-                                machineOptions.push({
-                                    value: machineSelect.options[i].value,
-                                    text: machineSelect.options[i].text,
-                                    siteId: machineSelect.options[i].getAttribute('data-site')
-                                });
-                            }
-                            const partOptions = [];
-                            for (let i = 0; i < partSelect.options.length; i++) {
-                                partOptions.push({
-                                    value: partSelect.options[i].value,
-                                    text: partSelect.options[i].text,
-                                    machineId: partSelect.options[i].getAttribute('data-machine')
-                                });
+{# Place all scripts at the end of the file #}
 {% block scripts %}
 {{ super() }}
 <script>
@@ -152,23 +134,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateMachineDropdown(siteId) {
         machineSelect.innerHTML = '<option value="">Select Machine</option>';
-        machineSelect.disabled = !siteId;
-        let machineCount = 0;
-        for (const option of machineOptions) {
-            if (option.value && option.siteId === siteId) {
-                const newOption = document.createElement('option');
-                newOption.value = option.value;
-                newOption.text = option.text;
-                newOption.setAttribute('data-site', option.siteId);
-                machineSelect.add(newOption);
-                machineCount++;
+        if (siteId) {
+            machineSelect.disabled = false;
+            let machineCount = 0;
+            for (const option of machineOptions) {
+                if (option.value && option.siteId === siteId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-site', option.siteId);
+                    machineSelect.add(newOption);
+                    machineCount++;
+                }
             }
-        }
-        if (machineCount > 0) {
-            machineHelp.textContent = `${machineCount} machines available`;
+            if (machineCount > 0) {
+                machineHelp.textContent = `${machineCount} machines available`;
+            } else {
+                machineHelp.textContent = "No machines available for this site";
+                machineSelect.disabled = true;
+            }
         } else {
-            machineHelp.textContent = "No machines available for this site";
             machineSelect.disabled = true;
+            machineHelp.textContent = "Please select a site first";
         }
         partHelp.textContent = "Please select a machine first";
         updatePartDropdown(''); // Reset part dropdown
@@ -176,23 +163,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updatePartDropdown(machineId) {
         partSelect.innerHTML = '<option value="">Select Part</option>';
-        partSelect.disabled = !machineId;
-        let partCount = 0;
-        for (const option of partOptions) {
-            if (option.value && option.machineId === machineId) {
-                const newOption = document.createElement('option');
-                newOption.value = option.value;
-                newOption.text = option.text;
-                newOption.setAttribute('data-machine', option.machineId);
-                partSelect.add(newOption);
-                partCount++;
+        if (machineId) {
+            partSelect.disabled = false;
+            let partCount = 0;
+            for (const option of partOptions) {
+                if (option.value && option.machineId === machineId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-machine', option.machineId);
+                    partSelect.add(newOption);
+                    partCount++;
+                }
             }
-        }
-        if (partCount > 0) {
-            partHelp.textContent = `${partCount} parts available`;
+            if (partCount > 0) {
+                partHelp.textContent = `${partCount} parts available`;
+            } else {
+                partHelp.textContent = "No parts available for this machine";
+                partSelect.disabled = true;
+            }
         } else {
-            partHelp.textContent = "No parts available for this machine";
             partSelect.disabled = true;
+            partHelp.textContent = "Please select a machine first";
         }
     }
 
