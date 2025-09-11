@@ -376,38 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 {% endblock %}
 
-{% block scripts %}
-{{ super() }}
-<script>
-    // Set up the maintenance modal
-    document.addEventListener('DOMContentLoaded', function() {
-        const recordMaintenanceModal = document.getElementById('recordMaintenanceModal');
-        if (recordMaintenanceModal) {
-            recordMaintenanceModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                const partId = button.getAttribute('data-part-id');
-                const partName = button.getAttribute('data-part-name');
-                document.getElementById('maintenance-part-id').value = partId;
-                document.getElementById('maintenance-part-name').value = partName;
-            });
-        }
-
-        // Simple and clean dropdown filtering solution
-        const siteSelect = document.getElementById('site_id');
-        const machineSelect = document.getElementById('machine_id');
-        const partSelect = document.getElementById('part_id');
-        const machineHelp = document.getElementById('machine-help');
-        const partHelp = document.getElementById('part-help');
-
-        if (!siteSelect || !machineSelect || !partSelect) return;
-
-        // Set initial state
-    // Only disable if no context is present
-    // Use variables declared at top of script
-    if (!initialSiteId) machineSelect.disabled = true;
-    if (!initialMachineId) partSelect.disabled = true;
-
-        // Cache original machine options for quick reference
+<!-- Removed duplicate block scripts. All JS logic is in the first block scripts. -->
         const machineOptions = [];
         for (let i = 0; i < machineSelect.options.length; i++) {
             machineOptions.push({
