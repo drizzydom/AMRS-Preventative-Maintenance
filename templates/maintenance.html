@@ -426,40 +426,21 @@
             updatePartDropdown(this.value);
         });
 
-        // On page load, if a site is pre-selected, populate machines and parts
+        // On page load, always update machine and part dropdowns based on initial values
         if (initialSiteId) {
             siteSelect.value = initialSiteId;
             updateMachineDropdown(initialSiteId);
             if (initialMachineId) {
-                setTimeout(function() {
-                    machineSelect.value = initialMachineId;
-                    updatePartDropdown(initialMachineId);
-                    if (initialPartId) {
-                        setTimeout(function() {
-                            partSelect.value = initialPartId;
-                        }, 100);
-                    }
-                }, 100);
+                machineSelect.value = initialMachineId;
+                updatePartDropdown(initialMachineId);
+                if (initialPartId) {
+                    partSelect.value = initialPartId;
+                }
             }
-        }
-
-        // --- Enhancement: Prepopulate dropdowns if values are present ---
-    // Already declared above
-
-        if (initialSiteId) {
-            siteSelect.value = initialSiteId;
-            siteSelect.dispatchEvent(new Event('change'));
-            if (initialMachineId) {
-                setTimeout(function() {
-                    machineSelect.value = initialMachineId;
-                    machineSelect.dispatchEvent(new Event('change'));
-                    if (initialPartId) {
-                        setTimeout(function() {
-                            partSelect.value = initialPartId;
-                        }, 100);
-                    }
-                }, 100);
-            }
+        } else {
+            // If no site is pre-selected, ensure machine dropdown is disabled
+            machineSelect.disabled = true;
+            partSelect.disabled = true;
         }
     });
 </script>
