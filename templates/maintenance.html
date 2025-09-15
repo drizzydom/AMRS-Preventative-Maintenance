@@ -33,7 +33,6 @@
             </div>
             <div class="card-body">
                 <form method="post" action="{{ url_for('maintenance_page', site_id=site_id, machine_id=machine_id, part_id=part_id) }}" enctype="multipart/form-data">
-{% include '_multi_part_modal.html' %}
                     <div class="row">
                         <div class="col-md-3 mb-3">
                             <label for="site_id" class="form-label">Site <span class="text-danger">*</span></label>
@@ -107,6 +106,8 @@
         </div>
     </div>
 </div>
+
+{% include '_multi_part_modal.html' %}
 
 <div class="row mb-4">
     <div class="col">
@@ -326,6 +327,27 @@ document.addEventListener('DOMContentLoaded', function() {
             const partName = button.getAttribute('data-part-name');
             document.getElementById('maintenance-part-id').value = partId;
             document.getElementById('maintenance-part-name').value = partName;
+        });
+    }
+
+    // Add form submission debugging
+    const mainForm = document.querySelector('form[method="post"]');
+    if (mainForm) {
+        mainForm.addEventListener('submit', function(e) {
+            console.log('Form submission attempted');
+            console.log('Site ID:', siteSelect.value);
+            console.log('Machine ID:', machineSelect.value);
+            console.log('Part ID:', partSelect.value);
+            
+            // Check if required fields are filled
+            if (!siteSelect.value || !machineSelect.value || !partSelect.value) {
+                console.log('Form validation failed - missing required fields');
+                alert('Please select Site, Machine, and Part before submitting.');
+                e.preventDefault();
+                return false;
+            }
+            
+            console.log('Form validation passed - submitting...');
         });
     }
 });
