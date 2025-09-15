@@ -73,57 +73,101 @@
 </div>
 
 <script>
-// Enable/disable machine/part selects based on site/machine selection
-$(function() {
-  $('#multi_site_id').on('change', function() {
-    var siteId = $(this).val();
-    $('#multi_machine_id').prop('disabled', !siteId);
-    $('#multi_machine_id option').each(function() {
-      var show = !siteId || $(this).data('site') == siteId || $(this).val() == '';
-      $(this).toggle(show);
-    });
-    $('#multi_machine_id').val('');
-    $('#multi_part_ids').prop('disabled', true).val([]);
-  });
-  $('#multi_machine_id').on('change', function() {
-    var machineId = $(this).val();
-    $('#multi_part_ids').prop('disabled', !machineId);
-    $('#multi_part_ids option').each(function() {
-      var show = !machineId || $(this).data('machine') == machineId;
-      $(this).toggle(show);
-    });
-    $('#multi_part_ids').val([]);
-  });
+document.addEventListener('DOMContentLoaded', function() {
+    var multiSiteSelect = document.getElementById('multi_site_id');
+    var multiMachineSelect = document.getElementById('multi_machine_id');
+    var multiPartSelect = document.getElementById('multi_part_ids');
 
-  // Click-to-toggle for multi-select (no Ctrl/Cmd needed)
-  $('#multi_part_ids').on('mousedown', 'option', function(e) {
-    e.preventDefault();
-    var select = $(this).parent();
-    var option = $(this);
-    option.prop('selected', !option.prop('selected'));
-    select.focus();
-    return false;
-  });
+    if (!multiSiteSelect || !multiMachineSelect || !multiPartSelect) return;
 
-  // On modal open, if site/machine are pre-selected, enable and filter dropdowns
-  $('#multiPartModal').on('shown.bs.modal', function() {
-    var siteSelect = $('#multi_site_id');
-    var machineSelect = $('#multi_machine_id');
-    var partSelect = $('#multi_part_ids');
-    if (siteSelect.val()) {
-      machineSelect.prop('disabled', false);
-      machineSelect.find('option').each(function() {
-        var show = !siteSelect.val() || $(this).data('site') == siteSelect.val() || $(this).val() == '';
-        $(this).toggle(show);
-      });
-      if (machineSelect.val()) {
-        partSelect.prop('disabled', false);
-        partSelect.find('option').each(function() {
-          var show = !machineSelect.val() || $(this).data('machine') == machineSelect.val();
-          $(this).toggle(show);
-        });
-      }
+    // Cache original options for filtering
+    const multiMachineOptions = Array.from(multiMachineSelect.options).map(opt => ({
+        value: opt.value,
+        text: opt.text,
+        siteId: opt.getAttribute('data-site')
+    }));
+    const multiPartOptions = Array.from(multiPartSelect.options).map(opt => ({
+        value: opt.value,
+        text: opt.text,
+        machineId: opt.getAttribute('data-machine')
+    }));
+
+    function updateMultiMachineDropdown(siteId) {
+        multiMachineSelect.innerHTML = '<option value="">Select Machine</option>';
+        if (siteId) {
+            multiMachineSelect.disabled = false;
+            let machineCount = 0;
+            for (const option of multiMachineOptions) {
+                if (option.value && option.siteId === siteId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-site', option.siteId);
+                    multiMachineSelect.add(newOption);
+                    machineCount++;
+                }
+            }
+        } else {
+            multiMachineSelect.disabled = true;
+        }
+        updateMultiPartDropdown(''); // Reset part dropdown
     }
-  });
+
+    function updateMultiPartDropdown(machineId) {
+        multiPartSelect.innerHTML = '';
+        if (machineId) {
+            multiPartSelect.disabled = false;
+            let partCount = 0;
+            for (const option of multiPartOptions) {
+                if (option.value && option.machineId === machineId) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newOption.setAttribute('data-machine', option.machineId);
+                    multiPartSelect.add(newOption);
+                    partCount++;
+                }
+            }
+        } else {
+            multiPartSelect.disabled = true;
+        }
+    }
+
+    // Site selection handler
+    multiSiteSelect.addEventListener('change', function() {
+        updateMultiMachineDropdown(this.value);
+    });
+
+    // Machine selection handler
+    multiMachineSelect.addEventListener('change', function() {
+        updateMultiPartDropdown(this.value);
+    });
+
+    // Click-to-toggle for multi-select (no Ctrl/Cmd needed)
+    multiPartSelect.addEventListener('mousedown', function(e) {
+        if (e.target.tagName === 'OPTION') {
+            e.preventDefault();
+            e.target.selected = !e.target.selected;
+            multiPartSelect.focus();
+            return false;
+        }
+    });
+
+    // On modal open, if site/machine are pre-selected, enable and filter dropdowns
+    const multiPartModal = document.getElementById('multiPartModal');
+    if (multiPartModal) {
+        multiPartModal.addEventListener('shown.bs.modal', function() {
+            if (multiSiteSelect.value) {
+                updateMultiMachineDropdown(multiSiteSelect.value);
+                if (multiMachineSelect.value) {
+                    updateMultiPartDropdown(multiMachineSelect.value);
+                }
+            }
+        });
+    }
+
+    // Initialize disabled state
+    multiMachineSelect.disabled = true;
+    multiPartSelect.disabled = true;
 });
 </script>
