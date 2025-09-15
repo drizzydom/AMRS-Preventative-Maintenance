@@ -4794,6 +4794,24 @@ def maintenance_multi():
             flash('All fields and at least one part must be selected!', 'danger')
             return redirect(url_for('maintenance_page'))
 
+        # Convert and validate machine_id
+        try:
+            machine_id = int(machine_id)
+        except (TypeError, ValueError):
+            flash('Invalid machine selection.', 'danger')
+            return redirect(url_for('maintenance_page'))
+
+        # Validate part_ids are all valid integers
+        validated_part_ids = []
+        for part_id in part_ids:
+            try:
+                validated_part_ids.append(int(part_id))
+            except (TypeError, ValueError):
+                flash('Invalid part selection.', 'danger')
+                return redirect(url_for('maintenance_page'))
+
+        part_ids = validated_part_ids
+
         try:
             maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
         except ValueError:
@@ -4830,12 +4848,13 @@ def maintenance_multi():
 
         for part_id in part_ids:
             try:
-                part = Part.query.get(int(part_id))
+                part = Part.query.get(part_id)  # part_id is already an integer
                 if not part:
+                    app.logger.warning(f"Part with ID {part_id} not found")
                     continue
                 new_record = MaintenanceRecord(
                     machine_id=machine_id,
-                    part_id=part.id,
+                    part_id=part_id,  # part_id is already an integer
                     user_id=user_id,
                     maintenance_type=maintenance_type,
                     description=description,
@@ -5810,6 +5829,11 @@ def maintenance_page():
             parts_used = request.form.getlist('parts_used')
 
             try:
+                # Check if values are not empty before converting
+                if not machine_id or not part_id:
+                    flash('Machine and part selection are required.', 'danger')
+                    return redirect(url_for('maintenance_page'))
+                
                 machine_id = int(machine_id)
                 part_id = int(part_id)
                 user_id = int(user_id)
