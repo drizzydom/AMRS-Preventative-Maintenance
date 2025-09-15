@@ -169,5 +169,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize disabled state
     multiMachineSelect.disabled = true;
     multiPartSelect.disabled = true;
+
+    // Add form submission debugging for multi-part form
+    const multiPartForm = document.getElementById('multiPartForm');
+    if (multiPartForm) {
+        multiPartForm.addEventListener('submit', function(e) {
+            console.log('Multi-part form submission attempted');
+            console.log('Multi Site ID:', multiSiteSelect.value);
+            console.log('Multi Machine ID:', multiMachineSelect.value);
+            
+            const selectedParts = Array.from(multiPartSelect.selectedOptions).map(opt => opt.value);
+            console.log('Selected Parts:', selectedParts);
+            
+            // Check if required fields are filled
+            if (!multiSiteSelect.value || !multiMachineSelect.value || selectedParts.length === 0) {
+                console.log('Multi-part form validation failed - missing required fields');
+                alert('Please select Site, Machine, and at least one Part before submitting.');
+                e.preventDefault();
+                return false;
+            }
+            
+            console.log('Multi-part form validation passed - submitting...');
+        });
+    }
 });
 </script>
