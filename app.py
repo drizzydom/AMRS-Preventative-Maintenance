@@ -4849,9 +4849,14 @@ def audit_history_page():
 
     # --- Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}} ---
     from collections import defaultdict
-    interval_bars = defaultdict(lambda: defaultdict(list))
+    interval_bars = {}
+    
+    # Initialize interval_bars for all machines and tasks to prevent KeyError
     for machine in available_machines:
+        interval_bars[machine.id] = {}
         for task in all_tasks_per_machine[machine.id]:
+            interval_bars[machine.id][task.id] = []
+            
             # Only for interval-based tasks (not daily)
             if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
                 days = {
@@ -4901,7 +4906,7 @@ def audit_history_page():
         available_machines=available_machines, 
         selected_month=selected_month,
         all_tasks_per_machine=all_tasks_per_machine,
-        interval_bars=dict(interval_bars),
+        interval_bars=interval_bars,
         display_machines=display_machines,
         get_calendar_weeks=get_calendar_weeks,
         safe_date=safe_date,
