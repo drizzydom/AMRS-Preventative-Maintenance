@@ -319,16 +319,38 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Set up the maintenance modal
+    console.log('Setting up maintenance modal...');
     const recordMaintenanceModal = document.getElementById('recordMaintenanceModal');
+    console.log('Found recordMaintenanceModal:', recordMaintenanceModal);
+    
     if (recordMaintenanceModal) {
         recordMaintenanceModal.addEventListener('show.bs.modal', function(event) {
+            console.log('Modal show event triggered');
             const button = event.relatedTarget;
+            console.log('Button that triggered modal:', button);
             const partId = button.getAttribute('data-part-id');
             const partName = button.getAttribute('data-part-name');
+            console.log('Part ID:', partId, 'Part Name:', partName);
             document.getElementById('maintenance-part-id').value = partId;
             document.getElementById('maintenance-part-name').value = partName;
         });
+    } else {
+        console.error('recordMaintenanceModal not found!');
     }
+    
+    // Debug: Check if Bootstrap modal is available
+    if (typeof bootstrap !== 'undefined') {
+        console.log('Bootstrap is loaded');
+    } else {
+        console.error('Bootstrap is not loaded!');
+    }
+    
+    // Debug: Check record maintenance buttons
+    const recordButtons = document.querySelectorAll('button[data-bs-target="#recordMaintenanceModal"]');
+    console.log('Found', recordButtons.length, 'record maintenance buttons');
+    recordButtons.forEach((btn, index) => {
+        console.log(`Button ${index}:`, btn, 'Part ID:', btn.getAttribute('data-part-id'));
+    });
 
     // Add form submission debugging
     const mainForm = document.querySelector('form[method="post"]');
