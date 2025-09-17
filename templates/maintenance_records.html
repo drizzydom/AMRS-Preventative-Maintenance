@@ -42,11 +42,29 @@
     </div>
   </form>
   {% if records %}
+  <!-- Bulk Actions Section -->
+  <div class="mb-3">
+    <div class="d-flex align-items-center gap-3">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAllBtn">
+        <i class="fas fa-check-square"></i> Select All
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="clearSelectionBtn">
+        <i class="fas fa-square"></i> Clear Selection
+      </button>
+      <button type="button" class="btn btn-sm btn-primary" id="generateBulkReportBtn" disabled>
+        <i class="fas fa-file-pdf"></i> Generate Bulk Report (<span id="selectedCount">0</span>)
+      </button>
+    </div>
+  </div>
+  
   <div class="table-responsive">
     <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
     <table class="table table-striped table-hover">
       <thead>
         <tr>
+          <th width="40">
+            <input type="checkbox" id="selectAllCheckbox" title="Select All Records">
+          </th>
           <th>Date</th>
           <th>Machine</th>
           <th>Part</th>
@@ -59,6 +77,9 @@
       <tbody>
         {% for record in records %}
         <tr class="clickable-row" data-href="{{ url_for('maintenance_record_detail', record_id=record.id) }}" style="cursor: pointer;" title="Click to view details">
+          <td onclick="event.stopPropagation();">
+            <input type="checkbox" class="record-checkbox" value="{{ record.id }}" data-record-id="{{ record.id }}">
+          </td>
           <td>{{ record.date|to_eastern('%Y-%m-%d') }}</td>
           <td>{{ record.machine.name if record.machine else '' }}{% if record.machine and record.machine.machine_number %} ({{ record.machine.machine_number }}){% elif record.machine and record.machine.serial_number %} (SN: {{ record.machine.serial_number }}){% endif %}</td>
           <td>{{ record.part.name if record.part else '' }}</td>
@@ -87,6 +108,14 @@
 // Make table rows clickable
 document.addEventListener('DOMContentLoaded', function() {
     const clickableRows = document.querySelectorAll('.clickable-row');
+    const recordCheckboxes = document.querySelectorAll('.record-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    const generateBulkReportBtn = document.getElementById('generateBulkReportBtn');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    
+    // Make table rows clickable
     clickableRows.forEach(function(row) {
         row.addEventListener('click', function() {
             const href = this.getAttribute('data-href');
@@ -104,6 +133,100 @@ document.addEventListener('DOMContentLoaded', function() {
             this.style.backgroundColor = '';
         });
     });
+    
+    // Function to update selection count and button state
+    function updateSelectionState() {
+        const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
+        const count = checkedBoxes.length;
+        
+        selectedCountSpan.textContent = count;
+        generateBulkReportBtn.disabled = count === 0;
+        
+        // Update "Select All" checkbox state
+        if (count === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+        } else if (count === recordCheckboxes.length) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = true;
+        } else {
+            selectAllCheckbox.indeterminate = true;
+            selectAllCheckbox.checked = false;
+        }
+    }
+    
+    // Individual checkbox change handlers
+    recordCheckboxes.forEach(function(checkbox) {
+        checkbox.addEventListener('change', updateSelectionState);
+    });
+    
+    // Select All checkbox handler
+    selectAllCheckbox.addEventListener('change', function() {
+        const isChecked = this.checked;
+        recordCheckboxes.forEach(function(checkbox) {
+            checkbox.checked = isChecked;
+        });
+        updateSelectionState();
+    });
+    
+    // Select All button handler
+    selectAllBtn.addEventListener('click', function() {
+        recordCheckboxes.forEach(function(checkbox) {
+            checkbox.checked = true;
+        });
+        updateSelectionState();
+    });
+    
+    // Clear Selection button handler
+    clearSelectionBtn.addEventListener('click', function() {
+        recordCheckboxes.forEach(function(checkbox) {
+            checkbox.checked = false;
+        });
+        updateSelectionState();
+    });
+    
+    // Generate Bulk Report button handler
+    generateBulkReportBtn.addEventListener('click', function() {
+        const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
+        const recordIds = Array.from(checkedBoxes).map(cb => cb.value);
+        
+        if (recordIds.length === 0) {
+            alert('Please select at least one maintenance record.');
+            return;
+        }
+        
+        // Create a form to submit the record IDs
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("maintenance_records_bulk_print") }}';
+        form.target = '_blank';
+        
+        // Add CSRF token if available
+        const csrfToken = document.querySelector('meta[name=csrf-token]');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken.getAttribute('content');
+            form.appendChild(csrfInput);
+        }
+        
+        // Add record IDs
+        recordIds.forEach(function(id) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'record_ids';
+            input.value = id;
+            form.appendChild(input);
+        });
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    });
+    
+    // Initialize the selection state
+    updateSelectionState();
 });
 </script>
 {% endblock %}

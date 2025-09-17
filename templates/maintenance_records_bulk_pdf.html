@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bulk Maintenance Records Report</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            font-size: 11pt;
+            line-height: 1.4;
+            max-width: 100%;
+        }
+        
+        /* Compact Header */
+        .print-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 12px;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+        
+        .letterhead-logo {
+            height: 55px;
+            max-width: 120px;
+            object-fit: contain;
+            margin-right: 20px;
+        }
+        
+        .company-info h1 {
+            font-size: 16pt;
+            margin: 0;
+            line-height: 1.2;
+        }
+        
+        .company-info p {
+            font-size: 9pt;
+            margin: 2px 0;
+            color: #666;
+        }
+        
+        .header-right {
+            text-align: right;
+            flex-shrink: 0;
+        }
+        
+        .document-title {
+            font-size: 14pt;
+            font-weight: bold;
+            margin: 0;
+        }
+        
+        .document-info {
+            font-size: 9pt;
+            color: #666;
+            margin: 2px 0;
+        }
+        
+        /* Summary Section */
+        .summary-section {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-title {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .summary-label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        /* Individual Record Section */
+        .record-section {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        
+        .record-header {
+            background-color: #e9ecef;
+            padding: 10px 15px;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+            font-size: 12pt;
+        }
+        
+        .record-content {
+            padding: 15px;
+        }
+        
+        .record-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px 20px;
+            margin-bottom: 15px;
+        }
+        
+        .field-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .field-label {
+            font-weight: bold;
+            color: #555;
+            font-size: 9pt;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .field-value {
+            color: #333;
+            font-size: 10pt;
+            word-wrap: break-word;
+        }
+        
+        .description-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .description-title {
+            font-weight: bold;
+            color: #555;
+            font-size: 9pt;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .description-text {
+            color: #333;
+            font-size: 10pt;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+        
+        /* Print Optimizations */
+        @media print {
+            body {
+                margin: 0;
+                padding: 15px;
+                font-size: 10pt;
+            }
+            
+            .print-header {
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+            }
+            
+            .record-section {
+                page-break-inside: avoid;
+                margin-bottom: 15px;
+            }
+            
+            .letterhead-logo {
+                height: 45px;
+            }
+        }
+        
+        /* Page Break Utilities */
+        .page-break-before {
+            page-break-before: always;
+        }
+        
+        .page-break-after {
+            page-break-after: always;
+        }
+        
+        .no-break {
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+<body>
+    <div class="print-header">
+        <div class="header-left">
+            <img src="{{ company_info.logo_url }}" alt="Company Logo" class="letterhead-logo">
+            <div class="company-info">
+                <h1>{{ company_info.name }}</h1>
+                {% if company_info.address %}
+                <p>{{ company_info.address }}</p>
+                {% endif %}
+                {% if company_info.phone %}
+                <p>Phone: {{ company_info.phone }}</p>
+                {% endif %}
+                {% if company_info.email %}
+                <p>Email: {{ company_info.email }}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="header-right">
+            <h2 class="document-title">Maintenance Records Report</h2>
+            <p class="document-info">Generated: {{ print_date }}</p>
+            <p class="document-info">Total Records: {{ total_records }}</p>
+        </div>
+    </div>
+    
+    <!-- Summary Section -->
+    <div class="summary-section">
+        <div class="summary-title">Report Summary</div>
+        <div class="summary-grid">
+            <div class="summary-item">
+                <span class="summary-label">Total Records:</span>
+                <span>{{ total_records }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Date Range:</span>
+                <span>
+                    {% if records %}
+                        {{ records[-1].date|to_eastern('%Y-%m-%d') }} to {{ records[0].date|to_eastern('%Y-%m-%d') }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Machines Covered:</span>
+                <span>{{ records|map(attribute='machine.name')|unique|list|length if records else 0 }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Report Generated:</span>
+                <span>{{ print_date }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Individual Records -->
+    {% for record in records %}
+    <div class="record-section">
+        <div class="record-header">
+            Record #{{ record.id }} - {{ record.date|to_eastern('%Y-%m-%d') }}
+            {% if record.machine %}
+                - {{ record.machine.name }}
+                {% if record.machine.machine_number %} ({{ record.machine.machine_number }}){% elif record.machine.serial_number %} (SN: {{ record.machine.serial_number }}){% endif %}
+            {% endif %}
+        </div>
+        <div class="record-content">
+            <div class="record-grid">
+                <div class="field-group">
+                    <div class="field-label">Date</div>
+                    <div class="field-value">{{ record.date|to_eastern('%Y-%m-%d') }}</div>
+                </div>
+                
+                {% if record.machine %}
+                <div class="field-group">
+                    <div class="field-label">Machine</div>
+                    <div class="field-value">{{ record.machine.name }}{% if record.machine.machine_number %} ({{ record.machine.machine_number }}){% elif record.machine.serial_number %} (SN: {{ record.machine.serial_number }}){% endif %}</div>
+                </div>
+                {% endif %}
+                
+                {% if record.part %}
+                <div class="field-group">
+                    <div class="field-label">Part</div>
+                    <div class="field-value">{{ record.part.name }}</div>
+                </div>
+                {% endif %}
+                
+                <div class="field-group">
+                    <div class="field-label">Maintenance Type</div>
+                    <div class="field-value">{{ record.maintenance_type or 'N/A' }}</div>
+                </div>
+                
+                <div class="field-group">
+                    <div class="field-label">Performed By</div>
+                    <div class="field-value">{{ record.user.display_name if record.user else (record.performed_by or 'N/A') }}</div>
+                </div>
+                
+                <div class="field-group">
+                    <div class="field-label">Status</div>
+                    <div class="field-value">{{ record.status or 'Completed' }}</div>
+                </div>
+                
+                {% if record.machine and record.machine.site %}
+                <div class="field-group">
+                    <div class="field-label">Site</div>
+                    <div class="field-value">{{ record.machine.site.name }}</div>
+                </div>
+                {% endif %}
+                
+                {% if record.created_at %}
+                <div class="field-group">
+                    <div class="field-label">Recorded</div>
+                    <div class="field-value">{{ record.created_at|to_eastern('%Y-%m-%d %H:%M') }}</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if record.description %}
+            <div class="description-section">
+                <div class="description-title">Description</div>
+                <div class="description-text">{{ record.description }}</div>
+            </div>
+            {% endif %}
+            
+            {% if record.notes or record.comments %}
+            <div class="description-section">
+                <div class="description-title">Notes</div>
+                <div class="description-text">{{ record.notes or record.comments }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    
+    <!-- Footer -->
+    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center; font-size: 9pt; color: #666;">
+        <p>End of Maintenance Records Report - {{ total_records }} records</p>
+        <p>Generated on {{ print_date }} by {{ company_info.name }}</p>
+    </div>
+</body>
+</html>
