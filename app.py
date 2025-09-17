@@ -4294,8 +4294,18 @@ def admin_audit_history():
     audit_tasks = {t.id: t for t in AuditTask.query.all()}
     machines = {m.id: m for m in Machine.query.all()}
     users = {u.id: u for u in User.query.all()}
-    # Fix available_months for dropdown: (year, month) tuples
-    available_months = sorted(set((c.completed_at.year, c.completed_at.month) for c in completions if c.completed_at))
+    
+    # Generate available months with proper formatting for consistency
+    import calendar
+    unique_months = sorted(set((c.completed_at.year, c.completed_at.month) for c in completions if c.completed_at))
+    available_months = []
+    for year, month in unique_months:
+        month_obj = {
+            'value': f"{year}-{month:02d}",
+            'display': f"{calendar.month_name[month]} {year}"
+        }
+        available_months.append(month_obj)
+    
     return render_template('admin/audit_history.html', completions=completions, audit_tasks=audit_tasks, machines=machines, users=users, available_months=available_months)
 
 @app.route('/admin/excel-import', methods=['GET'])
@@ -4644,11 +4654,26 @@ def audit_history_page():
     # --- Begin restored logic for audit history page ---
     from calendar import monthrange
     today = datetime.today()
-    month = request.args.get('month', type=int, default=today.month)
-    year = request.args.get('year', type=int, default=today.year)
+    
+    # Handle month_year parameter from the dropdown (format: YYYY-MM)
+    month_year = request.args.get('month_year', '')
+    if month_year:
+        try:
+            year_str, month_str = month_year.split('-')
+            year = int(year_str)
+            month = int(month_str)
+        except (ValueError, IndexError):
+            # If invalid format, default to current month/year
+            month = today.month
+            year = today.year
+    else:
+        # Fall back to individual month/year parameters or defaults
+        month = request.args.get('month', type=int, default=today.month)
+        year = request.args.get('year', type=int, default=today.year)
+    
     site_id = request.args.get('site_id', type=int)
     machine_id = request.args.get('machine_id', type=int)
-    selected_month = month
+    selected_month = f"{year}-{month:02d}"  # Format as YYYY-MM to match dropdown values
     selected_machine = machine_id
     # Restrict sites for non-admins
     if current_user.is_admin:
@@ -4677,7 +4702,17 @@ def audit_history_page():
         AuditTaskCompletion.date <= last_day,
         AuditTaskCompletion.completed == True
     )
-    available_months = [(m, y) for y in range(today.year-2, today.year+1) for m in range(1, 13)]
+    
+    # Generate available months with proper formatting for the template
+    import calendar
+    available_months = []
+    for y in range(today.year-2, today.year+1):
+        for m in range(1, 13):
+            month_obj = {
+                'value': f"{y}-{m:02d}",  # Format as YYYY-MM
+                'display': f"{calendar.month_name[m]} {y}"  # Display as "January 2025"
+            }
+            available_months.append(month_obj)
     if site_id:
         site_audit_tasks = AuditTask.query.filter_by(site_id=site_id).all()
         task_ids = [task.id for task in site_audit_tasks]
