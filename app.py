@@ -4706,8 +4706,33 @@ def audit_history_page():
     # Generate available months with proper formatting for the template
     import calendar
     available_months = []
-    for y in range(today.year-2, today.year+1):
-        for m in range(1, 13):
+    
+    # Application started in February 2025, so that's our earliest month
+    start_year = 2025
+    start_month = 2  # February
+    
+    # Current date limits
+    current_year = today.year
+    current_month = today.month
+    
+    # Generate months from February 2025 through current month
+    for y in range(start_year, current_year + 1):
+        # Determine the month range for this year
+        if y == start_year:
+            # For 2025, start from February
+            month_start = start_month
+        else:
+            # For subsequent years, start from January
+            month_start = 1
+            
+        if y == current_year:
+            # For current year, only go up to current month
+            month_end = current_month
+        else:
+            # For past years, include all 12 months
+            month_end = 12
+            
+        for m in range(month_start, month_end + 1):
             month_obj = {
                 'value': f"{y}-{m:02d}",  # Format as YYYY-MM
                 'display': f"{calendar.month_name[m]} {y}"  # Display as "January 2025"
@@ -4780,30 +4805,102 @@ def audit_history_page():
                     today=today
                 )
     completions = query.all()
-    # ...existing code for building machine_data, audit_tasks, unique_tasks, etc. would follow here...
-    # For now, just render the template with the main variables to restore functionality
+    
+    # Build calendar structure
+    import calendar
+    cal = calendar.Calendar(firstweekday=6)  # Sunday start
+    month_weeks = list(cal.monthdayscalendar(year, month))
+
+    # --- Build machine_data: {machine_id: {date_string: [completions]}} ---
+    machine_data = {}
+    for completion in completions:
+        m_id = completion.machine_id
+        d = completion.date.strftime('%Y-%m-%d') if completion.date else None
+        if d and m_id not in machine_data:
+            machine_data[m_id] = {}
+        if d and d not in machine_data[m_id]:
+            machine_data[m_id][d] = []
+        if d:
+            machine_data[m_id][d].append(completion)
+
+    # --- Build audit_tasks and unique_tasks for legend ---
+    audit_tasks = {task.id: task for task in AuditTask.query.all()}
+    unique_tasks = [audit_tasks[tid] for tid in {completion.audit_task_id for completion in completions if completion.audit_task_id in audit_tasks}]
+
+    # --- Build all_tasks_per_machine: {machine_id: [AuditTask, ...]} ---
+    all_tasks_per_machine = {}
+    for machine in available_machines:
+        all_tasks_per_machine[machine.id] = [task for task in audit_tasks.values() if machine in task.machines]
+
+    # --- Build interval_bars: {machine_id: {task_id: [(start_date, end_date), ...]}} ---
+    from collections import defaultdict
+    interval_bars = defaultdict(lambda: defaultdict(list))
+    for machine in available_machines:
+        for task in all_tasks_per_machine[machine.id]:
+            # Only for interval-based tasks (not daily)
+            if task.interval in ('weekly', 'monthly') or (task.interval == 'custom' and task.custom_interval_days):
+                days = {
+                    'weekly': 7,
+                    'monthly': 30,
+                    'custom': task.custom_interval_days
+                }.get(task.interval, 30)
+                
+                # Find completion dates for this task on this machine
+                task_completions = [
+                    completion for completion in completions 
+                    if completion.machine_id == machine.id and completion.audit_task_id == task.id
+                ]
+                task_completions.sort(key=lambda x: x.date)
+                
+                # Create intervals between consecutive completions
+                for i in range(len(task_completions) - 1):
+                    start_date = task_completions[i].date
+                    end_date = task_completions[i + 1].date
+                    interval_bars[machine.id][task.id].append((start_date, end_date))
+
+    # Build machines dictionary from available_machines list
+    machines = {machine.id: machine for machine in available_machines}
+    
+    # Build users dictionary
+    users = {user.id: user for user in User.query.all()}
+    
+    # Filter machines to display (ones with data or all if no data)
+    display_machines = [machine for machine in available_machines if machine.id in machine_data] or available_machines
+    
+    # Helper function for getting calendar weeks
+    def get_calendar_weeks(start_date, end_date):
+        """Generate calendar weeks for the given date range"""
+        weeks = []
+        current = start_date
+        while current <= end_date:
+            week_start = current - timedelta(days=current.weekday())
+            week_end = week_start + timedelta(days=6)
+            weeks.append((week_start, week_end))
+            current = week_end + timedelta(days=1)
+        return weeks
+
     return render_template('audit_history.html', 
         completions=completions, 
         month=month, 
         year=year,
         current_month=month,
         current_year=year,
-        month_weeks=[], 
-        machine_data={}, 
-        audit_tasks={}, 
-        unique_tasks=[], 
-        machines={}, 
-        users={}, 
+        month_weeks=month_weeks, 
+        machine_data=machine_data, 
+        audit_tasks=audit_tasks, 
+        unique_tasks=unique_tasks, 
+        machines=machines, 
+        users=users, 
         sites=sites, 
         selected_site=site_id, 
         selected_machine=selected_machine, 
         available_months=available_months, 
         available_machines=available_machines, 
         selected_month=selected_month,
-        all_tasks_per_machine={},
-        interval_bars={},
-        display_machines=[],
-        get_calendar_weeks=lambda start, end: [],
+        all_tasks_per_machine=all_tasks_per_machine,
+        interval_bars=dict(interval_bars),
+        display_machines=display_machines,
+        get_calendar_weeks=get_calendar_weeks,
         today=today
     )
 
