@@ -4811,6 +4811,21 @@ def audit_history_page():
     cal = calendar.Calendar(firstweekday=6)  # Sunday start
     month_weeks = list(cal.monthdayscalendar(year, month))
 
+    # Helper function for getting calendar weeks (as expected by template)
+    def get_calendar_weeks(year, month):
+        """Generate calendar weeks for the given month"""
+        cal = calendar.Calendar(firstweekday=6)  # Sunday start
+        return list(cal.monthdayscalendar(year, month))
+    
+    # Helper function for safe date creation (as expected by template)
+    def safe_date(year, month, day):
+        """Safely create a date object, return None if invalid"""
+        try:
+            from datetime import date
+            return date(year, month, day)
+        except ValueError:
+            return None
+
     # --- Build machine_data: {machine_id: {date_string: [completions]}} ---
     machine_data = {}
     for completion in completions:
@@ -4866,18 +4881,6 @@ def audit_history_page():
     
     # Filter machines to display (ones with data or all if no data)
     display_machines = [machine for machine in available_machines if machine.id in machine_data] or available_machines
-    
-    # Helper function for getting calendar weeks
-    def get_calendar_weeks(start_date, end_date):
-        """Generate calendar weeks for the given date range"""
-        weeks = []
-        current = start_date
-        while current <= end_date:
-            week_start = current - timedelta(days=current.weekday())
-            week_end = week_start + timedelta(days=6)
-            weeks.append((week_start, week_end))
-            current = week_end + timedelta(days=1)
-        return weeks
 
     return render_template('audit_history.html', 
         completions=completions, 
@@ -4901,6 +4904,7 @@ def audit_history_page():
         interval_bars=dict(interval_bars),
         display_machines=display_machines,
         get_calendar_weeks=get_calendar_weeks,
+        safe_date=safe_date,
         today=today
     )
 
