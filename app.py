@@ -4777,6 +4777,11 @@ def audit_history_page():
 @login_required
 def maintenance_multi():
     """Handle multi-part maintenance submission from the modal."""
+    app.logger.info("maintenance_multi route called")
+    app.logger.info(f"Request method: {request.method}")
+    app.logger.info(f"Request form data: {dict(request.form)}")
+    app.logger.info(f"Request files: {list(request.files.keys())}")
+    
     try:
         part_ids = request.form.getlist('part_ids')
         machine_id = request.form.get('machine_id')
@@ -4789,8 +4794,12 @@ def maintenance_multi():
         client_id = request.form.get('client_id')
         user_id = current_user.id
 
+        app.logger.info(f"Extracted: part_ids={part_ids}, machine_id={machine_id}, maintenance_type={maintenance_type}")
+        app.logger.info(f"Description={description}, date={date_str}, performed_by={performed_by}")
+
         # Validate required fields
         if not part_ids or not machine_id or not maintenance_type or not description or not date_str:
+            app.logger.warning("Validation failed - missing required fields")
             flash('All fields and at least one part must be selected!', 'danger')
             return redirect(url_for('maintenance_page'))
 
@@ -5954,19 +5963,33 @@ def maintenance_page():
 @app.route('/update-maintenance', methods=['POST'])
 @login_required
 def update_maintenance_alt():
+    app.logger.info("update_maintenance_alt route called")
+    app.logger.info(f"Request method: {request.method}")
+    app.logger.info(f"Request form data: {request.form}")
+    
     try:
         part_id = request.form.get('part_id')
         comments = request.form.get('comments', '')
+        
+        app.logger.info(f"Extracted part_id: {part_id}, comments: {comments}")
+        
         if not part_id:
+            app.logger.warning("Missing part ID in form submission")
             flash('Missing part ID', 'error')
             return redirect(url_for('maintenance_page'))
+            
         part = Part.query.get_or_404(int(part_id))
+        app.logger.info(f"Found part: {part.name} (ID: {part.id})")
+        
         now = datetime.now()
         # Update the last maintenance date
         part.last_maintenance = now
+        
         # Calculate next maintenance date based on frequency and unit
         freq = part.maintenance_frequency or 1
         unit = part.maintenance_unit or 'day'
+        app.logger.info(f"Maintenance frequency: {freq} {unit}")
+        
         if unit == 'week':
             delta = timedelta(weeks=freq)
         elif unit == 'month':
@@ -5976,6 +5999,9 @@ def update_maintenance_alt():
         else:
             delta = timedelta(days=freq)
         part.next_maintenance = now + delta
+        
+        app.logger.info(f"Setting next maintenance to: {part.next_maintenance}")
+        
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
             part_id=part.id,
@@ -5983,28 +6009,49 @@ def update_maintenance_alt():
             date=now,
             comments=comments
         )
+        
+        app.logger.info(f"Created maintenance record for part {part.id}")
+        
         db.session.add(maintenance_record)
         db.session.commit()
+        
+        app.logger.info("Database transaction committed successfully")
+        
         # Log to sync queue: maintenance record insert and part update (immediate sync)
-        add_to_sync_queue_enhanced('maintenance_records', maintenance_record.id, 'insert', {
-            'id': maintenance_record.id,
-            'part_id': maintenance_record.part_id,
-            'user_id': maintenance_record.user_id,
-            'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
-            'comments': maintenance_record.comments
-        }, immediate_sync=True)
-        add_to_sync_queue_enhanced('parts', part.id, 'update', {
-            'id': part.id,
-            'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
-            'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
-        }, immediate_sync=True)
+        try:
+            add_to_sync_queue_enhanced('maintenance_records', maintenance_record.id, 'insert', {
+                'id': maintenance_record.id,
+                'part_id': maintenance_record.part_id,
+                'user_id': maintenance_record.user_id,
+                'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
+                'comments': maintenance_record.comments
+            }, immediate_sync=True)
+            add_to_sync_queue_enhanced('parts', part.id, 'update', {
+                'id': part.id,
+                'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+                'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
+            }, immediate_sync=True)
+            app.logger.info("Sync queue entries added successfully")
+        except Exception as sync_error:
+            app.logger.warning(f"Sync queue failed but continuing: {sync_error}")
+        
         flash(f'Maintenance for "{part.name}" has been recorded successfully.', 'success')
+        app.logger.info("Success flash message set")
+        
         referrer = request.referrer
+        app.logger.info(f"Referrer: {referrer}")
+        
         if referrer:
             return redirect(referrer)
         else:
             return redirect(url_for('maintenance_page'))
+            
     except Exception as e:
+        app.logger.error(f"Exception in update_maintenance_alt: {e}")
+        app.logger.error(f"Exception type: {type(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        
         db.session.rollback()
         flash(f'Error updating maintenance: {str(e)}', 'error')
         return redirect(url_for('maintenance_page'))
