@@ -23,7 +23,7 @@
               <select class="form-select" id="multi_machine_id" name="machine_id" required disabled>
                 <option value="">Select Machine</option>
                 {% for machine in machines %}
-                <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}</option>
+                <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}{% if machine.machine_number %} ({{ machine.machine_number }}){% elif machine.serial_number %} (SN: {{ machine.serial_number }}){% endif %}</option>
                 {% endfor %}
               </select>
             </div>
@@ -147,7 +147,13 @@ document.addEventListener('DOMContentLoaded', function() {
     multiPartSelect.addEventListener('mousedown', function(e) {
         if (e.target.tagName === 'OPTION') {
             e.preventDefault();
+            // Store the current scroll position before making changes
+            const scrollTop = multiPartSelect.scrollTop;
             e.target.selected = !e.target.selected;
+            // Restore the scroll position after selection change
+            setTimeout(() => {
+                multiPartSelect.scrollTop = scrollTop;
+            }, 0);
             multiPartSelect.focus();
             return false;
         }
