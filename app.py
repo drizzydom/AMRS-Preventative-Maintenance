@@ -8344,6 +8344,88 @@ def maintenance_record_print(record_id):
         flash('An error occurred while generating the print view.', 'danger')
         return redirect(url_for('maintenance_record_detail', record_id=record_id))
 
+@app.route('/maintenance-records/bulk-print', methods=['POST'])
+@login_required
+def maintenance_records_bulk_print():
+    """Generate a printable view for multiple maintenance records"""
+    try:
+        # Get the list of record IDs from the form
+        record_ids = request.form.getlist('record_ids')
+        
+        if not record_ids:
+            flash('No maintenance records selected.', 'warning')
+            return redirect(url_for('maintenance_records_page'))
+        
+        # Convert to integers and validate
+        try:
+            record_ids = [int(rid) for rid in record_ids]
+        except ValueError:
+            flash('Invalid record IDs provided.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+        
+        # Get the maintenance records
+        records = MaintenanceRecord.query.filter(MaintenanceRecord.id.in_(record_ids)).order_by(MaintenanceRecord.date.desc()).all()
+        
+        if not records:
+            flash('No valid maintenance records found.', 'warning')
+            return redirect(url_for('maintenance_records_page'))
+        
+        # Check if user has access to all selected records
+        accessible_records = []
+        if not user_can_see_all_sites(current_user):
+            user_sites = current_user.sites
+            for record in records:
+                if record.machine and record.machine.site in user_sites:
+                    accessible_records.append(record)
+                elif not record.machine:  # Records without machines are accessible
+                    accessible_records.append(record)
+        else:
+            accessible_records = records
+        
+        if not accessible_records:
+            flash('You do not have access to the selected maintenance records.', 'danger')
+            return redirect(url_for('maintenance_records_page'))
+        
+        # Get company information from the first record's site (or use default)
+        company_info = {}
+        first_record_with_site = None
+        for record in accessible_records:
+            if record.machine and record.machine.site:
+                first_record_with_site = record
+                break
+        
+        if first_record_with_site:
+            site = first_record_with_site.machine.site
+            company_info = {
+                'name': site.name or "Maintenance Tracker",
+                'address': site.location or "",
+                'phone': "",  # Site model doesn't have phone field
+                'email': site.contact_email or "",
+                'logo_url': url_for('static', filename='img/logo.png')
+            }
+        else:
+            # Default company info
+            company_info = {
+                'name': "Maintenance Tracker", 
+                'address': "",
+                'phone': "",
+                'email': "",
+                'logo_url': url_for('static', filename='img/logo.png')
+            }
+        
+        return render_template(
+            'maintenance_records_bulk_pdf.html',
+            records=accessible_records,
+            company_info=company_info,
+            print_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            total_records=len(accessible_records)
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error in maintenance_records_bulk_print: {e}")
+        flash('An error occurred while generating the bulk report.', 'danger')
+        return redirect(url_for('maintenance_records_page'))
+
 @app.route('/emergency-maintenance-request', methods=['POST'])
 @login_required
 def emergency_maintenance_request():
