@@ -1158,7 +1158,8 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             enableRemoteModule: false,
-            webSecurity: true
+            webSecurity: true,
+            preload: path.join(__dirname, 'main-preload.js')
         },
         titleBarStyle: 'default',
         autoHideMenuBar: false
@@ -1484,3 +1485,230 @@ ipcMain.on('check-for-updates', () => {
     hasCheckedForUpdates = false; // Allow manual check even after auto check
     checkForUpdatesWhenReady();
 });
+
+// IPC handlers for printing functionality
+ipcMain.handle('print-page', async (event, options = {}) => {
+    try {
+        writeLog('[IPC] Print page requested');
+        
+        // Get the web contents of the main window
+        const webContents = mainWindow.webContents;
+        
+        // Wait for all resources to be loaded
+        await waitForContentLoaded(webContents);
+        
+        // Set default print options
+        const printOptions = {
+            silent: false,
+            printBackground: true,
+            color: true,
+            margin: {
+                marginType: 'printableArea'
+            },
+            landscape: false,
+            pagesPerSheet: 1,
+            collate: false,
+            copies: 1,
+            header: 'AMRS Maintenance Tracker',
+            footer: 'Page <span class=pageNumber></span> of <span class=totalPages></span>',
+            ...options
+        };
+        
+        writeLog(`[IPC] Print options: ${JSON.stringify(printOptions)}`);
+        
+        // Print the page
+        const success = await webContents.print(printOptions);
+        writeLog(`[IPC] Print result: ${success}`);
+        
+        return { success, message: success ? 'Print completed successfully' : 'Print was cancelled' };
+    } catch (error) {
+        writeLog(`[IPC] Print error: ${error.message}`);
+        return { success: false, message: `Print failed: ${error.message}` };
+    }
+});
+
+ipcMain.handle('print-to-pdf', async (event, options = {}) => {
+    try {
+        writeLog('[IPC] Print to PDF requested');
+        
+        // Get the web contents of the main window
+        const webContents = mainWindow.webContents;
+        
+        // Wait for all resources to be loaded
+        await waitForContentLoaded(webContents);
+        
+        // Set default PDF options
+        const pdfOptions = {
+            marginsType: 0, // Default margins
+            pageSize: 'A4',
+            printBackground: true,
+            printSelectionOnly: false,
+            landscape: false,
+            scaleFactor: 100,
+            ...options
+        };
+        
+        writeLog(`[IPC] PDF options: ${JSON.stringify(pdfOptions)}`);
+        
+        // Generate PDF
+        const pdfData = await webContents.printToPDF(pdfOptions);
+        
+        // Show save dialog
+        const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+            defaultPath: `maintenance-report-${new Date().toISOString().split('T')[0]}.pdf`,
+            filters: [
+                { name: 'PDF Files', extensions: ['pdf'] }
+            ]
+        });
+        
+        if (canceled || !filePath) {
+            return { success: false, message: 'PDF save was cancelled' };
+        }
+        
+        // Write PDF to file
+        fs.writeFileSync(filePath, pdfData);
+        writeLog(`[IPC] PDF saved to: ${filePath}`);
+        
+        return { success: true, message: `PDF saved to ${filePath}`, filePath };
+    } catch (error) {
+        writeLog(`[IPC] PDF generation error: ${error.message}`);
+        return { success: false, message: `PDF generation failed: ${error.message}` };
+    }
+});
+
+ipcMain.handle('show-print-preview', async (event, url) => {
+    try {
+        writeLog(`[IPC] Print preview requested for URL: ${url}`);
+        
+        // Create a new window for print preview
+        const previewWindow = new BrowserWindow({
+            width: 900,
+            height: 700,
+            parent: mainWindow,
+            modal: true,
+            show: false,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                enableRemoteModule: false,
+                webSecurity: true,
+                preload: path.join(__dirname, 'print-preload.js')
+            }
+        });
+        
+        // Load the print URL
+        await previewWindow.loadURL(url);
+        
+        // Wait for the page to be ready and CSS to be loaded
+        previewWindow.once('ready-to-show', () => {
+            // Give extra time for CSS to load
+            setTimeout(() => {
+                previewWindow.show();
+                writeLog('[IPC] Print preview window shown after CSS loading');
+            }, 500);
+        });
+        
+        // Also listen for DOM content loaded to ensure everything is ready
+        previewWindow.webContents.once('dom-ready', () => {
+            writeLog('[IPC] Print preview DOM ready');
+            
+            // Inject additional CSS loading script
+            previewWindow.webContents.executeJavaScript(`
+                // Ensure all required CSS is loaded
+                const requiredCSS = [
+                    'https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css',
+                    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
+                ];
+                
+                for (const css of requiredCSS) {
+                    const exists = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                        .some(link => link.href === css);
+                    
+                    if (!exists) {
+                        const link = document.createElement('link');
+                        link.rel = 'stylesheet';
+                        link.href = css;
+                        document.head.appendChild(link);
+                    }
+                }
+                
+                // Return true when done
+                true;
+            `).then(() => {
+                writeLog('[IPC] Additional CSS injection completed');
+            }).catch(err => {
+                writeLog(`[IPC] CSS injection error: ${err.message}`);
+            });
+        });
+        
+        // Handle window closed
+        previewWindow.on('closed', () => {
+            writeLog('[IPC] Print preview window closed');
+        });
+        
+        return { success: true, message: 'Print preview opened' };
+    } catch (error) {
+        writeLog(`[IPC] Print preview error: ${error.message}`);
+        return { success: false, message: `Print preview failed: ${error.message}` };
+    }
+});
+
+ipcMain.handle('close-window', async (event) => {
+    try {
+        // Get the window that sent the request
+        const webContents = event.sender;
+        const window = BrowserWindow.fromWebContents(webContents);
+        
+        if (window && window !== mainWindow) {
+            window.close();
+            return { success: true };
+        }
+        
+        return { success: false, message: 'Cannot close main window' };
+    } catch (error) {
+        writeLog(`[IPC] Close window error: ${error.message}`);
+        return { success: false, message: `Failed to close window: ${error.message}` };
+    }
+});
+
+// Helper function to wait for content to be fully loaded
+async function waitForContentLoaded(webContents) {
+    // Wait for DOM to be ready
+    await new Promise((resolve) => {
+        if (webContents.isLoading()) {
+            webContents.once('dom-ready', resolve);
+        } else {
+            resolve();
+        }
+    });
+    
+    // Additional wait for CSS and images to load
+    await webContents.executeJavaScript(`
+        new Promise((resolve) => {
+            // Check if all stylesheets are loaded
+            const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+            let loadedCount = 0;
+            
+            if (stylesheets.length === 0) {
+                resolve();
+                return;
+            }
+            
+            stylesheets.forEach((link) => {
+                if (link.sheet) {
+                    loadedCount++;
+                    if (loadedCount === stylesheets.length) {
+                        setTimeout(resolve, 200); // Extra wait for rendering
+                    }
+                } else {
+                    link.addEventListener('load', () => {
+                        loadedCount++;
+                        if (loadedCount === stylesheets.length) {
+                            setTimeout(resolve, 200); // Extra wait for rendering
+                        }
+                    });
+                }
+            });
+        });
+    `);
+}
