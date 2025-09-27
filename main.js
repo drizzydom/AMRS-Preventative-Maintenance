@@ -1537,25 +1537,31 @@ ipcMain.handle('print-to-pdf', async (event, options = {}) => {
         // Wait for all resources to be loaded
         await waitForContentLoaded(webContents);
         
+        // Extract filename option if provided
+        const { filename, ...pdfOptions } = options;
+        
         // Set default PDF options
-        const pdfOptions = {
+        const defaultPdfOptions = {
             marginsType: 0, // Default margins
             pageSize: 'A4',
             printBackground: true,
             printSelectionOnly: false,
             landscape: false,
             scaleFactor: 100,
-            ...options
+            ...pdfOptions
         };
         
-        writeLog(`[IPC] PDF options: ${JSON.stringify(pdfOptions)}`);
+        writeLog(`[IPC] PDF options: ${JSON.stringify(defaultPdfOptions)}`);
         
         // Generate PDF
-        const pdfData = await webContents.printToPDF(pdfOptions);
+        const pdfData = await webContents.printToPDF(defaultPdfOptions);
+        
+        // Use custom filename or default
+        const defaultFileName = filename || `maintenance-report-${new Date().toISOString().split('T')[0]}.pdf`;
         
         // Show save dialog
         const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-            defaultPath: `maintenance-report-${new Date().toISOString().split('T')[0]}.pdf`,
+            defaultPath: defaultFileName,
             filters: [
                 { name: 'PDF Files', extensions: ['pdf'] }
             ]
