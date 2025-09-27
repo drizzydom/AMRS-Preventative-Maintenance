@@ -484,194 +484,92 @@
     </div>
 
     <script>
-        // Electron-specific functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('[Bulk Print Preview] DOMContentLoaded - checking for Electron API...');
-            console.log('[Bulk Print Preview] window.electronAPI:', window.electronAPI);
-            console.log('[Bulk Print Preview] window.electronAPI.print:', window.electronAPI && window.electronAPI.print);
-            
-            // Always show print controls in print preview
-            console.log('[Bulk Print Preview] Activating print controls...');
-            const controls = document.getElementById('electronPrintControls');
-            if (controls) {
-                controls.style.display = 'block';
-                controls.classList.add('active');
-                console.log('[Bulk Print Preview] Print controls activated successfully');
-            } else {
-                console.error('[Bulk Print Preview] Could not find electronPrintControls element');
-            }
-            
-            // Add class to body for print-specific styling
-            document.body.classList.add('electron-print-ready');
-            console.log('[Bulk Print Preview] Added electron-print-ready class to body');
-            
-            // Log API availability
-            console.log('[Bulk Print Preview] Electron API available:', !!window.electronAPI);
-            console.log('[Bulk Print Preview] Print API available:', !!(window.electronAPI && window.electronAPI.print));
-            
-            // Add button event listeners
-            const backBtn = document.getElementById('backBtn');
-            const printBtn = document.getElementById('printBtn');
-            const pdfBtn = document.getElementById('pdfBtn');
-            
-            if (backBtn) {
-                backBtn.addEventListener('click', navigateBack);
-                console.log('[Bulk Print Preview] Back button event listener added');
-            }
-            
-            if (printBtn) {
-                printBtn.addEventListener('click', printDirectly);
-                console.log('[Bulk Print Preview] Print button event listener added');
-            }
-            
-            if (pdfBtn) {
-                pdfBtn.addEventListener('click', saveAsPDF);
-                console.log('[Bulk Print Preview] PDF button event listener added');
-            }
-                
-                // Add keyboard shortcuts
-                document.addEventListener('keydown', function(e) {
-                    if (e.ctrlKey || e.metaKey) {
-                        if (e.key === 'p') {
-                            e.preventDefault();
-                            printDirectly();
-                        } else if (e.key === 's') {
-                            e.preventDefault();
-                            saveAsPDF();
-                        }
-                    }
-                    // Escape key to go back
-                    if (e.key === 'Escape') {
-                        e.preventDefault();
-                        navigateBack();
-                    }
-                    // Alt + Left Arrow to go back (common browser shortcut)
-                    if (e.altKey && e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        navigateBack();
-                    }
-                });
-            }
-        });
-
-        async function printDirectly() {
-            console.log('[Bulk Print Preview] printDirectly called');
-            console.log('[Bulk Print Preview] electronAPI available:', !!window.electronAPI);
-            console.log('[Bulk Print Preview] electronAPI.print available:', !!(window.electronAPI && window.electronAPI.print));
-            
-            if (window.electronAPI && window.electronAPI.print) {
-                try {
-                    // Show loading notification
-                    showNotification('Preparing print job...', 'info');
-                    console.log('[Bulk Print Preview] Calling electronAPI.print.printPage...');
-                    
-                    const result = await window.electronAPI.print.printPage({
-                        printBackground: true,
-                        color: true,
-                        margin: { marginType: 'printableArea' },
-                        landscape: false,
-                        scaleFactor: 100
-                    });
-                    
-                    console.log('[Bulk Print Preview] Print result:', result);
-                    
-                    if (result.success) {
-                        showNotification('Print job sent successfully!', 'success');
-                    } else {
-                        console.warn('[Bulk Print Preview] Electron print failed, using fallback');
-                        showNotification('Using system print dialog...', 'info');
-                        window.print();
-                    }
-                } catch (error) {
-                    console.error('[Bulk Print Preview] Print error:', error);
-                    showNotification('Using system print dialog...', 'info');
-                    window.print();
-                }
-            } else {
-                // Fallback to browser print
-                console.log('[Bulk Print Preview] No Electron API, using browser print');
-                showNotification('Using system print dialog...', 'info');
-                window.print();
-            }
-        }
-
-        async function saveAsPDF() {
-            console.log('[Bulk Print Preview] saveAsPDF called');
-            console.log('[Bulk Print Preview] electronAPI available:', !!window.electronAPI);
-            console.log('[Bulk Print Preview] electronAPI.print available:', !!(window.electronAPI && window.electronAPI.print));
-            
-            if (window.electronAPI && window.electronAPI.print) {
-                try {
-                    showNotification('Generating PDF...', 'info');
-                    console.log('[Bulk Print Preview] Calling electronAPI.print.printToPDF...');
-                    
-                    const result = await window.electronAPI.print.printToPDF({
-                        printBackground: true,
-                        pageSize: 'A4',
-                        marginsType: 0
-                    });
-                    
-                    console.log('[Bulk Print Preview] PDF result:', result);
-                    
-                    if (result.success) {
-                        showNotification('PDF saved to: ' + result.filePath, 'success');
-                    } else {
-                        console.warn('[Bulk Print Preview] PDF generation failed, offering browser print');
-                        showNotification('PDF generation failed. Using print dialog instead.', 'warning');
-                        window.print();
-                    }
-                } catch (error) {
-                    console.error('[Bulk Print Preview] PDF error:', error);
-                    showNotification('PDF generation failed. Using print dialog instead.', 'warning');
-                    window.print();
-                }
-            } else {
-                console.log('[Bulk Print Preview] No Electron API, using browser print for PDF');
-                showNotification('PDF generation requires Electron app. Using print dialog instead.', 'warning');
-                window.print();
-            }
-        }
-
-        async function navigateBack() {
+        // Define functions in global scope
+        function navigateBack() {
             console.log('[Bulk Print Preview] navigateBack called');
+            
             if (window.electronAPI && window.electronAPI.closeWindow) {
-                // Use Electron's closeWindow API for print preview windows
-                try {
-                    console.log('[Bulk Print Preview] Attempting to close window via Electron API');
-                    const result = await window.electronAPI.closeWindow();
+                console.log('[Bulk Print Preview] Using Electron closeWindow API');
+                window.electronAPI.closeWindow().then(result => {
                     if (result.success) {
                         console.log('[Bulk Print Preview] Window closed successfully');
                     } else {
-                        console.error('[Bulk Print Preview] Failed to close window:', result.message);
-                        // Fallback to navigation
-                        if (window.history.length > 1) {
-                            window.history.back();
-                        } else {
-                            window.location.href = '/maintenance-records';
-                        }
+                        console.log('[Bulk Print Preview] Close failed, using fallback');
+                        fallbackNavigation();
                     }
-                } catch (error) {
-                    console.error('[Bulk Print Preview] Error closing window:', error);
-                    // Fallback to navigation
-                    if (window.history.length > 1) {
-                        window.history.back();
-                    } else {
-                        window.location.href = '/maintenance-records';
-                    }
-                }
+                }).catch(error => {
+                    console.error('[Bulk Print Preview] Close error:', error);
+                    fallbackNavigation();
+                });
             } else {
-                console.log('[Bulk Print Preview] No Electron API, using standard navigation');
-                // For non-Electron environments, use standard back navigation
-                if (window.history.length > 1) {
-                    window.history.back();
-                } else {
-                    window.location.href = '/maintenance-records';
-                }
+                console.log('[Bulk Print Preview] No Electron API, using fallback');
+                fallbackNavigation();
             }
         }
-
+        
+        function fallbackNavigation() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/maintenance-records';
+            }
+        }
+        
+        function printDirectly() {
+            console.log('[Bulk Print Preview] printDirectly called');
+            
+            if (window.electronAPI && window.electronAPI.print) {
+                console.log('[Bulk Print Preview] Using Electron print API');
+                window.electronAPI.print.printPage({
+                    printBackground: true,
+                    color: true,
+                    margin: { marginType: 'printableArea' }
+                }).then(result => {
+                    if (result.success) {
+                        showNotification('Print job sent successfully!', 'success');
+                    } else {
+                        console.log('[Bulk Print Preview] Electron print failed, using browser print');
+                        window.print();
+                    }
+                }).catch(error => {
+                    console.error('[Bulk Print Preview] Print error:', error);
+                    console.log('[Bulk Print Preview] Using browser print fallback');
+                    window.print();
+                });
+            } else {
+                console.log('[Bulk Print Preview] No Electron API, using browser print');
+                window.print();
+            }
+        }
+        
+        function saveAsPDF() {
+            console.log('[Bulk Print Preview] saveAsPDF called');
+            
+            if (window.electronAPI && window.electronAPI.print) {
+                console.log('[Bulk Print Preview] Using Electron PDF API');
+                window.electronAPI.print.printToPDF({
+                    printBackground: true,
+                    pageSize: 'A4',
+                    marginsType: 0
+                }).then(result => {
+                    if (result.success) {
+                        showNotification('PDF saved to: ' + result.filePath, 'success');
+                    } else {
+                        console.log('[Bulk Print Preview] PDF generation failed, using browser print');
+                        window.print();
+                    }
+                }).catch(error => {
+                    console.error('[Bulk Print Preview] PDF error:', error);
+                    console.log('[Bulk Print Preview] Using browser print fallback');
+                    window.print();
+                });
+            } else {
+                console.log('[Bulk Print Preview] No Electron API, using browser print');
+                window.print();
+            }
+        }
+        
         function showNotification(message, type) {
-            // Remove any existing notifications
             const existingNotifications = document.querySelectorAll('.electron-notification');
             existingNotifications.forEach(notification => {
                 if (document.body.contains(notification)) {
@@ -681,35 +579,22 @@
             
             const notification = document.createElement('div');
             notification.className = 'electron-notification';
-            notification.style.position = 'fixed';
-            notification.style.top = '10px';
-            notification.style.left = '50%';
-            notification.style.transform = 'translateX(-50%)';
-            notification.style.padding = '12px 20px';
-            notification.style.borderRadius = '6px';
-            notification.style.color = 'white';
-            notification.style.zIndex = '10001';
-            notification.style.fontWeight = 'bold';
-            notification.style.fontSize = '14px';
-            notification.style.maxWidth = '400px';
-            notification.style.textAlign = 'center';
-            notification.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+            notification.style.cssText = `
+                position: fixed;
+                top: 70px;
+                right: 20px;
+                background: ${type === 'success' ? '#d4edda' : '#d1ecf1'};
+                color: ${type === 'success' ? '#155724' : '#0c5460'};
+                border: 1px solid ${type === 'success' ? '#c3e6cb' : '#bee5eb'};
+                border-radius: 6px;
+                padding: 12px 20px;
+                z-index: 10001;
+                font-weight: bold;
+                font-size: 14px;
+                max-width: 400px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            `;
             notification.textContent = message;
-            
-            switch(type) {
-                case 'success':
-                    notification.style.background = '#28a745';
-                    break;
-                case 'error':
-                    notification.style.background = '#dc3545';
-                    break;
-                case 'warning':
-                    notification.style.background = '#ffc107';
-                    notification.style.color = '#000';
-                    break;
-                default:
-                    notification.style.background = '#007bff';
-            }
             
             document.body.appendChild(notification);
             
@@ -717,8 +602,58 @@
                 if (document.body.contains(notification)) {
                     document.body.removeChild(notification);
                 }
-            }, 3000);
+            }, 4000);
         }
+
+        // Initialize when DOM loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[Bulk Print Preview] DOMContentLoaded - initializing');
+            
+            // Always show print controls
+            const controls = document.getElementById('electronPrintControls');
+            if (controls) {
+                controls.style.display = 'block';
+                console.log('[Bulk Print Preview] Print controls shown');
+            }
+            
+            // Add event listeners to buttons
+            const backBtn = document.getElementById('backBtn');
+            const printBtn = document.getElementById('printBtn');
+            const pdfBtn = document.getElementById('pdfBtn');
+            
+            if (backBtn) {
+                backBtn.addEventListener('click', navigateBack);
+                console.log('[Bulk Print Preview] Back button listener added');
+            }
+            
+            if (printBtn) {
+                printBtn.addEventListener('click', printDirectly);
+                console.log('[Bulk Print Preview] Print button listener added');
+            }
+            
+            if (pdfBtn) {
+                pdfBtn.addEventListener('click', saveAsPDF);
+                console.log('[Bulk Print Preview] PDF button listener added');
+            }
+            
+            // Add keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key === 'p') {
+                        e.preventDefault();
+                        printDirectly();
+                    } else if (e.key === 's') {
+                        e.preventDefault();
+                        saveAsPDF();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    navigateBack();
+                }
+            });
+            
+            console.log('[Bulk Print Preview] Initialization complete');
+        });
     </script>
 </body>
 </html>
