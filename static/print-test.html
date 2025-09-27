@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Electron Print Test</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+        }
+        
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            background: #f9f9f9;
+        }
+        
+        .test-controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: white;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        
+        @media print {
+            .test-controls, .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="test-controls no-print">
+        <h4>Print Test Controls</h4>
+        <button class="btn btn-primary" onclick="testPrint()">🖨️ Test Print</button>
+        <button class="btn btn-success" onclick="testPDF()">📄 Test PDF</button>
+        <button class="btn btn-secondary" onclick="testPreview()">👁️ Test Preview</button>
+    </div>
+
+    <h1>AMRS Maintenance Tracker - Print Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Section 1</h2>
+        <p>This is a test document to verify that the Electron print functionality is working correctly.</p>
+        <ul>
+            <li>Print should work directly to printer</li>
+            <li>PDF generation should save files</li>
+            <li>Print preview should open in new window</li>
+        </ul>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Section 2</h2>
+        <p>Testing different content types:</p>
+        <table border="1" style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Direct Printing</td>
+                    <td>✅ Implemented</td>
+                    <td>Uses webContents.print()</td>
+                </tr>
+                <tr>
+                    <td>PDF Generation</td>
+                    <td>✅ Implemented</td>
+                    <td>Uses webContents.printToPDF()</td>
+                </tr>
+                <tr>
+                    <td>Print Preview</td>
+                    <td>✅ Implemented</td>
+                    <td>Opens in modal window</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Section 3</h2>
+        <p>Print settings should include:</p>
+        <ul>
+            <li>Background printing enabled</li>
+            <li>Color printing enabled</li>
+            <li>Proper margins</li>
+            <li>Page breaks handled correctly</li>
+        </ul>
+    </div>
+
+    <script>
+        async function testPrint() {
+            if (window.electronAPI && window.electronAPI.print) {
+                try {
+                    const result = await window.electronAPI.print.printPage({
+                        printBackground: true,
+                        color: true,
+                        margin: { marginType: 'printableArea' }
+                    });
+                    showNotification('Print test: ' + result.message, result.success ? 'success' : 'error');
+                } catch (error) {
+                    showNotification('Print error: ' + error.message, 'error');
+                }
+            } else {
+                showNotification('Electron API not available - using browser print', 'warning');
+                window.print();
+            }
+        }
+
+        async function testPDF() {
+            if (window.electronAPI && window.electronAPI.print) {
+                try {
+                    const result = await window.electronAPI.print.printToPDF({
+                        printBackground: true,
+                        pageSize: 'A4',
+                        marginsType: 0
+                    });
+                    showNotification('PDF test: ' + result.message, result.success ? 'success' : 'error');
+                } catch (error) {
+                    showNotification('PDF error: ' + error.message, 'error');
+                }
+            } else {
+                showNotification('PDF generation requires Electron app', 'warning');
+            }
+        }
+
+        async function testPreview() {
+            const currentUrl = window.location.href;
+            
+            if (window.electronAPI && window.electronAPI.print) {
+                try {
+                    const result = await window.electronAPI.print.showPrintPreview(currentUrl);
+                    showNotification('Preview test: ' + result.message, result.success ? 'success' : 'error');
+                } catch (error) {
+                    showNotification('Preview error: ' + error.message, 'error');
+                }
+            } else {
+                showNotification('Print preview requires Electron app', 'warning');
+            }
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.style.position = 'fixed';
+            notification.style.top = '60px';
+            notification.style.right = '10px';
+            notification.style.padding = '10px 20px';
+            notification.style.borderRadius = '4px';
+            notification.style.color = 'white';
+            notification.style.zIndex = '10001';
+            notification.style.fontWeight = 'bold';
+            notification.style.maxWidth = '300px';
+            notification.textContent = message;
+            
+            switch(type) {
+                case 'success':
+                    notification.style.background = '#28a745';
+                    break;
+                case 'error':
+                    notification.style.background = '#dc3545';
+                    break;
+                case 'warning':
+                    notification.style.background = '#ffc107';
+                    notification.style.color = '#000';
+                    break;
+                default:
+                    notification.style.background = '#007bff';
+            }
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 4000);
+        }
+
+        // Test API availability on load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.electronAPI && window.electronAPI.print) {
+                showNotification('Electron Print API detected and ready!', 'success');
+            } else {
+                showNotification('Running in browser mode - limited functionality', 'warning');
+            }
+        });
+    </script>
+</body>
+</html>

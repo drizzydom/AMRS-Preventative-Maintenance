@@ -90,7 +90,7 @@
             <a href="{{ url_for('maintenance_record_detail', record_id=record.id) }}" class="btn btn-sm btn-outline-primary" title="View Details" onclick="event.stopPropagation();">
               <i class="fas fa-eye"></i>
             </a>
-            <a href="{{ url_for('maintenance_record_print', record_id=record.id) }}" class="btn btn-sm btn-outline-secondary ms-1" title="Print Preview" onclick="event.stopPropagation();" target="_blank">
+            <a href="{{ url_for('maintenance_record_print', record_id=record.id) }}" class="btn btn-sm btn-outline-secondary ms-1" title="Print Preview" onclick="event.stopPropagation();">
               <i class="fas fa-print"></i>
             </a>
           </td>
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = '{{ url_for("maintenance_records_bulk_print") }}';
-        form.target = '_blank';
+        // Remove target='_blank' to keep it in the same Electron window
         
         // Add CSRF token if available
         const csrfToken = document.querySelector('meta[name=csrf-token]');

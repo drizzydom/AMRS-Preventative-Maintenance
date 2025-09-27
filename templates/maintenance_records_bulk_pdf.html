@@ -3,49 +3,177 @@
 <head>
     <title>Bulk Maintenance Records Report</title>
     <meta charset="UTF-8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
     <style>
+        /* CRITICAL FALLBACK STYLES - Always inline for reliability */
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-            font-size: 11pt;
-            line-height: 1.4;
-            max-width: 100%;
+            font-family: Arial, Helvetica, sans-serif !important;
+            margin: 0 !important;
+            padding: 20px !important;
+            color: #333 !important;
+            font-size: 11pt !important;
+            line-height: 1.4 !important;
+            max-width: 100% !important;
+            background: white !important;
+        }
+        
+        /* Ensure Bootstrap-like styling even if Bootstrap fails to load */
+        .container {
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 15px !important;
+        }
+        
+        .row {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            margin: 0 -15px !important;
+        }
+        
+        .col, .col-6, .col-12 {
+            flex: 1 !important;
+            padding: 0 15px !important;
+        }
+        
+        .col-6 {
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
+        }
+        
+        .table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin-bottom: 1rem !important;
+        }
+        
+        .table th,
+        .table td {
+            padding: 8px !important;
+            border: 1px solid #dee2e6 !important;
+            text-align: left !important;
+        }
+        
+        .table thead th {
+            background-color: #f8f9fa !important;
+            font-weight: bold !important;
+            border-bottom: 2px solid #dee2e6 !important;
+        }
+        
+        .table tbody tr:nth-child(even) {
+            background-color: #f8f9fa !important;
+        }
+        
+        /* Critical button styling */
+        .btn {
+            display: inline-block !important;
+            padding: 6px 12px !important;
+            font-size: 12px !important;
+            font-weight: bold !important;
+            text-align: center !important;
+            text-decoration: none !important;
+            border: 1px solid transparent !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
+            margin: 2px !important;
+        }
+        
+        .btn-primary {
+            background-color: #007bff !important;
+            border-color: #007bff !important;
+            color: white !important;
+        }
+        
+        .btn-success {
+            background-color: #28a745 !important;
+            border-color: #28a745 !important;
+            color: white !important;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d !important;
+            border-color: #6c757d !important;
+            color: white !important;
+        }
+        
+        .btn-sm {
+            padding: 4px 8px !important;
+            font-size: 11px !important;
+        }
+        
+        /* Electron-specific enhancements */
+        .electron-print-ready {
+            position: relative !important;
+        }
+        
+        .electron-print-controls {
+            position: fixed !important;
+            top: 10px !important;
+            right: 10px !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            border: 2px solid #007bff !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+            z-index: 10000 !important;
+            display: block !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+            min-width: 250px !important;
+            animation: slideInFade 0.3s ease-out !important;
+        }
+        
+        @keyframes slideInFade {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .electron-print-controls .btn {
+            margin: 2px !important;
+            font-size: 12px !important;
+            padding: 6px 10px !important;
+        }
+        
+        .electron-print-controls.active {
+            display: block !important;
         }
         
         /* Compact Header */
         .print-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 18px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 12px;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            margin-bottom: 18px !important;
+            border-bottom: 2px solid #000 !important;
+            padding-bottom: 12px !important;
         }
         
         .header-left {
-            display: flex;
-            align-items: center;
+            display: flex !important;
+            align-items: center !important;
         }
         
         .letterhead-logo {
-            height: 55px;
-            max-width: 120px;
-            object-fit: contain;
-            margin-right: 20px;
+            height: 55px !important;
+            max-width: 120px !important;
+            object-fit: contain !important;
+            margin-right: 20px !important;
         }
         
         .company-info h1 {
-            font-size: 16pt;
-            margin: 0;
-            line-height: 1.2;
+            font-size: 16pt !important;
+            margin: 0 !important;
+            line-height: 1.2 !important;
+            color: #000 !important;
         }
         
         .company-info p {
-            font-size: 9pt;
-            margin: 2px 0;
-            color: #666;
+            font-size: 9pt !important;
+            margin: 2px 0 !important;
+            color: #666 !important;
         }
         
         .header-right {
@@ -339,5 +467,258 @@
         <p>End of Maintenance Records Report - {{ total_records }} records</p>
         <p>Generated on {{ print_date }} by {{ company_info.name }}</p>
     </div>
+
+    <!-- Electron Print Controls (only visible in Electron) -->
+    <div id="electronPrintControls" class="electron-print-controls">
+        <div class="text-center mb-2">
+            <small class="text-muted">Print Controls</small>
+        </div>
+        <div class="d-grid gap-1">
+            <button id="backBtn" class="btn btn-outline-primary btn-sm">⬅️ Back to App</button>
+            <button id="printBtn" class="btn btn-primary btn-sm">🖨️ Print</button>
+            <button id="pdfBtn" class="btn btn-success btn-sm">📄 Save PDF</button>
+        </div>
+        <div class="text-center mt-2">
+            <small class="text-muted">Shortcuts: Ctrl+P, Ctrl+S, Esc</small>
+        </div>
+    </div>
+
+    <script>
+        // Electron-specific functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[Bulk Print Preview] DOMContentLoaded - checking for Electron API...');
+            console.log('[Bulk Print Preview] window.electronAPI:', window.electronAPI);
+            console.log('[Bulk Print Preview] window.electronAPI.print:', window.electronAPI && window.electronAPI.print);
+            
+            // Always show print controls in print preview
+            console.log('[Bulk Print Preview] Activating print controls...');
+            const controls = document.getElementById('electronPrintControls');
+            if (controls) {
+                controls.style.display = 'block';
+                controls.classList.add('active');
+                console.log('[Bulk Print Preview] Print controls activated successfully');
+            } else {
+                console.error('[Bulk Print Preview] Could not find electronPrintControls element');
+            }
+            
+            // Add class to body for print-specific styling
+            document.body.classList.add('electron-print-ready');
+            console.log('[Bulk Print Preview] Added electron-print-ready class to body');
+            
+            // Log API availability
+            console.log('[Bulk Print Preview] Electron API available:', !!window.electronAPI);
+            console.log('[Bulk Print Preview] Print API available:', !!(window.electronAPI && window.electronAPI.print));
+            
+            // Add button event listeners
+            const backBtn = document.getElementById('backBtn');
+            const printBtn = document.getElementById('printBtn');
+            const pdfBtn = document.getElementById('pdfBtn');
+            
+            if (backBtn) {
+                backBtn.addEventListener('click', navigateBack);
+                console.log('[Bulk Print Preview] Back button event listener added');
+            }
+            
+            if (printBtn) {
+                printBtn.addEventListener('click', printDirectly);
+                console.log('[Bulk Print Preview] Print button event listener added');
+            }
+            
+            if (pdfBtn) {
+                pdfBtn.addEventListener('click', saveAsPDF);
+                console.log('[Bulk Print Preview] PDF button event listener added');
+            }
+                
+                // Add keyboard shortcuts
+                document.addEventListener('keydown', function(e) {
+                    if (e.ctrlKey || e.metaKey) {
+                        if (e.key === 'p') {
+                            e.preventDefault();
+                            printDirectly();
+                        } else if (e.key === 's') {
+                            e.preventDefault();
+                            saveAsPDF();
+                        }
+                    }
+                    // Escape key to go back
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        navigateBack();
+                    }
+                    // Alt + Left Arrow to go back (common browser shortcut)
+                    if (e.altKey && e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        navigateBack();
+                    }
+                });
+            }
+        });
+
+        async function printDirectly() {
+            console.log('[Bulk Print Preview] printDirectly called');
+            console.log('[Bulk Print Preview] electronAPI available:', !!window.electronAPI);
+            console.log('[Bulk Print Preview] electronAPI.print available:', !!(window.electronAPI && window.electronAPI.print));
+            
+            if (window.electronAPI && window.electronAPI.print) {
+                try {
+                    // Show loading notification
+                    showNotification('Preparing print job...', 'info');
+                    console.log('[Bulk Print Preview] Calling electronAPI.print.printPage...');
+                    
+                    const result = await window.electronAPI.print.printPage({
+                        printBackground: true,
+                        color: true,
+                        margin: { marginType: 'printableArea' },
+                        landscape: false,
+                        scaleFactor: 100
+                    });
+                    
+                    console.log('[Bulk Print Preview] Print result:', result);
+                    
+                    if (result.success) {
+                        showNotification('Print job sent successfully!', 'success');
+                    } else {
+                        console.warn('[Bulk Print Preview] Electron print failed, using fallback');
+                        showNotification('Using system print dialog...', 'info');
+                        window.print();
+                    }
+                } catch (error) {
+                    console.error('[Bulk Print Preview] Print error:', error);
+                    showNotification('Using system print dialog...', 'info');
+                    window.print();
+                }
+            } else {
+                // Fallback to browser print
+                console.log('[Bulk Print Preview] No Electron API, using browser print');
+                showNotification('Using system print dialog...', 'info');
+                window.print();
+            }
+        }
+
+        async function saveAsPDF() {
+            console.log('[Bulk Print Preview] saveAsPDF called');
+            console.log('[Bulk Print Preview] electronAPI available:', !!window.electronAPI);
+            console.log('[Bulk Print Preview] electronAPI.print available:', !!(window.electronAPI && window.electronAPI.print));
+            
+            if (window.electronAPI && window.electronAPI.print) {
+                try {
+                    showNotification('Generating PDF...', 'info');
+                    console.log('[Bulk Print Preview] Calling electronAPI.print.printToPDF...');
+                    
+                    const result = await window.electronAPI.print.printToPDF({
+                        printBackground: true,
+                        pageSize: 'A4',
+                        marginsType: 0
+                    });
+                    
+                    console.log('[Bulk Print Preview] PDF result:', result);
+                    
+                    if (result.success) {
+                        showNotification('PDF saved to: ' + result.filePath, 'success');
+                    } else {
+                        console.warn('[Bulk Print Preview] PDF generation failed, offering browser print');
+                        showNotification('PDF generation failed. Using print dialog instead.', 'warning');
+                        window.print();
+                    }
+                } catch (error) {
+                    console.error('[Bulk Print Preview] PDF error:', error);
+                    showNotification('PDF generation failed. Using print dialog instead.', 'warning');
+                    window.print();
+                }
+            } else {
+                console.log('[Bulk Print Preview] No Electron API, using browser print for PDF');
+                showNotification('PDF generation requires Electron app. Using print dialog instead.', 'warning');
+                window.print();
+            }
+        }
+
+        async function navigateBack() {
+            console.log('[Bulk Print Preview] navigateBack called');
+            if (window.electronAPI && window.electronAPI.closeWindow) {
+                // Use Electron's closeWindow API for print preview windows
+                try {
+                    console.log('[Bulk Print Preview] Attempting to close window via Electron API');
+                    const result = await window.electronAPI.closeWindow();
+                    if (result.success) {
+                        console.log('[Bulk Print Preview] Window closed successfully');
+                    } else {
+                        console.error('[Bulk Print Preview] Failed to close window:', result.message);
+                        // Fallback to navigation
+                        if (window.history.length > 1) {
+                            window.history.back();
+                        } else {
+                            window.location.href = '/maintenance-records';
+                        }
+                    }
+                } catch (error) {
+                    console.error('[Bulk Print Preview] Error closing window:', error);
+                    // Fallback to navigation
+                    if (window.history.length > 1) {
+                        window.history.back();
+                    } else {
+                        window.location.href = '/maintenance-records';
+                    }
+                }
+            } else {
+                console.log('[Bulk Print Preview] No Electron API, using standard navigation');
+                // For non-Electron environments, use standard back navigation
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = '/maintenance-records';
+                }
+            }
+        }
+
+        function showNotification(message, type) {
+            // Remove any existing notifications
+            const existingNotifications = document.querySelectorAll('.electron-notification');
+            existingNotifications.forEach(notification => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            });
+            
+            const notification = document.createElement('div');
+            notification.className = 'electron-notification';
+            notification.style.position = 'fixed';
+            notification.style.top = '10px';
+            notification.style.left = '50%';
+            notification.style.transform = 'translateX(-50%)';
+            notification.style.padding = '12px 20px';
+            notification.style.borderRadius = '6px';
+            notification.style.color = 'white';
+            notification.style.zIndex = '10001';
+            notification.style.fontWeight = 'bold';
+            notification.style.fontSize = '14px';
+            notification.style.maxWidth = '400px';
+            notification.style.textAlign = 'center';
+            notification.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+            notification.textContent = message;
+            
+            switch(type) {
+                case 'success':
+                    notification.style.background = '#28a745';
+                    break;
+                case 'error':
+                    notification.style.background = '#dc3545';
+                    break;
+                case 'warning':
+                    notification.style.background = '#ffc107';
+                    notification.style.color = '#000';
+                    break;
+                default:
+                    notification.style.background = '#007bff';
+            }
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 3000);
+        }
+    </script>
 </body>
 </html>
