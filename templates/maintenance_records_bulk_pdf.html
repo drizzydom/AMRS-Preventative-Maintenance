@@ -120,6 +120,24 @@
             animation: slideInFade 0.3s ease-out !important;
         }
         
+        /* Hide print controls from actual print output */
+        @media print {
+            .electron-print-controls {
+                display: none !important;
+            }
+            
+            /* Ensure proper print formatting */
+            body {
+                margin: 0 !important;
+                padding: 20px !important;
+            }
+            
+            .container-fluid {
+                max-width: none !important;
+                margin: 0 !important;
+            }
+        }
+        
         @keyframes slideInFade {
             from {
                 opacity: 0;
@@ -543,28 +561,59 @@
         }
         
         function saveAsPDF() {
-            console.log('[Bulk Print Preview] saveAsPDF called');
+            console.log('[Bulk Print Preview] saveAsPDF called with file dialog');
             
             if (window.electronAPI && window.electronAPI.print) {
-                console.log('[Bulk Print Preview] Using Electron PDF API');
+                console.log('[Bulk Print Preview] Using Electron PDF API with save dialog');
+                
+                // Hide print controls before PDF generation
+                const controls = document.getElementById('electronPrintControls');
+                if (controls) {
+                    controls.style.display = 'none';
+                }
+                
+                // Use the print-to-pdf IPC handler which includes save dialog
                 window.electronAPI.print.printToPDF({
                     printBackground: true,
                     pageSize: 'A4',
-                    marginsType: 0
+                    landscape: true,  // Use landscape format as requested
+                    marginsType: 0,   // Minimum margins
+                    scaleFactor: 100,
+                    preferCSSPageSize: true,
+                    displayHeaderFooter: false,
+                    filename: `maintenance-records-bulk-${new Date().toISOString().split('T')[0]}.pdf`
                 }).then(result => {
+                    // Restore controls after PDF generation
+                    if (controls) {
+                        controls.style.display = 'block';
+                    }
+                    
                     if (result.success) {
-                        showNotification('PDF saved to: ' + result.filePath, 'success');
+                        const fileName = result.filePath || 'maintenance_records_bulk.pdf';
+                        showNotification('PDF saved successfully to: ' + fileName, 'success');
+                        console.log('[Bulk Print Preview] PDF saved to user-selected location:', fileName);
+                    } else if (result.message && result.message.includes('cancelled')) {
+                        showNotification('PDF save cancelled by user', 'info');
+                        console.log('[Bulk Print Preview] PDF save cancelled by user');
                     } else {
-                        console.log('[Bulk Print Preview] PDF generation failed, using browser print');
+                        console.log('[Bulk Print Preview] Electron PDF failed, using browser print');
+                        showNotification('PDF generation failed. Opening print dialog...', 'warning');
                         window.print();
                     }
                 }).catch(error => {
+                    // Restore controls on error
+                    if (controls) {
+                        controls.style.display = 'block';
+                    }
+                    
                     console.error('[Bulk Print Preview] PDF error:', error);
                     console.log('[Bulk Print Preview] Using browser print fallback');
+                    showNotification('PDF generation failed. Opening print dialog...', 'warning');
                     window.print();
                 });
             } else {
                 console.log('[Bulk Print Preview] No Electron API, using browser print');
+                showNotification('PDF requires Electron app. Opening print dialog...', 'info');
                 window.print();
             }
         }
