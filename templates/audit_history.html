@@ -911,7 +911,7 @@
         });
         
         // Print functionality
-        document.getElementById('printButton').addEventListener('click', function() {
+        document.getElementById('printButton').addEventListener('click', async function() {
             // Get the current URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             let printUrl = '/audit-history/print-view?';
@@ -929,13 +929,25 @@
                 printUrl += 'month_year=' + urlParams.get('month_year');
             }
             
-            // Open the printable view in a new window and trigger print
-            const printWindow = window.open(printUrl, '_blank');
-            printWindow.addEventListener('load', function() {
-                printWindow.print();
-                // Optional: close the window after printing (uncomment if desired)
-                // printWindow.onafterprint = function() { printWindow.close(); };
-            });
+            // Use Electron print functionality if available, otherwise fallback to opening window
+            if (window.electronAPI && window.electronAPI.print) {
+                try {
+                    await window.electronAPI.print.showPrintPreview(printUrl);
+                } catch (error) {
+                    console.error('Electron print failed, falling back to browser:', error);
+                    // Fallback to opening in new window
+                    const printWindow = window.open(printUrl, '_blank');
+                    printWindow.addEventListener('load', function() {
+                        printWindow.print();
+                    });
+                }
+            } else {
+                // Fallback for non-Electron environments
+                const printWindow = window.open(printUrl, '_blank');
+                printWindow.addEventListener('load', function() {
+                    printWindow.print();
+                });
+            }
         });
     });
     
