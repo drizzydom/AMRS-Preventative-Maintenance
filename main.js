@@ -1531,8 +1531,8 @@ ipcMain.handle('print-to-pdf', async (event, options = {}) => {
     try {
         writeLog('[IPC] Print to PDF requested');
         
-        // Get the web contents of the main window
-        const webContents = mainWindow.webContents;
+        // Get the web contents of the calling window (could be main or print preview)
+        const webContents = event.sender;
         
         // Wait for all resources to be loaded
         await waitForContentLoaded(webContents);
@@ -1559,8 +1559,11 @@ ipcMain.handle('print-to-pdf', async (event, options = {}) => {
         // Use custom filename or default
         const defaultFileName = filename || `maintenance-report-${new Date().toISOString().split('T')[0]}.pdf`;
         
+        // Get the window from the webContents for the save dialog
+        const parentWindow = BrowserWindow.fromWebContents(webContents) || mainWindow;
+        
         // Show save dialog
-        const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+        const { canceled, filePath } = await dialog.showSaveDialog(parentWindow, {
             defaultPath: defaultFileName,
             filters: [
                 { name: 'PDF Files', extensions: ['pdf'] }
@@ -1582,6 +1585,20 @@ ipcMain.handle('print-to-pdf', async (event, options = {}) => {
     }
 });
 
+const getPrintPreloadPath = () => {
+    // Use app/print-preload.js for both dev and production
+    const devPath = path.join(__dirname, 'app', 'print-preload.js');
+    const prodPath = path.join(process.resourcesPath, 'app', 'print-preload.js');
+    if (fs.existsSync(devPath)) {
+        return devPath;
+    } else if (fs.existsSync(prodPath)) {
+        return prodPath;
+    } else {
+        // Fallback to devPath (may error, but will log)
+        return devPath;
+    }
+};
+
 ipcMain.handle('show-print-preview', async (event, url) => {
     try {
         writeLog(`[IPC] Print preview requested for URL: ${url}`);
@@ -1598,7 +1615,7 @@ ipcMain.handle('show-print-preview', async (event, url) => {
                 contextIsolation: true,
                 enableRemoteModule: false,
                 webSecurity: true,
-                preload: path.join(__dirname, 'print-preload.js')
+                preload: getPrintPreloadPath()
             }
         });
         
