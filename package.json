@@ -36,6 +36,13 @@
       "output": "dist"
     },
     "files": [
+      "main.js",
+      "main-preload.js",
+      "app/print-preload.js",
+      "app/**",
+      "assets/**",
+      "node_modules/**",
+      "package.json",
       "**/*",
       "!venv/**/*",
       "!node_modules/**/*",
