@@ -603,8 +603,13 @@
         
         function saveAsPDF() {
             console.log('[Print Preview] saveAsPDF called with file dialog');
+            console.log('[Print Preview] window.electronAPI:', window.electronAPI);
+            console.log('[Print Preview] window.electronPrint:', window.electronPrint);
             
-            if (window.electronAPI && window.electronAPI.print) {
+            // Try electronAPI first, then fallback to electronPrint
+            const electronPrintAPI = window.electronAPI?.print || window.electronPrint;
+            
+            if (electronPrintAPI) {
                 console.log('[Print Preview] Using Electron PDF API with save dialog');
                 
                 // Hide print controls before PDF generation
@@ -614,7 +619,7 @@
                 }
                 
                 // Use the print-to-pdf IPC handler which includes save dialog
-                window.electronAPI.print.printToPDF({
+                electronPrintAPI.printToPDF({
                     printBackground: true,
                     pageSize: 'A4',
                     landscape: true,  // Use landscape format as requested
