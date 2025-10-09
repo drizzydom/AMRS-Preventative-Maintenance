@@ -668,7 +668,7 @@ def upload_to_server(upload_payload):
         admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
         
         if not online_url or not admin_username or not admin_password:
-            print("[SYNC] Missing AMRS_ONLINE_URL or AMRS_ADMIN_USERNAME/AMRS_ADMIN_PASSWORD; cannot upload changes.")
+            print("[SYNC] Missing required sync credentials; cannot upload changes.")
             return False
         
         clean_url = online_url.strip('"\'').rstrip('/')

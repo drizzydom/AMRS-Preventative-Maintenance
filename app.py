@@ -30,7 +30,8 @@ except ImportError as e:
             # Try to query for a user record
             user_record = db.session.query(User).first()
             if user_record:
-                print(f"[DEBUG] First user record: id={user_record.id}, username={user_record.username}, username_hash={getattr(user_record, 'username_hash', None)}, password_hash={getattr(user_record, 'password_hash', None)}")
+                # SECURITY: Never log password_hash or plaintext username
+                print(f"[DEBUG] First user record loaded (user_id={user_record.id})")
             else:
                 print("[DEBUG] No user records found in 'users' table.")
         else:
@@ -457,6 +458,65 @@ from sqlalchemy import or_
 # Initialize Flask app at the very top
 
 app = Flask(__name__, instance_relative_config=True)
+
+
+# --- Optional encryption debug endpoint (non-invasive) ---
+# This debug endpoint is only registered when ENABLE_ENCRYPTION_DEBUG=1 in the environment.
+# It does not change normal application behavior when disabled.
+if str(os.environ.get('ENABLE_ENCRYPTION_DEBUG', '')).lower() in ('1', 'true', 'yes'):
+    try:
+        import keyring as _keyring  # optional
+    except Exception:
+        _keyring = None
+
+    from flask import request as _request, jsonify as _jsonify
+
+    @app.route('/_debug/encryption/check', methods=['POST'])
+    def _encryption_check():
+        payload = _request.get_json() or {}
+        ciphertext = payload.get('ciphertext')
+
+        result = {
+            'env_has_key': bool(os.environ.get('USER_FIELD_ENCRYPTION_KEY')),
+            'embedded_has_key': False,
+            'keyring_services_present': [],
+            'decryption_attempted': False,
+            'decryption_succeeded': False,
+        }
+
+        # Check embedded credentials
+        try:
+            import embedded_bootstrap_credentials as _ebc
+            embedded = _ebc.get_embedded_credentials()
+            if embedded and embedded.get('USER_FIELD_ENCRYPTION_KEY'):
+                result['embedded_has_key'] = True
+        except Exception:
+            pass
+
+        # Probe keyring services non-destructively
+        if _keyring is not None:
+            services = ['amrs', 'amrs_pm', 'amrs_pm_windows', 'amrs_pm_macos', 'amrs_pm_linux']
+            for svc in services:
+                try:
+                    v = _keyring.get_password(svc, 'USER_FIELD_ENCRYPTION_KEY')
+                    if v:
+                        result['keyring_services_present'].append({'service': svc, 'key_length': len(v)})
+                except Exception:
+                    continue
+
+        # If ciphertext provided attempt a decryption using models.decrypt_value but do not return plaintext
+        if ciphertext:
+            result['decryption_attempted'] = True
+            try:
+                from models import decrypt_value as _dv
+                dec = _dv(ciphertext)
+                # If decrypt_value returns identical value, assume failure (it returns original on InvalidToken)
+                result['decryption_succeeded'] = (dec != ciphertext)
+            except Exception:
+                result['decryption_succeeded'] = False
+
+        return _jsonify(result)
+
 
 # --- Update Server Endpoints (merged from update_server.py) ---
 import yaml
@@ -964,7 +1024,7 @@ def fix_user_hashes(db_path):
             if not existing_username_hash and plain_username:
                 new_username_hash = hash_value(plain_username)
                 update_needed = True
-                print(f"[HASH FIX] User {user_id}: computed missing username hash")
+                app.logger.info(f"[HASH FIX] User {user_id}: computed missing username hash")
             elif existing_username_hash and plain_username:
                 # Verify the existing hash is correct for the plain text
                 expected_hash = hash_value(plain_username)
@@ -973,15 +1033,15 @@ def fix_user_hashes(db_path):
                     if len(existing_username_hash) < 32:  # SHA256 should be 64 chars
                         new_username_hash = expected_hash
                         update_needed = True
-                        print(f"[HASH FIX] User {user_id}: fixed invalid username hash")
+                        app.logger.info(f"[HASH FIX] User {user_id}: fixed invalid username hash")
                     else:
-                        print(f"[HASH FIX] User {user_id}: preserving existing username hash (likely from server)")
+                        app.logger.info(f"[HASH FIX] User {user_id}: preserving existing username hash (likely from server)")
             
             # Check email hash
             if not existing_email_hash and plain_email:
                 new_email_hash = hash_value(plain_email)
                 update_needed = True
-                print(f"[HASH FIX] User {user_id}: computed missing email hash")
+                app.logger.info(f"[HASH FIX] User {user_id}: computed missing email hash")
             elif existing_email_hash and plain_email:
                 # Verify the existing hash is correct for the plain text
                 expected_hash = hash_value(plain_email)
@@ -990,9 +1050,9 @@ def fix_user_hashes(db_path):
                     if len(existing_email_hash) < 32:  # SHA256 should be 64 chars
                         new_email_hash = expected_hash
                         update_needed = True
-                        print(f"[HASH FIX] User {user_id}: fixed invalid email hash")
+                        app.logger.info(f"[HASH FIX] User {user_id}: fixed invalid email hash")
                     else:
-                        print(f"[HASH FIX] User {user_id}: preserving existing email hash (likely from server)")
+                        app.logger.info(f"[HASH FIX] User {user_id}: preserving existing email hash (likely from server)")
             
             if update_needed:
                 cursor.execute(
@@ -1133,8 +1193,8 @@ def bootstrap_secrets_from_remote():
         loaded_any = False
         missing_keys = []
         
-        print(f"[BOOTSTRAP] Starting comprehensive bootstrap process...")
-        print(f"[BOOTSTRAP] Secure storage service: {KEYRING_SERVICE}")
+        app.logger.info("[BOOTSTRAP] Starting comprehensive bootstrap process...")
+        app.logger.info(f"[BOOTSTRAP] Secure storage service: {KEYRING_SERVICE}")
         
         # First, try to load all secrets from keyring
         for key in KEYRING_KEYS:
@@ -1161,7 +1221,7 @@ def bootstrap_secrets_from_remote():
                 
                 if resp.status_code == 200:
                     secrets = resp.json()
-                    print(f"[BOOTSTRAP] Retrieved {len(secrets)} secrets from remote")
+                    app.logger.info(f"[BOOTSTRAP] Retrieved {len(secrets)} secrets from remote")
                     
                     # Store ALL secrets from response
                     stored_count = 0
@@ -1171,11 +1231,13 @@ def bootstrap_secrets_from_remote():
                                 keyring.set_password(KEYRING_SERVICE, k, v)
                                 os.environ[k] = v
                                 stored_count += 1
-                                print(f"[BOOTSTRAP] Stored secret: {k}")
+                                # SECURITY: Do not log secret names in production
+                                if os.environ.get('DEBUG_BOOTSTRAP'):
+                                    app.logger.debug(f"[BOOTSTRAP] Stored secret: {k}")
                             except Exception as store_error:
-                                print(f"[BOOTSTRAP] Failed to store {k}: {store_error}")
+                                app.logger.error(f"[BOOTSTRAP] Failed to store secret: {store_error}")
                     
-                    print(f"[BOOTSTRAP] SUCCESS: Configuration downloaded and stored ({stored_count} secrets)")
+                    app.logger.info(f"[BOOTSTRAP] SUCCESS: Configuration downloaded and stored ({stored_count} secrets)")
                     bootstrap_attempted = True
                     
                 else:
@@ -1260,7 +1322,7 @@ def attempt_database_sync():
             return False
         
         sync_data = data_resp.json()
-        print(f"[SYNC] Downloaded data: {list(sync_data.keys())}")
+        app.logger.info(f"[SYNC] Downloaded data tables: {list(sync_data.keys())}")
         
         # Get secure database path
         db_path = get_secure_database_path()
@@ -1368,11 +1430,11 @@ def import_sync_data_to_database(sync_data, db_path):
                 # If server didn't provide hashes, compute them from the plain text values
                 if not username_hash and username_value:
                     username_hash = hash_value(username_value)
-                    print(f"[SYNC] User {user['id']}: computed username hash from plain text")
+                    app.logger.info(f"[SYNC] User {user['id']}: computed username hash from plain text")
                 
                 if not email_hash and email_value:
                     email_hash = hash_value(email_value)
-                    print(f"[SYNC] User {user['id']}: computed email hash from plain text")
+                    app.logger.info(f"[SYNC] User {user['id']}: computed email hash from plain text")
                 
                 # For offline storage security, encrypt the plain text username/email locally
                 # This ensures the database doesn't store plain text credentials
@@ -1380,10 +1442,11 @@ def import_sync_data_to_database(sync_data, db_path):
                     from models import encrypt_value
                     encrypted_username = encrypt_value(username_value) if username_value else username_value
                     encrypted_email = encrypt_value(email_value) if email_value else email_value
-                    print(f"[SYNC] User {user['id']}: encrypted username/email for secure local storage")
-                    print(f"[SYNC] User {user['id']}: preserved server hashes - username_hash: {username_hash[:16]}..., email_hash: {email_hash[:16]}...")
+                    app.logger.info(f"[SYNC] User {user['id']}: encrypted username/email for secure local storage")
+                    # SECURITY: Never log partial hashes - deterministic info can aid attackers
+                    app.logger.info(f"[SYNC] User {user['id']}: preserved server hashes")
                 except Exception as e:
-                    print(f"[SYNC] User {user['id']}: encryption failed, storing as plain text: {e}")
+                    app.logger.error(f"[SYNC] User {user['id']}: encryption failed, storing as plain text: {e}")
                     encrypted_username = username_value
                     encrypted_email = email_value
                 
@@ -1969,7 +2032,7 @@ def upload_pending_sync_queue():
         admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
         admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
         if not online_url or not admin_username or not admin_password:
-            print("[SYNC] Missing AMRS_ONLINE_URL or AMRS_ADMIN_USERNAME/AMRS_ADMIN_PASSWORD; cannot upload changes.")
+            app.logger.warning("[SYNC] Missing required sync credentials; cannot upload changes.")
             return
         clean_url = online_url.strip('"\'').rstrip('/')
         if clean_url.endswith('/api'):
@@ -2965,6 +3028,14 @@ def get_local_changes_for_upload(cursor):
                 for key, value in record_dict.items():
                     if isinstance(value, datetime):
                         record_dict[key] = value.isoformat()
+                # If this is the users table, sanitize the record: decrypt username/email and remove password_hash
+                if table_name == 'users':
+                    try:
+                        from models import sanitize_user_record
+                        record_dict = sanitize_user_record(record_dict)
+                    except Exception:
+                        # Non-fatal: if sanitization utilities aren't available, leave values as-is
+                        pass
                 table_changes.append(record_dict)
             
             if table_changes:
@@ -4920,7 +4991,8 @@ def maintenance_multi():
     """Handle multi-part maintenance submission from the modal."""
     app.logger.info("maintenance_multi route called")
     app.logger.info(f"Request method: {request.method}")
-    app.logger.info(f"Request form data: {dict(request.form)}")
+    # SECURITY: Never log full form data - may contain sensitive fields
+    app.logger.info(f"Request form keys: {list(request.form.keys())}")
     app.logger.info(f"Request files: {list(request.files.keys())}")
     
     try:
@@ -7049,7 +7121,9 @@ def sync_data():
                     'created_at': u.created_at.isoformat() if u.created_at else None,
                     'updated_at': u.updated_at.isoformat() if u.updated_at else None,
                 }
-                # Ensure password_hash is included - critical for offline authentication
+                # SECURITY NOTE: password_hash is intentionally included for offline authentication.
+                # This endpoint is gated by check_sync_auth() which requires admin or sync service permissions.
+                # This is the ONLY endpoint that should expose password_hash - all other endpoints must sanitize.
                 password_hash = getattr(u, 'password_hash', None)
                 if password_hash:
                     user_data['password_hash'] = password_hash
