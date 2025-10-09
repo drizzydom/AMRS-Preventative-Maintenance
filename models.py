@@ -121,31 +121,64 @@ def get_fernet_key():
             key = keyring.get_password(service, 'USER_FIELD_ENCRYPTION_KEY')
             if key:
                 os.environ['USER_FIELD_ENCRYPTION_KEY'] = key
+                # SECURITY: Only log presence, never key value or length
                 print("[ENCRYPTION] SUCCESS: Loaded encryption key from keyring")
                 return key
         except Exception:
             pass  # If keyring fails, continue with fallback
         
         # Instead of generating a key, show an error message recommending proper setup
-        print("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
-        print("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
-        print("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
-        print("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("[SECURITY ERROR] USER_FIELD_ENCRYPTION_KEY environment variable not set.")
+        logger.error("[SECURITY ERROR] Please set this variable to a valid Fernet key before starting the application.")
+        logger.error("[SECURITY ERROR] This key should be a URL-safe base64-encoded 32-byte key.")
+        logger.info("[SECURITY ERROR] Example command to generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
         # For development/testing, use a temporary key
-        print("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
+        logger.warning("[SECURITY WARNING] Using temporary key for development. DO NOT USE IN PRODUCTION!")
         key = base64.urlsafe_b64encode(os.urandom(32)).decode()
     
     return key
 
-# Initialize Fernet cipher with the key
-FERNET_KEY = get_fernet_key()
-fernet = Fernet(FERNET_KEY)
+# Lazily initialize Fernet cipher to avoid import-order fragility.
+# This ensures the encryption key is loaded (from env/keyring/embedded) before we
+# construct the Fernet instance. We also remove the environment variable after
+# constructing the cipher to reduce accidental exposure of the key.
+FERNET_KEY = None
+fernet = None
+
+def get_fernet():
+    """Return a initialized Fernet instance, initializing on first use.
+
+    This function is safe to call multiple times; initialization happens once.
+    After initialization we attempt to remove the USER_FIELD_ENCRYPTION_KEY from
+    the process environment to reduce accidental exposure.
+    """
+    global FERNET_KEY, fernet
+    if fernet is not None:
+        return fernet
+
+    key = get_fernet_key()
+    try:
+        fernet = Fernet(key)
+        FERNET_KEY = key
+        # Remove the env var to reduce exposure in process environment
+        try:
+            os.environ.pop('USER_FIELD_ENCRYPTION_KEY', None)
+        except Exception:
+            pass
+        return fernet
+    except Exception as e:
+        # If we can't construct the Fernet instance, re-raise to make errors visible
+        raise
 
 def encrypt_value(value):
     if value is None:
         return None
-    encrypted = fernet.encrypt(value.encode()).decode()
-    print(f"[ENCRYPTION] encrypt_value('{value}') = {encrypted}")
+    f = get_fernet()
+    encrypted = f.encrypt(value.encode()).decode()
+    # Do not log the ciphertext. Log only that encryption occurred.
+    print(f"[ENCRYPTION] encrypt_value: encrypted value (len={len(encrypted)})")
     return encrypted
 
 def decrypt_value(value):
@@ -153,11 +186,55 @@ def decrypt_value(value):
         return None
     try:
         # First try to decrypt as if it's encrypted
-        return fernet.decrypt(value.encode()).decode()
+        f = get_fernet()
+        return f.decrypt(value.encode()).decode()
     except (InvalidToken, AttributeError):
         # If decryption fails, assume it's plain text and return as-is
         # This handles legacy data that wasn't encrypted
         return value
+
+
+def maybe_decrypt(value):
+    """Attempt to decrypt a value but never raise; return decrypted value if possible or original.
+
+    This helper is intentionally non-invasive and safe to call from diagnostic code. It
+    uses the same decrypt_value behavior and is provided to make optional decryption
+    checks clearer elsewhere without changing core code paths.
+    """
+    try:
+        return decrypt_value(value)
+    except Exception:
+        # In the unlikely case decrypt_value itself raises, fall back to returning original
+        return value
+
+
+def sanitize_user_record(record_dict):
+    """Sanitize a user-like record dict coming from raw SQL/row results.
+
+    - Attempt to decrypt `username` and `email` using maybe_decrypt.
+    - Remove or blank out any password_hash to avoid accidental exposure.
+    - Return the sanitized dict (a shallow copy).
+    """
+    if not isinstance(record_dict, dict):
+        return record_dict
+
+    sanitized = record_dict.copy()
+    try:
+        if 'username' in sanitized and sanitized.get('username'):
+            sanitized['username'] = maybe_decrypt(sanitized['username'])
+    except Exception:
+        pass
+    try:
+        if 'email' in sanitized and sanitized.get('email'):
+            sanitized['email'] = maybe_decrypt(sanitized['email'])
+    except Exception:
+        pass
+
+    # Never expose password hashes via APIs or templates
+    if 'password_hash' in sanitized:
+        sanitized.pop('password_hash', None)
+
+    return sanitized
 
 def hash_value(value):
     if value is None:
