@@ -100,13 +100,21 @@ def index():
     """)
     recent_maintenance = []
     for record in cursor.fetchall():
+        tech = record['technician'] if 'technician' in record else None
+        try:
+            from models import maybe_decrypt
+            if tech:
+                tech = maybe_decrypt(tech)
+        except Exception:
+            pass
+
         recent_maintenance.append({
             'id': record['id'],
             'date': record['timestamp'],
             'part_name': record['part_name'],
             'machine_name': record['machine_name'],
             'site_name': record['site_name'],
-            'technician': record['technician'] or 'Unknown'
+            'technician': tech or 'Unknown'
         })
     
     dashboard = {
@@ -138,9 +146,16 @@ def login():
         elif not check_password_hash(user['password_hash'], password):
             error = 'Invalid password'
         else:
+            # session.clear()
+            # session['user_id'] = user['id']
+            # session['username'] = user['username']
             session.clear()
             session['user_id'] = user['id']
-            session['username'] = user['username']
+            try:
+                from models import maybe_decrypt
+                session['username'] = maybe_decrypt(user['username'])
+            except Exception:
+                session['username'] = user['username']
             
             # Update last login time
             cursor.execute(
