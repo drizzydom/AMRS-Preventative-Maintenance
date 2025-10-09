@@ -88,9 +88,10 @@ def send_daily_digest():
                                  html=html,
                                  sender=app.config['MAIL_DEFAULT_SENDER'])
                     mail.send(msg)
-                    print(f"Sent daily digest to {user.email}")
+                    # SECURITY: Log user_id instead of email to avoid PII in logs
+                    print(f"Sent daily digest to user {user.id}")
             except Exception as e:
-                print(f"Failed to send daily digest to {user.email}: {str(e)}")
+                print(f"Failed to send daily digest to user {user.id}: {str(e)}")
 
 def send_weekly_digest():
     """Send weekly digest emails to users who have selected this frequency"""
@@ -147,9 +148,10 @@ def send_weekly_digest():
                                  html=html,
                                  sender=app.config['MAIL_DEFAULT_SENDER'])
                     mail.send(msg)
-                    print(f"Sent weekly digest to {user.email}")
+                    # SECURITY: Log user_id instead of email to avoid PII in logs
+                    print(f"Sent weekly digest to user {user.id}")
             except Exception as e:
-                print(f"Failed to send weekly digest to {user.email}: {str(e)}")
+                print(f"Failed to send weekly digest to user {user.id}: {str(e)}")
 
 def send_audit_reminders():
     """Send audit reminder emails for incomplete audit tasks at end of day."""
@@ -196,9 +198,10 @@ def send_audit_reminders():
                                          html=html,
                                          sender=app.config['MAIL_DEFAULT_SENDER'])
                             mail.send(msg)
-                            print(f"Sent audit reminder to {user.email} for {machine.name}")
+                            # SECURITY: Log user_id instead of email to avoid PII in logs
+                            print(f"Sent audit reminder to user {user.id} for machine {machine.id}")
                         except Exception as e:
-                            print(f"Failed to send audit reminder to {user.email}: {str(e)}")
+                            print(f"Failed to send audit reminder to user {user.id}: {str(e)}")
 
 def send_immediate_notifications():
     """Send immediate notifications for users who want them."""
@@ -233,9 +236,10 @@ def send_immediate_notifications():
                                      html=html,
                                      sender=app.config['MAIL_DEFAULT_SENDER'])
                         mail.send(msg)
-                        print(f"Sent immediate overdue alert to {user.email}")
+                        # SECURITY: Log user_id instead of email to avoid PII in logs
+                        print(f"Sent immediate overdue alert to user {user.id}")
                     except Exception as e:
-                        print(f"Failed to send immediate alert to {user.email}: {str(e)}")
+                        print(f"Failed to send immediate alert to user {user.id}: {str(e)}")
                 if 'due_soon' in notification_types and due_soon:
                     subject = f"Immediate Maintenance Alert - Due Soon Items"
                     html = render_template(
@@ -251,9 +255,10 @@ def send_immediate_notifications():
                                      html=html,
                                      sender=app.config['MAIL_DEFAULT_SENDER'])
                         mail.send(msg)
-                        print(f"Sent immediate due soon alert to {user.email}")
+                        # SECURITY: Log user_id instead of email to avoid PII in logs
+                        print(f"Sent immediate due soon alert to user {user.id}")
                     except Exception as e:
-                        print(f"Failed to send immediate alert to {user.email}: {str(e)}")
+                        print(f"Failed to send immediate alert to user {user.id}: {str(e)}")
 
 def send_monthly_digest():
     """Send monthly digest emails to users who have selected this frequency."""
@@ -299,9 +304,10 @@ def send_monthly_digest():
                              html=html,
                              sender=app.config['MAIL_DEFAULT_SENDER'])
                 mail.send(msg)
-                print(f"Sent monthly digest to {user.email}")
+                # SECURITY: Log user_id instead of email to avoid PII in logs
+                print(f"Sent monthly digest to user {user.id}")
             except Exception as e:
-                print(f"Failed to send monthly digest to {user.email}: {str(e)}")
+                print(f"Failed to send monthly digest to user {user.id}: {str(e)}")
 
 # Add function to save audit completions at end of day
 def save_daily_audit_status(app):
