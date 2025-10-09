@@ -9,6 +9,7 @@ import datetime
 from flask_login import current_user, login_required
 import os
 from timezone_utils import get_timezone_aware_now, convert_utc_to_eastern
+from api_utils import prepare_user_for_response, prepare_users_list_for_response
 
 
 # Create blueprint for API routes
@@ -74,16 +75,14 @@ def login():
         'exp': get_timezone_aware_now() + datetime.timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     }, JWT_SECRET_KEY)
     
-    # Return token and user info
+    # Return token and user info (sanitized to remove password_hash and decrypt fields)
+    safe_user = prepare_user_for_response(
+        user, 
+        include_fields=['id', 'username', 'is_admin', 'email', 'full_name']
+    )
     return jsonify({
         'token': token,
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'is_admin': user.is_admin,
-            'email': user.email,
-            'full_name': user.full_name
-        }
+        'user': safe_user
     })
 
 @api_bp.route('/dashboard', methods=['GET'])
