@@ -6694,19 +6694,14 @@ def logout():
     """Handle user logout."""
     from security_event_logger import log_security_event
     remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
-    user_id = getattr(current_user, 'id', None)
-    username = getattr(current_user, 'username', None)
-    event_context = {
-        'ip': remote_addr,
-        'user_agent': request.headers.get('User-Agent', ''),
-    }
+    username = getattr(current_user, 'username', 'unknown')
+    
+    # Log the logout event (user info is automatically extracted from current_user)
     log_security_event(
         event_type="logout",
-        user_id=user_id,
-        username=username,
-        context=event_context,
-        message="User logged out."
+        details=f"User logged out from IP: {remote_addr}"
     )
+    
     logout_user()
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
@@ -6737,10 +6732,7 @@ def forgot_password():
             # Log password reset request (success)
             log_security_event(
                 event_type="password_reset_requested",
-                user_id=user.id,
-                username=getattr(user, 'username', None),
-                context=event_context,
-                message="Password reset requested. Token generated."
+                details=f"Password reset requested for email: {email} from IP: {remote_addr}"
             )
             # In a production app, you would send an email with the reset link
             reset_url = url_for('reset_password', token=reset_token, _external=True)
@@ -6749,10 +6741,7 @@ def forgot_password():
             # Log password reset request (unknown email)
             log_security_event(
                 event_type="password_reset_requested_unknown_email",
-                user_id=None,
-                username=None,
-                context=event_context,
-                message="Password reset requested for unknown email."
+                details=f"Password reset requested for unknown email: {email} from IP: {remote_addr}"
             )
         # Always show this message to prevent user enumeration
         flash('If an account with that email exists, a password reset link has been sent.', 'info')
@@ -6807,10 +6796,7 @@ def reset_password(token):
     if not user or (user.reset_token_expiration and user.reset_token_expiration < datetime.now()):
         log_security_event(
             event_type="password_reset_token_invalid",
-            user_id=None,
-            username=None,
-            context=event_context,
-            message="Password reset link invalid or expired."
+            details=f"Invalid or expired password reset token from IP: {remote_addr}"
         )
         flash('The password reset link is invalid or has expired.', 'danger')
         return redirect(url_for('forgot_password'))
@@ -6820,20 +6806,14 @@ def reset_password(token):
         if not password or len(password) < 8:
             log_security_event(
                 event_type="password_reset_failed_short_password",
-                user_id=user.id,
-                username=getattr(user, 'username', None),
-                context=event_context,
-                message="Password reset failed: password too short."
+                details=f"Password reset failed: password too short for user_id={user.id} from IP: {remote_addr}"
             )
             flash('Password must be at least 8 characters long.', 'danger')
             return redirect(url_for('reset_password', token=token))
         elif password != confirm_password:
             log_security_event(
                 event_type="password_reset_failed_mismatch",
-                user_id=user.id,
-                username=getattr(user, 'username', None),
-                context=event_context,
-                message="Password reset failed: passwords do not match."
+                details=f"Password reset failed: passwords do not match for user_id={user.id} from IP: {remote_addr}"
             )
             flash('Passwords do not match.', 'danger')
             return redirect(url_for('reset_password', token=token))
@@ -6845,10 +6825,7 @@ def reset_password(token):
             db.session.commit()
             log_security_event(
                 event_type="password_reset_success",
-                user_id=user.id,
-                username=getattr(user, 'username', None),
-                context=event_context,
-                message="Password reset successful."
+                details=f"Password reset successful for user_id={user.id} from IP: {remote_addr}"
             )
             flash('Your password has been updated. Please log in.', 'success')
             return redirect(url_for('login'))
