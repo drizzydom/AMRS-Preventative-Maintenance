@@ -59,6 +59,11 @@ class OfflineSecurityEvent(db.Model):
     details = db.Column(db.Text, nullable=True)
     is_critical = db.Column(db.Boolean, default=False)
     synced = db.Column(db.Boolean, default=False, index=True)
+    # Enhanced fields for better tracking and filtering
+    severity = db.Column(db.Integer, default=0)  # 0=info, 1=notice, 2=warning, 3=critical
+    source = db.Column(db.String(32), default='offline-client')  # 'web', 'offline-client', 'sync-agent', etc.
+    correlation_id = db.Column(db.String(36), nullable=True)  # UUID for grouping related events
+    actor_metadata = db.Column(db.Text, nullable=True)  # JSON string with non-sensitive metadata
 class AppSetting(db.Model):
     __tablename__ = 'app_settings'
     key = db.Column(db.String(64), primary_key=True)
@@ -448,6 +453,11 @@ class SecurityEvent(db.Model):
     location = db.Column(db.String(255), nullable=True)
     details = db.Column(db.Text, nullable=True)
     is_critical = db.Column(db.Boolean, default=False)
+    # Enhanced fields for better tracking and filtering
+    severity = db.Column(db.Integer, default=0)  # 0=info, 1=notice, 2=warning, 3=critical
+    source = db.Column(db.String(32), default='web')  # 'web', 'offline-client', 'sync-agent', etc.
+    correlation_id = db.Column(db.String(36), nullable=True)  # UUID for grouping related events
+    actor_metadata = db.Column(db.Text, nullable=True)  # JSON string with non-sensitive metadata
 
     user = db.relationship('User', backref=db.backref('security_events', lazy=True))
 
