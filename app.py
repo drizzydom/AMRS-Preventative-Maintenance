@@ -4382,12 +4382,12 @@ def inject_common_variables():
             if os.path.exists(package_json_path):
                 with open(package_json_path, 'r') as f:
                     package_data = json.load(f)
-                    app_version = package_data.get('version', '1.4.5')
+                    app_version = package_data.get('version', '1.4.6')
             else:
-                app_version = '1.4.5'  # Final fallback
+                app_version = '1.4.6'  # Final fallback
         except Exception as e:
             app.logger.warning(f"Could not read version from package.json: {e}")
-            app_version = '1.4.5'  # Final fallback
+            app_version = '1.4.6'  # Final fallback
     
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
