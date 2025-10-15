@@ -968,6 +968,10 @@ def upload_offline_security_events():
                 location=e.get('location'),
                 details=e.get('details'),
                 is_critical=e.get('is_critical', False),
+                severity=e.get('severity', 0),
+                source=e.get('source', 'offline-client'),
+                correlation_id=e.get('correlation_id'),
+                actor_metadata=e.get('actor_metadata'),
                 timestamp=datetime.datetime.fromisoformat(e['timestamp']) if e.get('timestamp') else datetime.datetime.utcnow()
             )
             db.session.add(event)
@@ -977,6 +981,335 @@ def upload_offline_security_events():
             continue
     db.session.commit()
     return jsonify({'status': 'ok', 'inserted': inserted}), 200
+
+
+# --- Admin API: Security Events Query Endpoint ---
+@app.route('/api/admin/security-events', methods=['GET'])
+@login_required
+def api_admin_security_events():
+    """
+    Admin-only API endpoint to query security events with filtering and pagination.
+    
+    Query Parameters:
+    - page: int (default: 1) - Page number for pagination
+    - per_page: int (default: 50, max: 500) - Number of events per page
+    - event_type: str - Filter by event type (e.g., 'login_success', 'logout')
+    - user_id: int - Filter by user ID
+    - username: str - Filter by username (partial match)
+    - severity: int - Filter by severity (0=info, 1=notice, 2=warning, 3=critical)
+    - source: str - Filter by source ('web', 'offline-client', 'sync-agent', etc.)
+    - is_critical: bool - Filter by critical flag
+    - start_date: ISO date string - Filter events after this date
+    - end_date: ISO date string - Filter events before this date
+    - correlation_id: str - Filter by correlation ID
+    - sort: str (default: 'desc') - Sort order: 'asc' or 'desc'
+    
+    Returns:
+    JSON with:
+    - events: array of event objects
+    - pagination: {page, per_page, total, pages}
+    - filters: applied filters
+    """
+    # Admin-only access
+    if not is_admin_user(current_user):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    # Parse pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 50, type=int), 500)
+    
+    # Build query with filters
+    query = SecurityEvent.query
+    
+    # Apply filters
+    filters_applied = {}
+    
+    if request.args.get('event_type'):
+        event_type = request.args.get('event_type')
+        query = query.filter(SecurityEvent.event_type == event_type)
+        filters_applied['event_type'] = event_type
+    
+    if request.args.get('user_id'):
+        user_id = request.args.get('user_id', type=int)
+        query = query.filter(SecurityEvent.user_id == user_id)
+        filters_applied['user_id'] = user_id
+    
+    if request.args.get('username'):
+        username = request.args.get('username')
+        query = query.filter(SecurityEvent.username.ilike(f'%{username}%'))
+        filters_applied['username'] = username
+    
+    if request.args.get('severity') is not None:
+        severity = request.args.get('severity', type=int)
+        query = query.filter(SecurityEvent.severity == severity)
+        filters_applied['severity'] = severity
+    
+    if request.args.get('source'):
+        source = request.args.get('source')
+        query = query.filter(SecurityEvent.source == source)
+        filters_applied['source'] = source
+    
+    if request.args.get('is_critical') is not None:
+        is_critical = request.args.get('is_critical').lower() == 'true'
+        query = query.filter(SecurityEvent.is_critical == is_critical)
+        filters_applied['is_critical'] = is_critical
+    
+    if request.args.get('start_date'):
+        try:
+            start_date = datetime.datetime.fromisoformat(request.args.get('start_date'))
+            query = query.filter(SecurityEvent.timestamp >= start_date)
+            filters_applied['start_date'] = request.args.get('start_date')
+        except ValueError:
+            return jsonify({'error': 'Invalid start_date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)'}), 400
+    
+    if request.args.get('end_date'):
+        try:
+            end_date = datetime.datetime.fromisoformat(request.args.get('end_date'))
+            query = query.filter(SecurityEvent.timestamp <= end_date)
+            filters_applied['end_date'] = request.args.get('end_date')
+        except ValueError:
+            return jsonify({'error': 'Invalid end_date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)'}), 400
+    
+    if request.args.get('correlation_id'):
+        correlation_id = request.args.get('correlation_id')
+        query = query.filter(SecurityEvent.correlation_id == correlation_id)
+        filters_applied['correlation_id'] = correlation_id
+    
+    # Apply sorting
+    sort_order = request.args.get('sort', 'desc').lower()
+    if sort_order == 'asc':
+        query = query.order_by(SecurityEvent.timestamp.asc())
+    else:
+        query = query.order_by(SecurityEvent.timestamp.desc())
+    
+    # Execute paginated query
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Serialize events
+    events = []
+    for event in pagination.items:
+        events.append({
+            'id': event.id,
+            'timestamp': event.timestamp.isoformat() if event.timestamp else None,
+            'event_type': event.event_type,
+            'user_id': event.user_id,
+            'username': event.username,
+            'ip_address': event.ip_address,
+            'location': event.location,
+            'details': event.details,
+            'is_critical': event.is_critical,
+            'severity': getattr(event, 'severity', 0),
+            'source': getattr(event, 'source', 'web'),
+            'correlation_id': getattr(event, 'correlation_id', None),
+            'actor_metadata': getattr(event, 'actor_metadata', None)
+        })
+    
+    return jsonify({
+        'events': events,
+        'pagination': {
+            'page': pagination.page,
+            'per_page': pagination.per_page,
+            'total': pagination.total,
+            'pages': pagination.pages
+        },
+        'filters': filters_applied
+    }), 200
+
+
+# --- Admin API: Export Security Events to CSV ---
+@app.route('/api/admin/security-events/export', methods=['POST'])
+@login_required
+def api_admin_security_events_export():
+    """
+    Admin-only API endpoint to export security events to CSV.
+    Accepts the same filter parameters as the query endpoint via POST body.
+    
+    Returns: CSV file download
+    """
+    # Admin-only access
+    if not is_admin_user(current_user):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    from io import StringIO
+    import csv
+    
+    # Build query with filters from request body
+    data = request.get_json() or {}
+    query = SecurityEvent.query
+    
+    # Apply filters (same logic as query endpoint)
+    if data.get('event_type'):
+        query = query.filter(SecurityEvent.event_type == data['event_type'])
+    
+    if data.get('user_id'):
+        query = query.filter(SecurityEvent.user_id == data['user_id'])
+    
+    if data.get('username'):
+        query = query.filter(SecurityEvent.username.ilike(f'%{data["username"]}%'))
+    
+    if data.get('severity') is not None:
+        query = query.filter(SecurityEvent.severity == data['severity'])
+    
+    if data.get('source'):
+        query = query.filter(SecurityEvent.source == data['source'])
+    
+    if data.get('is_critical') is not None:
+        query = query.filter(SecurityEvent.is_critical == data['is_critical'])
+    
+    if data.get('start_date'):
+        try:
+            start_date = datetime.datetime.fromisoformat(data['start_date'])
+            query = query.filter(SecurityEvent.timestamp >= start_date)
+        except ValueError:
+            return jsonify({'error': 'Invalid start_date format'}), 400
+    
+    if data.get('end_date'):
+        try:
+            end_date = datetime.datetime.fromisoformat(data['end_date'])
+            query = query.filter(SecurityEvent.timestamp <= end_date)
+        except ValueError:
+            return jsonify({'error': 'Invalid end_date format'}), 400
+    
+    if data.get('correlation_id'):
+        query = query.filter(SecurityEvent.correlation_id == data['correlation_id'])
+    
+    # Order by timestamp descending
+    query = query.order_by(SecurityEvent.timestamp.desc())
+    
+    # Limit to reasonable number for export (e.g., 10,000 events)
+    events = query.limit(10000).all()
+    
+    # Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        'ID', 'Timestamp', 'Event Type', 'User ID', 'Username', 
+        'IP Address', 'Location', 'Details', 'Is Critical', 
+        'Severity', 'Source', 'Correlation ID'
+    ])
+    
+    # Write rows
+    for event in events:
+        writer.writerow([
+            event.id,
+            event.timestamp.isoformat() if event.timestamp else '',
+            event.event_type,
+            event.user_id or '',
+            event.username or '',
+            event.ip_address or '',
+            event.location or '',
+            event.details or '',
+            event.is_critical,
+            getattr(event, 'severity', 0),
+            getattr(event, 'source', 'web'),
+            getattr(event, 'correlation_id', '') or ''
+        ])
+    
+    # Prepare response
+    output.seek(0)
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename=security_events_{datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
+        }
+    )
+
+
+# --- Admin API: Get Event Statistics ---
+@app.route('/api/admin/security-events/stats', methods=['GET'])
+@login_required
+def api_admin_security_events_stats():
+    """
+    Admin-only API endpoint to get statistics about security events.
+    
+    Query Parameters:
+    - days: int (default: 30) - Number of days to include in statistics
+    
+    Returns:
+    JSON with:
+    - total_events: total count
+    - by_severity: count by severity level
+    - by_source: count by source
+    - by_event_type: top 10 event types
+    - critical_events: count of critical events
+    - recent_events: last 10 events (summary)
+    """
+    # Admin-only access
+    if not is_admin_user(current_user):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    from sqlalchemy import func
+    
+    # Get days parameter
+    days = request.args.get('days', 30, type=int)
+    since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+    
+    # Total events
+    total_events = SecurityEvent.query.filter(SecurityEvent.timestamp >= since).count()
+    
+    # Count by severity
+    by_severity = {}
+    severity_counts = db.session.query(
+        SecurityEvent.severity,
+        func.count(SecurityEvent.id)
+    ).filter(SecurityEvent.timestamp >= since).group_by(SecurityEvent.severity).all()
+    
+    severity_labels = {0: 'info', 1: 'notice', 2: 'warning', 3: 'critical'}
+    for severity, count in severity_counts:
+        by_severity[severity_labels.get(severity, f'unknown_{severity}')] = count
+    
+    # Count by source
+    by_source = {}
+    source_counts = db.session.query(
+        SecurityEvent.source,
+        func.count(SecurityEvent.id)
+    ).filter(SecurityEvent.timestamp >= since).group_by(SecurityEvent.source).all()
+    
+    for source, count in source_counts:
+        by_source[source or 'unknown'] = count
+    
+    # Top 10 event types
+    by_event_type = {}
+    event_type_counts = db.session.query(
+        SecurityEvent.event_type,
+        func.count(SecurityEvent.id)
+    ).filter(SecurityEvent.timestamp >= since).group_by(SecurityEvent.event_type).order_by(func.count(SecurityEvent.id).desc()).limit(10).all()
+    
+    for event_type, count in event_type_counts:
+        by_event_type[event_type] = count
+    
+    # Critical events count
+    critical_events = SecurityEvent.query.filter(
+        SecurityEvent.timestamp >= since,
+        SecurityEvent.is_critical == True
+    ).count()
+    
+    # Recent events (last 10)
+    recent = SecurityEvent.query.order_by(SecurityEvent.timestamp.desc()).limit(10).all()
+    recent_events = [
+        {
+            'id': e.id,
+            'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+            'event_type': e.event_type,
+            'username': e.username,
+            'severity': getattr(e, 'severity', 0)
+        }
+        for e in recent
+    ]
+    
+    return jsonify({
+        'total_events': total_events,
+        'by_severity': by_severity,
+        'by_source': by_source,
+        'by_event_type': by_event_type,
+        'critical_events': critical_events,
+        'recent_events': recent_events,
+        'period_days': days
+    }), 200
 
 
 # --- Utility: Fix user hashes in the secure database ---
