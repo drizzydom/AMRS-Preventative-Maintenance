@@ -903,7 +903,8 @@ async function startFlaskServer() {
         PORT: FLASK_PORT.toString(),
         SECRET_KEY: require('crypto').randomBytes(32).toString('hex'),
         PYTHONPATH: __dirname,
-        PYTHONUNBUFFERED: '1'  // Ensure immediate output
+        PYTHONUNBUFFERED: '1',  // Ensure immediate output
+        APP_VERSION: app.getVersion()  // Pass version from package.json to Flask
     };
     
     writeLog(`[Electron] Starting Python process...`);
