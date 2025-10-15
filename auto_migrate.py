@@ -1,3 +1,37 @@
+def ensure_security_events_enhanced_schema(engine):
+    """
+    Ensure security_events and offline_security_events tables have enhanced fields.
+    Adds: severity, source, correlation_id, actor_metadata
+    """
+    inspector = inspect(engine)
+    tables_to_migrate = ['security_events', 'offline_security_events']
+    
+    # Define new columns with their types
+    new_columns = {
+        'severity': 'INTEGER DEFAULT 0',  # 0=info, 1=notice, 2=warning, 3=critical
+        'source': 'VARCHAR(32) DEFAULT \'web\'',  # 'web', 'offline-client', 'sync-agent', etc.
+        'correlation_id': 'VARCHAR(36)',  # UUID for grouping related events
+        'actor_metadata': 'TEXT'  # JSON string with non-sensitive metadata
+    }
+    
+    for table_name in tables_to_migrate:
+        # Check if table exists
+        if table_name not in inspector.get_table_names():
+            logger.warning(f"[AUTO_MIGRATE] Table {table_name} does not exist yet. Skipping enhanced schema migration.")
+            continue
+        
+        logger.info(f"[AUTO_MIGRATE] Checking enhanced schema for {table_name}...")
+        
+        # Add each new column if it doesn't exist
+        for column_name, column_type in new_columns.items():
+            try:
+                add_column_if_not_exists(engine, table_name, column_name, column_type)
+            except Exception as e:
+                logger.error(f"[AUTO_MIGRATE] Error adding {column_name} to {table_name}: {e}")
+                # Don't raise - allow other migrations to continue
+        
+        logger.info(f"[AUTO_MIGRATE] Enhanced schema check complete for {table_name}")
+
 def ensure_sync_queue_table(engine):
     """Ensure the sync_queue table and all required columns exist."""
     inspector = inspect(engine)
@@ -165,6 +199,11 @@ def run_auto_migration():
         # Add your new database migrations here
         create_maintenance_files_table(engine)
         ensure_sync_queue_table(engine)
+        
+        # Enhanced security events schema migration
+        logger.info("[AUTO_MIGRATE] Running enhanced security events schema migration...")
+        ensure_security_events_enhanced_schema(engine)
+        
         # Run data fixes
         run_data_fix(engine, fix_audit_completions_timestamps, 
                     "Fix audit completion records with missing timestamps")
