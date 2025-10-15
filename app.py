@@ -448,7 +448,7 @@ except Exception as e:
     print(f"[SCHEMA] Error ensuring schema: {e}")
 
 from datetime import datetime, timedelta
-from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify, Response, abort
+from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify, Response, abort, make_response
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf, validate_csrf
 # Don't import db here - we'll import it after Flask app creation
@@ -1012,6 +1012,13 @@ def api_admin_security_events():
     """
     # Admin-only access
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted API access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         return jsonify({'error': 'Admin access required'}), 403
     
     # Parse pagination parameters
@@ -1128,6 +1135,13 @@ def api_admin_security_events_export():
     """
     # Admin-only access
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted API access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         return jsonify({'error': 'Admin access required'}), 403
     
     from io import StringIO
@@ -1240,6 +1254,13 @@ def api_admin_security_events_stats():
     """
     # Admin-only access
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted API access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         return jsonify({'error': 'Admin access required'}), 403
     
     from sqlalchemy import func
@@ -2724,14 +2745,16 @@ def bootstrap_secrets():
         log_security_event(
             event_type="bootstrap_secrets_denied",
             details=f"Denied bootstrap secrets from {remote_addr}: invalid or missing token",
-            is_critical=True
+            severity=3,
+            source='web'
         )
         abort(403)
         
     log_security_event(
         event_type="bootstrap_secrets_success", 
         details=f"Bootstrap secrets successfully retrieved from {remote_addr}",
-        is_critical=False
+        severity=1,
+        source='web'
     )
     
     # Only return the secrets needed for offline sync/bootstrap
@@ -4213,6 +4236,56 @@ def assign_colors_to_audit_tasks():
 
 # Add database connection check before requests
 @app.before_request
+def check_remember_token():
+    """
+    Check for remember_token cookie and automatically log in user if valid.
+    This enables persistent "Remember Me" functionality across sessions.
+    """
+    from datetime import datetime, timedelta
+    from flask_login import login_user
+    
+    # Skip if user is already authenticated
+    if current_user.is_authenticated:
+        return
+    
+    # Skip for static files, API endpoints, login/logout routes
+    if request.path.startswith('/static/') or request.path in ['/login', '/logout', '/api/bootstrap-secrets']:
+        return
+    
+    # Check for remember_token cookie
+    remember_token = request.cookies.get('remember_token')
+    if not remember_token:
+        return
+    
+    try:
+        # Find user by remember token
+        user = User.find_by_remember_token(remember_token)
+        if user:
+            # Auto-login the user
+            login_user(user, remember=True)
+            
+            # Log the auto-login event
+            from security_event_logger import log_security_event
+            log_security_event(
+                event_type="auto_login_success",
+                details=f"Auto-login via remember token from IP: {request.remote_addr}",
+                severity=0,
+                source='web'
+            )
+            
+            # Extend token expiration by another 30 days
+            user.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
+            db.session.commit()
+            
+            app.logger.info(f"Auto-login successful for user_id={user.id} via remember token")
+        else:
+            # Invalid or expired token - clear the cookie
+            app.logger.debug("Invalid or expired remember token, will clear cookie")
+    except Exception as e:
+        app.logger.error(f"Error during remember token check: {e}")
+        # Don't crash the request, just continue without auto-login
+
+@app.before_request
 def ensure_db_connection():
     """Ensure database connection is working before each request."""
     # Skip for static files and health checks
@@ -4299,6 +4372,23 @@ def inject_common_variables():
             return permission_name in current_user.role.permissions.split(',')
         return False
     
+    # Get app version from environment variable (set by Electron) or package.json
+    app_version = os.environ.get("APP_VERSION", "")
+    if not app_version:
+        # Fallback: Read from package.json (for web deployments)
+        try:
+            import json
+            package_json_path = os.path.join(os.path.dirname(__file__), 'package.json')
+            if os.path.exists(package_json_path):
+                with open(package_json_path, 'r') as f:
+                    package_data = json.load(f)
+                    app_version = package_data.get('version', '1.4.5')
+            else:
+                app_version = '1.4.5'  # Final fallback
+        except Exception as e:
+            app.logger.warning(f"Could not read version from package.json: {e}")
+            app_version = '1.4.5'  # Final fallback
+    
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
@@ -4307,7 +4397,8 @@ def inject_common_variables():
         'hasattr': hasattr,  # Add hasattr function to be available in templates
         'has_permission': has_permission,  # Add permission checking helper
         'Role': Role,  # Add Role class to template context so it can be used in templates
-        'safe_date': safe_date  # Add safe_date function for templates
+        'safe_date': safe_date,  # Add safe_date function for templates
+        'app_version': app_version  # Add version for display in footer
     }
 
 def url_for_safe(endpoint, **values):
@@ -4583,6 +4674,13 @@ def dashboard():
 @login_required
 def admin_security_logs():
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to view security logs.', 'danger')
         return redirect(url_for('admin'))
     # Get filter parameters
@@ -4606,6 +4704,13 @@ def admin():
     """Enhanced admin dashboard with comprehensive statistics."""
     # Use standardized admin check
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
     try:
@@ -4675,6 +4780,13 @@ def admin():
 @login_required
 def toggle_security_logging():
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to perform this action.', 'danger')
         return redirect(url_for('admin'))
     try:
@@ -4692,6 +4804,13 @@ def toggle_security_logging():
 @login_required
 def admin_audit_history():
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     completions = AuditTaskCompletion.query.filter_by(completed=True).filter(AuditTaskCompletion.completed_at >= datetime(2010, 1, 1)).order_by(AuditTaskCompletion.completed_at.desc()).all()
@@ -4717,6 +4836,13 @@ def admin_audit_history():
 def admin_excel_import():
     """Admin page for Excel data import."""
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     # You can render a template or just show a simple message for now
@@ -5858,16 +5984,17 @@ def admin_users():
     """User management page."""
     # Use standardized admin check
     if not is_admin_user(current_user):
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     
     # Handle form submission for creating a new user
     if request.method == 'POST':
-        log_security_event(
-            event_type="admin_user_change",
-            details=f"Admin user change by {getattr(current_user, 'username', None)}. Data: {request.form}",
-            is_critical=True
-        )
         try:
             username = request.form.get('username')
             email = request.form.get('email')
@@ -5914,6 +6041,13 @@ def admin_users():
                 'full_name': new_user.full_name,
                 'role_id': new_user.role_id
             }, immediate_sync=False)
+            
+            log_security_event(
+                event_type="user_created",
+                details=f"Created user: {username}, role: {role.name if role else 'None'}",
+                severity=1,
+                source='web'
+            )
             flash(f'User "{username}" created successfully.', 'success')
             return redirect('/admin/users')
         except Exception as e:
@@ -6083,6 +6217,12 @@ def admin_roles():
     from security_event_logger import log_security_event
     """Redirect or render the roles management page."""
     if not is_admin_user(current_user):
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('dashboard'))
     
@@ -6988,12 +7128,9 @@ def login():
             user.set_remember_preference(remember)
             log_security_event(
                 event_type="login_success",
-                details=f"Login from IP: {request.remote_addr} (username: {username})"
-            )
-            # Detect new device/IP (simple version: always log, can be improved)
-            log_security_event(
-                event_type="login_new_device_or_ip",
-                details=f"Login from new device/IP: {request.remote_addr} (username: {username})"
+                details=f"Login from IP: {request.remote_addr} (username: {username})",
+                severity=0,
+                source='web'
             )
             if remember:
                 token = user.generate_remember_token()
@@ -7015,7 +7152,9 @@ def login():
                 app.logger.debug(f"Login failed: No user found with username={username}")
             log_security_event(
                 event_type="login_failed",
-                details=f"Failed login attempt for username: {username} from IP: {request.remote_addr}"
+                details=f"Failed login attempt for username: {username} from IP: {request.remote_addr}",
+                severity=1,
+                source='web'
             )
             flash('Invalid username or password', 'danger')
     return render_template('login.html')
@@ -7029,15 +7168,29 @@ def logout():
     remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
     username = getattr(current_user, 'username', 'unknown')
     
+    # Clear remember token from database
+    try:
+        current_user.clear_remember_token()
+        db.session.commit()
+    except Exception as e:
+        app.logger.error(f"Error clearing remember token during logout: {e}")
+    
     # Log the logout event (user info is automatically extracted from current_user)
     log_security_event(
         event_type="logout",
-        details=f"User logged out from IP: {remote_addr}"
+        details=f"User logged out from IP: {remote_addr}",
+        severity=0,
+        source='web'
     )
     
     logout_user()
+    
+    # Create response and clear remember_token cookie
+    resp = make_response(redirect(url_for('login')))
+    resp.set_cookie('remember_token', '', expires=0, httponly=True, samesite='Lax')
+    
     flash('You have been logged out', 'info')
-    return redirect(url_for('login'))
+    return resp
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
@@ -7139,14 +7292,18 @@ def reset_password(token):
         if not password or len(password) < 8:
             log_security_event(
                 event_type="password_reset_failed_short_password",
-                details=f"Password reset failed: password too short for user_id={user.id} from IP: {remote_addr}"
+                details=f"Password reset failed: password too short for user_id={user.id} from IP: {remote_addr}",
+                severity=1,
+                source='web'
             )
             flash('Password must be at least 8 characters long.', 'danger')
             return redirect(url_for('reset_password', token=token))
         elif password != confirm_password:
             log_security_event(
                 event_type="password_reset_failed_mismatch",
-                details=f"Password reset failed: passwords do not match for user_id={user.id} from IP: {remote_addr}"
+                details=f"Password reset failed: passwords do not match for user_id={user.id} from IP: {remote_addr}",
+                severity=1,
+                source='web'
             )
             flash('Passwords do not match.', 'danger')
             return redirect(url_for('reset_password', token=token))
@@ -7158,7 +7315,9 @@ def reset_password(token):
             db.session.commit()
             log_security_event(
                 event_type="password_reset_success",
-                details=f"Password reset successful for user_id={user.id} from IP: {remote_addr}"
+                details=f"Password reset successful for user_id={user.id} from IP: {remote_addr}",
+                severity=1,
+                source='web'
             )
             flash('Your password has been updated. Please log in.', 'success')
             return redirect(url_for('login'))
@@ -7967,6 +8126,13 @@ def forbidden(e):
 @login_required
 def admin_section(section):
     if not is_admin_user(current_user):
+        from security_event_logger import log_security_event
+        log_security_event(
+            event_type="admin_access_denied",
+            details=f"Attempted access to: {request.path}",
+            severity=2,
+            source='web'
+        )
         flash('You do not have permission to access the admin panel.', 'danger')
         return redirect(url_for('dashboard'))
     if section == 'users':
@@ -7993,7 +8159,8 @@ def manage_sites():
             log_security_event(
                 event_type="privilege_escalation_attempt",
                 details=f"Non-admin user {getattr(current_user, 'username', None)} attempted to create a site.",
-                is_critical=True
+                severity=3,
+                source='web'
             )
             flash('You do not have permission to create sites.', 'danger')
             return redirect(url_for('manage_sites'))
@@ -8145,7 +8312,8 @@ def manage_machines():
                 log_security_event(
                     event_type="suspicious_activity",
                     details=f"User {getattr(current_user, 'username', None)} attempted to access unauthorized site {site_id} in machines management.",
-                    is_critical=True
+                    severity=2,
+                    source='web'
                 )
                 flash('You do not have access to this site.', 'danger')
                 return redirect(url_for('manage_machines'))
@@ -8345,7 +8513,8 @@ def manage_parts():
                 log_security_event(
                     event_type="suspicious_activity",
                     details=f"User {getattr(current_user, 'username', None)} attempted to access unauthorized machine {machine_id} in parts management.",
-                    is_critical=True
+                    severity=2,
+                    source='web'
                 )
                 flash('You do not have access to this machine.', 'danger')
                 return redirect(url_for('manage_parts'))
