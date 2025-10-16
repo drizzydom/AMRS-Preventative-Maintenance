@@ -4352,6 +4352,49 @@ def inject_site_helpers():
         'get_site_parts_status': get_site_parts_status
     }
 
+# Cache the app version (read once at startup)
+_cached_app_version = None
+
+def get_app_version():
+    """
+    Get the application version from environment variable or package.json.
+    Caches the result to avoid repeated file reads.
+    
+    Priority:
+    1. APP_VERSION environment variable (set by Electron or deployment config)
+    2. package.json file (read once and cached)
+    3. Hardcoded fallback (1.4.6)
+    """
+    global _cached_app_version
+    
+    # Return cached version if available
+    if _cached_app_version:
+        return _cached_app_version
+    
+    # Try environment variable first (fastest)
+    app_version = os.environ.get("APP_VERSION", "")
+    if app_version:
+        _cached_app_version = app_version
+        return app_version
+    
+    # Fallback: Read from package.json (one-time read, then cached)
+    try:
+        import json
+        package_json_path = os.path.join(os.path.dirname(__file__), 'package.json')
+        if os.path.exists(package_json_path):
+            with open(package_json_path, 'r') as f:
+                package_data = json.load(f)
+                app_version = package_data.get('version', '1.4.6')
+                _cached_app_version = app_version
+                print(f"[VERSION] Loaded version {app_version} from package.json")
+                return app_version
+    except Exception as e:
+        app.logger.warning(f"Could not read version from package.json: {e}")
+    
+    # Final fallback
+    _cached_app_version = '1.4.6'
+    return '1.4.6'
+
 # Add this context processor before other route definitions
 
 @app.context_processor
@@ -4372,23 +4415,6 @@ def inject_common_variables():
             return permission_name in current_user.role.permissions.split(',')
         return False
     
-    # Get app version from environment variable (set by Electron) or package.json
-    app_version = os.environ.get("APP_VERSION", "")
-    if not app_version:
-        # Fallback: Read from package.json (for web deployments)
-        try:
-            import json
-            package_json_path = os.path.join(os.path.dirname(__file__), 'package.json')
-            if os.path.exists(package_json_path):
-                with open(package_json_path, 'r') as f:
-                    package_data = json.load(f)
-                    app_version = package_data.get('version', '1.4.6')
-            else:
-                app_version = '1.4.6'  # Final fallback
-        except Exception as e:
-            app.logger.warning(f"Could not read version from package.json: {e}")
-            app_version = '1.4.6'  # Final fallback
-    
     return {
         'is_admin_user': is_admin_user(current_user) if is_auth else False,
         'url_for_safe': url_for_safe,
@@ -4398,7 +4424,7 @@ def inject_common_variables():
         'has_permission': has_permission,  # Add permission checking helper
         'Role': Role,  # Add Role class to template context so it can be used in templates
         'safe_date': safe_date,  # Add safe_date function for templates
-        'app_version': app_version  # Add version for display in footer
+        'app_version': get_app_version()  # Add version for display in footer
     }
 
 def url_for_safe(endpoint, **values):
