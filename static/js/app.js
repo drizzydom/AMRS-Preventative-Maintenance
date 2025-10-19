@@ -79,9 +79,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Restore sidebar collapsed state from localStorage on desktop
+    // Keep sidebar expanded by default for easier navigation (better UX for non-technical users)
+    // Only restore collapsed state if user explicitly set it
     if (window.innerWidth >= 992) {
         const isCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+        // Default to expanded (do nothing) unless user collapsed it
         if (isCollapsed) {
             document.body.classList.add('sidebar-collapsed');
             
@@ -91,6 +93,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 collapseIcon.classList.remove('fa-angle-double-left');
                 collapseIcon.classList.add('fa-angle-double-right');
             }
+        } else {
+            // Ensure sidebar is expanded (remove any collapsed class)
+            document.body.classList.remove('sidebar-collapsed');
         }
     }
 });
