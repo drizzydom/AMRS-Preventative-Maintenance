@@ -647,9 +647,9 @@ a:hover {
 
 /* ===== TOOLTIP IMPROVEMENTS ===== */
 
-/* Larger, more readable tooltips */
-.tooltip {
-    font-size: 1rem !important;
+/* Larger, more readable tooltips - using specific selectors instead of !important */
+.tooltip.show {
+    font-size: 1rem;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -664,10 +664,9 @@ a:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* Dark mode tooltips */
-:root.dark-mode .tooltip-inner,
-html.dark-mode .tooltip-inner,
-html[data-theme="dark"] .tooltip-inner {
+/* Dark mode tooltips - consolidated to use html[data-theme="dark"] for consistency */
+html[data-theme="dark"] .tooltip-inner,
+:root.dark-mode .tooltip-inner {
     background-color: #f8f9fa;
     color: #333;
 }
@@ -693,28 +692,23 @@ html[data-theme="dark"] .tooltip-inner {
     border-left-color: #333;
 }
 
-/* Dark mode tooltip arrows */
-:root.dark-mode .tooltip.bs-tooltip-top .tooltip-arrow::before,
-html.dark-mode .tooltip.bs-tooltip-top .tooltip-arrow::before,
-html[data-theme="dark"] .tooltip.bs-tooltip-top .tooltip-arrow::before {
+/* Dark mode tooltip arrows - consolidated selectors */
+html[data-theme="dark"] .tooltip.bs-tooltip-top .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-top .tooltip-arrow::before {
     border-top-color: #f8f9fa;
 }
 
-:root.dark-mode .tooltip.bs-tooltip-end .tooltip-arrow::before,
-html.dark-mode .tooltip.bs-tooltip-end .tooltip-arrow::before,
-html[data-theme="dark"] .tooltip.bs-tooltip-end .tooltip-arrow::before {
+html[data-theme="dark"] .tooltip.bs-tooltip-end .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-end .tooltip-arrow::before {
     border-right-color: #f8f9fa;
 }
 
-:root.dark-mode .tooltip.bs-tooltip-bottom .tooltip-arrow::before,
-html.dark-mode .tooltip.bs-tooltip-bottom .tooltip-arrow::before,
-html[data-theme="dark"] .tooltip.bs-tooltip-bottom .tooltip-arrow::before {
+html[data-theme="dark"] .tooltip.bs-tooltip-bottom .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-bottom .tooltip-arrow::before {
     border-bottom-color: #f8f9fa;
 }
 
-:root.dark-mode .tooltip.bs-tooltip-start .tooltip-arrow::before,
-html.dark-mode .tooltip.bs-tooltip-start .tooltip-arrow::before,
-html[data-theme="dark"] .tooltip.bs-tooltip-start .tooltip-arrow::before {
+html[data-theme="dark"] .tooltip.bs-tooltip-start .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-start .tooltip-arrow::before {
     border-left-color: #f8f9fa;
 }
-
