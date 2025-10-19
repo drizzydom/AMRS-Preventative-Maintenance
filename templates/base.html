@@ -719,10 +719,9 @@
         const icon = document.getElementById('darkModeIcon');
         
         if (toggle && icon) {
-            // Initialize tooltip
-            let tooltip = null;
+            // Initialize tooltip if Bootstrap is available
             if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
-                tooltip = new bootstrap.Tooltip(toggle);
+                new bootstrap.Tooltip(toggle);
             }
             
             // Check saved preference and sync UI (class may already be applied by head script)
