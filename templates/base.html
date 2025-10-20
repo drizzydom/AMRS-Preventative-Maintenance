@@ -73,6 +73,9 @@
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
     
+    <!-- UX Enhancements CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ux-enhancements.css') }}">
+    
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
     
@@ -449,9 +452,25 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             
-            <a class="navbar-brand mx-auto" href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer">
-                <i class="fas fa-tools me-2"></i> Accurate Machine Repair
+            <a class="navbar-brand" href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer">
+                <i class="fas fa-tools me-2"></i>
+                <span class="d-none d-md-inline">Accurate Machine Repair</span>
+                <span class="d-inline d-md-none">AMR</span>
             </a>
+            
+            <!-- Global Search Bar -->
+            {% if current_user.is_authenticated %}
+            <div class="global-search d-none d-md-flex mx-auto">
+                <input type="text" 
+                       class="form-control" 
+                       id="global-search-input" 
+                       placeholder="Search machines, parts, sites... (Ctrl+K)"
+                       aria-label="Global search">
+                <span class="search-icon">
+                    <i class="fas fa-search"></i>
+                </span>
+            </div>
+            {% endif %}
             
             <!-- Dark Mode Toggle - positioned to the right -->
             <div class="navbar-nav ms-auto">
@@ -643,11 +662,30 @@
             <div class="col px-0 centered-content-col">
                 <div class="content-container">
                     <div class="container-fluid py-4 px-3">
+                        <!-- Breadcrumb Navigation -->
+                        {% if current_user.is_authenticated %}
+                        {% block breadcrumb %}
+                        <nav aria-label="breadcrumb" class="breadcrumb-nav">
+                            <ol class="breadcrumb">
+                                <li class="breadcrumb-item">
+                                    <a href="{{ url_for('dashboard') }}">
+                                        <i class="fas fa-home me-1"></i>Home
+                                    </a>
+                                </li>
+                                {% block breadcrumb_items %}{% endblock %}
+                            </ol>
+                        </nav>
+                        {% endblock %}
+                        {% endif %}
+                        
                         <!-- Page Header -->
                         {% if current_user.is_authenticated %}
                         <div class="page-header mb-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
+                                    {% block help_icon %}{% endblock %}
+                                </div>
                                 <div class="header_actions">
                                     {% block header_actions %}{% endblock %}
                                 </div>
@@ -698,6 +736,9 @@
     
     <!-- Main application scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
+    <!-- UX Enhancements JavaScript -->
+    <script src="{{ url_for('static', filename='js/ux-enhancements.js') }}"></script>
     
     <!-- Enhanced horizontal scrolling support for mouse users -->
     <script src="{{ url_for('static', filename='js/horizontal-scroll-support.js') }}"></script>
