@@ -63,25 +63,18 @@
     <script>
     (function() {
         // Apply dark mode immediately if preference is set
+        // Only modify html element for better performance
         if (localStorage.getItem('darkMode') === 'enabled') {
-            // Apply to all possible selectors immediately
             document.documentElement.classList.add('dark-mode');
-            document.querySelector(':root').classList.add('dark-mode');
-            
-            // Also add to body when it's available
-            if (document.body) {
-                document.body.classList.add('dark-mode');
-            } else {
-                document.addEventListener('DOMContentLoaded', function() {
-                    document.body.classList.add('dark-mode');
-                });
-            }
         }
     })();
     </script>
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
+    
+    <!-- UX Enhancements CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ux-enhancements.css') }}">
     
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
@@ -459,15 +452,35 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             
-            <a class="navbar-brand mx-auto" href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer">
-                <i class="fas fa-tools me-2"></i> Accurate Machine Repair
+            <a class="navbar-brand" href="https://www.accuratemachinerepair.com" target="_blank" rel="noopener noreferrer">
+                <i class="fas fa-tools me-2"></i>
+                <span class="d-none d-md-inline">Accurate Machine Repair</span>
+                <span class="d-inline d-md-none">AMR</span>
             </a>
+            
+            <!-- Global Search Bar -->
+            {% if current_user.is_authenticated %}
+            <div class="global-search d-none d-md-flex mx-auto">
+                <input type="text" 
+                       class="form-control" 
+                       id="global-search-input" 
+                       placeholder="Search machines, parts, sites... (Ctrl+K)"
+                       aria-label="Global search">
+                <span class="search-icon">
+                    <i class="fas fa-search"></i>
+                </span>
+            </div>
+            {% endif %}
             
             <!-- Dark Mode Toggle - positioned to the right -->
             <div class="navbar-nav ms-auto">
-                <button id="darkModeToggle" class="btn btn-outline-light btn-sm navbar-dark-mode-toggle">
+                <button id="darkModeToggle" 
+                        class="btn btn-outline-light btn-sm navbar-dark-mode-toggle"
+                        data-bs-toggle="tooltip" 
+                        data-bs-placement="bottom" 
+                        title="Switch between light and dark color themes">
                     <span id="darkModeIcon" class="fa fa-moon"></span>
-                    <span class="d-none d-md-inline ms-1">Dark Mode</span>
+                    <span class="d-none d-md-inline ms-1" id="darkModeText">Dark Mode</span>
                 </button>
             </div>
         </div>
@@ -481,14 +494,23 @@
                     <ul class="sidebar-nav">
                         <!-- Desktop collapse button (only visible on desktop) -->
                         <li class="sidebar-nav-item sidebar-toggle-item d-none d-lg-block">
-                            <button class="sidebar-toggle-btn" onclick="toggleSidebarCollapse()" aria-label="Collapse Sidebar">
+                            <button class="sidebar-toggle-btn" 
+                                    onclick="toggleSidebarCollapse()" 
+                                    aria-label="Collapse Sidebar"
+                                    data-bs-toggle="tooltip" 
+                                    data-bs-placement="right" 
+                                    title="Hide or show the navigation menu">
                                 <i class="fas fa-angle-double-left"></i>
                             </button>
                         </li>
                         
                         <!-- Regular sidebar navigation items -->
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('dashboard') }}" class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                            <a href="{{ url_for('dashboard') }}" 
+                               class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="View all maintenance tasks and their status">
                                 <i class="sidebar-icon fas fa-tachometer-alt"></i>
                                 <span class="sidebar-link-text">Dashboard</span>
                             </a>
@@ -497,7 +519,11 @@
                         {# Sites Management - requires sites.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'sites.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_sites') }}" class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}">
+                            <a href="{{ url_for('manage_sites') }}" 
+                               class="sidebar-link {% if request.endpoint == 'manage_sites' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="Manage work locations and facilities">
                                 <i class="sidebar-icon fas fa-building"></i>
                                 <span class="sidebar-link-text">Sites</span>
                             </a>
@@ -507,7 +533,11 @@
                         {# Machines Management - requires machines.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'machines.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_machines') }}" class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                            <a href="{{ url_for('manage_machines') }}" 
+                               class="sidebar-link {% if request.endpoint == 'manage_machines' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="View and manage all equipment">
                                 <i class="sidebar-icon fas fa-industry"></i>
                                 <span class="sidebar-link-text">Machines</span>
                             </a>
@@ -517,7 +547,11 @@
                         {# Parts Management - requires parts.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'parts.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('manage_parts') }}" class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                            <a href="{{ url_for('manage_parts') }}" 
+                               class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="Manage machine parts and components">
                                 <i class="sidebar-icon fas fa-cogs"></i>
                                 <span class="sidebar-link-text">Parts</span>
                             </a>
@@ -527,7 +561,11 @@
                         {# Record Maintenance - requires maintenance.record permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.record' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('maintenance_page', site_id=request.args.get('site_id', ''), machine_id=request.args.get('machine_id', ''), part_id=request.args.get('part_id', '')) }}" class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                            <a href="{{ url_for('maintenance_page', site_id=request.args.get('site_id', ''), machine_id=request.args.get('machine_id', ''), part_id=request.args.get('part_id', '')) }}" 
+                               class="sidebar-link {% if request.endpoint == 'maintenance_page' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="Log maintenance work performed">
                                 <i class="sidebar-icon fas fa-tools"></i>
                                 <span class="sidebar-link-text">Record Maintenance</span>
                             </a>
@@ -536,7 +574,11 @@
 
                         {# User Profile - always available to authenticated users #}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('user_profile') }}" class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}">
+                            <a href="{{ url_for('user_profile') }}" 
+                               class="sidebar-link {% if request.endpoint == 'user_profile' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="View and update your account settings">
                                 <i class="sidebar-icon fas fa-user"></i>
                                 <span class="sidebar-link-text">User Profile</span>
                             </a>
@@ -545,7 +587,11 @@
                         {# Admin Panel - requires admin role #}
                         {% if current_user.is_admin %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('admin') }}" class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                            <a href="{{ url_for('admin') }}" 
+                               class="sidebar-link {% if request.endpoint == 'admin' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="System administration and user management">
                                 <i class="sidebar-icon fas fa-user-shield"></i>
                                 <span class="sidebar-link-text">Admin</span>
                             </a>
@@ -555,13 +601,21 @@
                         {# Audits - requires audits.access permission #}
                         {% if current_user.is_authenticated and (current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'audits.access' in (current_user.role.permissions if current_user.role and current_user.role.permissions else ''))) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('audits_page') }}" class="sidebar-link {% if request.endpoint == 'audits_page' %}active{% endif %}">
+                            <a href="{{ url_for('audits_page') }}" 
+                               class="sidebar-link {% if request.endpoint == 'audits_page' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="Perform equipment inspections and audits">
                                 <i class="sidebar-icon fas fa-clipboard-check"></i>
                                 <span class="sidebar-link-text">Audits</span>
                             </a>
                         </li>
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('audit_history_page') }}" class="sidebar-link {% if request.endpoint == 'audit_history_page' %}active{% endif %}">
+                            <a href="{{ url_for('audit_history_page') }}" 
+                               class="sidebar-link {% if request.endpoint == 'audit_history_page' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="View past inspection records and reports">
                                 <i class="sidebar-icon fas fa-history"></i>
                                 <span class="sidebar-link-text">Audit History</span>
                             </a>
@@ -571,7 +625,11 @@
                         {# Maintenance Records - requires maintenance.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
-                            <a href="{{ url_for('maintenance_records_page') }}" class="sidebar-link {% if request.endpoint == 'maintenance_records_page' %}active{% endif %}">
+                            <a href="{{ url_for('maintenance_records_page') }}" 
+                               class="sidebar-link {% if request.endpoint == 'maintenance_records_page' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="View all maintenance work history">
                                 <i class="sidebar-icon fas fa-history"></i>
                                 <span class="sidebar-link-text">Maintenance Records</span>
                             </a>
@@ -583,7 +641,11 @@
                     {% if current_user.is_authenticated %}
                     <div class="sidebar-footer">
                         <!-- Removed username and role display, keeping only logout button -->
-                        <a href="{{ url_for('logout') }}" class="sidebar-logout-btn">
+                        <a href="{{ url_for('logout') }}" 
+                           class="sidebar-logout-btn"
+                           data-bs-toggle="tooltip" 
+                           data-bs-placement="right" 
+                           title="Sign out of your account">
                             <i class="sidebar-icon fas fa-sign-out-alt"></i>
                             <span>Logout</span>
                         </a>
@@ -600,11 +662,30 @@
             <div class="col px-0 centered-content-col">
                 <div class="content-container">
                     <div class="container-fluid py-4 px-3">
+                        <!-- Breadcrumb Navigation -->
+                        {% if current_user.is_authenticated %}
+                        {% block breadcrumb %}
+                        <nav aria-label="breadcrumb" class="breadcrumb-nav">
+                            <ol class="breadcrumb">
+                                <li class="breadcrumb-item">
+                                    <a href="{{ url_for('dashboard') }}">
+                                        <i class="fas fa-home me-1"></i>Home
+                                    </a>
+                                </li>
+                                {% block breadcrumb_items %}{% endblock %}
+                            </ol>
+                        </nav>
+                        {% endblock %}
+                        {% endif %}
+                        
                         <!-- Page Header -->
                         {% if current_user.is_authenticated %}
                         <div class="page-header mb-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <h1 class="h3 mb-0">{% block header_title %}{% endblock %}</h1>
+                                    {% block help_icon %}{% endblock %}
+                                </div>
                                 <div class="header_actions">
                                     {% block header_actions %}{% endblock %}
                                 </div>
@@ -636,6 +717,39 @@
         </div>
     </div>
 
+    <!-- Mobile Bottom Navigation (only on mobile) -->
+    {% if current_user.is_authenticated %}
+    <nav class="mobile-bottom-nav d-md-none">
+        <div class="d-flex justify-content-around">
+            <a href="{{ url_for('dashboard') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </a>
+            <a href="{{ url_for('manage_machines') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                <i class="fas fa-industry"></i>
+                <span>Equipment</span>
+            </a>
+            <a href="{{ url_for('maintenance_page') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                <i class="fas fa-tools"></i>
+                <span>Maintain</span>
+            </a>
+            <a href="{{ url_for('manage_parts') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                <i class="fas fa-cogs"></i>
+                <span>Parts</span>
+            </a>
+        </div>
+    </nav>
+    
+    <!-- Sticky Action Button on Mobile -->
+    <button class="sticky-action-button d-md-none" 
+            onclick="window.location.href='{{ url_for('maintenance_page') }}'"
+            data-bs-toggle="tooltip"
+            data-bs-placement="left"
+            title="Record maintenance">
+        <i class="fas fa-plus"></i>
+    </button>
+    {% endif %}
+
     <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light">
         <div class="container-fluid px-3">
@@ -656,6 +770,9 @@
     <!-- Main application scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     
+    <!-- UX Enhancements JavaScript -->
+    <script src="{{ url_for('static', filename='js/ux-enhancements.js') }}"></script>
+    
     <!-- Enhanced horizontal scrolling support for mouse users -->
     <script src="{{ url_for('static', filename='js/horizontal-scroll-support.js') }}"></script>
     
@@ -663,6 +780,12 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             document.body.classList.remove('preload');
+            
+            // Initialize all tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
         });
     </script>
     
@@ -676,24 +799,27 @@
         const icon = document.getElementById('darkModeIcon');
         
         if (toggle && icon) {
+            // Initialize tooltip if Bootstrap is available
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                new bootstrap.Tooltip(toggle);
+            }
+            
             // Check saved preference and sync UI (class may already be applied by head script)
             if (localStorage.getItem('darkMode') === 'enabled') {
-                // Ensure all elements have the class (in case head script missed any)
+                // Ensure html element has the class (in case head script missed it)
                 document.documentElement.classList.add('dark-mode');
-                document.body.classList.add('dark-mode');
                 icon.classList.remove('fa-moon');
                 icon.classList.add('fa-sun');
-                const textSpan = toggle.querySelector('.d-none.d-md-inline');
+                const textSpan = toggle.querySelector('#darkModeText');
                 if (textSpan) textSpan.textContent = 'Light Mode';
             }
             
             toggle.addEventListener('click', function() {
-                // Toggle on all relevant elements
+                // Toggle only on html element for better performance
                 document.documentElement.classList.toggle('dark-mode');
-                document.body.classList.toggle('dark-mode');
-                const textSpan = toggle.querySelector('.d-none.d-md-inline');
+                const textSpan = toggle.querySelector('#darkModeText');
                 
-                if (document.body.classList.contains('dark-mode')) {
+                if (document.documentElement.classList.contains('dark-mode')) {
                     localStorage.setItem('darkMode', 'enabled');
                     icon.classList.remove('fa-moon');
                     icon.classList.add('fa-sun');
