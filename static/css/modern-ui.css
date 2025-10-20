@@ -1,11 +1,27 @@
 /* Modern UI Style Improvements */
 
-/* Global styling improvements */
+/* Global styling improvements for better readability */
 body {
     background-color: #f8f9fa;
     color: #343a40;
     overflow-x: hidden; /* Prevent horizontal scrolling */
+    /* Larger base font size for better readability, especially for older users */
+    font-size: 16px;
+    line-height: 1.6;
 }
+
+/* Improve text readability */
+p, li, td, th, label, span {
+    line-height: 1.6;
+}
+
+/* Larger headings for better hierarchy */
+h1 { font-size: 2.25rem; font-weight: 600; margin-bottom: 1rem; }
+h2 { font-size: 1.875rem; font-weight: 600; margin-bottom: 0.875rem; }
+h3 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.75rem; }
+h4 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.625rem; }
+h5 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; }
+h6 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
 
 /* Container adjustments */
 .container-fluid {
@@ -42,31 +58,39 @@ body {
     padding: 20px;
 }
 
-/* Table improvements */
+/* Table improvements - better readability and spacing */
 .table {
     width: 100%;
     margin-bottom: 1rem;
     color: #212529;
     border-collapse: separate;
     border-spacing: 0;
+    font-size: 1rem;
 }
 
 .table th, 
 .table td {
-    padding: 0.75rem;
-    vertical-align: top;
+    /* Larger padding for better readability */
+    padding: 1rem;
+    vertical-align: middle;
     border-top: 1px solid #dee2e6;
+    line-height: 1.6;
 }
 
 .table thead th {
     vertical-align: bottom;
     border-bottom: 2px solid #dee2e6;
-    background-color: #f8f9fa; /* Light header background */
+    background-color: #f8f9fa;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: #333;
 }
 
 /* IMPROVED: Better row hover effect */
 .table-hover tbody tr:hover {
-    background-color: rgba(0, 0, 0, 0.04); /* More noticeable hover */
+    background-color: rgba(254, 121, 0, 0.08); /* Use brand orange for hover */
+    cursor: pointer;
+    transition: background-color 0.15s ease;
 }
 
 /* Responsive table improvements */
@@ -79,21 +103,40 @@ body {
     margin-bottom: 0;
 }
 
-/* Button improvements */
+/* Button improvements - larger and more accessible */
 .btn {
     position: relative;
     z-index: 5; /* Higher z-index to prevent overlap issues */
-    border-radius: 6px;
+    border-radius: 8px;
     font-weight: 500;
-    padding: 0.5rem 1rem;
+    /* Larger buttons for better touch targets (minimum 44x44px recommended) */
+    padding: 0.625rem 1.25rem;
+    font-size: 1rem;
+    min-height: 44px;
     border: 1px solid transparent;
     transition: all 0.2s;
     cursor: pointer; /* Ensure pointer cursor */
+    /* Add spacing for icons */
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn i {
+    /* Larger icons for better visibility */
+    font-size: 1.1em;
 }
 
 .btn-sm {
-    padding: 0.25rem 0.7rem;
-    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.95rem;
+    min-height: 38px;
+}
+
+.btn-lg {
+    padding: 0.875rem 1.75rem;
+    font-size: 1.125rem;
+    min-height: 52px;
 }
 
 .btn-primary {
@@ -119,24 +162,78 @@ body {
     color: white !important;
 }
 
-/* Badges */
+/* Badges - larger and more visible */
 .badge {
     font-weight: 500;
-    padding: 0.35em 0.65em;
-    border-radius: 4px;
+    padding: 0.5em 0.85em;
+    border-radius: 6px;
+    font-size: 0.95rem;
 }
 
-/* Form improvements */
+/* Status badges with better contrast */
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+    color: white;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000;
+}
+
+.badge.bg-success {
+    background-color: #28a745 !important;
+    color: white;
+}
+
+.badge.bg-info {
+    background-color: #17a2b8 !important;
+    color: white;
+}
+
+/* Form improvements - larger and more user-friendly */
 .form-control, .form-select {
     border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
+    /* Larger padding for easier interaction */
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    min-height: 44px;
+    border: 2px solid #dee2e6;
     transition: all 0.15s ease;
 }
 
 .form-control:focus, .form-select:focus {
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    border-color: #FE7900;
+    box-shadow: 0 0 0 0.25rem rgba(254, 121, 0, 0.15);
+    outline: none;
+}
+
+/* Larger, clearer labels */
+.form-label {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+/* Better placeholder visibility */
+.form-control::placeholder {
+    color: #6c757d;
+    opacity: 0.7;
+}
+
+/* Larger checkboxes and radio buttons for easier interaction */
+.form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.15rem;
+    cursor: pointer;
+}
+
+.form-check-label {
+    font-size: 1rem;
+    margin-left: 0.5rem;
+    cursor: pointer;
 }
 
 /* Dashboard stats */
@@ -399,4 +496,219 @@ html[data-theme="dark"] .btn-outline-secondary {
 html[data-theme="dark"] .btn-outline-secondary:hover {
     background-color: #4a5568 !important;
     color: #e2e8f0 !important;
+}
+
+/* ===== UX ENHANCEMENTS FOR NON-TECHNICAL USERS ===== */
+
+/* Clear focus indicators for keyboard navigation */
+a:focus, button:focus, input:focus, select:focus, textarea:focus {
+    outline: 3px solid #FE7900;
+    outline-offset: 2px;
+}
+
+/* Larger clickable areas for links */
+a {
+    padding: 2px 4px;
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Icon sizing for better visibility */
+.fa, .fas, .far, .fal, .fab {
+    margin-right: 0.4rem;
+}
+
+/* Better visual feedback on interactive elements */
+.btn:active,
+.form-control:active,
+.form-select:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+}
+
+/* Tooltip styling for help text */
+.tooltip {
+    font-size: 0.95rem;
+    padding: 0.5rem 0.75rem;
+}
+
+/* Alert messages - larger and more prominent */
+.alert {
+    padding: 1rem 1.25rem;
+    font-size: 1rem;
+    border-radius: 8px;
+    border-width: 2px;
+}
+
+.alert-icon {
+    font-size: 1.25rem;
+    margin-right: 0.75rem;
+}
+
+/* Loading states - clear visual feedback */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: wait;
+}
+
+/* Disabled states - clear visual indication */
+.btn:disabled,
+.form-control:disabled,
+.form-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Help text - more prominent */
+.form-text,
+.text-muted.small {
+    font-size: 0.925rem;
+    margin-top: 0.5rem;
+    line-height: 1.5;
+}
+
+/* Cards - better visual hierarchy */
+.card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+/* Navigation items - larger touch targets */
+.sidebar-link,
+.nav-link {
+    min-height: 44px;
+    padding: 0.75rem 1rem !important;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+}
+
+/* Status indicators - more visible */
+.status-badge,
+.stats-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.stats-label {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-top: 0.25rem;
+}
+
+/* Mobile optimizations for touch */
+@media (max-width: 767.98px) {
+    /* Even larger touch targets on mobile */
+    .btn {
+        min-height: 48px;
+        padding: 0.75rem 1.5rem;
+        font-size: 1.05rem;
+    }
+    
+    .form-control,
+    .form-select {
+        min-height: 48px;
+        font-size: 1.05rem;
+        padding: 0.875rem 1rem;
+    }
+    
+    .form-check-input {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+    
+    /* Larger table text on mobile */
+    .table {
+        font-size: 1.05rem;
+    }
+    
+    .table th,
+    .table td {
+        padding: 0.875rem;
+    }
+}
+
+/* Accessibility: Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ===== TOOLTIP IMPROVEMENTS ===== */
+
+/* Larger, more readable tooltips - using specific selectors instead of !important */
+.tooltip.show {
+    font-size: 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.tooltip-inner {
+    max-width: 300px;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    text-align: left;
+    background-color: #333;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode tooltips - consolidated to use html[data-theme="dark"] for consistency */
+html[data-theme="dark"] .tooltip-inner,
+:root.dark-mode .tooltip-inner {
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+/* Tooltip arrow colors */
+.tooltip.bs-tooltip-top .tooltip-arrow::before,
+.tooltip.bs-tooltip-auto[data-popper-placement^="top"] .tooltip-arrow::before {
+    border-top-color: #333;
+}
+
+.tooltip.bs-tooltip-end .tooltip-arrow::before,
+.tooltip.bs-tooltip-auto[data-popper-placement^="right"] .tooltip-arrow::before {
+    border-right-color: #333;
+}
+
+.tooltip.bs-tooltip-bottom .tooltip-arrow::before,
+.tooltip.bs-tooltip-auto[data-popper-placement^="bottom"] .tooltip-arrow::before {
+    border-bottom-color: #333;
+}
+
+.tooltip.bs-tooltip-start .tooltip-arrow::before,
+.tooltip.bs-tooltip-auto[data-popper-placement^="left"] .tooltip-arrow::before {
+    border-left-color: #333;
+}
+
+/* Dark mode tooltip arrows - consolidated selectors */
+html[data-theme="dark"] .tooltip.bs-tooltip-top .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: #f8f9fa;
+}
+
+html[data-theme="dark"] .tooltip.bs-tooltip-end .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-end .tooltip-arrow::before {
+    border-right-color: #f8f9fa;
+}
+
+html[data-theme="dark"] .tooltip.bs-tooltip-bottom .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-bottom .tooltip-arrow::before {
+    border-bottom-color: #f8f9fa;
+}
+
+html[data-theme="dark"] .tooltip.bs-tooltip-start .tooltip-arrow::before,
+:root.dark-mode .tooltip.bs-tooltip-start .tooltip-arrow::before {
+    border-left-color: #f8f9fa;
 }
