@@ -2,7 +2,20 @@
 
 {% block title %}Record Maintenance - Maintenance Tracker{% endblock %}
 
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Record Maintenance</li>
+{% endblock %}
+
 {% block header_title %}Record Maintenance{% endblock %}
+
+{% block help_icon %}
+<span class="help-icon" 
+      data-bs-toggle="tooltip" 
+      data-bs-placement="right" 
+      title="Use this page to log maintenance work performed on equipment parts. Select the location, machine, and part, then record what was done.">
+    ?
+</span>
+{% endblock %}
 
 {% block content %}
 <div class="row g-2">
