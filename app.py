@@ -4695,6 +4695,66 @@ def dashboard():
                   decommissioned_count=0,
                   app_version=app_version)
 
+# --- Global Search API ---
+@app.route('/api/search', methods=['GET'])
+@login_required
+def api_search():
+    """Search across machines, parts, and sites."""
+    query = request.args.get('q', '').strip()
+    
+    if len(query) < 2:
+        return jsonify({'machines': [], 'parts': [], 'sites': []})
+    
+    try:
+        # Search machines
+        machines = Machine.query.filter(
+            db.or_(
+                Machine.name.ilike(f'%{query}%'),
+                Machine.model.ilike(f'%{query}%'),
+                Machine.machine_number.ilike(f'%{query}%'),
+                Machine.serial_number.ilike(f'%{query}%')
+            )
+        ).limit(5).all()
+        
+        # Search parts
+        parts = Part.query.filter(
+            db.or_(
+                Part.name.ilike(f'%{query}%'),
+                Part.description.ilike(f'%{query}%')
+            )
+        ).limit(5).all()
+        
+        # Search sites
+        sites = Site.query.filter(
+            Site.name.ilike(f'%{query}%')
+        ).limit(5).all()
+        
+        return jsonify({
+            'machines': [
+                {
+                    'id': m.id,
+                    'name': m.name,
+                    'site': m.site.name if m.site else None
+                } for m in machines
+            ],
+            'parts': [
+                {
+                    'id': p.id,
+                    'name': p.name,
+                    'machine': p.machine.name if p.machine else None
+                } for p in parts
+            ],
+            'sites': [
+                {
+                    'id': s.id,
+                    'name': s.name
+                } for s in sites
+            ]
+        })
+    except Exception as e:
+        app.logger.error(f"Search error: {str(e)}")
+        return jsonify({'error': 'Search failed'}), 500
+
 # --- Admin Security Event Log Viewer ---
 @app.route('/admin/security-logs', methods=['GET'])
 @login_required
