@@ -52,16 +52,21 @@ html body .sidebar {
 .sidebar-link {
   display: flex;
   align-items: center;
-  padding: 0.75rem 1rem;
+  /* Larger padding for better touch targets */
+  padding: 1rem 1.25rem;
   color: white;
   text-decoration: none;
-  border-left: 3px solid transparent;
-  transition: background-color 0.2s, border-left-color 0.2s;
+  /* Thicker left border for better visual feedback */
+  border-left: 4px solid transparent;
+  transition: background-color 0.2s ease, border-left-color 0.2s ease;
+  font-size: 1rem;
+  font-weight: 500;
+  min-height: 48px;
 }
 
 .sidebar-link:hover {
   background-color: #4D4D4D; /* Darker gray */
-  border-left-color: rgba(254, 121, 0, 0.5); /* Semi-transparent orange */
+  border-left-color: #FE7900; /* Solid orange for better visibility */
   color: white;
   text-decoration: none;
 }
@@ -70,12 +75,20 @@ html body .sidebar {
   background-color: #FE7900; /* AMRS primary orange */
   border-left-color: white;
   color: white;
+  font-weight: 600;
 }
 
 .sidebar-icon {
-  width: 20px;
+  width: 24px;
+  /* Larger icons for better visibility */
+  font-size: 1.25rem;
   text-align: center;
-  margin-right: 0.75rem;
+  margin-right: 1rem;
+}
+
+.sidebar-link-text {
+  font-size: 1rem;
+  font-weight: 500;
 }
 
 /* Sidebar footer with logout button */
@@ -88,16 +101,25 @@ html body .sidebar {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 0.75rem 1rem;
+  /* Larger padding for easier clicking */
+  padding: 1rem 1.25rem;
   color: white;
   background-color: transparent;
   border: none;
-  border-left: 3px solid transparent;
+  border-left: 4px solid transparent;
   text-decoration: none;
+  font-size: 1rem;
+  font-weight: 500;
+  min-height: 48px;
+  cursor: pointer;
 }
 
 .sidebar-logout-btn:hover {
   background-color: #4D4D4D;
+  border-left-color: #dc3545;
+  color: white;
+  text-decoration: none;
+}
   border-left-color: rgba(254, 121, 0, 0.5);
   color: white;
 }
