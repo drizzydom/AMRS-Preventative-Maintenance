@@ -6,6 +6,15 @@
 
 {% block header_title %}Dashboard{% endblock %}
 
+{% block help_icon %}
+<span class="help-icon" 
+      data-bs-toggle="tooltip" 
+      data-bs-placement="right" 
+      title="This dashboard shows all your maintenance tasks and their current status. Click on the colored cards to filter by status.">
+    ?
+</span>
+{% endblock %}
+
 {% block content %}
 <div class="dashboard">
     {% if no_sites %}
@@ -84,63 +93,97 @@
     </div>
     {% endif %}
 
-    <!-- Status counters -->
-    <div class="row g-2 mb-4">
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-danger h-100">
+    <!-- Quick Action Buttons -->
+    <div class="quick-actions mb-4">
+        <div class="row g-3">
+            <div class="col-12 col-md-auto">
+                <a href="{{ url_for('maintenance_page') }}" class="btn quick-action-btn quick-action-btn-primary">
+                    <i class="fas fa-tools"></i>
+                    Record Maintenance Now
+                </a>
+            </div>
+            {% if overdue_count > 0 %}
+            <div class="col-12 col-md-auto">
+                <a href="#overdue-section" class="btn quick-action-btn quick-action-btn-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    View {{ overdue_count }} Overdue Item{{ 's' if overdue_count != 1 else '' }}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Status counters with plain language and clickable cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stats-card stats-danger h-100" 
+                 data-filter="overdue" 
+                 role="button"
+                 data-bs-toggle="tooltip"
+                 title="Click to see all overdue maintenance items">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="stats-icon bg-danger bg-opacity-10 text-danger">
-                            <i class="fas fa-exclamation-triangle fa-lg"></i>
+                            <i class="fas fa-exclamation-triangle"></i>
                         </div>
-                        <div>
+                        <div class="flex-grow-1">
                             <div class="stats-value text-danger">{{ overdue_count }}</div>
-                            <div class="stats-label">Overdue</div>
+                            <div class="stats-label text-danger">Needs Maintenance Now</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-warning h-100">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stats-card stats-warning h-100" 
+                 data-filter="due-soon"
+                 role="button"
+                 data-bs-toggle="tooltip"
+                 title="Click to see items that need maintenance soon">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="stats-icon bg-warning bg-opacity-10 text-warning">
-                            <i class="fas fa-clock fa-lg"></i>
+                            <i class="fas fa-clock"></i>
                         </div>
-                        <div>
+                        <div class="flex-grow-1">
                             <div class="stats-value text-warning">{{ due_soon_count }}</div>
-                            <div class="stats-label">Due Soon</div>
+                            <div class="stats-label text-warning">Schedule Maintenance Soon</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-success h-100">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stats-card stats-success h-100" 
+                 data-filter="ok"
+                 role="button"
+                 data-bs-toggle="tooltip"
+                 title="Click to see all up-to-date maintenance items">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="stats-icon bg-success bg-opacity-10 text-success">
-                            <i class="fas fa-check fa-lg"></i>
+                            <i class="fas fa-check"></i>
                         </div>
-                        <div>
+                        <div class="flex-grow-1">
                             <div class="stats-value text-success">{{ ok_count }}</div>
-                            <div class="stats-label">OK</div>
+                            <div class="stats-label text-success">Up to Date</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stats-card stats-info h-100">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stats-card stats-info h-100"
+                 data-bs-toggle="tooltip"
+                 title="Total number of parts being tracked">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="stats-icon bg-info bg-opacity-10 text-info">
-                            <i class="fas fa-cog fa-lg"></i>
+                            <i class="fas fa-cog"></i>
                         </div>
-                        <div>
+                        <div class="flex-grow-1">
                             <div class="stats-value text-info">{{ total_parts }}</div>
-                            <div class="stats-label">Total Parts</div>
+                            <div class="stats-label text-info">Total Parts Tracked</div>
                         </div>
                     </div>
                 </div>
@@ -149,16 +192,21 @@
     </div>
 
     <!-- Maintenance Panels -->
-    <div class="row g-2">
+    <div class="row g-3">
         <!-- Overdue Parts Panel -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-exclamation-triangle text-danger me-2"></i>
-                        Overdue Maintenance
-                    </h5>
-                    <span class="badge bg-danger">{{ overdue_count }}</span>
+        <div class="col-lg-6 mb-4" id="overdue-section">
+            <div class="card h-100 border-danger">
+                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="section-header-icon" style="background: rgba(255,255,255,0.2);">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0">Needs Maintenance Now</h5>
+                            <small>Items that are overdue for maintenance</small>
+                        </div>
+                    </div>
+                    <span class="badge bg-white text-danger fs-5">{{ overdue_count }}</span>
                 </div>
                 <div class="card-body p-0">
                     {% if overdue_count > 0 %}
