@@ -2,7 +2,20 @@
 
 {% block title %}Machines - Maintenance Tracker{% endblock %}
 
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Machines</li>
+{% endblock %}
+
 {% block header_title %}{{ title }}{% endblock %}
+
+{% block help_icon %}
+<span class="help-icon" 
+      data-bs-toggle="tooltip" 
+      data-bs-placement="right" 
+      title="Manage all equipment and machinery. Add new machines, edit details, or view their maintenance parts.">
+    ?
+</span>
+{% endblock %}
 
 {% block header_actions %}
 {% if can_create %}
@@ -27,42 +40,84 @@
             <div class="card-body">
                 {% if machines %}
                 <div class="table-responsive">
-                  <span class="table-scroll-hint d-md-none">Scroll &rarr; for more columns</span>
-                  <table class="table table-striped table-hover">
+                  <span class="table-scroll-hint d-md-none"><i class="fas fa-arrows-alt-h me-1"></i>Scroll for more info</span>
+                  <table class="table table-hover align-middle">
                     <thead>
                       <tr>
-                        <th>Name</th>
+                        <th>Equipment Name</th>
                         <th class="hide-sm">Model</th>
-                        <th class="hide-sm">Machine Number</th>
-                        <th class="hide-sm">Serial Number</th>
-                        <th>Site</th>
-                        <th>Parts</th>
-                        <th>Actions</th>
+                        <th class="hide-sm">ID Number</th>
+                        <th>Location</th>
+                        <th class="text-center">Parts</th>
+                        <th class="text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                         {% for machine in machines %}
                         <tr>
-                            <td>{{ machine.name }}</td>
+                            <td>
+                                <strong>{{ machine.name }}</strong>
+                                {% if machine.serial_number %}
+                                <br><small class="text-muted">Serial: {{ machine.serial_number }}</small>
+                                {% endif %}
+                            </td>
                             <td class="hide-sm">{{ machine.model or '-' }}</td>
                             <td class="hide-sm">{{ machine.machine_number or '-' }}</td>
-                            <td class="hide-sm">{{ machine.serial_number or '-' }}</td>
-                            <td>{{ machine.site.name }}</td>
-                            <td>{{ machine.parts|length }}</td>
                             <td>
-                                <a href="{{ url_for('manage_parts') }}?machine_id={{ machine.id }}" class="btn btn-sm btn-primary">View Parts</a>
-                                {% if can_edit %}
-                                <a href="{{ url_for('edit_machine', machine_id=machine.id) }}" class="btn btn-sm btn-secondary">Edit</a>
-                                {% endif %}
-                                {% if can_delete %}
-                                <button type="button" class="btn btn-sm btn-danger" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#deleteMachineModal" 
-                                        data-machine-id="{{ machine.id }}"
-                                        data-machine-name="{{ machine.name }}">
-                                    Delete
-                                </button>
-                                {% endif %}
+                                <i class="fas fa-map-marker-alt text-muted me-1"></i>
+                                {{ machine.site.name }}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-info">{{ machine.parts|length }}</span>
+                            </td>
+                            <td class="text-center">
+                                <!-- Primary action button -->
+                                <a href="{{ url_for('manage_parts') }}?machine_id={{ machine.id }}" 
+                                   class="btn btn-primary btn-sm me-2"
+                                   data-bs-toggle="tooltip"
+                                   title="View all parts for this machine">
+                                    <i class="fas fa-cogs me-1"></i>
+                                    <span class="d-none d-lg-inline">View Parts</span>
+                                </a>
+                                
+                                <!-- More actions dropdown -->
+                                <div class="action-dropdown d-inline-block">
+                                    <button class="action-dropdown-toggle" 
+                                            aria-label="More actions"
+                                            data-bs-toggle="tooltip"
+                                            title="More options">
+                                        ⋮
+                                    </button>
+                                    <div class="action-dropdown-menu">
+                                        {% if can_edit %}
+                                        <a href="{{ url_for('edit_machine', machine_id=machine.id) }}" class="action-dropdown-item">
+                                            <i class="fas fa-edit text-secondary"></i>
+                                            <span>Edit Equipment</span>
+                                        </a>
+                                        {% endif %}
+                                        <a href="{{ url_for('maintenance_page') }}?machine_id={{ machine.id }}" class="action-dropdown-item">
+                                            <i class="fas fa-tools text-primary"></i>
+                                            <span>Record Maintenance</span>
+                                        </a>
+                                        {% if can_delete %}
+                                        <div class="action-dropdown-item text-danger" 
+                                             role="button"
+                                             data-confirm-delete
+                                             data-item-name="{{ machine.name }}"
+                                             data-item-type="machine"
+                                             data-consequence="This will also delete {{ machine.parts|length }} associated part{{ 's' if machine.parts|length != 1 else '' }}."
+                                             onclick="event.preventDefault(); document.getElementById('delete-form-{{ machine.id }}').submit();">
+                                            <i class="fas fa-trash"></i>
+                                            <span>Delete Equipment</span>
+                                        </div>
+                                        <form id="delete-form-{{ machine.id }}" 
+                                              action="{{ url_for('delete_machine', machine_id=machine.id) }}" 
+                                              method="POST" 
+                                              style="display: none;">
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -70,56 +125,126 @@
                   </table>
                 </div>
                 {% else %}
-                <p>No machines found. {% if can_create %}Use the "Add Machine" button to create one.{% endif %}</p>
+                <!-- Empty state -->
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-industry"></i>
+                    </div>
+                    <h3 class="empty-state-title">No Equipment Found</h3>
+                    <p class="empty-state-text">
+                        You haven't added any machines or equipment yet.
+                        {% if can_create %}
+                        Get started by adding your first machine.
+                        {% else %}
+                        Contact your administrator to add machines.
+                        {% endif %}
+                    </p>
+                    {% if can_create %}
+                    <button class="btn btn-primary empty-state-action" data-bs-toggle="modal" data-bs-target="#addMachineModal">
+                        <i class="fas fa-plus"></i>
+                        Add Your First Machine
+                    </button>
+                    {% endif %}
+                </div>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Add Machine Modal -->
+<!-- Add Machine Modal - Improved with form sections and help text -->
 <div class="modal fade" id="addMachineModal" tabindex="-1" aria-labelledby="addMachineModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="post" action="{{ url_for('manage_machines') }}">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addMachineModalLabel">Add New Machine</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="addMachineModalLabel">
+                        <i class="fas fa-plus-circle me-2"></i>
+                        Add New Equipment
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Machine Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                    <!-- Basic Information Section -->
+                    <div class="form-section">
+                        <h6 class="form-section-title">
+                            <i class="fas fa-info-circle me-2"></i>Basic Information
+                        </h6>
+                        <div class="mb-3">
+                            <label for="name" class="form-label">
+                                Equipment Name <span class="required-asterisk">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="name" 
+                                   name="name" 
+                                   placeholder="e.g., CNC Lathe #1"
+                                   required>
+                            <small class="form-help-text">
+                                <i class="fas fa-lightbulb me-1"></i>
+                                Enter a descriptive name that helps identify this equipment
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="site_id" class="form-label">
+                                Location <span class="required-asterisk">*</span>
+                            </label>
+                            <select class="form-select" id="site_id" name="site_id" required>
+                                <option value="">Choose where this equipment is located...</option>
+                                {% for site in sites %}
+                                <option value="{{ site.id }}" {% if site_id and site.id == site_id|int %}selected{% endif %}>{{ site.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-help-text">
+                                <i class="fas fa-map-marker-alt me-1"></i>
+                                Select the facility or site where this equipment is installed
+                            </small>
+                        </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="model" class="form-label">Model</label>
-                        <input type="text" class="form-control" id="model" name="model">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="machine_number" class="form-label">Machine Number</label>
-                        <input type="text" class="form-control" id="machine_number" name="machine_number">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="serial_number" class="form-label">Serial Number</label>
-                        <input type="text" class="form-control" id="serial_number" name="serial_number">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="site_id" class="form-label">Site <span class="text-danger">*</span></label>
-                        <select class="form-select" id="site_id" name="site_id" required>
-                            <option value="">Select Site</option>
-                            {% for site in sites %}
-                            <option value="{{ site.id }}" {% if site_id and site.id == site_id|int %}selected{% endif %}>{{ site.name }}</option>
-                            {% endfor %}
-                        </select>
+                    <!-- Technical Details Section (Optional) -->
+                    <div class="form-section">
+                        <h6 class="form-section-title">
+                            <i class="fas fa-cog me-2"></i>Technical Details (Optional)
+                        </h6>
+                        <div class="mb-3">
+                            <label for="model" class="form-label">Model</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="model" 
+                                   name="model"
+                                   placeholder="e.g., XL-2000">
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="machine_number" class="form-label">ID Number</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="machine_number" 
+                                       name="machine_number"
+                                       placeholder="e.g., M-001">
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="serial_number" class="form-label">Serial Number</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="serial_number" 
+                                       name="serial_number"
+                                       placeholder="e.g., SN123456">
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Machine</button>
+                    <button type="button" class="btn btn-secondary">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check me-2"></i>Add Equipment
+                    </button>
                 </div>
             </form>
         </div>

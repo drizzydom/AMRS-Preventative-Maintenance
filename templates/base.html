@@ -717,6 +717,39 @@
         </div>
     </div>
 
+    <!-- Mobile Bottom Navigation (only on mobile) -->
+    {% if current_user.is_authenticated %}
+    <nav class="mobile-bottom-nav d-md-none">
+        <div class="d-flex justify-content-around">
+            <a href="{{ url_for('dashboard') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </a>
+            <a href="{{ url_for('manage_machines') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'manage_machines' %}active{% endif %}">
+                <i class="fas fa-industry"></i>
+                <span>Equipment</span>
+            </a>
+            <a href="{{ url_for('maintenance_page') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'maintenance_page' %}active{% endif %}">
+                <i class="fas fa-tools"></i>
+                <span>Maintain</span>
+            </a>
+            <a href="{{ url_for('manage_parts') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'manage_parts' %}active{% endif %}">
+                <i class="fas fa-cogs"></i>
+                <span>Parts</span>
+            </a>
+        </div>
+    </nav>
+    
+    <!-- Sticky Action Button on Mobile -->
+    <button class="sticky-action-button d-md-none" 
+            onclick="window.location.href='{{ url_for('maintenance_page') }}'"
+            data-bs-toggle="tooltip"
+            data-bs-placement="left"
+            title="Record maintenance">
+        <i class="fas fa-plus"></i>
+    </button>
+    {% endif %}
+
     <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light">
         <div class="container-fluid px-3">
