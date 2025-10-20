@@ -2,7 +2,20 @@
 
 {% block title %}Parts - Maintenance Tracker{% endblock %}
 
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Parts</li>
+{% endblock %}
+
 {% block header_title %}{{ title }}{% endblock %}
+
+{% block help_icon %}
+<span class="help-icon" 
+      data-bs-toggle="tooltip" 
+      data-bs-placement="right" 
+      title="Manage individual parts and components. Track maintenance schedules for each part.">
+    ?
+</span>
+{% endblock %}
 
 {% block header_actions %}
 {% if can_create %}
@@ -54,11 +67,23 @@
                       <td>
                           {% set days_until = (part.next_maintenance - now).days %}
                           {% if days_until < 0 %}
-                              <span class="badge bg-danger">{{ abs(days_until) }} days overdue</span>
+                              <span class="status-badge-enhanced status-needs-now">
+                                  <i class="fas fa-exclamation-triangle"></i>
+                                  Needs Maintenance Now
+                              </span>
+                              <br><small class="text-muted">{{ abs(days_until) }} days overdue</small>
                           {% elif days_until <= 7 %}
-                              <span class="badge bg-warning text-dark">Due in {{ days_until }} days</span>
+                              <span class="status-badge-enhanced status-schedule-soon">
+                                  <i class="fas fa-clock"></i>
+                                  Schedule Soon
+                              </span>
+                              <br><small class="text-muted">Due in {{ days_until }} days</small>
                           {% else %}
-                              <span class="badge bg-success">Due in {{ days_until }} days</span>
+                              <span class="status-badge-enhanced status-up-to-date">
+                                  <i class="fas fa-check"></i>
+                                  Up to Date
+                              </span>
+                              <br><small class="text-muted">Due in {{ days_until }} days</small>
                           {% endif %}
                       </td>
                       <td>
@@ -92,7 +117,31 @@
           </table>
         </div>
         {% else %}
-        <p class="p-3">No parts found. {% if can_create %}Use the "Add Part" button to create one.{% endif %}</p>
+        <!-- Empty state -->
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fas fa-cogs"></i>
+            </div>
+            <h3 class="empty-state-title">No Parts Found</h3>
+            <p class="empty-state-text">
+                {% if machine_id %}
+                This machine doesn't have any parts tracked yet.
+                {% else %}
+                You haven't added any parts to track yet.
+                {% endif %}
+                {% if can_create %}
+                Add parts to start tracking their maintenance schedules.
+                {% else %}
+                Contact your administrator to add parts.
+                {% endif %}
+            </p>
+            {% if can_create %}
+            <button class="btn btn-primary empty-state-action" data-bs-toggle="modal" data-bs-target="#addPartModal">
+                <i class="fas fa-plus"></i>
+                Add Your First Part
+            </button>
+            {% endif %}
+        </div>
         {% endif %}
     </div>
 </div>
