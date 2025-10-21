@@ -276,9 +276,14 @@ html .badge.bg-primary {
     border-color: var(--theme-border);
 }
 
-.table thead th {
-    background-color: var(--theme-card-header-bg);
-    border-color: var(--theme-border);
+/* Table headers - AMRS Orange branding for both light and dark mode */
+.table thead th,
+thead th,
+.table th {
+    background-color: #FE7900 !important; /* AMRS Orange */
+    color: #ffffff !important; /* White text for maximum contrast */
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    font-weight: 600 !important;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) {
