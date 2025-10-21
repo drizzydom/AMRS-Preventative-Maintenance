@@ -71,14 +71,14 @@
     </script>
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}?v=1.4.6.1">
     
     <!-- UX Enhancements CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ux-enhancements.css') }}">
     
-    <!-- COMPREHENSIVE FIXES - Load after theme and UX -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}">
+    <!-- COMPREHENSIVE FIXES - Load after theme and UX (with cache busting) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.6.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.6.1">
     
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
