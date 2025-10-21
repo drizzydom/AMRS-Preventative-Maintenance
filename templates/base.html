@@ -109,46 +109,70 @@
         z-index: 1050; /* Highest z-index */
     }
     
-    /* 2. SIDEBAR POSITIONING - fixed below header */
-    html body .sidebar,
-    body:not(.mobile-view) .sidebar {
-        position: fixed;
-        width: 200px;
-        top: 48px; /* Start right below the navbar */
-        left: 0;
-        bottom: 48px; /* Make room for footer */
-        height: calc(100vh - 96px); /* Account for both navbar and footer */
-        overflow-y: auto;
-        z-index: 1020; /* Below the navbar z-index */
+    /* 2. SIDEBAR POSITIONING - sticky on desktop, fixed on mobile */
+    @media (min-width: 992px) {
+        html body .sidebar,
+        body:not(.mobile-view) .sidebar {
+            position: sticky !important;
+            width: 200px;
+            top: 48px !important; /* Stick below the navbar */
+            left: 0;
+            height: calc(100vh - 96px); /* Account for both navbar and footer */
+            overflow-y: auto;
+            z-index: 1020; /* Below the navbar z-index */
+        }
+        
+        html body .sidebar-container,
+        body:not(.mobile-view) .sidebar-container {
+            width: 200px;
+            flex: 0 0 200px;
+        }
     }
     
-    html body .sidebar-container,
-    body:not(.mobile-view) .sidebar-container {
-        width: 200px;
-        flex: 0 0 200px;
+    /* Mobile sidebar remains fixed (off-canvas) */
+    @media (max-width: 991.98px) {
+        html body .sidebar,
+        body .sidebar {
+            position: fixed !important;
+            width: 280px;
+            top: 48px;
+            left: -280px; /* Hidden by default */
+            height: calc(100vh - 48px);
+            overflow-y: auto;
+            z-index: 1040;
+            transition: left 0.3s ease;
+        }
     }
     
     /* 3. BODY PADDING - ensure content starts below header */
     html body,
     body {
-        padding-top: 48px; /* Exactly match header height */
+        padding-top: 0 !important; /* Remove padding, use margin on content instead */
+        margin-top: 0 !important;
     }
     
     /* 4. MAIN CONTENT POSITIONING - moved to content-position-fix.css for consistency */
     /* All layout rules are now consolidated in CSS files for better maintainability */
     
+    /* 4. CONTENT CONTAINER POSITIONING */
+    html body .centered-layout,
+    body .centered-layout {
+        margin-top: 48px !important; /* Only offset for navbar */
+        padding-top: 0 !important;
+    }
+    
     html body .container-fluid,
     .centered-layout .row .centered-content-col .container-fluid {
         padding-left: 1rem;
         padding-right: 1rem;
-        padding-top: 1rem; /* Increased padding to create more space below header */
+        padding-top: 1rem;
     }
     
     /* 5. RESET VERTICAL SPACING - with specific combined selectors */
     html body .page-content,
     .centered-layout .centered-content-col .content-container .page-content {
         margin-top: 0;
-        padding-top: 1rem; /* Added padding to create space between header and content */
+        padding-top: 0; /* No extra padding needed */
         padding-left: 0;
         padding-right: 0;
     }
@@ -191,25 +215,19 @@
     /* 8. MOBILE ADJUSTMENTS */
     @media (max-width: 991.98px) {
         html body .content-container {
-            margin-left: 0;
+            margin-left: 0 !important;
             width: 100%;
             max-width: 100%;
         }
         
-        html body .sidebar {
-            position: fixed;
-            top: 48px;
-            left: -280px;
-            width: 280px;
-            height: calc(100vh - 96px);
-            z-index: 1040;
-            transition: left 0.3s ease;
-            bottom: 48px;
+        html body .sidebar.show {
+            left: 0 !important;
         }
         
-        html body .sidebar.show {
-            left: 0;
+        html body .centered-layout {
+            margin-top: 48px !important;
         }
+    }
         
         /* Mobile navbar adjustments */
         .navbar-brand {
