@@ -1,0 +1,343 @@
+/**
+ * LAYOUT AND POSITIONING FIXES
+ * Fixes for:
+ * - White space above navbar
+ * - Sidebar sticky behavior
+ * - Body padding and margin issues
+ * Date: October 21, 2025
+ */
+
+/* ========================================
+   REMOVE WHITE SPACE ABOVE NAVBAR
+   ======================================== */
+
+/* Reset all margin and padding on html and body */
+html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* Ensure no padding-top on body in any state */
+html body,
+body.d-flex,
+body.flex-column,
+body.h-100 {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* Fix navbar positioning to eliminate gap */
+.navbar,
+.navbar-dark,
+.navbar.fixed-top,
+nav.navbar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    margin: 0 !important;
+    z-index: 1050 !important;
+}
+
+/* Ensure main content starts directly after navbar */
+.container-fluid.centered-layout,
+.centered-layout {
+    margin-top: 48px !important; /* Navbar height */
+    padding-top: 0 !important;
+}
+
+/* ========================================
+   STICKY SIDEBAR FIX
+   ======================================== */
+
+/* Make sidebar sticky (follows scroll) on desktop */
+@media (min-width: 992px) {
+    .sidebar {
+        position: sticky !important;
+        top: 48px !important; /* Stick below navbar */
+        height: calc(100vh - 48px) !important;
+        overflow-y: auto !important;
+        overscroll-behavior-y: contain;
+        z-index: 1030;
+    }
+    
+    /* Ensure sidebar container doesn't interfere */
+    .sidebar-container {
+        position: relative;
+        height: auto;
+    }
+}
+
+/* Mobile sidebar remains fixed (overlay) */
+@media (max-width: 991.98px) {
+    .sidebar {
+        position: fixed !important;
+        top: 48px !important;
+        left: -280px !important; /* Hide off-screen by default */
+        height: calc(100vh - 48px) !important;
+        width: 280px !important;
+        transition: left 0.3s ease;
+        z-index: 1040;
+    }
+    
+    .sidebar.show {
+        left: 0 !important;
+    }
+}
+
+/* ========================================
+   CONTENT AREA ADJUSTMENTS
+   ======================================== */
+
+/* Ensure content doesn't overlap with navbar */
+.content-container,
+.page-content,
+main {
+    margin-top: 0 !important;
+    padding-top: 1rem;
+}
+
+/* Desktop: account for sidebar width */
+@media (min-width: 992px) {
+    .content-container {
+        margin-left: 200px;
+        width: calc(100% - 200px);
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* When sidebar is collapsed */
+    body.sidebar-collapsed .content-container {
+        margin-left: 56px !important;
+        width: calc(100% - 56px) !important;
+    }
+}
+
+/* Mobile: full width */
+@media (max-width: 991.98px) {
+    .content-container {
+        margin-left: 0;
+        width: 100%;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+/* ========================================
+   PREVENT BODY SCROLL WHEN SIDEBAR OPEN (MOBILE)
+   ======================================== */
+
+body.sidebar-active {
+    overflow: hidden;
+    position: fixed;
+    width: 100vw;
+}
+
+/* Overlay for mobile sidebar */
+body.sidebar-active::before {
+    content: '';
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1039;
+}
+
+/* ========================================
+   FOOTER POSITIONING
+   ======================================== */
+
+/* Ensure footer stays at bottom */
+.footer {
+    margin-top: auto;
+    position: relative;
+    bottom: 0;
+    width: 100%;
+    z-index: 1020;
+}
+
+/* ========================================
+   SMOOTH SCROLLING
+   ======================================== */
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* Improve sidebar scrolling */
+.sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ========================================
+   REMOVE ANY EXTRA PADDING/MARGIN FROM CONTAINERS
+   ======================================== */
+
+/* Reset container padding that might cause white space */
+.container-fluid {
+    padding-top: 0 !important;
+}
+
+.row {
+    margin-top: 0;
+}
+
+/* Ensure first row in content has proper spacing */
+.content-container > .row:first-child,
+.page-content > .row:first-child {
+    margin-top: 0;
+}
+
+/* ========================================
+   NAVBAR CONTAINER FIXES
+   ======================================== */
+
+/* Remove any extra padding from navbar container */
+.navbar .container-fluid {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* Ensure navbar height is consistent */
+.navbar {
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+}
+
+/* ========================================
+   Z-INDEX HIERARCHY
+   ======================================== */
+
+/* 
+   Z-index hierarchy (highest to lowest):
+   - Modals: 1055
+   - Navbar: 1050
+   - Mobile sidebar: 1040
+   - Mobile overlay: 1039
+   - Desktop sidebar: 1030
+   - Footer: 1020
+   - Content: 1
+*/
+
+.modal {
+    z-index: 1055;
+}
+
+.modal-backdrop {
+    z-index: 1054;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================== */
+
+/* Extra small screens */
+@media (max-width: 575.98px) {
+    .content-container {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}
+
+/* Medium screens */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .content-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+/* Large screens - center content */
+@media (min-width: 1800px) {
+    .content-container {
+        max-width: 1600px;
+        margin-left: 260px;
+        margin-right: auto;
+    }
+    
+    body.sidebar-collapsed .content-container {
+        margin-left: 56px !important;
+    }
+}
+
+/* ========================================
+   FIX BOOTSTRAP CLASSES INTERFERING
+   ======================================== */
+
+/* Override Bootstrap's h-100 on body which can cause issues */
+body.h-100 {
+    height: auto !important;
+    min-height: 100vh;
+}
+
+/* Ensure flex column works properly */
+body.d-flex.flex-column {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 100vh;
+}
+
+/* ========================================
+   SAFARI/WEBKIT SPECIFIC FIXES
+   ======================================== */
+
+/* Fix for Safari sticky positioning */
+@supports (-webkit-backdrop-filter: blur(1px)) {
+    @media (min-width: 992px) {
+        .sidebar {
+            position: -webkit-sticky;
+            position: sticky;
+            top: 48px;
+        }
+    }
+}
+
+/* ========================================
+   PRINT MEDIA ADJUSTMENTS
+   ======================================== */
+
+@media print {
+    /* Hide sidebar when printing */
+    .sidebar,
+    .sidebar-container {
+        display: none !important;
+    }
+    
+    /* Full width content when printing */
+    .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    
+    /* Hide navbar when printing */
+    .navbar {
+        display: none !important;
+    }
+    
+    /* Remove top margin when printing */
+    .container-fluid.centered-layout {
+        margin-top: 0 !important;
+    }
+}
