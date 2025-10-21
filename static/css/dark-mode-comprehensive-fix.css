@@ -29,10 +29,26 @@ html[data-theme="dark"] .table thead th,
 .dark-mode .table thead th,
 html.dark-mode thead th,
 html[data-theme="dark"] thead th,
-.dark-mode thead th {
+.dark-mode thead th,
+html.dark-mode .table th,
+html[data-theme="dark"] .table th,
+.dark-mode .table th {
     background-color: #FE7900 !important; /* AMRS Orange */
     color: #ffffff !important; /* White text for maximum contrast */
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    font-weight: 600 !important;
+}
+
+/* Ensure all table header variations are covered */
+html.dark-mode table thead th,
+html[data-theme="dark"] table thead th,
+.dark-mode table thead th,
+html.dark-mode .table-responsive thead th,
+html[data-theme="dark"] .table-responsive thead th,
+.dark-mode .table-responsive thead th {
+    background-color: #FE7900 !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* Table body rows in dark mode */
@@ -71,6 +87,74 @@ html.dark-mode .table-responsive,
 html[data-theme="dark"] .table-responsive,
 .dark-mode .table-responsive {
     background-color: var(--theme-table-bg, #23272b);
+}
+
+/* ========================================
+   ADDITIONAL TABLE HEADER FIXES
+   Covers all possible table header scenarios
+   ======================================== */
+
+/* Cover Bootstrap table variants */
+html.dark-mode .table-dark thead th,
+html[data-theme="dark"] .table-dark thead th,
+.dark-mode .table-dark thead th,
+html.dark-mode .table-bordered thead th,
+html[data-theme="dark"] .table-bordered thead th,
+.dark-mode .table-bordered thead th,
+html.dark-mode .table-striped thead th,
+html[data-theme="dark"] .table-striped thead th,
+.dark-mode .table-striped thead th,
+html.dark-mode .table-hover thead th,
+html[data-theme="dark"] .table-hover thead th,
+.dark-mode .table-hover thead th {
+    background-color: #FE7900 !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Cover direct th elements (not in thead) */
+html.dark-mode table th,
+html[data-theme="dark"] table th,
+.dark-mode table th {
+    background-color: #FE7900 !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Cover th elements with specific classes */
+html.dark-mode th.text-center,
+html[data-theme="dark"] th.text-center,
+.dark-mode th.text-center,
+html.dark-mode th.text-left,
+html[data-theme="dark"] th.text-left,
+.dark-mode th.text-left,
+html.dark-mode th.text-right,
+html[data-theme="dark"] th.text-right,
+.dark-mode th.text-right {
+    color: #ffffff !important;
+}
+
+/* Ensure sorting headers are visible */
+html.dark-mode th[data-sort],
+html[data-theme="dark"] th[data-sort],
+.dark-mode th[data-sort],
+html.dark-mode th.sortable,
+html[data-theme="dark"] th.sortable,
+.dark-mode th.sortable {
+    background-color: #FE7900 !important;
+    color: #ffffff !important;
+}
+
+/* Fix any table headers inside cards */
+html.dark-mode .card .table thead th,
+html[data-theme="dark"] .card .table thead th,
+.dark-mode .card .table thead th,
+html.dark-mode .card-body .table thead th,
+html[data-theme="dark"] .card-body .table thead th,
+.dark-mode .card-body .table thead th {
+    background-color: #FE7900 !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* ========================================

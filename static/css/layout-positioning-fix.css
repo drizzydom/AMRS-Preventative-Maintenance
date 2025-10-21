@@ -40,7 +40,7 @@ nav.navbar {
     z-index: 1050 !important;
 }
 
-/* Ensure main content starts directly after navbar */
+/* Ensure main content starts with margin-top equal to navbar height */
 .container-fluid.centered-layout,
 .centered-layout {
     margin-top: 48px !important; /* Navbar height */
@@ -56,16 +56,23 @@ nav.navbar {
     .sidebar {
         position: sticky !important;
         top: 48px !important; /* Stick below navbar */
-        height: calc(100vh - 48px) !important;
+        height: calc(100vh - 96px) !important; /* Account for navbar and footer */
         overflow-y: auto !important;
         overscroll-behavior-y: contain;
         z-index: 1030;
+        align-self: flex-start; /* Important for sticky positioning */
     }
     
     /* Ensure sidebar container doesn't interfere */
     .sidebar-container {
         position: relative;
         height: auto;
+    }
+    
+    /* Content should not push down due to sidebar */
+    .content-container {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
 }
 
@@ -83,6 +90,12 @@ nav.navbar {
     
     .sidebar.show {
         left: 0 !important;
+    }
+    
+    /* Content should not be affected by sidebar on mobile */
+    .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
     }
 }
 
