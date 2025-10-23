@@ -77,8 +77,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ux-enhancements.css') }}">
     
     <!-- COMPREHENSIVE FIXES - Load after theme and UX (with cache busting) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.6.3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.6.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.6.4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.6.4">
     
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
@@ -164,14 +164,23 @@
             width: 200px;
             flex: 0 0 200px;
             max-width: 200px;
+            min-width: 200px;
         }
         
-        /* Fix content container - no left margin needed with sticky sidebar */
+        /* Content container takes remaining space */
         html body .content-container,
         body .content-container {
             margin-left: 0 !important;
             width: 100% !important;
-            flex: 1 !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+        }
+        
+        /* Centered content column should not overflow */
+        html body .centered-content-col,
+        body .centered-content-col {
+            width: calc(100% - 200px) !important;
+            max-width: calc(100% - 200px) !important;
         }
     }
     
@@ -187,6 +196,12 @@
             overflow-y: auto;
             z-index: 1040;
             transition: left 0.3s ease;
+        }
+        
+        html body .centered-content-col,
+        body .centered-content-col {
+            width: 100% !important;
+            max-width: 100% !important;
         }
     }
     
@@ -205,17 +220,21 @@
     body .centered-layout {
         margin-top: 48px !important; /* Offset for navbar */
         padding-top: 0 !important;
-        display: flex !important;
-        flex-direction: column !important;
     }
     
-    /* Ensure row doesn't add extra spacing */
+    /* Ensure row uses proper Bootstrap flex behavior */
     html body .centered-layout > .row,
     body .centered-layout > .row {
         margin: 0 !important;
+        width: 100% !important;
+    }
+    
+    /* Content column should fill available space */
+    html body .centered-content-col,
+    body .centered-content-col {
         flex: 1 !important;
-        display: flex !important;
-        flex-wrap: nowrap !important;
+        min-width: 0 !important; /* Allow flex item to shrink below content size */
+        overflow-x: auto !important;
     }
     
     html body .container-fluid,
@@ -223,6 +242,8 @@
         padding-left: 1rem;
         padding-right: 1rem;
         padding-top: 1rem;
+        max-width: 100% !important;
+        overflow-x: visible !important;
     }
     
     /* 5. RESET VERTICAL SPACING - with specific combined selectors */
@@ -232,6 +253,8 @@
         padding-top: 0; /* No extra padding needed */
         padding-left: 0;
         padding-right: 0;
+        width: 100% !important;
+        max-width: 100% !important;
     }
     
     /* 6. ENSURE TABLE DISPLAYS CORRECTLY - with class hierarchy */
