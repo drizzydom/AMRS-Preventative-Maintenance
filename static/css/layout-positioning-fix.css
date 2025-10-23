@@ -354,3 +354,75 @@ body.d-flex.flex-column {
         margin-top: 0 !important;
     }
 }
+
+/* ========================================
+   TABLE UI FIXES
+   ======================================== */
+
+/* Fix #1: Dropdown menus appearing behind table content */
+.dropdown-menu,
+.action-dropdown-menu {
+    z-index: 1050 !important; /* Higher than table content */
+    position: absolute !important;
+}
+
+/* Ensure dropdown parent has proper stacking context */
+.dropdown,
+.btn-group {
+    position: relative;
+    z-index: auto;
+}
+
+/* When dropdown is open, increase z-index */
+.dropdown.show,
+.btn-group.show {
+    z-index: 1051 !important;
+}
+
+/* Fix #2: Status column text cutoff */
+.table td,
+.table th {
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+}
+
+/* Status badges should not wrap */
+.badge,
+.status-badge,
+td .badge {
+    white-space: nowrap !important;
+    display: inline-block !important;
+}
+
+/* Fix #3: Actions column scrolling and overflow */
+.actions-column,
+td:has(.dropdown),
+td:has(.btn-group) {
+    position: relative !important;
+    overflow: visible !important;
+}
+
+/* Ensure action dropdowns can extend beyond table */
+.table-responsive {
+    overflow: visible !important; /* Allow dropdowns to overflow */
+}
+
+/* Alternative: If table needs scroll, only overflow-x */
+.table-responsive-scroll {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+}
+
+/* Dropdown menus should have max height and scroll */
+.dropdown-menu {
+    max-height: 400px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+/* Ensure table cells with dropdowns don't clip */
+.table td.actions-cell,
+.table td:last-child {
+    overflow: visible !important;
+}
