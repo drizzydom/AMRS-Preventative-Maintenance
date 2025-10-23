@@ -7,6 +7,7 @@
 .table-responsive {
   width: 100%;
   overflow-x: auto;
+  overflow-y: visible !important; /* Allow dropdowns to overflow vertically */
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
   margin-bottom: 1rem;
 }
@@ -17,6 +18,7 @@
 html body .card .table-responsive {
   width: 100%;
   overflow-x: auto;
+  overflow-y: visible !important; /* Allow dropdowns to overflow vertically */
 }
 
 /* Ensure tables fill their container */
@@ -47,6 +49,8 @@ html body .card .table-responsive {
 .table td {
   padding: 0.75rem;
   vertical-align: middle;
+  white-space: nowrap; /* Prevent text wrapping in cells */
+  overflow: visible; /* Allow content to overflow if needed */
 }
 
 /* Fix table striping */
@@ -99,6 +103,12 @@ html body .card .table-responsive {
 /* Table in card special case */
 .card .table {
   margin-bottom: 0;
+}
+
+/* Ensure cards don't clip dropdown menus */
+.card,
+.card-body {
+  overflow: visible !important;
 }
 
 /* Special case for fixed-layout tables */
