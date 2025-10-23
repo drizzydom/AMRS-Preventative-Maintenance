@@ -53,6 +53,30 @@ html body .card .table-responsive {
   overflow: visible; /* Allow content to overflow if needed */
 }
 
+/* Ensure content within cells is properly aligned */
+.table td > * {
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* Fix for badges and small elements in cells */
+.table td .badge,
+.table td .btn,
+.table td .small-card {
+  margin: 0;
+  vertical-align: middle;
+}
+
+/* Parts count alignment - ensure badges align properly */
+.table td:has(.badge) {
+  text-align: center;
+}
+
+.table td .badge {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 /* Fix table striping */
 .table-striped tbody tr:nth-of-type(odd) {
   background-color: rgba(0, 0, 0, 0.02);
