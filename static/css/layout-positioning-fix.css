@@ -385,6 +385,18 @@ body.d-flex.flex-column {
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: clip !important;
+    vertical-align: middle !important;
+}
+
+/* Ensure proper cell alignment */
+.table td {
+    text-align: left;
+}
+
+/* Center align specific columns if needed */
+.table td.text-center,
+.table th.text-center {
+    text-align: center !important;
 }
 
 /* Status badges should not wrap */
@@ -393,6 +405,43 @@ body.d-flex.flex-column {
 td .badge {
     white-space: nowrap !important;
     display: inline-block !important;
+}
+
+/* Fix: Cards should respect container width */
+.card,
+.stats-card,
+.maintenance-status-card {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+.card-body {
+    overflow: hidden !important;
+    word-wrap: break-word !important;
+    box-sizing: border-box !important;
+}
+
+/* Fix: Ensure card content doesn't overflow */
+.card .row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+.card .col,
+.card [class*="col-"] {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    box-sizing: border-box !important;
+}
+
+/* Fix: Small cards in status columns */
+.small-card,
+.status-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
 }
 
 /* Fix #3: Actions column scrolling and overflow */
@@ -425,4 +474,76 @@ td:has(.btn-group) {
 .table td.actions-cell,
 .table td:last-child {
     overflow: visible !important;
+}
+
+/* ========================================
+   TABLE COLUMN ALIGNMENT FIXES
+   ======================================== */
+
+/* Numbers should be right-aligned for better readability */
+.table td[data-label*="Part"],
+.table td[data-label*="Count"],
+.table td[data-label*="Number"],
+.table td:has(.badge),
+.parts-count,
+.number-cell {
+    text-align: right !important;
+    padding-right: 1rem !important;
+}
+
+/* Ensure numeric badges are right-aligned */
+.table td .badge.bg-secondary,
+.table td .badge.bg-info {
+    float: none !important;
+    margin-left: auto !important;
+}
+
+/* Fix for parts count display */
+.parts-count-cell,
+td:has(.parts-count) {
+    text-align: right !important;
+    vertical-align: middle !important;
+}
+
+/* ========================================
+   GRID AND CARD LAYOUT FIXES
+   ======================================== */
+
+/* Ensure Bootstrap grid columns respect container width */
+.row {
+    --bs-gutter-x: 1.5rem;
+    margin-right: calc(-.5 * var(--bs-gutter-x));
+    margin-left: calc(-.5 * var(--bs-gutter-x));
+}
+
+.row > * {
+    padding-right: calc(var(--bs-gutter-x) * .5);
+    padding-left: calc(var(--bs-gutter-x) * .5);
+    box-sizing: border-box;
+}
+
+/* Force cards in columns to respect width */
+.col .card,
+[class*="col-"] .card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* Maintenance status cards specific fix */
+.maintenance-status-card,
+.status-summary-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-bottom: 1rem;
+    box-sizing: border-box !important;
+}
+
+/* Card content should never exceed card width */
+.card-title,
+.card-text,
+.card-body > * {
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
