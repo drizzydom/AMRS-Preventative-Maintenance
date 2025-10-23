@@ -71,14 +71,14 @@
     </script>
     
     <!-- Theme CSS must be loaded last to apply theme colors properly -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}?v=1.4.6.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/amrs-theme.css') }}?v=1.4.6.2">
     
     <!-- UX Enhancements CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ux-enhancements.css') }}">
     
     <!-- COMPREHENSIVE FIXES - Load after theme and UX (with cache busting) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.6.1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.6.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.6.2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.6.2">
     
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
@@ -94,7 +94,7 @@
         top: 0;
         left: 0;
         right: 0;
-        height: 48px; /* Fixed height for navbar */
+        height: 64px; /* Increased from 48px to 64px */
         z-index: 1050; /* Highest z-index to stay on top */
     }
     
@@ -104,9 +104,34 @@
         top: 0;
         left: 0;
         right: 0;
-        height: 48px;
-        min-height: 48px;
+        height: 64px; /* Increased from 48px to 64px */
+        min-height: 64px;
         z-index: 1050; /* Highest z-index */
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+    }
+    
+    /* Navbar brand positioning */
+    .navbar-brand {
+        flex-shrink: 0;
+        margin-right: 1rem;
+    }
+    
+    /* Global search bar - prevent overlap with brand */
+    .global-search {
+        position: relative;
+        max-width: 400px;
+        width: 100%;
+        margin-left: 2rem !important; /* Add more space from brand */
+        margin-right: 2rem !important;
+    }
+    
+    /* Ensure navbar items don't overlap */
+    .navbar .container-fluid {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
     }
     
     /* 2. SIDEBAR POSITIONING - sticky on desktop, fixed on mobile */
@@ -115,9 +140,9 @@
         body:not(.mobile-view) .sidebar {
             position: sticky !important;
             width: 200px;
-            top: 48px !important; /* Stick below the navbar */
+            top: 64px !important; /* Stick below the navbar (updated from 48px) */
             left: 0;
-            height: calc(100vh - 96px); /* Account for both navbar and footer */
+            height: calc(100vh - 112px); /* Account for navbar (64px) and footer (48px) */
             overflow-y: auto;
             z-index: 1020; /* Below the navbar z-index */
         }
@@ -135,9 +160,9 @@
         body .sidebar {
             position: fixed !important;
             width: 280px;
-            top: 48px;
+            top: 64px; /* Updated from 48px */
             left: -280px; /* Hidden by default */
-            height: calc(100vh - 48px);
+            height: calc(100vh - 64px); /* Updated from 48px */
             overflow-y: auto;
             z-index: 1040;
             transition: left 0.3s ease;
@@ -157,7 +182,7 @@
     /* 4. CONTENT CONTAINER POSITIONING */
     html body .centered-layout,
     body .centered-layout {
-        margin-top: 48px !important; /* Only offset for navbar */
+        margin-top: 64px !important; /* Updated from 48px to match new navbar height */
         padding-top: 0 !important;
     }
     
@@ -225,7 +250,7 @@
         }
         
         html body .centered-layout {
-            margin-top: 48px !important;
+            margin-top: 64px !important; /* Updated from 48px */
         }
     }
         
@@ -390,6 +415,7 @@
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         transition: background 0.2s, box-shadow 0.2s;
         margin-right: 0.5rem;
+        flex-shrink: 0;
     }
     #hamburger-btn:focus {
         outline: 2px solid #0d6efd;
@@ -457,7 +483,7 @@
     @media (max-width: 991.98px) {
         #hamburger-btn {
             position: fixed;
-            top: 8px;
+            top: 12px; /* Adjusted for taller navbar */
             left: 8px;
             margin: 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.18);
