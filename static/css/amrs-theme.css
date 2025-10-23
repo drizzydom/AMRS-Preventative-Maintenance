@@ -71,7 +71,7 @@ html[data-theme='light'], body[data-theme='light'] {
   --bs-light: var(--amrs-light-gray);
   
   /* Define layout measurements */
-  --navbar-height: 48px;
+  --navbar-height: 64px; /* Increased from 48px */
   --sidebar-width: 200px;
   --sidebar-mobile-width: 280px;
   
