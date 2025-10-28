@@ -1,0 +1,444 @@
+/**
+ * RESPONSIVE ENHANCEMENTS AND ACCESSIBILITY FIXES
+ * Ensures proper scaling, visibility, and accessibility across all viewport sizes
+ * Date: October 27, 2025
+ */
+
+/* ========================================
+   CRITICAL ISSUE #1: FIXED SIDEBAR WIDTH ON SMALL DESKTOPS
+   Problem: Sidebar takes 200px on screens between 992px-1200px, 
+   leaving very little content space
+   ======================================== */
+
+/* Reduce sidebar width on smaller desktops */
+@media (min-width: 992px) and (max-width: 1199px) {
+    .sidebar,
+    .sidebar-container {
+        width: 160px !important;
+        flex: 0 0 160px !important;
+    }
+    
+    /* Adjust content width accordingly */
+    html body .centered-content-col,
+    body .centered-content-col {
+        width: calc(100% - 160px) !important;
+        max-width: calc(100% - 160px) !important;
+    }
+    
+    /* Make sidebar text smaller */
+    .sidebar-link-text {
+        font-size: 0.875rem;
+    }
+    
+    /* Collapsed sidebar */
+    body.sidebar-collapsed .sidebar,
+    body.sidebar-collapsed .sidebar-container {
+        width: 50px !important;
+    }
+    
+    body.sidebar-collapsed .centered-content-col {
+        width: calc(100% - 50px) !important;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #2: NAVBAR CONTENT OVERLAP IN MEDIUM SCREENS
+   Problem: Search bar, brand, and buttons can overlap between 768px-991px
+   ======================================== */
+
+@media (min-width: 768px) and (max-width: 991px) {
+    /* Make search bar smaller */
+    .global-search {
+        max-width: 250px !important;
+        margin-left: 1rem !important;
+        margin-right: 1rem !important;
+    }
+    
+    /* Reduce navbar brand font */
+    .navbar-brand {
+        font-size: 0.85rem !important;
+    }
+    
+    /* Hide "Dark Mode" text on medium screens */
+    #darkModeText {
+        display: none !important;
+    }
+    
+    /* Make dark mode button more compact */
+    #darkModeToggle {
+        padding: 0.25rem 0.5rem !important;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #3: TABLE RESPONSIVENESS
+   Problem: Tables with many columns become unreadable on smaller screens
+   ======================================== */
+
+/* Hide less critical columns on tablets */
+@media (max-width: 991px) {
+    /* Add class .hide-tablet to columns that should hide */
+    .table th.hide-tablet,
+    .table td.hide-tablet {
+        display: none;
+    }
+}
+
+/* Show all columns on desktop */
+@media (min-width: 992px) {
+    .table th.hide-tablet,
+    .table td.hide-tablet {
+        display: table-cell !important;
+    }
+}
+
+/* Ensure table headers remain sticky on scroll */
+.table-responsive {
+    position: relative;
+}
+
+.table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* ========================================
+   CRITICAL ISSUE #4: FONT SIZES TOO SMALL ON MOBILE
+   Problem: Text becomes unreadable on phones
+   ======================================== */
+
+@media (max-width: 767px) {
+    /* Increase base font size on mobile */
+    body {
+        font-size: 16px !important; /* Prevents iOS zoom on input focus */
+    }
+    
+    /* Make table text larger */
+    .table {
+        font-size: 0.9rem;
+    }
+    
+    /* Make card text more readable */
+    .card-body {
+        font-size: 0.95rem;
+    }
+    
+    /* Make buttons larger for touch */
+    .btn {
+        min-height: 44px; /* Apple's recommended touch target */
+        padding: 0.5rem 1rem;
+    }
+    
+    /* Make form inputs larger */
+    .form-control,
+    .form-select {
+        font-size: 16px !important; /* Prevents iOS zoom */
+        min-height: 44px;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #5: CARDS OVERFLOWING IN GRID LAYOUTS
+   Problem: Cards can overflow their grid columns on certain screen sizes
+   ======================================== */
+
+/* Ensure all grid columns respect container */
+.row > * {
+    box-sizing: border-box;
+    min-width: 0; /* Allow flex items to shrink */
+}
+
+/* Force cards to respect column width at all sizes */
+@media (max-width: 1399px) {
+    .col .card,
+    [class*="col-"] .card {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #6: DROPDOWN MENUS CUT OFF ON VIEWPORT EDGES
+   Problem: Dropdowns near screen edges get clipped
+   ======================================== */
+
+.dropdown-menu {
+    /* Ensure dropdowns can flip position */
+    --bs-dropdown-min-width: 10rem;
+    max-width: calc(100vw - 2rem) !important; /* Prevent edge overflow */
+}
+
+/* Right-aligned dropdowns on small screens */
+@media (max-width: 767px) {
+    .dropdown-menu-end {
+        right: 0;
+        left: auto;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #7: MODAL CONTENT OVERFLOW
+   Problem: Modals can overflow viewport height on small screens
+   ======================================== */
+
+@media (max-height: 600px) {
+    .modal-dialog {
+        max-height: 95vh;
+        margin: 0.5rem auto;
+    }
+    
+    .modal-content {
+        max-height: 95vh;
+    }
+    
+    .modal-body {
+        max-height: calc(95vh - 120px); /* Account for header/footer */
+        overflow-y: auto;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #8: FOOTER COVERING CONTENT ON SHORT SCREENS
+   Problem: Fixed footer can cover content when viewport is short
+   ======================================== */
+
+/* Add padding to body to prevent footer overlap */
+body {
+    padding-bottom: 48px; /* Footer height */
+}
+
+/* Ensure last content has extra space */
+.page-content > *:last-child {
+    margin-bottom: 2rem;
+}
+
+/* ========================================
+   CRITICAL ISSUE #9: TOUCH TARGET SIZES
+   Problem: Buttons and links too small for touch on mobile
+   ======================================== */
+
+@media (max-width: 767px) {
+    /* Ensure minimum touch target size (44x44px) */
+    .btn,
+    .badge,
+    a.sidebar-link,
+    .dropdown-toggle {
+        min-height: 44px;
+        min-width: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Sidebar links larger on mobile */
+    .sidebar-link {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+    
+    /* Table action buttons */
+    .table .btn-sm {
+        min-height: 40px;
+        min-width: 40px;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #10: CONTRAST RATIO ISSUES
+   Problem: Some text doesn't meet WCAG AA standards (4.5:1)
+   ======================================== */
+
+/* Ensure sufficient contrast for all text */
+.text-muted {
+    color: #6c757d !important; /* Meets WCAG AA */
+}
+
+/* Light mode: ensure dark text on light backgrounds */
+html:not(.dark-mode) .badge.bg-secondary {
+    background-color: #5a6268 !important;
+}
+
+/* Dark mode: ensure light text on dark backgrounds */
+html.dark-mode .text-muted,
+html[data-theme="dark"] .text-muted {
+    color: #adb5bd !important; /* Better contrast in dark mode */
+}
+
+/* ========================================
+   CRITICAL ISSUE #11: HORIZONTAL SCROLL INDICATORS MISSING
+   Problem: Users don't know tables are scrollable
+   ======================================== */
+
+/* Add scroll shadow indicators */
+.table-responsive {
+    background:
+        linear-gradient(to right, white 30%, rgba(255,255,255,0)),
+        linear-gradient(to left, white 30%, rgba(255,255,255,0)) 100% 0,
+        radial-gradient(farthest-side at 0 50%, rgba(0,0,0,0.2), rgba(0,0,0,0)),
+        radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,0.2), rgba(0,0,0,0)) 100% 0;
+    background-repeat: no-repeat;
+    background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+    background-attachment: local, local, scroll, scroll;
+}
+
+/* Dark mode scroll shadows */
+html.dark-mode .table-responsive,
+html[data-theme="dark"] .table-responsive {
+    background:
+        linear-gradient(to right, #181a1b 30%, rgba(24,26,27,0)),
+        linear-gradient(to left, #181a1b 30%, rgba(24,26,27,0)) 100% 0,
+        radial-gradient(farthest-side at 0 50%, rgba(255,255,255,0.2), rgba(255,255,255,0)),
+        radial-gradient(farthest-side at 100% 50%, rgba(255,255,255,0.2), rgba(255,255,255,0)) 100% 0;
+    background-repeat: no-repeat;
+    background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+    background-attachment: local, local, scroll, scroll;
+}
+
+/* ========================================
+   CRITICAL ISSUE #12: LOADING STATES NOT ACCESSIBLE
+   Problem: No indication for screen readers when content is loading
+   ======================================== */
+
+/* Add loading states */
+[aria-busy="true"] {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+[aria-busy="true"]::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #FE7900;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spinner 0.6s linear infinite;
+}
+
+@keyframes spinner {
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   CRITICAL ISSUE #13: FOCUS INDICATORS MISSING
+   Problem: Keyboard navigation difficult without visible focus
+   ======================================== */
+
+/* Enhanced focus styles */
+*:focus-visible {
+    outline: 2px solid #FE7900 !important;
+    outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible {
+    box-shadow: 0 0 0 0.25rem rgba(254, 121, 0, 0.25) !important;
+}
+
+/* ========================================
+   CRITICAL ISSUE #14: PRINT STYLES BREAKING LAYOUT
+   Problem: Fixed elements cause issues when printing
+   ======================================== */
+
+@media print {
+    /* Remove fixed positioning for print */
+    .navbar,
+    .sidebar,
+    .footer {
+        position: relative !important;
+    }
+    
+    /* Hide non-essential elements */
+    .sidebar,
+    .navbar-toggler,
+    #darkModeToggle,
+    .sticky-action-button,
+    .mobile-bottom-nav {
+        display: none !important;
+    }
+    
+    /* Ensure content takes full width */
+    .content-container,
+    .centered-content-col {
+        width: 100% !important;
+        margin-left: 0 !important;
+    }
+    
+    /* Ensure tables print properly */
+    .table {
+        page-break-inside: avoid;
+    }
+    
+    .table thead {
+        display: table-header-group;
+    }
+}
+
+/* ========================================
+   CRITICAL ISSUE #15: LANDSCAPE ORIENTATION ON MOBILE
+   Problem: Layout breaks in landscape mode on phones
+   ======================================== */
+
+@media (max-height: 500px) and (orientation: landscape) {
+    /* Reduce navbar height in landscape */
+    .navbar {
+        height: 40px !important;
+        min-height: 40px !important;
+    }
+    
+    .centered-layout {
+        margin-top: 40px !important;
+    }
+    
+    .sidebar {
+        top: 40px !important;
+        height: calc(100vh - 40px) !important;
+    }
+    
+    /* Make sidebar even more compact */
+    .sidebar-link {
+        padding: 0.5rem;
+        font-size: 0.875rem;
+    }
+}
+
+/* ========================================
+   UTILITY CLASSES FOR RESPONSIVE VISIBILITY
+   ======================================== */
+
+/* Hide on specific breakpoints */
+.hide-xs { display: none !important; }
+@media (min-width: 576px) { .hide-xs { display: block !important; } }
+
+.hide-sm { display: block !important; }
+@media (min-width: 576px) and (max-width: 767px) { .hide-sm { display: none !important; } }
+
+.hide-md { display: block !important; }
+@media (min-width: 768px) and (max-width: 991px) { .hide-md { display: none !important; } }
+
+.hide-lg { display: block !important; }
+@media (min-width: 992px) and (max-width: 1199px) { .hide-lg { display: none !important; } }
+
+.hide-xl { display: block !important; }
+@media (min-width: 1200px) { .hide-xl { display: none !important; } }
+
+/* ========================================
+   REDUCED MOTION PREFERENCE
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
