@@ -25,6 +25,8 @@ html body .card .table-responsive {
 .table {
   width: 100%;
   margin-bottom: 0;
+  table-layout: fixed; /* Fixed layout prevents columns from expanding */
+  word-wrap: break-word; /* Allow text to wrap within cells if needed */
 }
 
 /* Ensure consistent header styling */
@@ -50,7 +52,8 @@ html body .card .table-responsive {
   padding: 0.75rem;
   vertical-align: middle;
   white-space: nowrap; /* Prevent text wrapping in cells */
-  overflow: visible; /* Allow content to overflow if needed */
+  overflow: hidden; /* Prevent overflow into adjacent columns */
+  text-overflow: ellipsis; /* Show ellipsis for truncated text */
 }
 
 /* Ensure content within cells is properly aligned */
