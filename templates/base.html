@@ -50,7 +50,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}?v=1.4.6.8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}?v=1.4.7.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
@@ -77,9 +77,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ux-enhancements.css') }}">
     
     <!-- COMPREHENSIVE FIXES - Load after theme and UX (with cache busting) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.6.8">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.6.8">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-enhancements.css') }}?v=1.4.6.8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-enhancements.css') }}?v=1.4.7.0">
     
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
@@ -147,17 +147,17 @@
         gap: 0.5rem;
     }
     
-    /* 2. SIDEBAR POSITIONING - sticky on desktop, fixed on mobile */
+    /* 2. SIDEBAR POSITIONING - fixed (always visible) on desktop, fixed on mobile */
     @media (min-width: 992px) {
         html body .sidebar,
         body:not(.mobile-view) .sidebar {
-            position: sticky !important;
+            position: fixed !important;
             width: 200px;
-            top: 48px !important; /* Stick below the navbar */
+            top: 48px !important; /* Below the navbar */
             left: 0;
             height: calc(100vh - 96px); /* Account for navbar (48px) and footer (48px) */
             overflow-y: auto;
-            z-index: 1020; /* Below the navbar z-index */
+            z-index: 1030; /* Below the navbar but above content */
         }
         
         html body .sidebar-container,
@@ -876,6 +876,37 @@
     
     <!-- UX Enhancements JavaScript -->
     <script src="{{ url_for('static', filename='js/ux-enhancements.js') }}"></script>
+    
+    <!-- Table Scroll Detection and Indicator -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Detect if table-responsive containers need scrolling
+        function checkTableScroll() {
+            const containers = document.querySelectorAll('.table-responsive');
+            containers.forEach(container => {
+                const table = container.querySelector('.table');
+                if (table) {
+                    // Check if table is wider than container
+                    if (table.scrollWidth > container.clientWidth) {
+                        container.classList.add('has-scroll');
+                    } else {
+                        container.classList.remove('has-scroll');
+                    }
+                }
+            });
+        }
+        
+        // Check on load
+        checkTableScroll();
+        
+        // Check on window resize
+        window.addEventListener('resize', checkTableScroll);
+        
+        // Check after any dynamic content loads
+        const observer = new MutationObserver(checkTableScroll);
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
+    </script>
     
     <!-- Enhanced horizontal scrolling support for mouse users -->
     <script src="{{ url_for('static', filename='js/horizontal-scroll-support.js') }}"></script>
