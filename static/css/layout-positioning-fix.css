@@ -48,19 +48,20 @@ nav.navbar {
 }
 
 /* ========================================
-   STICKY SIDEBAR FIX
+   FIXED SIDEBAR (ALWAYS VISIBLE)
    ======================================== */
 
-/* Make sidebar sticky (follows scroll) on desktop */
+/* Make sidebar fixed (always visible) on desktop */
 @media (min-width: 992px) {
     .sidebar {
-        position: sticky !important;
-        top: 48px !important; /* Stick below navbar */
+        position: fixed !important;
+        top: 48px !important; /* Below navbar */
+        left: 0 !important;
+        width: 200px !important;
         height: calc(100vh - 96px) !important; /* Account for navbar and footer */
         overflow-y: auto !important;
         overscroll-behavior-y: contain;
         z-index: 1030;
-        align-self: flex-start; /* Important for sticky positioning */
     }
     
     /* Ensure sidebar container doesn't interfere */
@@ -387,6 +388,16 @@ body.d-flex.flex-column {
     text-overflow: ellipsis !important;
     vertical-align: middle !important;
     max-width: 250px; /* Prevent excessive width */
+    position: relative; /* Create positioning context for interactive elements */
+}
+
+/* Allow overflow for cells with interactive content */
+.table td:has(.dropdown),
+.table td:has(.btn-group),
+.table td:has(.card),
+.table td:has(.small-card),
+.table td:has(button) {
+    overflow: visible !important;
 }
 
 /* Ensure proper cell alignment */
@@ -413,14 +424,26 @@ td .badge {
 .stats-card,
 .maintenance-status-card {
     max-width: 100% !important;
-    overflow: hidden !important;
+    overflow: visible !important; /* Allow interactive elements to extend */
     box-sizing: border-box !important;
 }
 
 .card-body {
-    overflow: hidden !important;
+    overflow: visible !important; /* Allow buttons/dropdowns to extend */
     word-wrap: break-word !important;
     box-sizing: border-box !important;
+}
+
+/* Cards inside table cells need special handling */
+.table td .card,
+.table td .small-card,
+.table td .stats-card {
+    overflow: visible !important;
+    position: relative;
+}
+
+.table td .card-body {
+    overflow: visible !important;
 }
 
 /* Fix: Ensure card content doesn't overflow */
@@ -445,35 +468,42 @@ td .badge {
     box-sizing: border-box !important;
 }
 
-/* Fix #3: Actions column scrolling and overflow */
+/* Fix #3: Actions column and interactive elements */
 .actions-column,
 td:has(.dropdown),
-td:has(.btn-group) {
+td:has(.btn-group),
+td:has(.card),
+td:has(.small-card) {
     position: relative !important;
     overflow: visible !important;
 }
 
-/* Ensure action dropdowns can extend beyond table */
+/* CRITICAL: Table responsive must allow horizontal scroll */
 .table-responsive {
-    overflow: visible !important; /* Allow dropdowns to overflow */
+    overflow-x: auto !important; /* Enable horizontal scrolling */
+    overflow-y: visible !important; /* Allow dropdowns to overflow vertically */
+    -webkit-overflow-scrolling: touch !important; /* Smooth scrolling on iOS */
 }
 
-/* Alternative: If table needs scroll, only overflow-x */
-.table-responsive-scroll {
+/* Ensure table wrapper allows proper scrolling */
+.card-body > .table-responsive,
+.container > .table-responsive {
     overflow-x: auto !important;
     overflow-y: visible !important;
 }
 
-/* Dropdown menus should have max height and scroll */
+/* Dropdown menus should have max height and scroll internally */
 .dropdown-menu {
     max-height: 400px !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
 }
 
-/* Ensure table cells with dropdowns don't clip */
+/* Ensure table cells with interactive content don't clip */
 .table td.actions-cell,
-.table td:last-child {
+.table td:last-child,
+.table td:has(.dropdown),
+.table td:has(.card) {
     overflow: visible !important;
 }
 
@@ -553,6 +583,27 @@ td:has(.parts-count) {
     position: absolute !important;
     max-width: none !important;
     width: max-content !important;
+}
+
+/* Buttons and interactive elements in table cells */
+.table td button,
+.table td .btn,
+.table td a.btn {
+    position: relative;
+    z-index: 1;
+    white-space: nowrap;
+}
+
+/* Small cards in table cells should be contained */
+.table td .small-card {
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* Ensure tooltips and popovers can extend beyond table */
+.table td [data-bs-toggle="tooltip"],
+.table td [data-bs-toggle="popover"] {
+    position: relative;
 }
 
 /* ========================================
