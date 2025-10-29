@@ -25,8 +25,15 @@ html body .card .table-responsive {
 .table {
   width: 100%;
   margin-bottom: 0;
-  table-layout: fixed; /* Fixed layout prevents columns from expanding */
+  table-layout: auto; /* Auto layout allows proper horizontal scrolling */
   word-wrap: break-word; /* Allow text to wrap within cells if needed */
+  min-width: 100%; /* Ensure table takes at least full width */
+}
+
+/* If table content exceeds container, allow scrolling */
+.table-responsive .table {
+  width: max-content; /* Allow table to grow beyond container */
+  min-width: 100%; /* But at least fill the container */
 }
 
 /* Ensure consistent header styling */
@@ -130,6 +137,38 @@ html body .card .table-responsive {
 /* Table in card special case */
 .card .table {
   margin-bottom: 0;
+}
+
+/* Visual indicator for horizontal scroll */
+.table-responsive {
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.125);
+  border-radius: 0.25rem;
+  padding: 0; /* Remove any padding that could interfere with scrolling */
+  margin-bottom: 1rem;
+}
+
+/* Ensure proper clipping of table boundaries */
+.table-responsive > .table {
+  margin-bottom: 0; /* Remove bottom margin inside responsive container */
+}
+
+/* Scroll shadow indicator - shows when content is scrollable */
+.table-responsive::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 30px;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.table-responsive.has-scroll::after {
+  opacity: 1;
 }
 
 /* Ensure cards don't clip dropdown menus */
