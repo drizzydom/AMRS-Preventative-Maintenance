@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}?v=1.4.8.2">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}?v=1.4.8.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
@@ -80,7 +80,7 @@
     
     <!-- COMPREHENSIVE FIXES - Load after theme and UX (with cache busting) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.7.4">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.7.4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.8.2">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-enhancements.css') }}?v=1.4.7.4">
     
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
@@ -149,23 +149,23 @@
         gap: 0.5rem;
     }
     
-    /* 2. SIDEBAR POSITIONING - fixed (always visible) on desktop, fixed on mobile */
+    /* 2. SIDEBAR POSITIONING - sticky (scrolls with page) on desktop, fixed on mobile */
     @media (min-width: 992px) {
         html body .container-fluid .sidebar-container .sidebar,
         html body .centered-layout .sidebar-container .sidebar,
         html body .sidebar,
         body:not(.mobile-view) .sidebar,
         .sidebar {
-            position: fixed !important;
+            position: sticky !important;
             width: 200px !important;
-            top: 48px !important; /* Below the navbar */
+            top: 48px !important; /* Stick below the navbar */
             left: 0 !important;
-            bottom: 48px !important; /* Above footer */
-            height: calc(100vh - 96px) !important; /* Account for navbar (48px) and footer (48px) */
+            max-height: calc(100vh - 96px) !important; /* Account for navbar (48px) and footer (48px) */
             overflow-y: auto !important;
             overflow-x: hidden !important;
             z-index: 1030 !important; /* Below the navbar but above content */
             display: block !important;
+            align-self: flex-start !important; /* Important for sticky positioning */
         }
         
         html body .sidebar-container,
