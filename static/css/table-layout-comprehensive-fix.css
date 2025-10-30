@@ -35,8 +35,23 @@
 .table td.hide-sm:nth-child(2) {
     white-space: normal !important;
     word-wrap: break-word !important;
-    max-width: 250px !important;
-    line-height: 1.4 !important;
+    word-break: break-word !important;
+    max-width: 300px !important;
+    line-height: 1.5 !important;
+    vertical-align: middle !important;
+    padding: 0.75rem !important;
+}
+
+/* Ensure address column has same formatting as other columns */
+.table td:has(.fa-map-marker-alt) {
+    background: inherit;
+    border: inherit;
+}
+
+/* Address icon should not affect alignment */
+.table td .fa-map-marker-alt {
+    vertical-align: middle;
+    margin-right: 0.25rem;
 }
 
 /* ========================================
@@ -46,17 +61,20 @@
 /* Status badge containers should not expand vertically */
 .table td:has(.status-badge-enhanced) {
     vertical-align: middle !important;
-    padding: 0.5rem !important;
+    padding: 0.75rem !important;
+    white-space: normal !important;
+    overflow: visible !important;
 }
 
 /* Stack badges vertically with consistent spacing */
 .status-badge-enhanced {
     display: inline-block;
     margin: 0.15rem 0;
-    padding: 0.35rem 0.65rem;
+    padding: 0.4rem 0.7rem;
     font-size: 0.875rem;
     white-space: nowrap;
-    line-height: 1.2;
+    line-height: 1.3;
+    border-radius: 0.25rem;
 }
 
 /* Ensure multiple badges don't increase row height */
@@ -68,12 +86,19 @@
     margin-bottom: 0;
 }
 
-/* Make status column fixed width */
+/* Display badges as block elements to stack properly */
+.table td .status-badge-enhanced {
+    display: block;
+    margin: 0.25rem 0;
+    width: fit-content;
+}
+
+/* Make status column wider to accommodate badges */
 .table th:has(+ td .status-badge-enhanced),
 .table td:has(.status-badge-enhanced) {
-    width: 180px;
-    min-width: 160px;
-    max-width: 200px;
+    width: 200px;
+    min-width: 180px;
+    max-width: 220px;
 }
 
 /* ========================================
@@ -107,6 +132,8 @@
     background-color: #ffffff;
     border-collapse: separate;
     border-spacing: 0;
+    width: 100%;
+    table-layout: auto;
 }
 
 /* Table wrapper must contain all content */
@@ -119,12 +146,27 @@
     overflow-y: visible;
     padding: 0;
     margin-bottom: 1rem;
+    width: 100%;
+    max-width: 100%;
 }
 
 /* Prevent content from extending outside table area */
 .table-responsive > .table {
     margin-bottom: 0;
     border: none;
+    min-width: 100%;
+}
+
+/* Ensure table takes full width but can expand if needed */
+.card-body .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+/* Table should not overflow its container */
+.card .table-responsive {
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 /* ========================================
@@ -150,14 +192,36 @@
     position: relative;
     overflow: hidden;
     text-overflow: ellipsis;
+    box-sizing: border-box;
 }
 
 /* Allow specific cells with interactive elements to overflow */
 .table td:has(.dropdown),
 .table td:has(.btn-group),
 .table td:has(button),
-.table td:has(.action-dropdown) {
+.table td:has(.btn),
+.table td:has(.action-dropdown),
+.table td:has(.status-badge-enhanced) {
     overflow: visible !important;
+}
+
+/* Buttons should fit within their cells */
+.table td .btn {
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Actions column should have enough width for buttons */
+.table td:has(.btn.btn-primary) {
+    min-width: 180px;
+}
+
+/* Ensure button text doesn't get cut off */
+.table td .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
 }
 
 /* ========================================
@@ -284,14 +348,78 @@ html.dark-mode .table tbody td {
    ACTION COLUMN FIXES
    ======================================== */
 
-/* Actions column should be right-aligned */
+/* Actions column should be center-aligned with enough width */
 .table td:last-child {
     text-align: center !important;
     white-space: nowrap;
+    min-width: 200px;
+    padding: 0.75rem !important;
+}
+
+/* Actions column header */
+.table th:last-child {
+    min-width: 200px;
+    text-align: center !important;
 }
 
 /* Dropdown menus in actions should extend properly */
-.table td:last-child .dropdown-menu {
+.table td:last-child .dropdown-menu,
+.table td .action-dropdown-menu {
     position: absolute !important;
     max-width: none !important;
+    z-index: 1050 !important;
+}
+
+/* Action dropdown container */
+.table td .action-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+/* Ensure buttons in actions column don't wrap */
+.table td:last-child .btn {
+    margin: 0.1rem 0.2rem;
+}
+
+/* ========================================
+   COLUMN WIDTH MANAGEMENT
+   ======================================== */
+
+/* Facility/Machine Name column */
+.table th:first-child,
+.table td:first-child {
+    min-width: 150px;
+    max-width: 300px;
+}
+
+/* Equipment Count column */
+.table th:has(+ td .badge.bg-info),
+.table td:has(.badge.bg-info) {
+    width: 120px;
+    min-width: 100px;
+    max-width: 150px;
+    text-align: center;
+}
+
+/* Ensure all columns have proper width distribution */
+.table thead th {
+    white-space: nowrap;
+    padding: 0.75rem !important;
+}
+
+/* ========================================
+   PREVENT COLUMN CUTOFF
+   ======================================== */
+
+/* Ensure no column content gets cut off */
+.table td,
+.table th {
+    min-width: 80px; /* Minimum width for any column */
+    box-sizing: border-box;
+}
+
+/* Allow table to expand beyond container if needed (horizontal scroll) */
+.table-responsive .table {
+    width: max-content;
+    min-width: 100%;
 }
