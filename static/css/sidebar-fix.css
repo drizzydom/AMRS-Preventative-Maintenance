@@ -11,24 +11,24 @@
 .sidebar {
   padding-bottom: calc(var(--footer-height) + 48px) !important; /* Further increased space for full visibility above bottom bar */
   width: 200px;
-  position: fixed;
+  position: sticky;
   left: 0;
-  top: 48px; /* Match navbar height */
-  height: calc(100vh - 48px - var(--footer-height)); /* Full height minus navbar and footer */
+  top: 48px; /* Stick below navbar height */
+  max-height: calc(100vh - 48px - var(--footer-height)); /* Max height minus navbar and footer */
   overflow-y: auto; /* Always allow vertical scrolling */
   overscroll-behavior-y: contain;
-  max-height: calc(100vh - 48px);
   background-color: #5E5E5E; /* AMRS secondary gray */
   color: #ffffff;
   z-index: 1030;
   padding: 0;
+  align-self: flex-start; /* Required for sticky positioning */
 }
 
 /* Higher specificity overrides */
 body .sidebar,
 html body .sidebar {
   width: 200px;
-  position: fixed;
+  position: sticky;
 }
 
 /* Sidebar container width */
@@ -119,9 +119,6 @@ html body .sidebar {
   border-left-color: #dc3545;
   color: white;
   text-decoration: none;
-}
-  border-left-color: rgba(254, 121, 0, 0.5);
-  color: white;
 }
 
 .sidebar-logout-btn i {
