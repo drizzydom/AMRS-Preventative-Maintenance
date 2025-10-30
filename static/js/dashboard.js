@@ -32,11 +32,11 @@ function dashboardInit() {
     // 4. Set up individual toggle buttons
     setupPartToggles();
     
-    // 5. Show all parts initially (instead of hiding them)
-    showAllParts();
+    // 5. Hide all parts initially (default state)
+    hideAllParts();
     
-    // 6. Update button text to match the initial state (all parts are now shown)
-    updateToggleButtonText(true);
+    // 6. Update button text to match the initial state (all parts are now hidden)
+    updateToggleButtonText(false);
     
     // 7. Initialize machine statuses based on their parts
     initializeMachineStatuses();
@@ -311,14 +311,25 @@ function updateMachineStatuses(siteItem) {
 // Set up toggle all parts button
 function setupToggleAllParts() {
     const toggleBtn = document.getElementById('toggleAllMachineParts');
-    if (!toggleBtn) return;
+    if (!toggleBtn) {
+        console.log("Toggle all parts button not found");
+        return;
+    }
     
-    toggleBtn.addEventListener('click', function() {
+    console.log("Setting up toggle all parts button");
+    
+    toggleBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        console.log("Toggle all parts button clicked");
+        
         const allShowing = areAllPartsShowing();
+        console.log("All parts showing:", allShowing);
         
         if (allShowing) {
+            console.log("Hiding all parts");
             hideAllParts();
         } else {
+            console.log("Showing all parts");
             showAllParts();
         }
     });
@@ -330,32 +341,40 @@ function setupToggleAllParts() {
 // Check if all machine parts are shown
 function areAllPartsShowing() {
     const partRows = document.querySelectorAll('.machine-parts-row');
-    if (partRows.length === 0) return false;
+    if (partRows.length === 0) {
+        console.log("No part rows found");
+        return false;
+    }
     
+    let showingCount = 0;
     for (const row of partRows) {
         // Check if the row has the Bootstrap 'show' class
-        if (!row.classList.contains('show')) {
-            return false;
+        if (row.classList.contains('show')) {
+            showingCount++;
         }
     }
-    return true;
+    
+    const allShowing = showingCount === partRows.length;
+    console.log(`Parts showing: ${showingCount} / ${partRows.length}, All showing: ${allShowing}`);
+    return allShowing;
 }
 
 // Hide all machine parts
 function hideAllParts() {
     // Hide all part rows using Bootstrap's collapse
     document.querySelectorAll('.machine-parts-row').forEach(function(row) {
-        if (bootstrap && bootstrap.Collapse) {
-            const bsCollapse = bootstrap.Collapse.getInstance(row);
-            if (bsCollapse) {
-                bsCollapse.hide();
-            } else {
-                // Fallback to direct style manipulation if no collapse instance exists
-                row.classList.remove('show');
+        if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+            let bsCollapse = bootstrap.Collapse.getInstance(row);
+            if (!bsCollapse) {
+                // Create new collapse instance with toggle: false
+                bsCollapse = new bootstrap.Collapse(row, { toggle: false });
             }
+            bsCollapse.hide();
         } else {
-            // Fallback in case bootstrap is not available
-            row.style.display = 'none';
+            // Fallback - directly manipulate classes and style
+            row.classList.remove('show');
+            row.style.height = '0';
+            row.style.overflow = 'hidden';
         }
     });
     
@@ -373,13 +392,18 @@ function hideAllParts() {
 function showAllParts() {
     // Show all part rows using Bootstrap's collapse
     document.querySelectorAll('.machine-parts-row').forEach(function(row) {
-        if (bootstrap && bootstrap.Collapse) {
-            const bsCollapse = bootstrap.Collapse.getInstance(row) || new bootstrap.Collapse(row, { toggle: false });
+        if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+            let bsCollapse = bootstrap.Collapse.getInstance(row);
+            if (!bsCollapse) {
+                // Create new collapse instance with toggle: false
+                bsCollapse = new bootstrap.Collapse(row, { toggle: false });
+            }
             bsCollapse.show();
         } else {
-            // Fallback in case bootstrap is not available
+            // Fallback - directly manipulate classes and style
             row.classList.add('show');
-            row.style.display = 'table-row';
+            row.style.height = 'auto';
+            row.style.overflow = 'visible';
         }
     });
     
@@ -428,16 +452,35 @@ function setupPartToggles() {
             if (!targetId) return;
             const targetRow = document.querySelector(targetId);
             if (!targetRow) return;
+            
             // Use Bootstrap's collapse functionality
-            let bsCollapse = bootstrap.Collapse.getInstance(targetRow);
-            if (!bsCollapse) {
-                bsCollapse = new bootstrap.Collapse(targetRow, { toggle: false });
-            }
-            if (targetRow.classList.contains('show')) {
-                bsCollapse.hide();
+            if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+                let bsCollapse = bootstrap.Collapse.getInstance(targetRow);
+                if (!bsCollapse) {
+                    bsCollapse = new bootstrap.Collapse(targetRow, { toggle: false });
+                }
+                if (targetRow.classList.contains('show')) {
+                    bsCollapse.hide();
+                } else {
+                    bsCollapse.show();
+                }
             } else {
-                bsCollapse.show();
+                // Fallback - toggle manually
+                if (targetRow.classList.contains('show')) {
+                    targetRow.classList.remove('show');
+                    targetRow.style.height = '0';
+                    targetRow.style.overflow = 'hidden';
+                    this.setAttribute('aria-expanded', 'false');
+                    this.classList.remove('active');
+                } else {
+                    targetRow.classList.add('show');
+                    targetRow.style.height = 'auto';
+                    targetRow.style.overflow = 'visible';
+                    this.setAttribute('aria-expanded', 'true');
+                    this.classList.add('active');
+                }
             }
+            
             // Always update global toggle button after any toggle
             setTimeout(function() {
                 updateToggleButtonText(areAllPartsShowing());
