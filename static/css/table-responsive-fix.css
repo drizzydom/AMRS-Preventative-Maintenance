@@ -162,42 +162,29 @@ html body .card .table-responsive {
   margin-bottom: 0;
 }
 
-/* Visual indicator for horizontal scroll */
+/* Visual indicator for horizontal scroll - NO PHANTOM SHADOWS */
 .table-responsive {
   position: relative;
   border: 1px solid rgba(0, 0, 0, 0.125);
   border-radius: 0.25rem;
-  padding: 0; /* Remove any padding that could interfere with scrolling */
+  padding: 0;
   margin-bottom: 1rem;
-  background: white; /* Ensure proper background */
+  background: white;
+  /* Remove all pseudo-elements that cause phantom shadows */
 }
 
 /* Ensure proper clipping of table boundaries */
 .table-responsive > .table {
-  margin-bottom: 0; /* Remove bottom margin inside responsive container */
+  margin-bottom: 0;
 }
 
-/* Scroll shadow indicator using inset box-shadow (doesn't scroll with content) */
+/* Simple static border indicator - NO MOVING SHADOWS */
 .table-responsive.has-scroll {
-  /* Add subtle border highlight to indicate scrollability */
-  border-right: 3px solid #FE7900;
-  border-right-style: double;
+  border-right: 2px solid #FE7900;
+  /* No pseudo-elements, no gradients that move */
 }
 
-/* Add visual cue on the right side when scrolled to the left */
-.table-responsive.scrolled-left::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 20px;
-  background: linear-gradient(to left, rgba(254, 121, 0, 0.1), transparent);
-  pointer-events: none;
-  z-index: 5;
-}
-
-/* Dark mode support for scroll indicators */
+/* Dark mode support */
 html.dark-mode .table-responsive {
   background: #2d2d2d;
   border-color: rgba(255, 255, 255, 0.2);
