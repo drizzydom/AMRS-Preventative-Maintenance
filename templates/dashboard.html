@@ -722,7 +722,7 @@
 
 <!-- Remove the inline script to avoid conflict with dashboard.js -->
 <!-- Load dashboard.js with defer attribute to ensure DOM is ready -->
-<script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=1.4.8.1" defer></script>
 
 <script>
     function toggleDecommissioned() {

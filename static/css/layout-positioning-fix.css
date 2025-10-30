@@ -48,29 +48,30 @@ nav.navbar {
 }
 
 /* ========================================
-   FIXED SIDEBAR (ALWAYS VISIBLE)
+   STICKY SIDEBAR (SCROLLS WITH PAGE)
    ======================================== */
 
-/* Make sidebar fixed (always visible) on desktop - MAXIMUM SPECIFICITY */
+/* Make sidebar sticky (scrolls with page but stays visible) on desktop - MAXIMUM SPECIFICITY */
 @media (min-width: 992px) {
     html body .container-fluid .row .sidebar-container .sidebar,
     html body .centered-layout .row .sidebar-container .sidebar,
     html body .sidebar,
     body .sidebar,
     .sidebar {
-        position: fixed !important;
-        top: 48px !important; /* Below navbar */
+        position: sticky !important;
+        top: 48px !important; /* Stick below navbar */
         left: 0 !important;
         width: 200px !important;
-        height: calc(100vh - 96px) !important; /* Account for navbar and footer */
+        max-height: calc(100vh - 96px) !important; /* Account for navbar and footer */
         overflow-y: auto !important;
         overflow-x: hidden !important;
         overscroll-behavior-y: contain !important;
         z-index: 1030 !important;
         display: block !important;
+        align-self: flex-start !important; /* Required for sticky positioning */
     }
     
-    /* Ensure sidebar container acts as a spacer */
+    /* Ensure sidebar container acts as a proper container */
     .sidebar-container {
         position: relative;
         width: 200px !important;
