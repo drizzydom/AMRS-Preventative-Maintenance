@@ -50,7 +50,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}?v=1.4.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table-responsive-fix.css') }}?v=1.4.7.1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-page-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/footer-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/content-position-fix.css') }}">
@@ -77,9 +77,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ux-enhancements.css') }}">
     
     <!-- COMPREHENSIVE FIXES - Load after theme and UX (with cache busting) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.7.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.7.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-enhancements.css') }}?v=1.4.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-comprehensive-fix.css') }}?v=1.4.7.2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout-positioning-fix.css') }}?v=1.4.7.2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive-enhancements.css') }}?v=1.4.7.2">
     
     <!-- Print CSS must be loaded absolutely last to override all other styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
@@ -149,23 +149,31 @@
     
     /* 2. SIDEBAR POSITIONING - fixed (always visible) on desktop, fixed on mobile */
     @media (min-width: 992px) {
+        html body .container-fluid .sidebar-container .sidebar,
+        html body .centered-layout .sidebar-container .sidebar,
         html body .sidebar,
-        body:not(.mobile-view) .sidebar {
+        body:not(.mobile-view) .sidebar,
+        .sidebar {
             position: fixed !important;
-            width: 200px;
+            width: 200px !important;
             top: 48px !important; /* Below the navbar */
-            left: 0;
-            height: calc(100vh - 96px); /* Account for navbar (48px) and footer (48px) */
-            overflow-y: auto;
-            z-index: 1030; /* Below the navbar but above content */
+            left: 0 !important;
+            bottom: 48px !important; /* Above footer */
+            height: calc(100vh - 96px) !important; /* Account for navbar (48px) and footer (48px) */
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            z-index: 1030 !important; /* Below the navbar but above content */
+            display: block !important;
         }
         
         html body .sidebar-container,
-        body:not(.mobile-view) .sidebar-container {
-            width: 200px;
-            flex: 0 0 200px;
-            max-width: 200px;
-            min-width: 200px;
+        body:not(.mobile-view) .sidebar-container,
+        .sidebar-container {
+            position: relative !important;
+            width: 200px !important;
+            flex: 0 0 200px !important;
+            max-width: 200px !important;
+            min-width: 200px !important;
         }
         
         /* Content container takes remaining space */
@@ -880,30 +888,45 @@
     <!-- Table Scroll Detection and Indicator -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Detect if table-responsive containers need scrolling
+        // Detect if table-responsive containers need scrolling and track scroll position
         function checkTableScroll() {
             const containers = document.querySelectorAll('.table-responsive');
             containers.forEach(container => {
-                const table = container.querySelector('.table');
-                if (table) {
-                    // Check if table is wider than container
-                    if (table.scrollWidth > container.clientWidth) {
-                        container.classList.add('has-scroll');
-                    } else {
-                        container.classList.remove('has-scroll');
-                    }
+                // Check if table is wider than container
+                const hasHorizontalScroll = container.scrollWidth > container.clientWidth;
+                
+                if (hasHorizontalScroll) {
+                    container.classList.add('has-scroll');
+                } else {
+                    container.classList.remove('has-scroll');
                 }
+                
+                // Track scroll position
+                container.addEventListener('scroll', function() {
+                    if (this.scrollLeft > 10) {
+                        this.classList.add('scrolled-left');
+                    } else {
+                        this.classList.remove('scrolled-left');
+                    }
+                });
             });
         }
         
-        // Check on load
-        checkTableScroll();
+        // Check on load with slight delay to ensure tables are rendered
+        setTimeout(checkTableScroll, 100);
         
         // Check on window resize
-        window.addEventListener('resize', checkTableScroll);
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(checkTableScroll, 100);
+        });
         
         // Check after any dynamic content loads
-        const observer = new MutationObserver(checkTableScroll);
+        const observer = new MutationObserver(function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(checkTableScroll, 100);
+        });
         observer.observe(document.body, { childList: true, subtree: true });
     });
     </script>
