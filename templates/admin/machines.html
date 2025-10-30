@@ -53,12 +53,19 @@
                         <td>{{ machine.site.name }}</td>
                         <td>
                             {% if machine.decommissioned %}
-                                <span class="badge bg-secondary">
-                                    <i class="fas fa-power-off"></i> Decommissioned
+                                <span class="badge bg-secondary" 
+                                      data-bs-toggle="tooltip" 
+                                      title="Decommissioned{{ (' on ' + machine.decommissioned_date|to_eastern('%Y-%m-%d')) if machine.decommissioned_date else '' }}">
+                                    <i class="fas fa-power-off"></i>
+                                    <span class="d-none d-xl-inline">Decommissioned</span>
+                                    <span class="d-xl-none">Decomm</span>
                                 </span>
                             {% else %}
-                                <span class="badge bg-success">
-                                    <i class="fas fa-check-circle"></i> Active
+                                <span class="badge bg-success"
+                                      data-bs-toggle="tooltip"
+                                      title="Machine is active and operational">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>Active</span>
                                 </span>
                             {% endif %}
                         </td>
