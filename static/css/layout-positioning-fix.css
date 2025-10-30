@@ -51,8 +51,12 @@ nav.navbar {
    FIXED SIDEBAR (ALWAYS VISIBLE)
    ======================================== */
 
-/* Make sidebar fixed (always visible) on desktop */
+/* Make sidebar fixed (always visible) on desktop - MAXIMUM SPECIFICITY */
 @media (min-width: 992px) {
+    html body .container-fluid .row .sidebar-container .sidebar,
+    html body .centered-layout .row .sidebar-container .sidebar,
+    html body .sidebar,
+    body .sidebar,
     .sidebar {
         position: fixed !important;
         top: 48px !important; /* Below navbar */
@@ -60,14 +64,28 @@ nav.navbar {
         width: 200px !important;
         height: calc(100vh - 96px) !important; /* Account for navbar and footer */
         overflow-y: auto !important;
-        overscroll-behavior-y: contain;
-        z-index: 1030;
+        overflow-x: hidden !important;
+        overscroll-behavior-y: contain !important;
+        z-index: 1030 !important;
+        display: block !important;
     }
     
-    /* Ensure sidebar container doesn't interfere */
+    /* Ensure sidebar container acts as a spacer */
     .sidebar-container {
         position: relative;
+        width: 200px !important;
+        min-width: 200px !important;
+        flex: 0 0 200px !important;
         height: auto;
+    }
+    
+    /* Prevent parent containers from interfering */
+    .centered-layout {
+        overflow: visible !important;
+    }
+    
+    .centered-layout > .row {
+        overflow: visible !important;
     }
     
     /* Content should not push down due to sidebar */
@@ -381,14 +399,21 @@ body.d-flex.flex-column {
 }
 
 /* Fix #2: Prevent text overflow into adjacent columns */
-.table td,
-.table th {
+.table td {
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     vertical-align: middle !important;
-    max-width: 250px; /* Prevent excessive width */
     position: relative; /* Create positioning context for interactive elements */
+}
+
+/* Table headers should NOT be constrained - let them size naturally */
+.table th {
+    white-space: nowrap !important;
+    overflow: visible !important; /* Headers should show full text */
+    vertical-align: middle !important;
+    position: relative;
+    padding: 0.75rem !important;
 }
 
 /* Allow overflow for cells with interactive content */
@@ -536,39 +561,33 @@ td:has(.parts-count) {
     vertical-align: middle !important;
 }
 
-/* Specific column width constraints to prevent overflow */
-.table th:first-child,
-.table td:first-child {
-    max-width: 80px; /* ID/checkbox columns */
-}
+/* Specific column width constraints - more flexible */
+/* Only constrain very specific columns that tend to be too wide */
 
+/* Description/Notes fields can wrap and should be wider */
 .table td.text-wrap,
 .table td[data-label*="Description"],
 .table td[data-label*="Notes"],
-.table td[data-label*="Details"] {
-    max-width: 300px !important;
+.table td[data-label*="Details"],
+.table td[data-label*="Comment"] {
+    max-width: 400px !important;
     white-space: normal !important;
     word-wrap: break-word !important;
+    overflow: visible !important;
 }
 
-.table td[data-label*="Name"],
-.table td[data-label*="Site"],
-.table td[data-label*="Machine"],
-.table td[data-label*="Part"] {
-    max-width: 200px !important;
+/* Most columns should size naturally based on content */
+.table td {
+    min-width: 60px; /* Minimum width for readability */
+    max-width: none; /* No maximum - let content determine width */
 }
 
-.table td[data-label*="Status"],
-.table td[data-label*="Type"],
-.table td[data-label*="Category"] {
-    max-width: 150px !important;
-}
-
-.table td[data-label*="Date"],
-.table td[data-label*="Time"],
-.table td[data-label*="Created"],
-.table td[data-label*="Updated"] {
-    max-width: 120px !important;
+/* Only very small columns get constrained */
+.table td[data-label*="ID"],
+.table th:first-child:has(input[type="checkbox"]),
+.table td:first-child:has(input[type="checkbox"]) {
+    max-width: 60px;
+    width: 60px;
 }
 
 .table td[data-label*="Actions"],
