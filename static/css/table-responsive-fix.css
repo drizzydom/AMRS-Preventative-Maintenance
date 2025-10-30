@@ -25,15 +25,27 @@ html body .card .table-responsive {
 .table {
   width: 100%;
   margin-bottom: 0;
-  table-layout: auto; /* Auto layout allows proper horizontal scrolling */
-  word-wrap: break-word; /* Allow text to wrap within cells if needed */
+  table-layout: auto; /* Auto layout allows columns to size naturally */
+  border-collapse: separate; /* Separate borders for better control */
+  border-spacing: 0; /* No spacing between cells */
   min-width: 100%; /* Ensure table takes at least full width */
 }
 
 /* If table content exceeds container, allow scrolling */
 .table-responsive .table {
-  width: max-content; /* Allow table to grow beyond container */
+  width: auto; /* Let table size based on content */
   min-width: 100%; /* But at least fill the container */
+}
+
+/* Prevent layout shifts when content loads */
+.table tbody tr {
+  contain: layout; /* CSS containment for performance */
+}
+
+/* Ensure cells have consistent box-sizing */
+.table th,
+.table td {
+  box-sizing: border-box;
 }
 
 /* Ensure consistent header styling */
@@ -45,6 +57,8 @@ html body .card .table-responsive {
   top: 0;
   z-index: 10; /* Ensure headers stay above table content when scrolling */
   border-bottom: 2px solid rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  padding: 0.75rem !important;
 }
 
 /* Theme specific header override */
@@ -58,15 +72,26 @@ html body .card .table-responsive {
 .table td {
   padding: 0.75rem;
   vertical-align: middle;
-  white-space: nowrap; /* Prevent text wrapping in cells */
-  overflow: hidden; /* Prevent overflow into adjacent columns */
-  text-overflow: ellipsis; /* Show ellipsis for truncated text */
+  border: 1px solid #dee2e6; /* Consistent borders */
+  line-height: 1.5; /* Consistent line height prevents distortion */
+}
+
+/* Headers should not wrap or truncate */
+.table th {
+  white-space: nowrap;
+  overflow: visible;
+}
+
+/* Data cells handle overflow with ellipsis */
+.table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Ensure content within cells is properly aligned */
 .table td > * {
   vertical-align: middle;
-  display: inline-block;
 }
 
 /* Fix for badges and small elements in cells */
@@ -97,12 +122,10 @@ html body .card .table-responsive {
   background-color: rgba(0, 0, 0, 0.04);
 }
 
-/* Handle text overflow in cells */
-.table td {
-  max-width: 300px; /* Maximum width for any cell */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Table rows should maintain consistent height */
+.table tbody tr {
+  min-height: 45px;
+  height: auto;
 }
 
 /* Allow text wrapping for specific cells that need it */
@@ -146,6 +169,7 @@ html body .card .table-responsive {
   border-radius: 0.25rem;
   padding: 0; /* Remove any padding that could interfere with scrolling */
   margin-bottom: 1rem;
+  background: white; /* Ensure proper background */
 }
 
 /* Ensure proper clipping of table boundaries */
@@ -153,22 +177,30 @@ html body .card .table-responsive {
   margin-bottom: 0; /* Remove bottom margin inside responsive container */
 }
 
-/* Scroll shadow indicator - shows when content is scrollable */
-.table-responsive::after {
+/* Scroll shadow indicator using inset box-shadow (doesn't scroll with content) */
+.table-responsive.has-scroll {
+  /* Add subtle border highlight to indicate scrollability */
+  border-right: 3px solid #FE7900;
+  border-right-style: double;
+}
+
+/* Add visual cue on the right side when scrolled to the left */
+.table-responsive.scrolled-left::before {
   content: '';
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: 30px;
-  background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
+  width: 20px;
+  background: linear-gradient(to left, rgba(254, 121, 0, 0.1), transparent);
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  z-index: 5;
 }
 
-.table-responsive.has-scroll::after {
-  opacity: 1;
+/* Dark mode support for scroll indicators */
+html.dark-mode .table-responsive {
+  background: #2d2d2d;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Ensure cards don't clip dropdown menus */
