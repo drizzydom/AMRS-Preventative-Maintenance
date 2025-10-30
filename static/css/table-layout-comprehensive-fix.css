@@ -1,0 +1,297 @@
+/**
+ * COMPREHENSIVE TABLE LAYOUT FIX
+ * Fixes row height alignment, phantom shadows, and content overflow issues
+ */
+
+/* ========================================
+   ROW HEIGHT ALIGNMENT
+   ======================================== */
+
+/* Force consistent row height across all cells */
+.table tbody tr {
+    height: auto;
+    min-height: 60px;
+}
+
+/* All cells in a row must have same height */
+.table tbody td {
+    vertical-align: middle !important;
+    height: 100%;
+    line-height: 1.5;
+    padding: 0.75rem !important;
+}
+
+/* Prevent content from changing cell height */
+.table tbody td > * {
+    vertical-align: middle;
+}
+
+/* ========================================
+   ADDRESS/LOCATION COLUMN FIX
+   ======================================== */
+
+/* Address columns should wrap text naturally without expanding row height */
+.table td:has(.fa-map-marker-alt),
+.table td.hide-sm:nth-child(2) {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    max-width: 250px !important;
+    line-height: 1.4 !important;
+}
+
+/* ========================================
+   MAINTENANCE STATUS COLUMN FIX
+   ======================================== */
+
+/* Status badge containers should not expand vertically */
+.table td:has(.status-badge-enhanced) {
+    vertical-align: middle !important;
+    padding: 0.5rem !important;
+}
+
+/* Stack badges vertically with consistent spacing */
+.status-badge-enhanced {
+    display: inline-block;
+    margin: 0.15rem 0;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+/* Ensure multiple badges don't increase row height */
+.table td > .status-badge-enhanced:first-child {
+    margin-top: 0;
+}
+
+.table td > .status-badge-enhanced:last-child {
+    margin-bottom: 0;
+}
+
+/* Make status column fixed width */
+.table th:has(+ td .status-badge-enhanced),
+.table td:has(.status-badge-enhanced) {
+    width: 180px;
+    min-width: 160px;
+    max-width: 200px;
+}
+
+/* ========================================
+   REMOVE PHANTOM SHADOWS
+   ======================================== */
+
+/* Remove all pseudo-element shadows that move with scroll */
+.table-responsive::after,
+.table-responsive::before {
+    display: none !important;
+}
+
+/* Remove scroll shadow class effects */
+.table-responsive.has-scroll::after,
+.table-responsive.scrolled-left::before {
+    display: none !important;
+}
+
+/* Static border indicator instead of moving shadow */
+.table-responsive.has-scroll {
+    border-right: 2px solid #FE7900;
+    box-shadow: none !important;
+}
+
+/* ========================================
+   TABLE BACKGROUND AND BORDERS
+   ======================================== */
+
+/* Ensure table background extends with content */
+.table {
+    background-color: #ffffff;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+/* Table wrapper must contain all content */
+.table-responsive {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+/* Prevent content from extending outside table area */
+.table-responsive > .table {
+    margin-bottom: 0;
+    border: none;
+}
+
+/* ========================================
+   STRIPING AND HOVER EFFECTS
+   ======================================== */
+
+/* Ensure striping extends full width */
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Hover effect should cover full row */
+.table-hover > tbody > tr:hover > * {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* ========================================
+   CELL CONTENT CONTAINMENT
+   ======================================== */
+
+/* Prevent text from overflowing cell boundaries */
+.table td {
+    position: relative;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Allow specific cells with interactive elements to overflow */
+.table td:has(.dropdown),
+.table td:has(.btn-group),
+.table td:has(button),
+.table td:has(.action-dropdown) {
+    overflow: visible !important;
+}
+
+/* ========================================
+   CONSISTENT CELL PADDING
+   ======================================== */
+
+/* All cells should have consistent padding */
+.table thead th,
+.table tbody td {
+    padding: 0.75rem !important;
+}
+
+/* Center-aligned cells */
+.table .text-center {
+    text-align: center !important;
+    justify-content: center;
+}
+
+/* ========================================
+   TABLE HEADER FIXES
+   ======================================== */
+
+/* Headers should not wrap and stay consistent */
+.table thead th {
+    white-space: nowrap;
+    font-weight: 600;
+    background-color: #5E5E5E;
+    color: #ffffff;
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================== */
+
+/* Mobile: Reduce padding for smaller screens */
+@media (max-width: 767px) {
+    .table tbody td {
+        padding: 0.5rem !important;
+        font-size: 0.875rem;
+    }
+    
+    .status-badge-enhanced {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* ========================================
+   DARK MODE SUPPORT
+   ======================================== */
+
+html.dark-mode .table {
+    background-color: #2d2d2d;
+    color: #ffffff;
+}
+
+html.dark-mode .table-responsive {
+    background: #2d2d2d;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+html.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+html.dark-mode .table-hover > tbody > tr:hover > * {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark-mode .table thead th {
+    background-color: #1a1a1a;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+html.dark-mode .table tbody td {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ========================================
+   BADGE SPECIFIC FIXES
+   ======================================== */
+
+/* Equipment count badges */
+.table td .badge.bg-info {
+    padding: 0.4rem 0.6rem;
+    font-size: 1rem;
+    min-width: 36px;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Status badges in status column */
+.table td .badge.bg-success,
+.table td .badge.bg-secondary,
+.table td .badge.bg-danger,
+.table td .badge.bg-warning {
+    display: inline-block;
+    margin: 0.1rem 0;
+    vertical-align: middle;
+}
+
+/* ========================================
+   PREVENT LAYOUT SHIFT
+   ======================================== */
+
+/* Use CSS containment to prevent layout thrashing */
+.table tbody tr {
+    contain: layout style;
+}
+
+/* Ensure consistent box-sizing */
+.table *,
+.table *::before,
+.table *::after {
+    box-sizing: border-box;
+}
+
+/* ========================================
+   ACTION COLUMN FIXES
+   ======================================== */
+
+/* Actions column should be right-aligned */
+.table td:last-child {
+    text-align: center !important;
+    white-space: nowrap;
+}
+
+/* Dropdown menus in actions should extend properly */
+.table td:last-child .dropdown-menu {
+    position: absolute !important;
+    max-width: none !important;
+}
