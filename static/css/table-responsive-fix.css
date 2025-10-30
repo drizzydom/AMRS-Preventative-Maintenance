@@ -29,11 +29,12 @@ html body .card .table-responsive {
   border-collapse: separate; /* Separate borders for better control */
   border-spacing: 0; /* No spacing between cells */
   min-width: 100%; /* Ensure table takes at least full width */
+  background-color: inherit;
 }
 
 /* If table content exceeds container, allow scrolling */
 .table-responsive .table {
-  width: auto; /* Let table size based on content */
+  width: max-content; /* Let table size based on content */
   min-width: 100%; /* But at least fill the container */
 }
 
@@ -46,6 +47,15 @@ html body .card .table-responsive {
 .table th,
 .table td {
   box-sizing: border-box;
+  border: 1px solid #dee2e6;
+}
+
+/* Ensure table stays within responsive container */
+.table-responsive {
+  contain: layout;
+  overflow-x: auto;
+  overflow-y: visible;
+  width: 100%;
 }
 
 /* Ensure consistent header styling */
