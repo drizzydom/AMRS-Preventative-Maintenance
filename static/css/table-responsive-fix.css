@@ -21,60 +21,14 @@ html body .card .table-responsive {
   overflow-y: visible !important; /* Allow dropdowns to overflow vertically */
 }
 
-/* Ensure tables fill their container */
-.table {
-  width: 100%;
-  margin-bottom: 0;
-  table-layout: auto; /* Auto layout allows columns to size naturally */
-  border-collapse: separate; /* Separate borders for better control */
-  border-spacing: 0; /* No spacing between cells */
-  min-width: 100%; /* Ensure table takes at least full width */
-  background-color: inherit;
-}
+/* Note: Core table structure is managed by table-layout-comprehensive-fix.css */
+/* This file provides base responsive behavior, comprehensive fix adds specific rules */
 
-/* If table content exceeds container, allow scrolling */
-.table-responsive .table {
-  width: max-content; /* Let table size based on content */
-  min-width: 100%; /* But at least fill the container */
-}
-
-/* Prevent layout shifts when content loads */
-.table tbody tr {
-  contain: layout; /* CSS containment for performance */
-}
-
-/* Ensure cells have consistent box-sizing */
-.table th,
-.table td {
-  box-sizing: border-box;
-  border: 1px solid #dee2e6;
-}
-
-/* Ensure table stays within responsive container */
-.table-responsive {
-  contain: layout;
-  overflow-x: auto;
-  overflow-y: visible;
-  width: 100%;
-}
-
-/* Ensure consistent header styling */
-.table thead th {
-  background-color: #5E5E5E;
-  color: white;
-  white-space: nowrap; /* Prevent header text wrapping */
-  position: sticky;
-  top: 0;
-  z-index: 10; /* Ensure headers stay above table content when scrolling */
-  border-bottom: 2px solid rgba(0, 0, 0, 0.2);
-  font-weight: 600;
-  padding: 0.75rem !important;
-}
-
-/* Theme specific header override */
+/* Note: Header styling is managed by table-layout-comprehensive-fix.css */
+/* Theme specific header override for AMRS branding */
 .table thead th.bg-primary,
 .table thead th.table-primary {
-  background-color: #FE7900; /* AMRS orange */
+  background-color: #FE7900 !important; /* AMRS orange */
 }
 
 /* Fix table padding and spacing */
@@ -132,11 +86,8 @@ html body .card .table-responsive {
   background-color: rgba(0, 0, 0, 0.04);
 }
 
-/* Table rows should maintain consistent height */
-.table tbody tr {
-  min-height: 45px;
-  height: auto;
-}
+/* Note: Row height is managed by table-layout-comprehensive-fix.css */
+/* Keeping this comment for reference - the min-height of 60px is set there */
 
 /* Allow text wrapping for specific cells that need it */
 .table td.text-wrap {
