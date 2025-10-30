@@ -1,0 +1,178 @@
+/**
+ * STATUS BADGE ABBREVIATIONS
+ * Provides abbreviated and full text versions of status badges
+ * to prevent column overflow in tables
+ */
+
+/* ========================================
+   STATUS BADGE BASE STYLES
+   ======================================== */
+
+.badge {
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* ========================================
+   ABBREVIATED TEXT (DEFAULT - MOBILE/TABLET)
+   ======================================== */
+
+/* Active Status - Show "Active" by default */
+.badge .status-full-text {
+    display: inline;
+}
+
+.badge .status-abbr-text {
+    display: none;
+}
+
+/* ========================================
+   STATUS BADGE SPECIFIC STYLES
+   ======================================== */
+
+/* Active Status Badge */
+.badge.bg-success .status-text::after {
+    content: "Active";
+}
+
+/* Decommissioned Status Badge */
+.badge.bg-secondary .status-text::after {
+    content: "Decomm";
+}
+
+/* Desktop: Show full text on larger screens */
+@media (min-width: 1200px) {
+    .badge.bg-secondary .status-text::after {
+        content: "Decommissioned";
+    }
+}
+
+/* ========================================
+   DATA ATTRIBUTE APPROACH (FLEXIBLE)
+   Use data-full and data-abbr attributes
+   ======================================== */
+
+.badge[data-status-full] .status-text::after {
+    content: attr(data-status-abbr);
+}
+
+@media (min-width: 1200px) {
+    .badge[data-status-full] .status-text::after {
+        content: attr(data-status-full);
+    }
+}
+
+/* ========================================
+   TABLE COLUMN WIDTH ADJUSTMENTS
+   ======================================== */
+
+/* Status columns should be narrower */
+.table th[style*="Status"],
+.table td .badge.bg-success,
+.table td .badge.bg-secondary {
+    min-width: auto;
+}
+
+/* Ensure Status column doesn't expand too much */
+.table th:has(+ td .badge),
+.table td:has(.badge) {
+    width: 100px; /* Fixed width for status column */
+    min-width: 100px;
+    max-width: 120px;
+}
+
+/* Desktop: Allow more space for full text */
+@media (min-width: 1200px) {
+    .table td:has(.badge.bg-secondary) {
+        width: 140px;
+        max-width: 160px;
+    }
+}
+
+/* ========================================
+   MAINTENANCE STATUS BADGES
+   ======================================== */
+
+/* Overdue */
+.badge.bg-danger .status-badge-text::after {
+    content: "Overdue";
+}
+
+/* Due Soon */
+.badge.bg-warning .status-badge-text::after {
+    content: "Due Soon";
+}
+
+/* OK */
+.badge.bg-success .status-badge-text::after {
+    content: "OK";
+}
+
+/* Info badges (parts count, etc) - no abbreviation needed */
+.badge.bg-info {
+    min-width: 40px;
+    justify-content: center;
+}
+
+/* ========================================
+   RESPONSIVE BREAKPOINTS
+   ======================================== */
+
+/* Mobile: Super compact */
+@media (max-width: 767px) {
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    /* Hide icons on very small screens if needed */
+    .badge i.fas {
+        font-size: 0.7rem;
+    }
+}
+
+/* Tablet: Abbreviated */
+@media (min-width: 768px) and (max-width: 1199px) {
+    .badge {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.6rem;
+    }
+}
+
+/* Desktop: Full text */
+@media (min-width: 1200px) {
+    .badge {
+        font-size: 0.875rem;
+        padding: 0.35rem 0.65rem;
+    }
+}
+
+/* ========================================
+   DARK MODE SUPPORT
+   ======================================== */
+
+html.dark-mode .badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+html.dark-mode .badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+html.dark-mode .badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+html.dark-mode .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+html.dark-mode .badge.bg-info {
+    background-color: #17a2b8 !important;
+}

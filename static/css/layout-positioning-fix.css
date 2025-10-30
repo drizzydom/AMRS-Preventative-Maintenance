@@ -561,6 +561,26 @@ td:has(.parts-count) {
     vertical-align: middle !important;
 }
 
+/* Status column with badges - keep compact */
+.table td:has(.badge.bg-success),
+.table td:has(.badge.bg-secondary),
+.table td:has(.badge.bg-danger),
+.table td:has(.badge.bg-warning) {
+    width: 110px !important;
+    min-width: 110px !important;
+    max-width: 140px !important;
+    text-align: center !important;
+    padding: 0.5rem !important;
+}
+
+/* On larger screens, allow more space for full text */
+@media (min-width: 1200px) {
+    .table td:has(.badge.bg-secondary) {
+        width: 140px !important;
+        max-width: 160px !important;
+    }
+}
+
 /* Specific column width constraints - more flexible */
 /* Only constrain very specific columns that tend to be too wide */
 
