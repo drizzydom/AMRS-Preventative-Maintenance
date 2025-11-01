@@ -1,0 +1,170 @@
+/* Enhanced Modal System - Phase 2.7 */
+
+.base-modal {
+  /* High-contrast overlay */
+  --modal-backdrop: rgba(0, 0, 0, 0.65);
+  --modal-blur: 4px;
+}
+
+.base-modal .ant-modal-content {
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.base-modal .ant-modal-header {
+  background: #fafafa;
+  border-bottom: 1px solid #e8e8e8;
+  padding: 16px 24px;
+  border-radius: 8px 8px 0 0;
+}
+
+.base-modal .ant-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.base-modal .ant-modal-body {
+  padding: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.base-modal .ant-modal-footer {
+  border-top: 1px solid #e8e8e8;
+  padding: 12px 24px;
+  background: #fafafa;
+  border-radius: 0 0 8px 8px;
+}
+
+/* Prominent action buttons with visual hierarchy */
+.base-modal .ant-modal-footer .ant-btn {
+  height: 36px;
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.base-modal .ant-modal-footer .ant-btn-primary {
+  background: #1890ff;
+  border-color: #1890ff;
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.3);
+}
+
+.base-modal .ant-modal-footer .ant-btn-primary:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.4);
+}
+
+/* Clear focus states */
+.base-modal .ant-input:focus,
+.base-modal .ant-select-selector:focus,
+.base-modal .ant-picker:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  outline: none;
+}
+
+/* Form styling within modals */
+.base-modal .ant-form-item {
+  margin-bottom: 20px;
+}
+
+.base-modal .ant-form-item-label > label {
+  font-weight: 500;
+  color: #262626;
+}
+
+.base-modal .ant-input,
+.base-modal .ant-select-selector,
+.base-modal .ant-picker {
+  border-radius: 4px;
+  border-color: #d9d9d9;
+}
+
+.base-modal .ant-input:hover,
+.base-modal .ant-select-selector:hover,
+.base-modal .ant-picker:hover {
+  border-color: #40a9ff;
+}
+
+/* Keyboard navigation hints */
+.base-modal [data-shortcut]::after {
+  content: attr(data-shortcut);
+  margin-left: 8px;
+  padding: 2px 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+/* Loading state */
+.base-modal .ant-btn-loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Error states */
+.base-modal .ant-form-item-has-error .ant-input,
+.base-modal .ant-form-item-has-error .ant-select-selector {
+  border-color: #ff4d4f;
+}
+
+.base-modal .ant-form-item-has-error .ant-input:focus,
+.base-modal .ant-form-item-has-error .ant-select-selector:focus {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+}
+
+/* Success states */
+.base-modal .ant-form-item-has-success .ant-input,
+.base-modal .ant-form-item-has-success .ant-select-selector {
+  border-color: #52c41a;
+}
+
+/* Multi-part maintenance modal specific styles */
+.multi-part-modal {
+  --steps-color: #1890ff;
+}
+
+.multi-part-modal .ant-steps {
+  margin-bottom: 24px;
+}
+
+.multi-part-modal .ant-steps-item-icon {
+  border-color: var(--steps-color);
+}
+
+.multi-part-modal .ant-steps-item-process .ant-steps-item-icon {
+  background: var(--steps-color);
+  border-color: var(--steps-color);
+}
+
+.multi-part-modal .ant-steps-item-finish .ant-steps-item-icon {
+  border-color: #52c41a;
+  background: #52c41a;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .base-modal {
+    max-width: 90vw !important;
+  }
+
+  .base-modal .ant-modal-body {
+    max-height: 70vh;
+  }
+}

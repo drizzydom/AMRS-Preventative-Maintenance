@@ -1,0 +1,35 @@
+import React from 'react'
+import { Tooltip as AntTooltip } from 'antd'
+import type { TooltipProps as AntTooltipProps } from 'antd'
+
+interface TooltipProps extends AntTooltipProps {
+  shortcut?: string
+}
+
+/**
+ * Enhanced tooltip component with keyboard shortcut support
+ * Phase 2.8 - Tooltip & Onboarding System
+ */
+const Tooltip: React.FC<TooltipProps> = ({ shortcut, title, children, ...props }) => {
+  const enhancedTitle = shortcut ? (
+    <span>
+      {title}
+      <span style={{ marginLeft: 8, opacity: 0.7, fontSize: '11px' }}>
+        ({shortcut})
+      </span>
+    </span>
+  ) : title
+
+  return (
+    <AntTooltip
+      {...props}
+      title={enhancedTitle}
+      mouseEnterDelay={0.3}
+      placement={props.placement || 'top'}
+    >
+      {children}
+    </AntTooltip>
+  )
+}
+
+export default Tooltip
