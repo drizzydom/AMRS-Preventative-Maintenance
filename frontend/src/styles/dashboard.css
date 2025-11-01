@@ -1,0 +1,52 @@
+.dashboard-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.dashboard-header .ant-typography {
+  margin: 0;
+}
+
+.stats-row {
+  margin-bottom: 24px;
+}
+
+.stats-row .ant-card {
+  height: 100%;
+}
+
+.recent-tasks-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.recent-tasks-card .ant-card-body {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Statistic styling */
+.ant-statistic-title {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  margin-bottom: 8px;
+}
+
+.ant-statistic-content {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.ant-statistic-content-prefix {
+  margin-right: 8px;
+  font-size: 20px;
+}
