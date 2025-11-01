@@ -1,0 +1,281 @@
+import React, { useState } from 'react'
+import { Card, Table, Button, Input, Space, Tag, Select, Typography, DatePicker } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import {
+  PlusOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  CalendarOutlined,
+} from '@ant-design/icons'
+import '../styles/maintenance.css'
+
+const { Title } = Typography
+const { Search } = Input
+const { RangePicker } = DatePicker
+
+interface MaintenanceTask {
+  key: string
+  id: number
+  machine: string
+  task: string
+  dueDate: string
+  status: 'pending' | 'overdue' | 'completed' | 'in-progress'
+  assignedTo: string
+  site: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
+}
+
+const Maintenance: React.FC = () => {
+  const [selectedStatus, setSelectedStatus] = useState<string>('all')
+  const [selectedSite, setSelectedSite] = useState<string>('all')
+
+  // Mock data - will be replaced with API calls
+  const mockData: MaintenanceTask[] = [
+    {
+      key: '1',
+      id: 1,
+      machine: 'CNC Machine A',
+      task: 'Oil Change',
+      dueDate: '2025-11-05',
+      status: 'pending',
+      assignedTo: 'John Doe',
+      site: 'Main Plant',
+      priority: 'medium',
+    },
+    {
+      key: '2',
+      id: 2,
+      machine: 'Lathe Machine B',
+      task: 'Filter Replacement',
+      dueDate: '2025-11-03',
+      status: 'overdue',
+      assignedTo: 'Jane Smith',
+      site: 'Warehouse',
+      priority: 'high',
+    },
+    {
+      key: '3',
+      id: 3,
+      machine: 'Press Machine C',
+      task: 'Inspection',
+      dueDate: '2025-10-25',
+      status: 'completed',
+      assignedTo: 'Bob Johnson',
+      site: 'Main Plant',
+      priority: 'low',
+    },
+    {
+      key: '4',
+      id: 4,
+      machine: 'CNC Machine A',
+      task: 'Belt Replacement',
+      dueDate: '2025-11-02',
+      status: 'in-progress',
+      assignedTo: 'John Doe',
+      site: 'Main Plant',
+      priority: 'critical',
+    },
+  ]
+
+  const columns: ColumnsType<MaintenanceTask> = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 60,
+      sorter: (a, b) => a.id - b.id,
+    },
+    {
+      title: 'Machine',
+      dataIndex: 'machine',
+      key: 'machine',
+      sorter: (a, b) => a.machine.localeCompare(b.machine),
+    },
+    {
+      title: 'Task',
+      dataIndex: 'task',
+      key: 'task',
+      render: (text) => <strong>{text}</strong>,
+    },
+    {
+      title: 'Due Date',
+      dataIndex: 'dueDate',
+      key: 'dueDate',
+      sorter: (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      render: (date) => {
+        const dueDate = new Date(date)
+        const today = new Date()
+        const isOverdue = dueDate < today
+        return (
+          <span style={{ color: isOverdue ? '#ff4d4f' : 'inherit' }}>
+            {date}
+          </span>
+        )
+      },
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => {
+        const colors: Record<string, string> = {
+          pending: 'blue',
+          overdue: 'red',
+          completed: 'green',
+          'in-progress': 'orange',
+        }
+        return <Tag color={colors[status]}>{status.toUpperCase()}</Tag>
+      },
+    },
+    {
+      title: 'Priority',
+      dataIndex: 'priority',
+      key: 'priority',
+      render: (priority: string) => {
+        const colors: Record<string, string> = {
+          low: 'default',
+          medium: 'blue',
+          high: 'orange',
+          critical: 'red',
+        }
+        return <Tag color={colors[priority]}>{priority.toUpperCase()}</Tag>
+      },
+    },
+    {
+      title: 'Assigned To',
+      dataIndex: 'assignedTo',
+      key: 'assignedTo',
+    },
+    {
+      title: 'Site',
+      dataIndex: 'site',
+      key: 'site',
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 100,
+      render: (_, record) => (
+        <Space size="small">
+          {record.status !== 'completed' && (
+            <Button
+              type="text"
+              icon={<CheckOutlined />}
+              size="small"
+              title="Complete"
+              style={{ color: '#52c41a' }}
+            />
+          )}
+          <Button
+            type="text"
+            danger
+            icon={<CloseOutlined />}
+            size="small"
+            title="Cancel"
+          />
+        </Space>
+      ),
+    },
+  ]
+
+  return (
+    <div className="maintenance-container">
+      <div className="maintenance-header">
+        <Title level={2}>Maintenance Tasks</Title>
+      </div>
+
+      <Card className="maintenance-table-card">
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <div className="maintenance-controls">
+            <Space wrap>
+              <Search
+                placeholder="Search tasks..."
+                allowClear
+                style={{ width: 300 }}
+                prefix={<SearchOutlined />}
+              />
+              <Select
+                value={selectedStatus}
+                onChange={setSelectedStatus}
+                style={{ width: 150 }}
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'pending', label: 'Pending' },
+                  { value: 'overdue', label: 'Overdue' },
+                  { value: 'in-progress', label: 'In Progress' },
+                  { value: 'completed', label: 'Completed' },
+                ]}
+              />
+              <Select
+                value={selectedSite}
+                onChange={setSelectedSite}
+                style={{ width: 150 }}
+                options={[
+                  { value: 'all', label: 'All Sites' },
+                  { value: 'main', label: 'Main Plant' },
+                  { value: 'warehouse', label: 'Warehouse' },
+                ]}
+              />
+              <RangePicker
+                placeholder={['Start Date', 'End Date']}
+                style={{ width: 280 }}
+              />
+            </Space>
+            <Space>
+              <Button icon={<CalendarOutlined />}>Schedule</Button>
+              <Button icon={<ReloadOutlined />}>Refresh</Button>
+              <Button type="primary" icon={<PlusOutlined />}>
+                New Task
+              </Button>
+            </Space>
+          </div>
+
+          <div className="maintenance-summary">
+            <Space size="large">
+              <div className="summary-item">
+                <span className="summary-label">Overdue:</span>
+                <span className="summary-value summary-overdue">
+                  {mockData.filter((t) => t.status === 'overdue').length}
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">In Progress:</span>
+                <span className="summary-value summary-progress">
+                  {mockData.filter((t) => t.status === 'in-progress').length}
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Pending:</span>
+                <span className="summary-value summary-pending">
+                  {mockData.filter((t) => t.status === 'pending').length}
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Completed:</span>
+                <span className="summary-value summary-completed">
+                  {mockData.filter((t) => t.status === 'completed').length}
+                </span>
+              </div>
+            </Space>
+          </div>
+
+          <Table
+            columns={columns}
+            dataSource={mockData}
+            pagination={{
+              pageSize: 25,
+              showSizeChanger: true,
+              pageSizeOptions: ['25', '50', '100'],
+              showTotal: (total) => `Total ${total} tasks`,
+            }}
+            scroll={{ x: 1200 }}
+          />
+        </Space>
+      </Card>
+    </div>
+  )
+}
+
+export default Maintenance
