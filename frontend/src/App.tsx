@@ -5,6 +5,8 @@ import MenuBar from './components/MenuBar'
 import Sidebar from './components/Sidebar'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Machines from './pages/Machines'
+import Maintenance from './pages/Maintenance'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import './styles/App.css'
@@ -28,6 +30,22 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/machines"
+                  element={
+                    <ProtectedRoute>
+                      <Machines />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/maintenance"
+                  element={
+                    <ProtectedRoute>
+                      <Maintenance />
                     </ProtectedRoute>
                   }
                 />
