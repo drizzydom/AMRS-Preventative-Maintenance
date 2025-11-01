@@ -1,0 +1,110 @@
+.maintenance-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.maintenance-header {
+  margin-bottom: 16px;
+}
+
+.maintenance-header .ant-typography {
+  margin: 0;
+}
+
+.maintenance-table-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.maintenance-table-card .ant-card-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.maintenance-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.maintenance-summary {
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.summary-value {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.summary-overdue {
+  color: #ff4d4f;
+}
+
+.summary-progress {
+  color: #faad14;
+}
+
+.summary-pending {
+  color: #1890ff;
+}
+
+.summary-completed {
+  color: #52c41a;
+}
+
+/* Table styling */
+.maintenance-table-card .ant-table {
+  font-size: 14px;
+}
+
+.maintenance-table-card .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.maintenance-table-card .ant-table-tbody > tr:hover {
+  background: #f5f5f5;
+  cursor: pointer;
+}
+
+/* Tag styling */
+.ant-tag {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .maintenance-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .maintenance-controls > * {
+    width: 100%;
+  }
+
+  .maintenance-summary {
+    overflow-x: auto;
+  }
+}

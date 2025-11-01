@@ -1,0 +1,104 @@
+.machines-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.machines-header {
+  margin-bottom: 16px;
+}
+
+.machines-header .ant-typography {
+  margin: 0;
+}
+
+.machines-stats {
+  margin-bottom: 16px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.stat-value.stat-active {
+  color: #52c41a;
+}
+
+.stat-value.stat-warning {
+  color: #faad14;
+}
+
+.machines-table-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.machines-table-card .ant-card-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.machines-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Table styling */
+.machines-table-card .ant-table {
+  font-size: 14px;
+}
+
+.machines-table-card .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.machines-table-card .ant-table-tbody > tr:hover {
+  background: #f5f5f5;
+  cursor: pointer;
+}
+
+/* Tag styling */
+.ant-tag {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+}
+
+/* Button styling */
+.machines-controls .ant-btn {
+  border-radius: 4px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .machines-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .machines-controls > * {
+    width: 100%;
+  }
+}
