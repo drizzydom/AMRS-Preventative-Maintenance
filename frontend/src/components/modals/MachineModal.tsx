@@ -1,0 +1,135 @@
+import React, { useEffect } from 'react'
+import { Form, Input, Select, Button, Space, message } from 'antd'
+import BaseModal from './BaseModal'
+
+interface Machine {
+  id?: number
+  name: string
+  serial: string
+  model: string
+  site: string
+  status: 'active' | 'inactive' | 'maintenance'
+}
+
+interface MachineModalProps {
+  visible: boolean
+  machine?: Machine
+  onCancel: () => void
+  onSubmit: (values: Machine) => Promise<void>
+}
+
+const MachineModal: React.FC<MachineModalProps> = ({
+  visible,
+  machine,
+  onCancel,
+  onSubmit,
+}) => {
+  const [form] = Form.useForm()
+  const [loading, setLoading] = React.useState(false)
+
+  useEffect(() => {
+    if (visible && machine) {
+      form.setFieldsValue(machine)
+    } else if (visible) {
+      form.resetFields()
+    }
+  }, [visible, machine, form])
+
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields()
+      setLoading(true)
+      await onSubmit(values)
+      message.success(machine ? 'Machine updated successfully' : 'Machine created successfully')
+      form.resetFields()
+      onCancel()
+    } catch (error: any) {
+      if (error.errorFields) {
+        message.error('Please fill in all required fields')
+      } else {
+        message.error('Failed to save machine')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <BaseModal
+      title={machine ? 'Edit Machine' : 'Add New Machine'}
+      open={visible}
+      onCancel={onCancel}
+      footer={[
+        <Button key="cancel" onClick={onCancel}>
+          Cancel
+        </Button>,
+        <Button
+          key="submit"
+          type="primary"
+          loading={loading}
+          onClick={handleSubmit}
+        >
+          {machine ? 'Update' : 'Create'}
+        </Button>,
+      ]}
+      width={600}
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        autoComplete="off"
+      >
+        <Form.Item
+          name="name"
+          label="Machine Name"
+          rules={[{ required: true, message: 'Please enter machine name' }]}
+        >
+          <Input placeholder="Enter machine name" />
+        </Form.Item>
+
+        <Form.Item
+          name="serial"
+          label="Serial Number"
+          rules={[{ required: true, message: 'Please enter serial number' }]}
+        >
+          <Input placeholder="Enter serial number" />
+        </Form.Item>
+
+        <Form.Item
+          name="model"
+          label="Model"
+          rules={[{ required: true, message: 'Please enter model' }]}
+        >
+          <Input placeholder="Enter model" />
+        </Form.Item>
+
+        <Form.Item
+          name="site"
+          label="Site"
+          rules={[{ required: true, message: 'Please select a site' }]}
+        >
+          <Select placeholder="Select a site">
+            <Select.Option value="Main Plant">Main Plant</Select.Option>
+            <Select.Option value="Warehouse">Warehouse</Select.Option>
+            <Select.Option value="Assembly Line">Assembly Line</Select.Option>
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="status"
+          label="Status"
+          rules={[{ required: true, message: 'Please select status' }]}
+          initialValue="active"
+        >
+          <Select>
+            <Select.Option value="active">Active</Select.Option>
+            <Select.Option value="inactive">Inactive</Select.Option>
+            <Select.Option value="maintenance">Maintenance</Select.Option>
+          </Select>
+        </Form.Item>
+      </Form>
+    </BaseModal>
+  )
+}
+
+export default MachineModal

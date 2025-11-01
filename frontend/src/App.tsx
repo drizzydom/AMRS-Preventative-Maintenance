@@ -9,6 +9,8 @@ import Machines from './pages/Machines'
 import Maintenance from './pages/Maintenance'
 import Audits from './pages/Audits'
 import Sites from './pages/Sites'
+import Users from './pages/admin/Users'
+import Settings from './pages/Settings'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import './styles/App.css'
@@ -64,6 +66,22 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Sites />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/users"
+                  element={
+                    <ProtectedRoute>
+                      <Users />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <Settings />
                     </ProtectedRoute>
                   }
                 />
