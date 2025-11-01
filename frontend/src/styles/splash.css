@@ -1,0 +1,119 @@
+.splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  min-width: 400px;
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.splash-logo {
+  margin-bottom: 24px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.splash-title {
+  margin: 0 0 32px 0 !important;
+  text-align: center;
+  color: #2c3e50;
+}
+
+.splash-progress {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.splash-status {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.splash-message {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.splash-percent {
+  font-size: 12px;
+  color: #999;
+}
+
+.splash-cancel {
+  margin-top: 16px;
+  color: #999;
+}
+
+.splash-cancel:hover {
+  color: #ff4d4f;
+}
+
+.splash-footer {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+  width: 100%;
+  text-align: center;
+}
+
+/* Progress bar customization */
+.splash-progress .ant-progress-bg {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

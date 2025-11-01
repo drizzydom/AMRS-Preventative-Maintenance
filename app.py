@@ -10805,6 +10805,14 @@ with app.app_context():
 
 print("[AMRS] Database initialization and setup completed")
 
+# Register REST API blueprint for React frontend
+try:
+    from api_v1 import api_v1
+    app.register_blueprint(api_v1)
+    print("[AMRS] REST API v1 registered successfully")
+except Exception as e:
+    print(f"[AMRS] Warning: Could not register API v1: {e}")
+
 def initialize_bootstrap_only():
     """Run bootstrap operations only - database is already initialized above."""
     print("[AMRS] Running bootstrap operations...")
