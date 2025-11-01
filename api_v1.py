@@ -183,6 +183,105 @@ def api_dashboard():
         logger.error(f'Dashboard error: {str(e)}')
         return api_response(error='Failed to load dashboard data', status=500)
 
+# ==================== MACHINES ENDPOINTS ====================
+
+@api_v1.route('/machines', methods=['GET'])
+@api_login_required
+def api_get_machines():
+    """Get list of machines"""
+    try:
+        from models import Machine
+        machines = Machine.query.filter_by(is_decommissioned=False).all()
+        
+        machines_data = []
+        for machine in machines:
+            machines_data.append({
+                'id': machine.id,
+                'name': machine.name,
+                'serial': machine.serial_number if hasattr(machine, 'serial_number') else '',
+                'model': machine.model if hasattr(machine, 'model') else '',
+                'site': machine.site.name if machine.site else '',
+                'status': 'active',  # Add status logic as needed
+                'lastMaintenance': machine.last_maintenance.strftime('%Y-%m-%d') if hasattr(machine, 'last_maintenance') and machine.last_maintenance else None,
+                'nextMaintenance': machine.next_maintenance.strftime('%Y-%m-%d') if hasattr(machine, 'next_maintenance') and machine.next_maintenance else None,
+            })
+        
+        return api_response(data=machines_data)
+        
+    except Exception as e:
+        logger.error(f'Get machines error: {str(e)}')
+        return api_response(error='Failed to load machines', status=500)
+
+# ==================== MAINTENANCE ENDPOINTS ====================
+
+@api_v1.route('/maintenance', methods=['GET'])
+@api_login_required
+def api_get_maintenance():
+    """Get list of maintenance tasks"""
+    try:
+        from models import MaintenanceRecord
+        from datetime import datetime
+        
+        tasks = MaintenanceRecord.query.filter_by(completed=False).all()
+        
+        tasks_data = []
+        for task in tasks:
+            # Determine status
+            status = 'pending'
+            if task.next_maintenance_date:
+                today = datetime.now().date()
+                if task.next_maintenance_date < today:
+                    status = 'overdue'
+                elif task.next_maintenance_date <= today + timedelta(days=7):
+                    status = 'due-soon'
+            
+            tasks_data.append({
+                'id': task.id,
+                'machine': task.machine.name if task.machine else '',
+                'task': task.task_description if hasattr(task, 'task_description') else 'Maintenance',
+                'dueDate': task.next_maintenance_date.strftime('%Y-%m-%d') if task.next_maintenance_date else None,
+                'status': status,
+                'assignedTo': task.assigned_to if hasattr(task, 'assigned_to') else '',
+                'site': task.machine.site.name if task.machine and task.machine.site else '',
+                'priority': 'medium',  # Add priority logic as needed
+            })
+        
+        return api_response(data=tasks_data)
+        
+    except Exception as e:
+        logger.error(f'Get maintenance error: {str(e)}')
+        return api_response(error='Failed to load maintenance tasks', status=500)
+
+# ==================== SITES ENDPOINTS ====================
+
+@api_v1.route('/sites', methods=['GET'])
+@api_login_required
+def api_get_sites():
+    """Get list of sites"""
+    try:
+        from models import Site
+        sites = Site.query.all()
+        
+        sites_data = []
+        for site in sites:
+            sites_data.append({
+                'id': site.id,
+                'name': site.name,
+                'location': site.location if hasattr(site, 'location') else '',
+                'machineCount': len(site.machines) if hasattr(site, 'machines') else 0,
+                'activeCount': len([m for m in site.machines if not m.is_decommissioned]) if hasattr(site, 'machines') else 0,
+                'maintenanceThreshold': site.maintenance_threshold if hasattr(site, 'maintenance_threshold') else 7,
+                'contactPerson': site.contact_person if hasattr(site, 'contact_person') else '',
+                'phone': site.phone if hasattr(site, 'phone') else '',
+                'status': 'active',
+            })
+        
+        return api_response(data=sites_data)
+        
+    except Exception as e:
+        logger.error(f'Get sites error: {str(e)}')
+        return api_response(error='Failed to load sites', status=500)
+
 # ==================== ERROR HANDLERS ====================
 
 @api_v1.errorhandler(404)
