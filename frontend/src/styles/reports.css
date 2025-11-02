@@ -1,0 +1,486 @@
+/* Reports Styling */
+
+.reports-preview-container {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: 100vh;
+}
+
+.reports-header {
+  margin-bottom: 24px;
+}
+
+.option-description {
+  margin-bottom: 24px;
+}
+
+.report-preview-wrapper {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Common Report Styles */
+
+.report-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  padding: 40px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.company-branding h2 {
+  margin-bottom: 8px;
+  color: #1890ff;
+}
+
+.report-meta {
+  text-align: right;
+}
+
+.report-summary {
+  margin: 24px 0;
+}
+
+.report-table {
+  margin: 24px 0;
+}
+
+.report-footer {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.print-friendly-table {
+  font-size: 12px;
+}
+
+.print-friendly-table th {
+  background: #fafafa !important;
+  font-weight: 600;
+}
+
+/* Option A: Minimalist Table Layout */
+
+.option-a .report-header {
+  padding-bottom: 16px;
+}
+
+.option-a .ant-statistic {
+  text-align: center;
+}
+
+/* Option B: Card-Based Layout */
+
+.option-b .report-header-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.option-b .report-header-card .ant-typography {
+  color: white;
+}
+
+.summary-dashboard {
+  margin-top: 16px;
+}
+
+.metric-card {
+  text-align: center;
+  background: #f5f5f5;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.metric-card.success {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.metric-card.warning {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.metric-card.danger {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  color: white;
+}
+
+.metric-content {
+  position: relative;
+  padding: 20px;
+}
+
+.metric-value {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.metric-label {
+  font-size: 14px;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.metric-icon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 32px;
+  opacity: 0.2;
+}
+
+.completion-progress {
+  margin-top: 16px;
+}
+
+.maintenance-record-card {
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.maintenance-record-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateX(4px);
+}
+
+.record-details {
+  width: 100%;
+}
+
+.record-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.record-info {
+  margin-bottom: 8px;
+}
+
+.record-meta {
+  font-size: 13px;
+}
+
+/* Option C: Timeline Layout */
+
+.option-c .report-header-timeline {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.option-c .report-header-timeline .ant-typography {
+  color: white;
+}
+
+.option-c .ant-tag {
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.statistics-panel {
+  background: #fafafa;
+}
+
+.timeline-container {
+  margin-top: 16px;
+}
+
+.timeline-record-card {
+  background: #fafafa;
+  transition: all 0.3s ease;
+}
+
+.timeline-record-card:hover {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ant-timeline-item-label {
+  width: 120px;
+}
+
+/* Print Styles */
+
+@media print {
+  .reports-preview-container,
+  .reports-header,
+  .option-description,
+  .ant-tabs-nav {
+    display: none;
+  }
+
+  .report-preview-wrapper {
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .report-container {
+    padding: 20px;
+  }
+
+  .metric-card,
+  .maintenance-record-card,
+  .timeline-record-card {
+    break-inside: avoid;
+  }
+
+  /* Ensure colored backgrounds print */
+  .metric-card.success,
+  .metric-card.warning,
+  .metric-card.danger,
+  .option-b .report-header-card,
+  .option-c .report-header-timeline {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+  .report-container {
+    padding: 20px;
+  }
+
+  .report-header {
+    flex-direction: column;
+  }
+
+  .report-meta {
+    text-align: left;
+    margin-top: 16px;
+  }
+
+  .metric-card {
+    margin-bottom: 16px;
+  }
+
+  .ant-timeline-item-label {
+    width: 80px;
+  }
+}
+
+/* Audit Report Specific Styles */
+
+.audit-report .audit-summary-card {
+  background: #fafafa;
+  text-align: center;
+}
+
+.audit-report .audit-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.summary-stat {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #8c8c8c;
+  text-transform: uppercase;
+}
+
+.audit-table .audit-fail-row {
+  background: #fff1f0;
+}
+
+.finding-item {
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 4px;
+  border-left: 3px solid #ff4d4f;
+}
+
+.signature-section {
+  margin-top: 40px;
+  padding-top: 20px;
+}
+
+.signature-block {
+  text-align: center;
+}
+
+.signature-line {
+  width: 200px;
+  height: 1px;
+  background: #d9d9d9;
+  margin-bottom: 8px;
+}
+
+/* Option B: Executive Audit Styles */
+
+.audit-report-executive .audit-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.kpi-card {
+  background: #fafafa;
+}
+
+.metric-card-small {
+  text-align: center;
+  padding: 20px;
+  background: #f5f5f5;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.metric-card-small.success {
+  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
+  color: white;
+}
+
+.metric-card-small.danger {
+  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
+  color: white;
+}
+
+.metric-card-small.neutral {
+  background: linear-gradient(135deg, #8c8c8c 0%, #bfbfbf 100%);
+  color: white;
+}
+
+.metric-card-small.info {
+  background: linear-gradient(135deg, #1890ff 0%, #40a9ff 100%);
+  color: white;
+}
+
+.metric-value-large {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.metric-label-large {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.metric-icon-large {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 40px;
+  opacity: 0.2;
+}
+
+.category-performance-card {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+}
+
+.critical-findings-card .ant-card-head {
+  background: #fff1f0;
+}
+
+/* Option C: Compliance Audit Styles */
+
+.audit-report-compliance .compliance-header {
+  background: linear-gradient(to right, #f5f5f5, #fafafa);
+  border-left: 4px solid #1890ff;
+}
+
+.compliance-score-card {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.compliance-stat {
+  text-align: center;
+  padding: 16px;
+}
+
+.stat-value-comp {
+  font-size: 32px;
+  font-weight: 700;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.stat-label-comp {
+  font-size: 12px;
+  color: #8c8c8c;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.compliance-item-card {
+  transition: all 0.3s ease;
+}
+
+.compliance-item-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateX(4px);
+}
+
+.compliance-item-card.pass {
+  background: #f6ffed;
+}
+
+.compliance-item-card.fail {
+  background: #fff1f0;
+}
+
+.non-compliance-section .finding-number {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #ff4d4f;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.certification-section {
+  background: #fafafa;
+}
+
+.signature-box {
+  padding: 20px;
+  text-align: center;
+}
+
+/* Color-blind friendly patterns */
+:root.color-blind-mode .metric-card {
+  border: 2px solid currentColor;
+}
+
+:root.color-blind-mode .ant-tag {
+  border: 2px solid currentColor;
+  font-weight: 600;
+}
