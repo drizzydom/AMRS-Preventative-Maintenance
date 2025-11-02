@@ -8,6 +8,7 @@ import {
   SettingOutlined,
   TeamOutlined,
   EnvironmentOutlined,
+  FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons'
@@ -48,6 +49,11 @@ const Sidebar: React.FC = () => {
       key: '/sites',
       icon: <EnvironmentOutlined />,
       label: 'Sites',
+    },
+    {
+      key: '/reports',
+      icon: <FileTextOutlined />,
+      label: 'Reports',
     },
     {
       key: '/users',
