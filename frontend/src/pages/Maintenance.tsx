@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Select, Typography, DatePicker } from 'antd'
+import { Card, Table, Button, Input, Space, Tag, Select, Typography, DatePicker, message, Modal } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -8,12 +8,15 @@ import {
   CheckOutlined,
   CloseOutlined,
   CalendarOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons'
+import MaintenanceTaskModal from '../components/modals/MaintenanceTaskModal'
 import '../styles/maintenance.css'
 
 const { Title } = Typography
 const { Search } = Input
 const { RangePicker } = DatePicker
+const { confirm } = Modal
 
 interface MaintenanceTask {
   key: string
@@ -30,9 +33,11 @@ interface MaintenanceTask {
 const Maintenance: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
   const [selectedSite, setSelectedSite] = useState<string>('all')
+  const [modalVisible, setModalVisible] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<MaintenanceTask | undefined>(undefined)
 
   // Mock data - will be replaced with API calls
-  const mockData: MaintenanceTask[] = [
+  const [tasks, setTasks] = useState<MaintenanceTask[]>([
     {
       key: '1',
       id: 1,
@@ -77,7 +82,69 @@ const Maintenance: React.FC = () => {
       site: 'Main Plant',
       priority: 'critical',
     },
-  ]
+  ])
+
+  const handleCreateTask = () => {
+    setSelectedTask(undefined)
+    setModalVisible(true)
+  }
+
+  const handleCompleteTask = (task: MaintenanceTask) => {
+    confirm({
+      title: 'Complete Task',
+      icon: <CheckOutlined />,
+      content: `Mark "${task.task}" as completed?`,
+      okText: 'Complete',
+      okType: 'primary',
+      cancelText: 'Cancel',
+      onOk() {
+        setTasks(tasks.map(t => 
+          t.id === task.id 
+            ? { ...t, status: 'completed' as const }
+            : t
+        ))
+        message.success('Task marked as completed')
+      },
+    })
+  }
+
+  const handleCancelTask = (task: MaintenanceTask) => {
+    confirm({
+      title: 'Cancel Task',
+      icon: <ExclamationCircleOutlined />,
+      content: `Are you sure you want to cancel "${task.task}"?`,
+      okText: 'Cancel Task',
+      okType: 'danger',
+      cancelText: 'Go Back',
+      onOk() {
+        setTasks(tasks.filter(t => t.id !== task.id))
+        message.success('Task cancelled')
+      },
+    })
+  }
+
+  const handleSubmitTask = async (values: any) => {
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    if (selectedTask) {
+      // Update existing task
+      setTasks(tasks.map(t => 
+        t.id === selectedTask.id 
+          ? { ...t, ...values, key: t.key, status: t.status }
+          : t
+      ))
+    } else {
+      // Create new task
+      const newTask: MaintenanceTask = {
+        ...values,
+        id: Math.max(...tasks.map(t => t.id)) + 1,
+        key: `${tasks.length + 1}`,
+        status: 'pending',
+      }
+      setTasks([...tasks, newTask])
+    }
+  }
 
   const columns: ColumnsType<MaintenanceTask> = [
     {
@@ -166,6 +233,7 @@ const Maintenance: React.FC = () => {
               size="small"
               title="Complete"
               style={{ color: '#52c41a' }}
+              onClick={() => handleCompleteTask(record)}
             />
           )}
           <Button
@@ -174,6 +242,7 @@ const Maintenance: React.FC = () => {
             icon={<CloseOutlined />}
             size="small"
             title="Cancel"
+            onClick={() => handleCancelTask(record)}
           />
         </Space>
       ),
@@ -226,7 +295,11 @@ const Maintenance: React.FC = () => {
             <Space>
               <Button icon={<CalendarOutlined />}>Schedule</Button>
               <Button icon={<ReloadOutlined />}>Refresh</Button>
-              <Button type="primary" icon={<PlusOutlined />}>
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />}
+                onClick={handleCreateTask}
+              >
                 New Task
               </Button>
             </Space>
@@ -237,25 +310,25 @@ const Maintenance: React.FC = () => {
               <div className="summary-item">
                 <span className="summary-label">Overdue:</span>
                 <span className="summary-value summary-overdue">
-                  {mockData.filter((t) => t.status === 'overdue').length}
+                  {tasks.filter((t) => t.status === 'overdue').length}
                 </span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">In Progress:</span>
                 <span className="summary-value summary-progress">
-                  {mockData.filter((t) => t.status === 'in-progress').length}
+                  {tasks.filter((t) => t.status === 'in-progress').length}
                 </span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Pending:</span>
                 <span className="summary-value summary-pending">
-                  {mockData.filter((t) => t.status === 'pending').length}
+                  {tasks.filter((t) => t.status === 'pending').length}
                 </span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Completed:</span>
                 <span className="summary-value summary-completed">
-                  {mockData.filter((t) => t.status === 'completed').length}
+                  {tasks.filter((t) => t.status === 'completed').length}
                 </span>
               </div>
             </Space>
@@ -263,7 +336,7 @@ const Maintenance: React.FC = () => {
 
           <Table
             columns={columns}
-            dataSource={mockData}
+            dataSource={tasks}
             pagination={{
               pageSize: 25,
               showSizeChanger: true,
@@ -274,6 +347,13 @@ const Maintenance: React.FC = () => {
           />
         </Space>
       </Card>
+
+      <MaintenanceTaskModal
+        visible={modalVisible}
+        task={selectedTask}
+        onCancel={() => setModalVisible(false)}
+        onSubmit={handleSubmitTask}
+      />
     </div>
   )
 }
