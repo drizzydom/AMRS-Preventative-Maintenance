@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Select, Typography, Row, Col } from 'antd'
+import { Card, Table, Button, Input, Space, Tag, Select, Typography, Row, Col, message, Modal } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -9,11 +9,14 @@ import {
   EditOutlined,
   DeleteOutlined,
   ToolOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons'
+import MachineModal from '../components/modals/MachineModal'
 import '../styles/machines.css'
 
 const { Title } = Typography
 const { Search } = Input
+const { confirm } = Modal
 
 interface Machine {
   key: string
@@ -31,9 +34,9 @@ const Machines: React.FC = () => {
   const [selectedSite, setSelectedSite] = useState<string>('all')
   const [showDecommissioned, setShowDecommissioned] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-
-  // Mock data - will be replaced with API calls
-  const mockData: Machine[] = [
+  const [modalVisible, setModalVisible] = useState(false)
+  const [selectedMachine, setSelectedMachine] = useState<Machine | undefined>(undefined)
+  const [machines, setMachines] = useState<Machine[]>([
     {
       key: '1',
       id: 1,
@@ -67,7 +70,58 @@ const Machines: React.FC = () => {
       lastMaintenance: '2025-10-01',
       nextMaintenance: '2025-12-01',
     },
-  ]
+  ])
+
+  const handleCreateMachine = () => {
+    setSelectedMachine(undefined)
+    setModalVisible(true)
+  }
+
+  const handleEditMachine = (machine: Machine) => {
+    setSelectedMachine(machine)
+    setModalVisible(true)
+  }
+
+  const handleDeleteMachine = (machine: Machine) => {
+    confirm({
+      title: 'Delete Machine',
+      icon: <ExclamationCircleOutlined />,
+      content: `Are you sure you want to delete "${machine.name}"?`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk() {
+        setMachines(machines.filter(m => m.id !== machine.id))
+        message.success(`Machine "${machine.name}" deleted successfully`)
+      },
+    })
+  }
+
+  const handleSubmitMachine = async (values: any) => {
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    if (selectedMachine) {
+      // Update existing machine
+      setMachines(machines.map(m => 
+        m.id === selectedMachine.id 
+          ? { ...m, ...values, key: m.key }
+          : m
+      ))
+      message.success('Machine updated successfully')
+    } else {
+      // Create new machine
+      const newMachine: Machine = {
+        ...values,
+        id: Math.max(...machines.map(m => m.id)) + 1,
+        key: `${machines.length + 1}`,
+        lastMaintenance: '',
+        nextMaintenance: '',
+      }
+      setMachines([...machines, newMachine])
+      message.success('Machine created successfully')
+    }
+  }
 
   const columns: ColumnsType<Machine> = [
     {
@@ -138,6 +192,7 @@ const Machines: React.FC = () => {
             icon={<EditOutlined />}
             size="small"
             title="Edit"
+            onClick={() => handleEditMachine(record)}
           />
           <Button
             type="text"
@@ -151,6 +206,7 @@ const Machines: React.FC = () => {
             icon={<DeleteOutlined />}
             size="small"
             title="Delete"
+            onClick={() => handleDeleteMachine(record)}
           />
         </Space>
       ),
@@ -159,7 +215,6 @@ const Machines: React.FC = () => {
 
   const handleSearch = (value: string) => {
     setSearchTerm(value)
-    // TODO: Implement search functionality
   }
 
   return (
@@ -229,7 +284,11 @@ const Machines: React.FC = () => {
             </Space>
             <Space>
               <Button icon={<ReloadOutlined />}>Refresh</Button>
-              <Button type="primary" icon={<PlusOutlined />}>
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />}
+                onClick={handleCreateMachine}
+              >
                 Add Machine
               </Button>
             </Space>
@@ -237,7 +296,7 @@ const Machines: React.FC = () => {
 
           <Table
             columns={columns}
-            dataSource={mockData}
+            dataSource={machines}
             pagination={{
               pageSize: 25,
               showSizeChanger: true,
@@ -248,6 +307,13 @@ const Machines: React.FC = () => {
           />
         </Space>
       </Card>
+
+      <MachineModal
+        visible={modalVisible}
+        machine={selectedMachine}
+        onCancel={() => setModalVisible(false)}
+        onSubmit={handleSubmitMachine}
+      />
     </div>
   )
 }
