@@ -1,18 +1,24 @@
 """
 REST API v1 endpoints for React frontend
+Performance optimized with caching and query optimization
 """
 from flask import Blueprint, jsonify, request, session
 from flask_login import login_user, logout_user, current_user, login_required
-from functools import wraps
+from functools import wraps, lru_cache
 from models import User, db
 from werkzeug.security import check_password_hash
 import logging
+from datetime import datetime, timedelta
 
 # Create API blueprint
 api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 
 # Setup logging
 logger = logging.getLogger(__name__)
+
+# Simple in-memory cache for dashboard stats (cache for 5 minutes)
+_dashboard_cache = {'data': None, 'timestamp': None}
+CACHE_DURATION = 300  # 5 minutes in seconds
 
 def api_response(data=None, message=None, error=None, status=200):
     """Standard API response format"""
@@ -139,43 +145,54 @@ def api_current_user():
 @api_v1.route('/dashboard', methods=['GET'])
 @api_login_required
 def api_dashboard():
-    """Get dashboard statistics"""
+    """Get dashboard statistics with caching"""
+    global _dashboard_cache
+    
     try:
+        # Check cache
+        now = datetime.now()
+        if (_dashboard_cache['data'] is not None and 
+            _dashboard_cache['timestamp'] is not None and
+            (now - _dashboard_cache['timestamp']).total_seconds() < CACHE_DURATION):
+            logger.debug('Returning cached dashboard data')
+            return api_response(data=_dashboard_cache['data'])
+        
+        # Cache miss or expired - fetch fresh data
         from models import Machine, MaintenanceRecord
-        from datetime import datetime, timedelta
         from sqlalchemy import func
         
-        # Get counts
-        total_machines = Machine.query.filter_by(is_decommissioned=False).count()
-        
-        # Get overdue tasks
+        # Optimized queries using single database calls
         today = datetime.now().date()
-        overdue_count = MaintenanceRecord.query.filter(
-            MaintenanceRecord.next_maintenance_date < today,
-            MaintenanceRecord.completed == False
-        ).count()
-        
-        # Get due soon (next 7 days)
         due_soon_date = today + timedelta(days=7)
-        due_soon_count = MaintenanceRecord.query.filter(
-            MaintenanceRecord.next_maintenance_date >= today,
-            MaintenanceRecord.next_maintenance_date <= due_soon_date,
-            MaintenanceRecord.completed == False
-        ).count()
-        
-        # Get completed this month
         first_day_of_month = today.replace(day=1)
-        completed_count = MaintenanceRecord.query.filter(
-            MaintenanceRecord.completed == True,
-            MaintenanceRecord.completed_date >= first_day_of_month
-        ).count()
+        
+        # Single query for machine count
+        total_machines = db.session.query(func.count(Machine.id)).filter_by(
+            is_decommissioned=False
+        ).scalar()
+        
+        # Single query for maintenance statistics
+        maintenance_stats = db.session.query(
+            func.sum((MaintenanceRecord.next_maintenance_date < today) & 
+                    (MaintenanceRecord.completed == False)).label('overdue'),
+            func.sum((MaintenanceRecord.next_maintenance_date >= today) & 
+                    (MaintenanceRecord.next_maintenance_date <= due_soon_date) &
+                    (MaintenanceRecord.completed == False)).label('due_soon'),
+            func.sum((MaintenanceRecord.completed == True) &
+                    (MaintenanceRecord.completed_date >= first_day_of_month)).label('completed')
+        ).first()
         
         stats = {
-            'total_machines': total_machines,
-            'overdue': overdue_count,
-            'due_soon': due_soon_count,
-            'completed': completed_count,
+            'total_machines': total_machines or 0,
+            'overdue': int(maintenance_stats.overdue or 0),
+            'due_soon': int(maintenance_stats.due_soon or 0),
+            'completed': int(maintenance_stats.completed or 0),
         }
+        
+        # Update cache
+        _dashboard_cache['data'] = stats
+        _dashboard_cache['timestamp'] = now
+        logger.debug('Dashboard cache updated')
         
         return api_response(data=stats)
         
@@ -188,10 +205,15 @@ def api_dashboard():
 @api_v1.route('/machines', methods=['GET'])
 @api_login_required
 def api_get_machines():
-    """Get list of machines"""
+    """Get list of machines with optimized queries"""
     try:
         from models import Machine
-        machines = Machine.query.filter_by(is_decommissioned=False).all()
+        from sqlalchemy.orm import joinedload
+        
+        # Optimize with eager loading to avoid N+1 queries
+        machines = Machine.query.options(
+            joinedload(Machine.site)
+        ).filter_by(is_decommissioned=False).all()
         
         machines_data = []
         for machine in machines:
@@ -217,22 +239,27 @@ def api_get_machines():
 @api_v1.route('/maintenance', methods=['GET'])
 @api_login_required
 def api_get_maintenance():
-    """Get list of maintenance tasks"""
+    """Get list of maintenance tasks with optimized queries"""
     try:
         from models import MaintenanceRecord
-        from datetime import datetime
+        from sqlalchemy.orm import joinedload
         
-        tasks = MaintenanceRecord.query.filter_by(completed=False).all()
+        # Optimize with eager loading to avoid N+1 queries
+        tasks = MaintenanceRecord.query.options(
+            joinedload(MaintenanceRecord.machine).joinedload('site')
+        ).filter_by(completed=False).all()
+        
+        today = datetime.now().date()
+        due_soon_date = today + timedelta(days=7)
         
         tasks_data = []
         for task in tasks:
             # Determine status
             status = 'pending'
             if task.next_maintenance_date:
-                today = datetime.now().date()
                 if task.next_maintenance_date < today:
                     status = 'overdue'
-                elif task.next_maintenance_date <= today + timedelta(days=7):
+                elif task.next_maintenance_date <= due_soon_date:
                     status = 'due-soon'
             
             tasks_data.append({

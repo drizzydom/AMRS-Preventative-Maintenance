@@ -1154,6 +1154,7 @@ function createWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false, // Don't show until ready
+        frame: false, // Frameless window for custom title bar
         icon: path.join(__dirname, 'assets', 'icon.png'), // Add your app icon
         webPreferences: {
             nodeIntegration: false,
@@ -1162,7 +1163,7 @@ function createWindow() {
             webSecurity: true,
             preload: path.join(__dirname, 'main-preload.js')
         },
-        titleBarStyle: 'default',
+        titleBarStyle: 'hidden',
         autoHideMenuBar: false
     });
     
@@ -1485,6 +1486,41 @@ ipcMain.on('check-for-updates', () => {
     manualUpdateCheck = true;
     hasCheckedForUpdates = false; // Allow manual check even after auto check
     checkForUpdatesWhenReady();
+});
+
+// IPC handlers for window controls
+ipcMain.on('minimize-window', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.minimize();
+        writeLog('[IPC] Window minimized');
+    }
+});
+
+ipcMain.on('maximize-window', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMaximized()) {
+            mainWindow.unmaximize();
+            writeLog('[IPC] Window unmaximized');
+        } else {
+            mainWindow.maximize();
+            writeLog('[IPC] Window maximized');
+        }
+    }
+});
+
+ipcMain.on('close-window', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.close();
+        writeLog('[IPC] Window close requested');
+    }
+});
+
+// IPC handler to check if window is maximized
+ipcMain.handle('is-maximized', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        return mainWindow.isMaximized();
+    }
+    return false;
 });
 
 // IPC handlers for printing functionality
