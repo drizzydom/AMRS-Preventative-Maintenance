@@ -4,20 +4,20 @@ import '../styles/titlebar.css'
 
 const TitleBar: React.FC = () => {
   const handleMinimize = () => {
-    if (window.electronAPI) {
-      window.electronAPI.minimize()
+    if (window.electronAPI && window.electronAPI.window) {
+      window.electronAPI.window.minimize()
     }
   }
 
   const handleMaximize = () => {
-    if (window.electronAPI) {
-      window.electronAPI.maximize()
+    if (window.electronAPI && window.electronAPI.window) {
+      window.electronAPI.window.maximize()
     }
   }
 
   const handleClose = () => {
-    if (window.electronAPI) {
-      window.electronAPI.close()
+    if (window.electronAPI && window.electronAPI.window) {
+      window.electronAPI.window.close()
     }
   }
 

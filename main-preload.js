@@ -1,7 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose print functionality to the renderer process
+// Expose print functionality and window controls to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
+    // Window controls
+    window: {
+        minimize: () => ipcRenderer.send('minimize-window'),
+        maximize: () => ipcRenderer.send('maximize-window'),
+        close: () => ipcRenderer.send('close-window'),
+        isMaximized: () => ipcRenderer.invoke('is-maximized')
+    },
+    
     // Print functionality
     print: {
         // Print the current page
