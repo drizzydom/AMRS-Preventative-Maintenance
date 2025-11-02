@@ -12,6 +12,7 @@ import Sites from './pages/Sites'
 import Users from './pages/admin/Users'
 import Settings from './pages/Settings'
 import ReportsPreview from './pages/reports/ReportsPreview'
+import AuditReportsPreview from './pages/reports/AuditReportsPreview'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import './styles/App.css'
@@ -91,6 +92,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ReportsPreview />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reports/audits"
+                  element={
+                    <ProtectedRoute>
+                      <AuditReportsPreview />
                     </ProtectedRoute>
                   }
                 />
