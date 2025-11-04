@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Select, Typography, Progress } from 'antd'
+import React, { useState, useEffect } from 'react'
+import { Card, Table, Button, Input, Space, Tag, Select, Typography, Progress, message, Modal } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -7,80 +7,174 @@ import {
   ReloadOutlined,
   CheckOutlined,
   FileTextOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons'
+import apiClient from '../utils/api'
+import AuditModal from '../components/modals/AuditModal'
 import '../styles/audits.css'
 
 const { Title } = Typography
 const { Search } = Input
+const { confirm } = Modal
 
 interface Audit {
   key: string
   id: number
   name: string
+  description?: string
   site: string
-  date: string
-  totalTasks: number
-  completedTasks: number
+  site_id: number
+  interval: string
+  custom_interval_days?: number
+  totalMachines: number
+  completedToday: number
   status: 'pending' | 'in-progress' | 'completed'
-  assignedTo: string
-  type: 'safety' | 'quality' | 'maintenance' | 'compliance'
+  machines: Array<{ id: number; name: string }>
+  created_at?: string
 }
 
 const Audits: React.FC = () => {
-  const [selectedType, setSelectedType] = useState<string>('all')
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
+  const [audits, setAudits] = useState<Audit[]>([])
+  const [sites, setSites] = useState<any[]>([])
+  const [machines, setMachines] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  // Mock data - will be replaced with API calls
-  const mockData: Audit[] = [
-    {
-      key: '1',
-      id: 1,
-      name: 'Q4 Safety Audit',
-      site: 'Main Plant',
-      date: '2025-11-15',
-      totalTasks: 45,
-      completedTasks: 38,
-      status: 'in-progress',
-      assignedTo: 'Safety Team',
-      type: 'safety',
-    },
-    {
-      key: '2',
-      id: 2,
-      name: 'Equipment Quality Check',
-      site: 'Warehouse',
-      date: '2025-10-28',
-      totalTasks: 32,
-      completedTasks: 32,
-      status: 'completed',
-      assignedTo: 'QA Team',
-      type: 'quality',
-    },
-    {
-      key: '3',
-      id: 3,
-      name: 'Monthly Maintenance Review',
-      site: 'Main Plant',
-      date: '2025-11-10',
-      totalTasks: 28,
-      completedTasks: 15,
-      status: 'in-progress',
-      assignedTo: 'Maintenance',
-      type: 'maintenance',
-    },
-    {
-      key: '4',
-      id: 4,
-      name: 'ISO Compliance Audit',
-      site: 'All Sites',
-      date: '2025-12-01',
-      totalTasks: 67,
-      completedTasks: 0,
-      status: 'pending',
-      assignedTo: 'Compliance',
-      type: 'compliance',
-    },
-  ]
+  const fetchAudits = async () => {
+    try {
+      setLoading(true)
+      const response = await apiClient.get('/api/v1/audits')
+      const auditsData = response.data.data.map((audit: any) => ({
+        key: audit.id.toString(),
+        id: audit.id,
+        name: audit.name,
+        description: audit.description || '',
+        site: audit.site,
+        site_id: audit.site_id,
+        interval: audit.interval,
+        custom_interval_days: audit.custom_interval_days,
+        totalMachines: audit.totalMachines || 0,
+        completedToday: audit.completedToday || 0,
+        status: audit.status,
+        machines: audit.machines || [],
+        created_at: audit.created_at,
+      }))
+      setAudits(auditsData)
+    } catch (error: any) {
+      console.error('Failed to load audits:', error)
+      message.error('Failed to load audits')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchSites = async () => {
+    try {
+      const response = await apiClient.get('/api/v1/sites')
+      setSites(response.data.data)
+    } catch (error) {
+      console.error('Failed to load sites:', error)
+    }
+  }
+
+  const fetchMachines = async () => {
+    try {
+      const response = await apiClient.get('/api/v1/machines')
+      setMachines(response.data.data)
+    } catch (error) {
+      console.error('Failed to load machines:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchAudits()
+    fetchSites()
+    fetchMachines()
+  }, [])
+
+  const handleAddAudit = () => {
+    setSelectedAudit(null)
+    setModalOpen(true)
+  }
+
+  const handleEditAudit = (audit: Audit) => {
+    setSelectedAudit(audit)
+    setModalOpen(true)
+  }
+
+  const handleSubmitAudit = async (values: any) => {
+    try {
+      setSubmitting(true)
+      const formData = new FormData()
+      formData.append('name', values.name)
+      formData.append('description', values.description || '')
+      formData.append('site_id', values.site_id.toString())
+      formData.append('interval', values.interval)
+      
+      if (values.interval === 'custom' && values.custom_interval_days) {
+        formData.append('custom_interval_days', values.custom_interval_days.toString())
+      }
+
+      // Add machine_ids as array
+      if (values.machine_ids && values.machine_ids.length > 0) {
+        values.machine_ids.forEach((id: number) => {
+          formData.append('machine_ids', id.toString())
+        })
+      }
+
+      formData.append('create_audit', '1')
+
+      if (selectedAudit) {
+        // Edit not supported in current backend - would need new endpoint
+        message.warning('Edit functionality not yet available')
+      } else {
+        // Create new audit
+        await apiClient.post('/audits', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        message.success('Audit task created successfully')
+      }
+
+      setModalOpen(false)
+      setSelectedAudit(null)
+      await fetchAudits()
+    } catch (error: any) {
+      console.error('Failed to save audit:', error)
+      const errorMsg = error.response?.data?.message || 'Failed to save audit'
+      message.error(errorMsg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDeleteAudit = (audit: Audit) => {
+    confirm({
+      title: 'Delete Audit Task',
+      icon: <ExclamationCircleOutlined />,
+      content: `Are you sure you want to delete "${audit.name}"? This will also delete all completion records.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      async onOk() {
+        try {
+          await apiClient.post(`/audit-tasks/delete/${audit.id}`)
+          message.success('Audit task deleted successfully')
+          await fetchAudits()
+        } catch (error: any) {
+          console.error('Failed to delete audit:', error)
+          const errorMsg = error.response?.data?.message || 'Failed to delete audit'
+          message.error(errorMsg)
+        }
+      },
+    })
+  }
+
+  // Mock data removed - now using real API data from fetchAudits()
 
   const columns: ColumnsType<Audit> = [
     {
@@ -90,25 +184,11 @@ const Audits: React.FC = () => {
       width: 60,
     },
     {
-      title: 'Audit Name',
+      title: 'Task Name',
       dataIndex: 'name',
       key: 'name',
       sorter: (a, b) => a.name.localeCompare(b.name),
       render: (text) => <strong>{text}</strong>,
-    },
-    {
-      title: 'Type',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => {
-        const colors: Record<string, string> = {
-          safety: 'red',
-          quality: 'blue',
-          maintenance: 'orange',
-          compliance: 'purple',
-        }
-        return <Tag color={colors[type]}>{type.toUpperCase()}</Tag>
-      },
     },
     {
       title: 'Site',
@@ -116,16 +196,29 @@ const Audits: React.FC = () => {
       key: 'site',
     },
     {
-      title: 'Date',
-      dataIndex: 'date',
-      key: 'date',
-      sorter: (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      title: 'Interval',
+      dataIndex: 'interval',
+      key: 'interval',
+      render: (interval: string, record) => {
+        if (interval === 'custom' && record.custom_interval_days) {
+          return `Every ${record.custom_interval_days} day${record.custom_interval_days > 1 ? 's' : ''}`
+        }
+        return interval.charAt(0).toUpperCase() + interval.slice(1)
+      },
     },
     {
-      title: 'Progress',
+      title: 'Machines',
+      dataIndex: 'totalMachines',
+      key: 'totalMachines',
+      render: (total) => <Tag color="blue">{total}</Tag>,
+    },
+    {
+      title: 'Today\'s Progress',
       key: 'progress',
       render: (_, record) => {
-        const percent = Math.round((record.completedTasks / record.totalTasks) * 100)
+        const percent = record.totalMachines > 0 
+          ? Math.round((record.completedToday / record.totalMachines) * 100) 
+          : 0
         return (
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <Progress
@@ -134,7 +227,7 @@ const Audits: React.FC = () => {
               status={percent === 100 ? 'success' : 'active'}
             />
             <span className="progress-text">
-              {record.completedTasks}/{record.totalTasks} tasks
+              {record.completedToday}/{record.totalMachines} completed
             </span>
           </Space>
         )
@@ -155,31 +248,26 @@ const Audits: React.FC = () => {
       },
     },
     {
-      title: 'Assigned To',
-      dataIndex: 'assignedTo',
-      key: 'assignedTo',
-    },
-    {
       title: 'Actions',
       key: 'actions',
-      width: 100,
+      width: 120,
       render: (_, record) => (
         <Space size="small">
           <Button
             type="text"
-            icon={<FileTextOutlined />}
+            icon={<EditOutlined />}
             size="small"
-            title="View Details"
+            title="Edit"
+            onClick={() => handleEditAudit(record)}
           />
-          {record.status !== 'completed' && (
-            <Button
-              type="text"
-              icon={<CheckOutlined />}
-              size="small"
-              title="Complete"
-              style={{ color: '#52c41a' }}
-            />
-          )}
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            size="small"
+            title="Delete"
+            onClick={() => handleDeleteAudit(record)}
+          />
         </Space>
       ),
     },
@@ -188,7 +276,7 @@ const Audits: React.FC = () => {
   return (
     <div className="audits-container">
       <div className="audits-header">
-        <Title level={2}>Audits</Title>
+        <Title level={2}>Audit Tasks</Title>
       </div>
 
       <Card className="audits-table-card">
@@ -196,22 +284,10 @@ const Audits: React.FC = () => {
           <div className="audits-controls">
             <Space wrap>
               <Search
-                placeholder="Search audits..."
+                placeholder="Search audit tasks..."
                 allowClear
                 style={{ width: 300 }}
                 prefix={<SearchOutlined />}
-              />
-              <Select
-                value={selectedType}
-                onChange={setSelectedType}
-                style={{ width: 150 }}
-                options={[
-                  { value: 'all', label: 'All Types' },
-                  { value: 'safety', label: 'Safety' },
-                  { value: 'quality', label: 'Quality' },
-                  { value: 'maintenance', label: 'Maintenance' },
-                  { value: 'compliance', label: 'Compliance' },
-                ]}
               />
               <Select
                 value={selectedStatus}
@@ -226,9 +302,11 @@ const Audits: React.FC = () => {
               />
             </Space>
             <Space>
-              <Button icon={<ReloadOutlined />}>Refresh</Button>
-              <Button type="primary" icon={<PlusOutlined />}>
-                New Audit
+              <Button icon={<ReloadOutlined />} onClick={fetchAudits} loading={loading}>
+                Refresh
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddAudit}>
+                New Audit Task
               </Button>
             </Space>
           </div>
@@ -236,25 +314,25 @@ const Audits: React.FC = () => {
           <div className="audits-summary">
             <Space size="large">
               <div className="summary-item">
-                <span className="summary-label">Total Audits:</span>
-                <span className="summary-value">{mockData.length}</span>
+                <span className="summary-label">Total Tasks:</span>
+                <span className="summary-value">{audits.length}</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Pending:</span>
                 <span className="summary-value summary-pending">
-                  {mockData.filter((a) => a.status === 'pending').length}
+                  {audits.filter((a) => a.status === 'pending').length}
                 </span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">In Progress:</span>
                 <span className="summary-value summary-progress">
-                  {mockData.filter((a) => a.status === 'in-progress').length}
+                  {audits.filter((a) => a.status === 'in-progress').length}
                 </span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Completed:</span>
                 <span className="summary-value summary-completed">
-                  {mockData.filter((a) => a.status === 'completed').length}
+                  {audits.filter((a) => a.status === 'completed').length}
                 </span>
               </div>
             </Space>
@@ -262,16 +340,30 @@ const Audits: React.FC = () => {
 
           <Table
             columns={columns}
-            dataSource={mockData}
+            dataSource={audits}
+            loading={loading}
             pagination={{
               pageSize: 25,
               showSizeChanger: true,
               pageSizeOptions: ['25', '50', '100'],
-              showTotal: (total) => `Total ${total} audits`,
+              showTotal: (total) => `Total ${total} audit tasks`,
             }}
           />
         </Space>
       </Card>
+
+      <AuditModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false)
+          setSelectedAudit(null)
+        }}
+        onSubmit={handleSubmitAudit}
+        audit={selectedAudit}
+        sites={sites}
+        machines={machines}
+        loading={submitting}
+      />
     </div>
   )
 }

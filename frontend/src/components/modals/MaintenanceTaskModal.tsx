@@ -7,11 +7,11 @@ interface MaintenanceTask {
   id?: number
   machine: string
   task: string
-  dueDate: string
+  dueDate: string | null
   assignedTo: string
   site: string
   priority: 'low' | 'medium' | 'high' | 'critical'
-  status?: 'pending' | 'overdue' | 'completed' | 'in-progress'
+  status?: 'pending' | 'overdue' | 'completed' | 'in-progress' | 'due-soon'
 }
 
 interface MaintenanceTaskModalProps {

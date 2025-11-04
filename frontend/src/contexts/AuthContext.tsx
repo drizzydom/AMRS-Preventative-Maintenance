@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { message } from 'antd'
-import axios from 'axios'
+import apiClient from '../utils/api'
 
 interface User {
   id: number
@@ -41,8 +41,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await axios.get('/api/v1/auth/me')
-      setUser(response.data)
+      const response = await apiClient.get('/api/v1/auth/me')
+      // API response structure: { data: {...user data...} }
+      setUser(response.data.data)
     } catch (error) {
       setUser(null)
     } finally {
@@ -57,13 +58,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (username: string, password: string, rememberMe = false) => {
     try {
       setIsLoading(true)
-      const response = await axios.post('/api/v1/auth/login', {
+      const response = await apiClient.post('/api/v1/auth/login', {
         username,
         password,
         remember_me: rememberMe,
       })
       
-      setUser(response.data.user)
+      // API response structure: { data: { user: {...} }, message: '...' }
+      setUser(response.data.data.user)
       message.success('Login successful!')
       navigate('/dashboard')
     } catch (error: any) {
@@ -77,7 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.post('/api/v1/auth/logout')
+      await apiClient.post('/api/v1/auth/logout')
       setUser(null)
       message.success('Logged out successfully')
       navigate('/login')
@@ -93,6 +95,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     checkAuth,
+  }
+
+  // Show loading screen while checking initial authentication
+  if (isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        backgroundColor: '#f0f2f5'
+      }}>
+        <div style={{ marginBottom: '20px' }}>
+          <svg width="50" height="50" viewBox="0 0 50 50" style={{ animation: 'spin 1s linear infinite' }}>
+            <circle cx="25" cy="25" r="20" fill="none" stroke="#1890ff" strokeWidth="4" strokeDasharray="80, 200" strokeLinecap="round">
+              <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
+            </circle>
+          </svg>
+        </div>
+        <div style={{ fontSize: '16px', color: '#595959' }}>Loading AMRS Maintenance Tracker...</div>
+        <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '8px' }}>Initializing application...</div>
+      </div>
+    )
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

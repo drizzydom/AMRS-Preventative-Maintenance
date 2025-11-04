@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Typography, Badge } from 'antd'
+import React, { useState, useEffect } from 'react'
+import { Card, Table, Button, Input, Space, Tag, Typography, Badge, message, Modal } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -10,69 +10,147 @@ import {
   UserOutlined,
   LockOutlined,
   UnlockOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons'
+import apiClient from '../../utils/api'
+import UserModal from '../../components/modals/UserModal'
 import '../../styles/users.css'
 
 const { Title } = Typography
 const { Search } = Input
+const { confirm } = Modal
 
 interface User {
   key: string
   id: number
   username: string
   email: string
+  full_name?: string
   role: string
-  isActive: boolean
-  lastLogin: string
-  createdAt: string
+  role_id?: number
+  is_admin: boolean
+  created_at?: string
 }
 
 const Users: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
+  const [users, setUsers] = useState<User[]>([])
+  const [roles, setRoles] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  // Mock data - will be replaced with API calls
-  const mockData: User[] = [
-    {
-      key: '1',
-      id: 1,
-      username: 'admin',
-      email: 'admin@amrs.com',
-      role: 'Administrator',
-      isActive: true,
-      lastLogin: '2025-11-01 10:30:00',
-      createdAt: '2024-01-15',
-    },
-    {
-      key: '2',
-      id: 2,
-      username: 'john.doe',
-      email: 'john.doe@amrs.com',
-      role: 'Manager',
-      isActive: true,
-      lastLogin: '2025-11-01 09:15:00',
-      createdAt: '2024-03-20',
-    },
-    {
-      key: '3',
-      id: 3,
-      username: 'jane.smith',
-      email: 'jane.smith@amrs.com',
-      role: 'Technician',
-      isActive: true,
-      lastLogin: '2025-10-31 16:45:00',
-      createdAt: '2024-06-10',
-    },
-    {
-      key: '4',
-      id: 4,
-      username: 'bob.johnson',
-      email: 'bob.johnson@amrs.com',
-      role: 'Technician',
-      isActive: false,
-      lastLogin: '2025-10-15 14:20:00',
-      createdAt: '2024-02-28',
-    },
-  ]
+  const fetchUsers = async () => {
+    try {
+      setLoading(true)
+      const response = await apiClient.get('/api/v1/users')
+      const usersData = response.data.data.map((user: any) => ({
+        key: user.id.toString(),
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        full_name: user.full_name || '',
+        role: user.role,
+        role_id: user.role_id,
+        is_admin: user.is_admin || false,
+        created_at: user.created_at,
+      }))
+      setUsers(usersData)
+    } catch (error: any) {
+      console.error('Failed to load users:', error)
+      message.error('Failed to load users')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchRoles = async () => {
+    try {
+      const response = await apiClient.get('/api/v1/roles')
+      setRoles(response.data.data)
+    } catch (error) {
+      console.error('Failed to load roles:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+    fetchRoles()
+  }, [])
+
+  const handleAddUser = () => {
+    setSelectedUser(null)
+    setModalOpen(true)
+  }
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user)
+    setModalOpen(true)
+  }
+
+  const handleSubmitUser = async (values: any) => {
+    try {
+      setSubmitting(true)
+      const formData = new FormData()
+      formData.append('username', values.username)
+      formData.append('email', values.email)
+      formData.append('full_name', values.full_name || '')
+      formData.append('role_id', values.role_id.toString())
+      
+      if (values.password) {
+        formData.append('password', values.password)
+      }
+
+      if (selectedUser) {
+        // Edit existing user
+        await apiClient.post(`/user/edit/${selectedUser.id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        message.success('User updated successfully')
+      } else {
+        // Create new user
+        await apiClient.post('/admin/users', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        message.success('User created successfully')
+      }
+
+      setModalOpen(false)
+      setSelectedUser(null)
+      await fetchUsers()
+    } catch (error: any) {
+      console.error('Failed to save user:', error)
+      const errorMsg = error.response?.data?.message || 'Failed to save user'
+      message.error(errorMsg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDeleteUser = (user: User) => {
+    confirm({
+      title: 'Delete User',
+      icon: <ExclamationCircleOutlined />,
+      content: `Are you sure you want to delete user "${user.username}"? This action cannot be undone.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      async onOk() {
+        try {
+          await apiClient.post(`/user/delete/${user.id}`)
+          message.success('User deleted successfully')
+          await fetchUsers()
+        } catch (error: any) {
+          console.error('Failed to delete user:', error)
+          const errorMsg = error.response?.data?.message || 'Failed to delete user'
+          message.error(errorMsg)
+        }
+      },
+    })
+  }
+
+  // Mock data removed - now using real API data from fetchUsers()
 
   const columns: ColumnsType<User> = [
     {
@@ -89,8 +167,9 @@ const Users: React.FC = () => {
       sorter: (a, b) => a.username.localeCompare(b.username),
       render: (text, record) => (
         <Space>
-          <UserOutlined style={{ color: record.isActive ? '#1890ff' : '#8c8c8c' }} />
+          <UserOutlined style={{ color: '#1890ff' }} />
           <strong>{text}</strong>
+          {record.is_admin && <Tag color="red">Admin</Tag>}
         </Space>
       ),
     },
@@ -100,58 +179,41 @@ const Users: React.FC = () => {
       key: 'email',
     },
     {
+      title: 'Full Name',
+      dataIndex: 'full_name',
+      key: 'full_name',
+    },
+    {
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
       render: (role: string) => {
         const colors: Record<string, string> = {
           Administrator: 'red',
+          Admin: 'red',
           Manager: 'blue',
           Technician: 'green',
-          Viewer: 'default',
+          User: 'default',
         }
         return <Tag color={colors[role] || 'default'}>{role}</Tag>
       },
-      filters: [
-        { text: 'Administrator', value: 'Administrator' },
-        { text: 'Manager', value: 'Manager' },
-        { text: 'Technician', value: 'Technician' },
-        { text: 'Viewer', value: 'Viewer' },
-      ],
       onFilter: (value, record) => record.role === value,
     },
     {
-      title: 'Status',
-      dataIndex: 'isActive',
-      key: 'isActive',
-      render: (isActive: boolean) => (
-        <Badge
-          status={isActive ? 'success' : 'error'}
-          text={isActive ? 'Active' : 'Inactive'}
-        />
-      ),
-      filters: [
-        { text: 'Active', value: true },
-        { text: 'Inactive', value: false },
-      ],
-      onFilter: (value, record) => record.isActive === value,
-    },
-    {
-      title: 'Last Login',
-      dataIndex: 'lastLogin',
-      key: 'lastLogin',
-      sorter: (a, b) => new Date(a.lastLogin).getTime() - new Date(b.lastLogin).getTime(),
-    },
-    {
       title: 'Created',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => date ? new Date(date).toLocaleDateString() : '-',
+      sorter: (a, b) => {
+        if (!a.created_at) return 1
+        if (!b.created_at) return -1
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      },
     },
     {
       title: 'Actions',
       key: 'actions',
-      width: 150,
+      width: 120,
       render: (_, record) => (
         <Space size="small">
           <Button
@@ -159,13 +221,7 @@ const Users: React.FC = () => {
             icon={<EditOutlined />}
             size="small"
             title="Edit User"
-          />
-          <Button
-            type="text"
-            icon={record.isActive ? <LockOutlined /> : <UnlockOutlined />}
-            size="small"
-            title={record.isActive ? 'Deactivate' : 'Activate'}
-            style={{ color: record.isActive ? '#ff4d4f' : '#52c41a' }}
+            onClick={() => handleEditUser(record)}
           />
           <Button
             type="text"
@@ -173,6 +229,7 @@ const Users: React.FC = () => {
             icon={<DeleteOutlined />}
             size="small"
             title="Delete User"
+            onClick={() => handleDeleteUser(record)}
           />
         </Space>
       ),
@@ -198,8 +255,10 @@ const Users: React.FC = () => {
               />
             </Space>
             <Space>
-              <Button icon={<ReloadOutlined />}>Refresh</Button>
-              <Button type="primary" icon={<PlusOutlined />}>
+              <Button icon={<ReloadOutlined />} onClick={fetchUsers} loading={loading}>
+                Refresh
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddUser}>
                 Add User
               </Button>
             </Space>
@@ -209,32 +268,25 @@ const Users: React.FC = () => {
             <Space size="large">
               <div className="summary-item">
                 <span className="summary-label">Total Users:</span>
-                <span className="summary-value">{mockData.length}</span>
+                <span className="summary-value">{users.length}</span>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Active:</span>
-                <span className="summary-value summary-active">
-                  {mockData.filter((u) => u.isActive).length}
-                </span>
-              </div>
-              <div className="summary-item">
-                <span className="summary-label">Inactive:</span>
-                <span className="summary-value summary-inactive">
-                  {mockData.filter((u) => !u.isActive).length}
-                </span>
-              </div>
-              <div className="summary-item">
-                <span className="summary-label">Administrators:</span>
+                <span className="summary-label">Admins:</span>
                 <span className="summary-value summary-admin">
-                  {mockData.filter((u) => u.role === 'Administrator').length}
+                  {users.filter((u) => u.is_admin).length}
                 </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Roles:</span>
+                <span className="summary-value">{roles.length}</span>
               </div>
             </Space>
           </div>
 
           <Table
             columns={columns}
-            dataSource={mockData}
+            dataSource={users}
+            loading={loading}
             pagination={{
               pageSize: 25,
               showSizeChanger: true,
@@ -244,6 +296,18 @@ const Users: React.FC = () => {
           />
         </Space>
       </Card>
+
+      <UserModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false)
+          setSelectedUser(null)
+        }}
+        onSubmit={handleSubmitUser}
+        user={selectedUser}
+        roles={roles}
+        loading={submitting}
+      />
     </div>
   )
 }

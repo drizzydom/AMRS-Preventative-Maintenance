@@ -1,5 +1,5 @@
-import React from 'react'
-import { Card, Table, Button, Input, Space, Tag, Typography, Row, Col, Statistic } from 'antd'
+import React, { useState, useEffect } from 'react'
+import { Card, Table, Button, Input, Space, Tag, Typography, Row, Col, Statistic, message, Spin, Modal } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -8,17 +8,24 @@ import {
   EditOutlined,
   DeleteOutlined,
   EnvironmentOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons'
+import apiClient from '../utils/api'
+import SiteModal from '../components/modals/SiteModal'
 import '../styles/sites.css'
 
 const { Title } = Typography
 const { Search } = Input
+const { confirm } = Modal
 
 interface Site {
   key: string
   id: number
   name: string
   location: string
+  contact_email?: string
+  notification_threshold?: number
+  enable_notifications?: boolean
   machineCount: number
   activeCount: number
   maintenanceThreshold: number
@@ -28,45 +35,114 @@ interface Site {
 }
 
 const Sites: React.FC = () => {
-  // Mock data - will be replaced with API calls
-  const mockData: Site[] = [
-    {
-      key: '1',
-      id: 1,
-      name: 'Main Plant',
-      location: 'Building A, Floor 1',
-      machineCount: 45,
-      activeCount: 42,
-      maintenanceThreshold: 7,
-      contactPerson: 'John Manager',
-      phone: '555-0101',
-      status: 'active',
-    },
-    {
-      key: '2',
-      id: 2,
-      name: 'Warehouse',
-      location: 'Building B',
-      machineCount: 28,
-      activeCount: 25,
-      maintenanceThreshold: 14,
-      contactPerson: 'Jane Supervisor',
-      phone: '555-0102',
-      status: 'active',
-    },
-    {
-      key: '3',
-      id: 3,
-      name: 'Assembly Line',
-      location: 'Building A, Floor 2',
-      machineCount: 67,
-      activeCount: 64,
-      maintenanceThreshold: 7,
-      contactPerson: 'Bob Foreman',
-      phone: '555-0103',
-      status: 'active',
-    },
-  ]
+  const [sites, setSites] = useState<Site[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedSite, setSelectedSite] = useState<Site | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const fetchSites = async () => {
+    try {
+      setLoading(true)
+      const response = await apiClient.get('/api/v1/sites')
+      const sitesData = response.data.data.map((site: any) => ({
+        key: site.id.toString(),
+        id: site.id,
+        name: site.name,
+        location: site.location || '',
+        contact_email: site.contact_email || '',
+        notification_threshold: site.notification_threshold || 30,
+        enable_notifications: site.enable_notifications || false,
+        machineCount: site.machineCount || 0,
+        activeCount: site.activeCount || 0,
+        maintenanceThreshold: site.maintenanceThreshold || 7,
+        contactPerson: site.contactPerson || '',
+        phone: site.phone || '',
+        status: site.status || 'active',
+      }))
+      setSites(sitesData)
+    } catch (error: any) {
+      console.error('Failed to load sites:', error)
+      message.error('Failed to load sites')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSites()
+  }, [])
+
+  const handleAddSite = () => {
+    setSelectedSite(null)
+    setModalOpen(true)
+  }
+
+  const handleEditSite = (site: Site) => {
+    setSelectedSite(site)
+    setModalOpen(true)
+  }
+
+  const handleSubmitSite = async (values: any) => {
+    try {
+      setSubmitting(true)
+      const formData = new FormData()
+      formData.append('name', values.name)
+      formData.append('location', values.location || '')
+      formData.append('contact_email', values.contact_email || '')
+      formData.append('notification_threshold', values.notification_threshold?.toString() || '30')
+      
+      if (values.enable_notifications) {
+        formData.append('enable_notifications', 'on')
+      }
+
+      if (selectedSite) {
+        // Edit existing site
+        await apiClient.post(`/site/edit/${selectedSite.id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        message.success('Site updated successfully')
+      } else {
+        // Create new site
+        await apiClient.post('/sites', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        message.success('Site created successfully')
+      }
+
+      setModalOpen(false)
+      setSelectedSite(null)
+      await fetchSites()
+    } catch (error: any) {
+      console.error('Failed to save site:', error)
+      const errorMsg = error.response?.data?.message || 'Failed to save site'
+      message.error(errorMsg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDeleteSite = (site: Site) => {
+    confirm({
+      title: 'Delete Site',
+      icon: <ExclamationCircleOutlined />,
+      content: `Are you sure you want to delete "${site.name}"? This action cannot be undone.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      async onOk() {
+        try {
+          await apiClient.post(`/sites/delete/${site.id}`)
+          message.success('Site deleted successfully')
+          await fetchSites()
+        } catch (error: any) {
+          console.error('Failed to delete site:', error)
+          const errorMsg = error.response?.data?.message || 'Failed to delete site'
+          message.error(errorMsg)
+        }
+      },
+    })
+  }
 
   const columns: ColumnsType<Site> = [
     {
@@ -143,6 +219,7 @@ const Sites: React.FC = () => {
             icon={<EditOutlined />}
             size="small"
             title="Edit"
+            onClick={() => handleEditSite(record)}
           />
           <Button
             type="text"
@@ -150,14 +227,15 @@ const Sites: React.FC = () => {
             icon={<DeleteOutlined />}
             size="small"
             title="Delete"
+            onClick={() => handleDeleteSite(record)}
           />
         </Space>
       ),
     },
   ]
 
-  const totalMachines = mockData.reduce((sum, site) => sum + site.machineCount, 0)
-  const totalActive = mockData.reduce((sum, site) => sum + site.activeCount, 0)
+  const totalMachines = sites.reduce((sum: number, site: Site) => sum + site.machineCount, 0)
+  const totalActive = sites.reduce((sum: number, site: Site) => sum + site.activeCount, 0)
 
   return (
     <div className="sites-container">
@@ -170,7 +248,7 @@ const Sites: React.FC = () => {
           <Card>
             <Statistic
               title="Total Sites"
-              value={mockData.length}
+              value={sites.length}
               prefix={<EnvironmentOutlined />}
               valueStyle={{ color: '#1890ff' }}
             />
@@ -215,8 +293,10 @@ const Sites: React.FC = () => {
               prefix={<SearchOutlined />}
             />
             <Space>
-              <Button icon={<ReloadOutlined />}>Refresh</Button>
-              <Button type="primary" icon={<PlusOutlined />}>
+              <Button icon={<ReloadOutlined />} onClick={fetchSites} loading={loading}>
+                Refresh
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddSite}>
                 Add Site
               </Button>
             </Space>
@@ -224,7 +304,8 @@ const Sites: React.FC = () => {
 
           <Table
             columns={columns}
-            dataSource={mockData}
+            dataSource={sites}
+            loading={loading}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
@@ -234,6 +315,17 @@ const Sites: React.FC = () => {
           />
         </Space>
       </Card>
+
+      <SiteModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false)
+          setSelectedSite(null)
+        }}
+        onSubmit={handleSubmitSite}
+        site={selectedSite}
+        loading={submitting}
+      />
     </div>
   )
 }

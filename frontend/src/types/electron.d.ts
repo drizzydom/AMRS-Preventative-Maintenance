@@ -17,6 +17,9 @@ export interface ElectronAPI {
   // Update functionality
   checkForUpdates: () => void
   
+  // Flask API configuration
+  getFlaskPort: () => Promise<number>
+  
   // Legacy window controls (for compatibility)
   minimize?: () => void
   maximize?: () => void

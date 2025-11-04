@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Select, Typography, Row, Col, message, Modal } from 'antd'
+import React, { useState, useEffect } from 'react'
+import { Card, Table, Button, Input, Space, Tag, Select, Typography, Row, Col, message, Modal, Spin } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -12,6 +12,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons'
 import MachineModal from '../components/modals/MachineModal'
+import apiClient from '../utils/api'
 import '../styles/machines.css'
 
 const { Title } = Typography
@@ -25,9 +26,10 @@ interface Machine {
   serial: string
   model: string
   site: string
+  site_id?: number
   status: 'active' | 'inactive' | 'maintenance'
-  lastMaintenance: string
-  nextMaintenance: string
+  lastMaintenance: string | null
+  nextMaintenance: string | null
 }
 
 const Machines: React.FC = () => {
@@ -36,41 +38,48 @@ const Machines: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [modalVisible, setModalVisible] = useState(false)
   const [selectedMachine, setSelectedMachine] = useState<Machine | undefined>(undefined)
-  const [machines, setMachines] = useState<Machine[]>([
-    {
-      key: '1',
-      id: 1,
-      name: 'CNC Machine A',
-      serial: 'SN-001',
-      model: 'Model X',
-      site: 'Main Plant',
-      status: 'active',
-      lastMaintenance: '2025-10-15',
-      nextMaintenance: '2025-11-15',
-    },
-    {
-      key: '2',
-      id: 2,
-      name: 'Lathe Machine B',
-      serial: 'SN-002',
-      model: 'Model Y',
-      site: 'Warehouse',
-      status: 'maintenance',
-      lastMaintenance: '2025-10-20',
-      nextMaintenance: '2025-11-10',
-    },
-    {
-      key: '3',
-      id: 3,
-      name: 'Press Machine C',
-      serial: 'SN-003',
-      model: 'Model Z',
-      site: 'Main Plant',
-      status: 'active',
-      lastMaintenance: '2025-10-01',
-      nextMaintenance: '2025-12-01',
-    },
-  ])
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [loading, setLoading] = useState(true)
+  const [sites, setSites] = useState<any[]>([])
+
+  const fetchSites = async () => {
+    try {
+      const response = await apiClient.get('/api/v1/sites')
+      setSites(response.data.data)
+    } catch (error: any) {
+      console.error('Failed to load sites:', error)
+    }
+  }
+
+  const fetchMachines = async () => {
+    try {
+      setLoading(true)
+      const response = await apiClient.get('/api/v1/machines')
+      const machinesData = response.data.data.map((machine: any) => ({
+        key: machine.id.toString(),
+        id: machine.id,
+        name: machine.name,
+        serial: machine.serial || '',
+        model: machine.model || '',
+        site: machine.site || '',
+        site_id: machine.site_id,
+        status: machine.status || 'active',
+        lastMaintenance: machine.lastMaintenance,
+        nextMaintenance: machine.nextMaintenance,
+      }))
+      setMachines(machinesData)
+    } catch (error: any) {
+      console.error('Failed to load machines:', error)
+      message.error('Failed to load machines')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSites()
+    fetchMachines()
+  }, [])
 
   const handleCreateMachine = () => {
     setSelectedMachine(undefined)
@@ -90,36 +99,49 @@ const Machines: React.FC = () => {
       okText: 'Delete',
       okType: 'danger',
       cancelText: 'Cancel',
-      onOk() {
-        setMachines(machines.filter(m => m.id !== machine.id))
-        message.success(`Machine "${machine.name}" deleted successfully`)
+      async onOk() {
+        try {
+          await apiClient.post(`/machines/delete/${machine.id}`)
+          message.success(`Machine "${machine.name}" deleted successfully`)
+          await fetchMachines()
+        } catch (error: any) {
+          console.error('Failed to delete machine:', error)
+          message.error('Failed to delete machine')
+        }
       },
     })
   }
 
   const handleSubmitMachine = async (values: any) => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    if (selectedMachine) {
-      // Update existing machine
-      setMachines(machines.map(m => 
-        m.id === selectedMachine.id 
-          ? { ...m, ...values, key: m.key }
-          : m
-      ))
-      message.success('Machine updated successfully')
-    } else {
-      // Create new machine
-      const newMachine: Machine = {
-        ...values,
-        id: Math.max(...machines.map(m => m.id)) + 1,
-        key: `${machines.length + 1}`,
-        lastMaintenance: '',
-        nextMaintenance: '',
+    try {
+      // Create FormData to match Flask's form handling
+      const formData = new FormData()
+      formData.append('name', values.name)
+      formData.append('model', values.model || '')
+      formData.append('serial_number', values.serial || '')
+      formData.append('machine_number', values.machine_number || '')
+      formData.append('site_id', values.site_id)
+
+      if (selectedMachine) {
+        // Update existing machine
+        await apiClient.post(`/machine/edit/${selectedMachine.id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        message.success('Machine updated successfully')
+      } else {
+        // Create new machine
+        await apiClient.post('/machines', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        message.success('Machine created successfully')
       }
-      setMachines([...machines, newMachine])
-      message.success('Machine created successfully')
+      
+      // Refresh the machines list
+      await fetchMachines()
+      setModalVisible(false)
+    } catch (error: any) {
+      console.error('Failed to save machine:', error)
+      message.error(error.response?.data?.message || 'Failed to save machine')
     }
   }
 
@@ -173,13 +195,23 @@ const Machines: React.FC = () => {
       title: 'Last Maintenance',
       dataIndex: 'lastMaintenance',
       key: 'lastMaintenance',
-      sorter: (a, b) => new Date(a.lastMaintenance).getTime() - new Date(b.lastMaintenance).getTime(),
+      render: (date: string | null) => date || 'N/A',
+      sorter: (a, b) => {
+        const dateA = a.lastMaintenance ? new Date(a.lastMaintenance).getTime() : 0
+        const dateB = b.lastMaintenance ? new Date(b.lastMaintenance).getTime() : 0
+        return dateA - dateB
+      },
     },
     {
       title: 'Next Maintenance',
       dataIndex: 'nextMaintenance',
       key: 'nextMaintenance',
-      sorter: (a, b) => new Date(a.nextMaintenance).getTime() - new Date(b.nextMaintenance).getTime(),
+      render: (date: string | null) => date || 'N/A',
+      sorter: (a, b) => {
+        const dateA = a.nextMaintenance ? new Date(a.nextMaintenance).getTime() : 0
+        const dateB = b.nextMaintenance ? new Date(b.nextMaintenance).getTime() : 0
+        return dateA - dateB
+      },
     },
     {
       title: 'Actions',
@@ -228,7 +260,7 @@ const Machines: React.FC = () => {
           <Card>
             <div className="stat-item">
               <span className="stat-label">Total Machines</span>
-              <span className="stat-value">{mockData.length}</span>
+              <span className="stat-value">{machines.length}</span>
             </div>
           </Card>
         </Col>
@@ -237,7 +269,7 @@ const Machines: React.FC = () => {
             <div className="stat-item">
               <span className="stat-label">Active</span>
               <span className="stat-value stat-active">
-                {mockData.filter((m) => m.status === 'active').length}
+                {machines.filter((m) => m.status === 'active').length}
               </span>
             </div>
           </Card>
@@ -247,7 +279,7 @@ const Machines: React.FC = () => {
             <div className="stat-item">
               <span className="stat-label">In Maintenance</span>
               <span className="stat-value stat-warning">
-                {mockData.filter((m) => m.status === 'maintenance').length}
+                {machines.filter((m) => m.status === 'maintenance').length}
               </span>
             </div>
           </Card>
@@ -283,7 +315,9 @@ const Machines: React.FC = () => {
               </Button>
             </Space>
             <Space>
-              <Button icon={<ReloadOutlined />}>Refresh</Button>
+              <Button icon={<ReloadOutlined />} onClick={fetchMachines} loading={loading}>
+                Refresh
+              </Button>
               <Button 
                 type="primary" 
                 icon={<PlusOutlined />}
@@ -297,6 +331,7 @@ const Machines: React.FC = () => {
           <Table
             columns={columns}
             dataSource={machines}
+            loading={loading}
             pagination={{
               pageSize: 25,
               showSizeChanger: true,
@@ -311,6 +346,7 @@ const Machines: React.FC = () => {
       <MachineModal
         visible={modalVisible}
         machine={selectedMachine}
+        sites={sites}
         onCancel={() => setModalVisible(false)}
         onSubmit={handleSubmitMachine}
       />

@@ -1,23 +1,51 @@
-import React from 'react'
-import { Card, Row, Col, Statistic, Table, Button, Space, Typography } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { Card, Row, Col, Statistic, Table, Button, Space, Typography, Spin, message } from 'antd'
 import {
   ToolOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   WarningOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
+import apiClient from '../utils/api'
 import '../styles/dashboard.css'
 
 const { Title } = Typography
 
+interface DashboardStats {
+  total_machines: number
+  overdue: number
+  due_soon: number
+  completed: number
+}
+
 const Dashboard: React.FC = () => {
-  // Mock data - will be replaced with API calls
-  const statsData = [
-    { title: 'Total Machines', value: 156, icon: <ToolOutlined />, color: '#1890ff' },
-    { title: 'Overdue', value: 12, icon: <WarningOutlined />, color: '#ff4d4f' },
-    { title: 'Due Soon', value: 28, icon: <ClockCircleOutlined />, color: '#faad14' },
-    { title: 'Completed', value: 89, icon: <CheckCircleOutlined />, color: '#52c41a' },
-  ]
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      const response = await apiClient.get('/api/v1/dashboard')
+      setStats(response.data.data)
+    } catch (error: any) {
+      console.error('Failed to load dashboard data:', error)
+      message.error('Failed to load dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const statsData = stats ? [
+    { title: 'Total Machines', value: stats.total_machines, icon: <ToolOutlined />, color: '#1890ff' },
+    { title: 'Overdue', value: stats.overdue, icon: <WarningOutlined />, color: '#ff4d4f' },
+    { title: 'Due Soon', value: stats.due_soon, icon: <ClockCircleOutlined />, color: '#faad14' },
+    { title: 'Completed', value: stats.completed, icon: <CheckCircleOutlined />, color: '#52c41a' },
+  ] : []
 
   const recentTasksColumns = [
     { title: 'Machine', dataIndex: 'machine', key: 'machine' },
@@ -46,6 +74,14 @@ const Dashboard: React.FC = () => {
     },
   ]
 
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+        <Spin size="large" tip="Loading dashboard data..." />
+      </div>
+    )
+  }
+
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
@@ -53,7 +89,7 @@ const Dashboard: React.FC = () => {
         <Space>
           <Button type="primary">New Task</Button>
           <Button>Export Report</Button>
-          <Button>Refresh</Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchDashboardData}>Refresh</Button>
         </Space>
       </div>
 

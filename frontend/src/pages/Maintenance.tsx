@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Select, Typography, DatePicker, message, Modal } from 'antd'
+import React, { useState, useEffect } from 'react'
+import { Card, Table, Button, Input, Space, Tag, Select, Typography, DatePicker, message, Modal, Spin } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -11,6 +11,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons'
 import MaintenanceTaskModal from '../components/modals/MaintenanceTaskModal'
+import apiClient from '../utils/api'
 import '../styles/maintenance.css'
 
 const { Title } = Typography
@@ -23,8 +24,8 @@ interface MaintenanceTask {
   id: number
   machine: string
   task: string
-  dueDate: string
-  status: 'pending' | 'overdue' | 'completed' | 'in-progress'
+  dueDate: string | null
+  status: 'pending' | 'overdue' | 'completed' | 'in-progress' | 'due-soon'
   assignedTo: string
   site: string
   priority: 'low' | 'medium' | 'high' | 'critical'
@@ -35,9 +36,39 @@ const Maintenance: React.FC = () => {
   const [selectedSite, setSelectedSite] = useState<string>('all')
   const [modalVisible, setModalVisible] = useState(false)
   const [selectedTask, setSelectedTask] = useState<MaintenanceTask | undefined>(undefined)
+  const [tasks, setTasks] = useState<MaintenanceTask[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Mock data - will be replaced with API calls
-  const [tasks, setTasks] = useState<MaintenanceTask[]>([
+  const fetchMaintenanceTasks = async () => {
+    try {
+      setLoading(true)
+      const response = await apiClient.get('/api/v1/maintenance')
+      const tasksData = response.data.data.map((task: any) => ({
+        key: task.id.toString(),
+        id: task.id,
+        machine: task.machine,
+        task: task.task,
+        dueDate: task.dueDate,
+        status: task.status,
+        assignedTo: task.assignedTo || '',
+        site: task.site,
+        priority: task.priority || 'medium',
+      }))
+      setTasks(tasksData)
+    } catch (error: any) {
+      console.error('Failed to load maintenance tasks:', error)
+      message.error('Failed to load maintenance tasks')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMaintenanceTasks()
+  }, [])
+
+  // Remove mock data that was here before
+  const [mockTasksRemoved] = useState<MaintenanceTask[]>([
     {
       key: '1',
       id: 1,
@@ -170,14 +201,19 @@ const Maintenance: React.FC = () => {
       title: 'Due Date',
       dataIndex: 'dueDate',
       key: 'dueDate',
-      sorter: (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
-      render: (date) => {
+      sorter: (a, b) => {
+        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0
+        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0
+        return dateA - dateB
+      },
+      render: (date: string | null) => {
+        if (!date) return 'N/A'
         const dueDate = new Date(date)
         const today = new Date()
         const isOverdue = dueDate < today
         return (
           <span style={{ color: isOverdue ? '#ff4d4f' : 'inherit' }}>
-            {date}
+            {dueDate.toLocaleDateString()}
           </span>
         )
       },
@@ -294,7 +330,9 @@ const Maintenance: React.FC = () => {
             </Space>
             <Space>
               <Button icon={<CalendarOutlined />}>Schedule</Button>
-              <Button icon={<ReloadOutlined />}>Refresh</Button>
+              <Button icon={<ReloadOutlined />} onClick={fetchMaintenanceTasks} loading={loading}>
+                Refresh
+              </Button>
               <Button 
                 type="primary" 
                 icon={<PlusOutlined />}
@@ -322,7 +360,7 @@ const Maintenance: React.FC = () => {
               <div className="summary-item">
                 <span className="summary-label">Pending:</span>
                 <span className="summary-value summary-pending">
-                  {tasks.filter((t) => t.status === 'pending').length}
+                  {tasks.filter((t) => t.status === 'pending' || t.status === 'due-soon').length}
                 </span>
               </div>
               <div className="summary-item">
@@ -337,6 +375,7 @@ const Maintenance: React.FC = () => {
           <Table
             columns={columns}
             dataSource={tasks}
+            loading={loading}
             pagination={{
               pageSize: 25,
               showSizeChanger: true,

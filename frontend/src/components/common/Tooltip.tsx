@@ -1,9 +1,12 @@
 import React from 'react'
 import { Tooltip as AntTooltip } from 'antd'
-import type { TooltipProps as AntTooltipProps } from 'antd'
 
-interface TooltipProps extends AntTooltipProps {
+interface TooltipProps {
   shortcut?: string
+  title?: React.ReactNode
+  children?: React.ReactNode
+  placement?: 'top' | 'bottom' | 'left' | 'right'
+  [key: string]: any
 }
 
 /**

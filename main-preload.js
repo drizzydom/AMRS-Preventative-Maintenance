@@ -23,7 +23,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     
     // Update functionality (existing)
-    checkForUpdates: () => ipcRenderer.send('check-for-updates')
+    checkForUpdates: () => ipcRenderer.send('check-for-updates'),
+    
+    // Flask API configuration
+    getFlaskPort: () => ipcRenderer.invoke('get-flask-port')
 });
 
 // Add event listeners when DOM is loaded
