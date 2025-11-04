@@ -1154,7 +1154,7 @@ function createWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false, // Don't show until ready
-        frame: false, // Frameless window for custom title bar
+        frame: true, // Use native OS window frame (includes close/minimize/maximize buttons)
         icon: path.join(__dirname, 'assets', 'icon.png'), // Add your app icon
         webPreferences: {
             nodeIntegration: false,
@@ -1163,12 +1163,18 @@ function createWindow() {
             webSecurity: true,
             preload: path.join(__dirname, 'main-preload.js')
         },
-        titleBarStyle: 'hidden',
+        titleBarStyle: 'default', // Use default title bar style
         autoHideMenuBar: false
     });
     
-    // Load the Flask application
-    mainWindow.loadURL(`http://127.0.0.1:${FLASK_PORT}`);
+    // Load the React frontend from Flask server (same origin for cookies to work)
+    // This ensures session cookies work properly since frontend and backend are on same origin
+    const frontendURL = `http://127.0.0.1:${FLASK_PORT}/`;
+    writeLog(`[Electron] Loading React frontend from Flask server: ${frontendURL}`);
+    mainWindow.loadURL(frontendURL);
+    
+    // Store Flask port for API communication
+    global.flaskPort = FLASK_PORT;
     
     // Show window when ready to prevent visual flash
     mainWindow.once('ready-to-show', () => {
@@ -1494,6 +1500,12 @@ ipcMain.on('minimize-window', () => {
         mainWindow.minimize();
         writeLog('[IPC] Window minimized');
     }
+});
+
+// IPC handler to get Flask API port for React frontend
+ipcMain.handle('get-flask-port', () => {
+    writeLog(`[IPC] Returning Flask port: ${FLASK_PORT}`);
+    return FLASK_PORT;
 });
 
 ipcMain.on('maximize-window', () => {

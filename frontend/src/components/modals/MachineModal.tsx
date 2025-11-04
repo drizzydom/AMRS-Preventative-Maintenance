@@ -7,20 +7,24 @@ interface Machine {
   name: string
   serial: string
   model: string
+  machine_number?: string
   site: string
+  site_id?: number
   status: 'active' | 'inactive' | 'maintenance'
 }
 
 interface MachineModalProps {
   visible: boolean
   machine?: Machine
+  sites?: any[]
   onCancel: () => void
-  onSubmit: (values: Machine) => Promise<void>
+  onSubmit: (values: any) => Promise<void>
 }
 
 const MachineModal: React.FC<MachineModalProps> = ({
   visible,
   machine,
+  sites = [],
   onCancel,
   onSubmit,
 }) => {
@@ -29,7 +33,14 @@ const MachineModal: React.FC<MachineModalProps> = ({
 
   useEffect(() => {
     if (visible && machine) {
-      form.setFieldsValue(machine)
+      form.setFieldsValue({
+        name: machine.name,
+        serial: machine.serial,
+        model: machine.model,
+        machine_number: machine.machine_number,
+        site_id: machine.site_id,
+        status: machine.status
+      })
     } else if (visible) {
       form.resetFields()
     }
@@ -90,7 +101,6 @@ const MachineModal: React.FC<MachineModalProps> = ({
         <Form.Item
           name="serial"
           label="Serial Number"
-          rules={[{ required: true, message: 'Please enter serial number' }]}
         >
           <Input placeholder="Enter serial number" />
         </Form.Item>
@@ -98,20 +108,28 @@ const MachineModal: React.FC<MachineModalProps> = ({
         <Form.Item
           name="model"
           label="Model"
-          rules={[{ required: true, message: 'Please enter model' }]}
         >
           <Input placeholder="Enter model" />
         </Form.Item>
 
         <Form.Item
-          name="site"
+          name="machine_number"
+          label="Machine Number"
+        >
+          <Input placeholder="Enter machine number" />
+        </Form.Item>
+
+        <Form.Item
+          name="site_id"
           label="Site"
           rules={[{ required: true, message: 'Please select a site' }]}
         >
           <Select placeholder="Select a site">
-            <Select.Option value="Main Plant">Main Plant</Select.Option>
-            <Select.Option value="Warehouse">Warehouse</Select.Option>
-            <Select.Option value="Assembly Line">Assembly Line</Select.Option>
+            {sites.map(site => (
+              <Select.Option key={site.id} value={site.id}>
+                {site.name}
+              </Select.Option>
+            ))}
           </Select>
         </Form.Item>
 

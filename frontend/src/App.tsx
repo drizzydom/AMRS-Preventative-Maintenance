@@ -38,95 +38,44 @@ const PageLoader = () => (
 function App() {
   return (
     <AuthProvider>
-      <Layout className="app-layout">
-        <TitleBar />
-        <MenuBar />
-        <Layout hasSider>
-          <Sidebar />
-          <Layout className="content-layout">
-            <Content className="app-content">
-              <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  <Route path="/login" element={<Login />} />
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/machines"
-                    element={
-                      <ProtectedRoute>
-                        <Machines />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/maintenance"
-                    element={
-                      <ProtectedRoute>
-                        <Maintenance />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/audits"
-                    element={
-                      <ProtectedRoute>
-                        <Audits />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/sites"
-                    element={
-                      <ProtectedRoute>
-                        <Sites />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/users"
-                    element={
-                      <ProtectedRoute>
-                        <Users />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/settings"
-                    element={
-                      <ProtectedRoute>
-                        <Settings />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/reports"
-                    element={
-                      <ProtectedRoute>
-                        <ReportsPreview />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/reports/audits"
-                    element={
-                      <ProtectedRoute>
-                        <AuditReportsPreview />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="/" element={<Navigate to="/login" replace />} />
-                </Routes>
-              </Suspense>
-            </Content>
-          </Layout>
-        </Layout>
-      </Layout>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public route - Login page without sidebar/menubar */}
+          <Route path="/login" element={<Login />} />
+          
+          {/* Protected routes with app layout */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <Layout className="app-layout">
+                  <TitleBar />
+                  <MenuBar />
+                  <Layout hasSider>
+                    <Sidebar />
+                    <Layout className="content-layout">
+                      <Content className="app-content">
+                        <Routes>
+                          <Route path="/dashboard" element={<Dashboard />} />
+                          <Route path="/machines" element={<Machines />} />
+                          <Route path="/maintenance" element={<Maintenance />} />
+                          <Route path="/audits" element={<Audits />} />
+                          <Route path="/sites" element={<Sites />} />
+                          <Route path="/users" element={<Users />} />
+                          <Route path="/settings" element={<Settings />} />
+                          <Route path="/reports" element={<ReportsPreview />} />
+                          <Route path="/reports/audits" element={<AuditReportsPreview />} />
+                          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                        </Routes>
+                      </Content>
+                    </Layout>
+                  </Layout>
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </Suspense>
     </AuthProvider>
   )
 }

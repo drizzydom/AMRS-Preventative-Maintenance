@@ -3080,6 +3080,27 @@ mail = Mail(app)
 # Secret key from environment only
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
+# Session configuration for cookie-based authentication
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Lax since frontend is served from same origin
+app.config['SESSION_COOKIE_SECURE'] = False  # False for local development (HTTP)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_NAME'] = 'amrs_session'
+app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
+app.config['REMEMBER_COOKIE_SECURE'] = False
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+
+# CORS configuration for Electron app (file:// origin to http://127.0.0.1)
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    # Allow file:// protocol and localhost
+    if origin and (origin.startswith('file://') or '127.0.0.1' in origin or 'localhost' in origin):
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    return response
+
 # Set up logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -3600,7 +3621,9 @@ def load_user(user_id):
         from flask import has_app_context
         if not has_app_context() or not user_id:
             return None
-        return db.session.get(User, int(user_id))
+        # Explicitly join the role relationship to ensure it's always loaded
+        user = db.session.query(User).options(db.joinedload(User.role)).filter_by(id=int(user_id)).first()
+        return user
     except Exception as e:
         app.logger.debug(f"Error loading user {user_id}: {e}")
         return None
@@ -4467,13 +4490,24 @@ def get_all_permissions():
     }
     return permissions
 
-# Add root route handler
+# Add root route handler - serve React app
 @app.route('/')
 def index():
-    """Homepage route that redirects to dashboard if logged in or shows login page."""
+    """Serve the React frontend application"""
+    frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+    if os.path.exists(frontend_path):
+        return send_file(frontend_path)
+    # Fallback to old template for development
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return render_template('login.html')
+
+# Serve React static assets
+@app.route('/assets/<path:filename>')
+def serve_react_assets(filename):
+    """Serve React build assets"""
+    assets_dir = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'assets')
+    return send_file(os.path.join(assets_dir, filename))
 
 @app.route('/dashboard')
 @login_required
