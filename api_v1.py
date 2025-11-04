@@ -5,7 +5,7 @@ Performance optimized with caching and query optimization
 from flask import Blueprint, jsonify, request, session
 from flask_login import login_user, logout_user, current_user, login_required
 from functools import wraps, lru_cache
-from models import User, db
+from models import User, db, hash_value
 from werkzeug.security import check_password_hash
 import logging
 from datetime import datetime, timedelta
@@ -59,8 +59,10 @@ def api_login():
                 status=400
             )
         
-        # Find user
-        user = User.query.filter_by(username=username).first()
+        # Find user using hashed username (for encrypted username support in offline mode)
+        # Explicitly join the role relationship to ensure it's loaded
+        from models import Role
+        user = User.query.options(db.joinedload(User.role)).filter_by(username_hash=hash_value(username)).first()
         
         if not user:
             logger.warning(f'Login attempt for non-existent user: {username}')
@@ -77,8 +79,9 @@ def api_login():
                 status=401
             )
         
-        # Check if account is active
-        if not user.is_active:
+        # Check if account is active (check 'active' column if it exists, otherwise use is_active property)
+        is_user_active = getattr(user, 'active', True) if hasattr(user, 'active') else getattr(user, 'is_active', True)
+        if not is_user_active:
             logger.warning(f'Login attempt for inactive account: {username}')
             return api_response(
                 error='Account locked - contact administrator',
@@ -89,13 +92,32 @@ def api_login():
         login_user(user, remember=remember_me)
         logger.info(f'User logged in successfully: {username}')
         
-        # Return user data
+        # Return user data - handle role safely
+        role_name = 'user'
+        permissions = []
+        
+        try:
+            logger.info(f'Accessing role for user {username}: role_id={user.role_id}, role type={type(user.role)}, role value={repr(user.role)}')
+            if user.role:
+                # Check if role is an object with name attribute
+                if hasattr(user.role, 'name'):
+                    role_name = user.role.name
+                    # Get permissions if available
+                    if hasattr(user.role, 'permissions'):
+                        permissions_str = user.role.permissions or ''
+                        permissions = [p.strip() for p in permissions_str.split(',') if p.strip()]
+                elif isinstance(user.role, str):
+                    role_name = user.role
+                    logger.warning(f'Role is a string: {user.role}')
+        except Exception as role_error:
+            logger.error(f'Error accessing role for user {username}: {role_error}', exc_info=True)
+        
         user_data = {
             'id': user.id,
             'username': user.username,
             'email': user.email,
-            'role': user.role.name if user.role else 'user',
-            'permissions': [perm.name for perm in user.role.permissions] if user.role else [],
+            'role': role_name,
+            'permissions': permissions,
         }
         
         return api_response(
@@ -128,12 +150,27 @@ def api_logout():
 def api_current_user():
     """Get current user information"""
     try:
+        # Handle role safely - it might be a string or None
+        role_name = 'user'
+        permissions = []
+        
+        if hasattr(current_user, 'role') and current_user.role:
+            if isinstance(current_user.role, str):
+                role_name = current_user.role
+            elif hasattr(current_user.role, 'name'):
+                role_name = current_user.role.name
+                if hasattr(current_user.role, 'permissions'):
+                    try:
+                        permissions = [perm.name for perm in current_user.role.permissions]
+                    except:
+                        permissions = []
+        
         user_data = {
             'id': current_user.id,
             'username': current_user.username,
             'email': current_user.email,
-            'role': current_user.role.name if current_user.role else 'user',
-            'permissions': [perm.name for perm in current_user.role.permissions] if current_user.role else [],
+            'role': role_name,
+            'permissions': permissions,
         }
         return api_response(data=user_data)
     except Exception as e:
@@ -158,8 +195,8 @@ def api_dashboard():
             return api_response(data=_dashboard_cache['data'])
         
         # Cache miss or expired - fetch fresh data
-        from models import Machine, MaintenanceRecord
-        from sqlalchemy import func
+        from models import Machine, Part, MaintenanceRecord
+        from sqlalchemy import func, and_
         
         # Optimized queries using single database calls
         today = datetime.now().date()
@@ -168,25 +205,32 @@ def api_dashboard():
         
         # Single query for machine count
         total_machines = db.session.query(func.count(Machine.id)).filter_by(
-            is_decommissioned=False
+            decommissioned=False
         ).scalar()
         
-        # Single query for maintenance statistics
-        maintenance_stats = db.session.query(
-            func.sum((MaintenanceRecord.next_maintenance_date < today) & 
-                    (MaintenanceRecord.completed == False)).label('overdue'),
-            func.sum((MaintenanceRecord.next_maintenance_date >= today) & 
-                    (MaintenanceRecord.next_maintenance_date <= due_soon_date) &
-                    (MaintenanceRecord.completed == False)).label('due_soon'),
-            func.sum((MaintenanceRecord.completed == True) &
-                    (MaintenanceRecord.completed_date >= first_day_of_month)).label('completed')
-        ).first()
+        # Query parts for maintenance statistics (parts have next_maintenance dates)
+        overdue_parts = db.session.query(func.count(Part.id)).filter(
+            and_(Part.next_maintenance < today, Part.next_maintenance.isnot(None))
+        ).scalar()
+        
+        due_soon_parts = db.session.query(func.count(Part.id)).filter(
+            and_(
+                Part.next_maintenance >= today,
+                Part.next_maintenance <= due_soon_date,
+                Part.next_maintenance.isnot(None)
+            )
+        ).scalar()
+        
+        # Count completed maintenance records this month
+        completed_this_month = db.session.query(func.count(MaintenanceRecord.id)).filter(
+            MaintenanceRecord.date >= first_day_of_month
+        ).scalar()
         
         stats = {
             'total_machines': total_machines or 0,
-            'overdue': int(maintenance_stats.overdue or 0),
-            'due_soon': int(maintenance_stats.due_soon or 0),
-            'completed': int(maintenance_stats.completed or 0),
+            'overdue': int(overdue_parts or 0),
+            'due_soon': int(due_soon_parts or 0),
+            'completed': int(completed_this_month or 0),
         }
         
         # Update cache
@@ -213,7 +257,7 @@ def api_get_machines():
         # Optimize with eager loading to avoid N+1 queries
         machines = Machine.query.options(
             joinedload(Machine.site)
-        ).filter_by(is_decommissioned=False).all()
+        ).filter_by(decommissioned=False).all()
         
         machines_data = []
         for machine in machines:
@@ -222,7 +266,9 @@ def api_get_machines():
                 'name': machine.name,
                 'serial': machine.serial_number if hasattr(machine, 'serial_number') else '',
                 'model': machine.model if hasattr(machine, 'model') else '',
+                'machine_number': machine.machine_number if hasattr(machine, 'machine_number') else '',
                 'site': machine.site.name if machine.site else '',
+                'site_id': machine.site_id if hasattr(machine, 'site_id') else None,
                 'status': 'active',  # Add status logic as needed
                 'lastMaintenance': machine.last_maintenance.strftime('%Y-%m-%d') if hasattr(machine, 'last_maintenance') and machine.last_maintenance else None,
                 'nextMaintenance': machine.next_maintenance.strftime('%Y-%m-%d') if hasattr(machine, 'next_maintenance') and machine.next_maintenance else None,
@@ -239,44 +285,59 @@ def api_get_machines():
 @api_v1.route('/maintenance', methods=['GET'])
 @api_login_required
 def api_get_maintenance():
-    """Get list of maintenance tasks with optimized queries"""
+    """Get list of maintenance tasks based on parts with due maintenance"""
     try:
-        from models import MaintenanceRecord
+        from models import Part, Machine
         from sqlalchemy.orm import joinedload
-        
-        # Optimize with eager loading to avoid N+1 queries
-        tasks = MaintenanceRecord.query.options(
-            joinedload(MaintenanceRecord.machine).joinedload('site')
-        ).filter_by(completed=False).all()
+        from sqlalchemy import and_
         
         today = datetime.now().date()
         due_soon_date = today + timedelta(days=7)
         
+        # Get all parts that have upcoming or overdue maintenance
+        # Optimize with eager loading to avoid N+1 queries
+        parts = Part.query.options(
+            joinedload(Part.machine).joinedload(Machine.site)
+        ).filter(
+            Part.next_maintenance.isnot(None)
+        ).all()
+        
         tasks_data = []
-        for task in tasks:
-            # Determine status
+        for part in parts:
+            if not part.next_maintenance:
+                continue
+                
+            # Determine status based on next_maintenance date
             status = 'pending'
-            if task.next_maintenance_date:
-                if task.next_maintenance_date < today:
-                    status = 'overdue'
-                elif task.next_maintenance_date <= due_soon_date:
-                    status = 'due-soon'
+            if part.next_maintenance < today:
+                status = 'overdue'
+            elif part.next_maintenance <= due_soon_date:
+                status = 'due-soon'
+            
+            # Get machine and site info
+            machine_name = part.machine.name if part.machine else 'Unknown'
+            site_name = part.machine.site.name if part.machine and part.machine.site else ''
             
             tasks_data.append({
-                'id': task.id,
-                'machine': task.machine.name if task.machine else '',
-                'task': task.task_description if hasattr(task, 'task_description') else 'Maintenance',
-                'dueDate': task.next_maintenance_date.strftime('%Y-%m-%d') if task.next_maintenance_date else None,
+                'id': part.id,
+                'machine': machine_name,
+                'task': f"{part.name} - {part.description}" if part.description else part.name,
+                'dueDate': part.next_maintenance.strftime('%Y-%m-%d'),
                 'status': status,
-                'assignedTo': task.assigned_to if hasattr(task, 'assigned_to') else '',
-                'site': task.machine.site.name if task.machine and task.machine.site else '',
-                'priority': 'medium',  # Add priority logic as needed
+                'assignedTo': '',  # Can be added from maintenance records if needed
+                'site': site_name,
+                'priority': 'high' if status == 'overdue' else 'medium' if status == 'due-soon' else 'low',
+                'lastMaintenance': part.last_maintenance.strftime('%Y-%m-%d') if part.last_maintenance else None,
+                'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}" if part.maintenance_frequency else None,
             })
+        
+        # Sort by due date (overdue first, then upcoming)
+        tasks_data.sort(key=lambda x: (x['status'] != 'overdue', x['dueDate']))
         
         return api_response(data=tasks_data)
         
     except Exception as e:
-        logger.error(f'Get maintenance error: {str(e)}')
+        logger.error(f'Get maintenance error: {str(e)}', exc_info=True)
         return api_response(error='Failed to load maintenance tasks', status=500)
 
 # ==================== SITES ENDPOINTS ====================
@@ -296,7 +357,7 @@ def api_get_sites():
                 'name': site.name,
                 'location': site.location if hasattr(site, 'location') else '',
                 'machineCount': len(site.machines) if hasattr(site, 'machines') else 0,
-                'activeCount': len([m for m in site.machines if not m.is_decommissioned]) if hasattr(site, 'machines') else 0,
+                'activeCount': len([m for m in site.machines if not m.decommissioned]) if hasattr(site, 'machines') else 0,
                 'maintenanceThreshold': site.maintenance_threshold if hasattr(site, 'maintenance_threshold') else 7,
                 'contactPerson': site.contact_person if hasattr(site, 'contact_person') else '',
                 'phone': site.phone if hasattr(site, 'phone') else '',
@@ -308,6 +369,123 @@ def api_get_sites():
     except Exception as e:
         logger.error(f'Get sites error: {str(e)}')
         return api_response(error='Failed to load sites', status=500)
+
+# ==================== AUDIT ENDPOINTS ====================
+
+@api_v1.route('/audits', methods=['GET'])
+@api_login_required
+def api_get_audits():
+    """Get list of audit tasks"""
+    try:
+        from models import AuditTask, AuditTaskCompletion
+        from sqlalchemy.orm import joinedload
+        
+        # Get audit tasks based on user permissions
+        if current_user.is_admin:
+            audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).all()
+        else:
+            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
+            audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).filter(
+                AuditTask.site_id.in_(user_site_ids)
+            ).all() if user_site_ids else []
+        
+        audits_data = []
+        for task in audit_tasks:
+            # Get completion stats
+            total_machines = len(task.machines) if hasattr(task, 'machines') else 0
+            completed_today = AuditTaskCompletion.query.filter_by(
+                audit_task_id=task.id,
+                date=datetime.utcnow().date(),
+                completed=True
+            ).count()
+            
+            # Determine status
+            if completed_today == total_machines and total_machines > 0:
+                status = 'completed'
+            elif completed_today > 0:
+                status = 'in-progress'
+            else:
+                status = 'pending'
+            
+            site = task.site if hasattr(task, 'site') else None
+            
+            audits_data.append({
+                'id': task.id,
+                'name': task.name,
+                'description': task.description if hasattr(task, 'description') else '',
+                'site': site.name if site else '',
+                'site_id': task.site_id,
+                'interval': task.interval if hasattr(task, 'interval') else 'daily',
+                'custom_interval_days': task.custom_interval_days if hasattr(task, 'custom_interval_days') else None,
+                'color': task.color if hasattr(task, 'color') else None,
+                'totalMachines': total_machines,
+                'completedToday': completed_today,
+                'status': status,
+                'machines': [{'id': m.id, 'name': m.name} for m in task.machines] if hasattr(task, 'machines') else [],
+                'created_at': task.created_at.isoformat() if hasattr(task, 'created_at') and task.created_at else None,
+            })
+        
+        return api_response(data=audits_data)
+        
+    except Exception as e:
+        logger.error(f'Get audits error: {str(e)}')
+        return api_response(error='Failed to load audits', status=500)
+
+# ==================== USERS ENDPOINTS ====================
+
+@api_v1.route('/users', methods=['GET'])
+@api_login_required
+def api_get_users():
+    """Get list of users (admin only)"""
+    try:
+        # Check admin permission
+        if not current_user.is_admin:
+            return api_response(error='Admin access required', status=403)
+        
+        users = User.query.all()
+        
+        users_data = []
+        for user in users:
+            role = user.role if hasattr(user, 'role') else None
+            users_data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'full_name': user.full_name if hasattr(user, 'full_name') else '',
+                'role': role.name if role and hasattr(role, 'name') else (role if isinstance(role, str) else 'User'),
+                'role_id': user.role_id if hasattr(user, 'role_id') else None,
+                'is_admin': user.is_admin if hasattr(user, 'is_admin') else False,
+                'created_at': user.created_at.isoformat() if hasattr(user, 'created_at') and user.created_at else None,
+            })
+        
+        return api_response(data=users_data)
+        
+    except Exception as e:
+        logger.error(f'Get users error: {str(e)}')
+        return api_response(error='Failed to load users', status=500)
+
+@api_v1.route('/roles', methods=['GET'])
+@api_login_required
+def api_get_roles():
+    """Get list of roles"""
+    try:
+        from models import Role
+        roles = Role.query.all()
+        
+        roles_data = []
+        for role in roles:
+            roles_data.append({
+                'id': role.id,
+                'name': role.name,
+                'description': role.description if hasattr(role, 'description') else '',
+                'permissions': role.permissions.split(',') if hasattr(role, 'permissions') and role.permissions else [],
+            })
+        
+        return api_response(data=roles_data)
+        
+    except Exception as e:
+        logger.error(f'Get roles error: {str(e)}')
+        return api_response(error='Failed to load roles', status=500)
 
 # ==================== ERROR HANDLERS ====================
 
