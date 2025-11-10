@@ -181,12 +181,10 @@ def api_current_user():
 
 @api_v1.route('/dashboard', methods=['GET'])
 @api_login_required
-def api_dashboard():
-    """Get dashboard statistics with caching"""
-    global _dashboard_cache
-    
+def api_get_dashboard():
+    """Get dashboard statistics with 5-minute caching"""
     try:
-        # Check cache
+        # Check cache first
         now = datetime.now()
         if (_dashboard_cache['data'] is not None and 
             _dashboard_cache['timestamp'] is not None and
@@ -194,24 +192,30 @@ def api_dashboard():
             logger.debug('Returning cached dashboard data')
             return api_response(data=_dashboard_cache['data'])
         
+        logger.info('Fetching fresh dashboard data...')
+        
         # Cache miss or expired - fetch fresh data
         from models import Machine, Part, MaintenanceRecord
         from sqlalchemy import func, and_
         
-        # Optimized queries using single database calls
-        today = datetime.now().date()
+        # Use datetime for consistent comparisons (parts store datetime, not just date)
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         due_soon_date = today + timedelta(days=7)
         first_day_of_month = today.replace(day=1)
+        
+        logger.debug(f'Dashboard date filters: today={today}, due_soon_date={due_soon_date}, first_day_of_month={first_day_of_month}')
         
         # Single query for machine count
         total_machines = db.session.query(func.count(Machine.id)).filter_by(
             decommissioned=False
         ).scalar()
+        logger.debug(f'Total machines (not decommissioned): {total_machines}')
         
         # Query parts for maintenance statistics (parts have next_maintenance dates)
         overdue_parts = db.session.query(func.count(Part.id)).filter(
             and_(Part.next_maintenance < today, Part.next_maintenance.isnot(None))
         ).scalar()
+        logger.debug(f'Overdue parts: {overdue_parts}')
         
         due_soon_parts = db.session.query(func.count(Part.id)).filter(
             and_(
@@ -220,11 +224,13 @@ def api_dashboard():
                 Part.next_maintenance.isnot(None)
             )
         ).scalar()
+        logger.debug(f'Due soon parts: {due_soon_parts}')
         
         # Count completed maintenance records this month
         completed_this_month = db.session.query(func.count(MaintenanceRecord.id)).filter(
             MaintenanceRecord.date >= first_day_of_month
         ).scalar()
+        logger.debug(f'Completed maintenance this month: {completed_this_month}')
         
         stats = {
             'total_machines': total_machines or 0,
@@ -236,12 +242,12 @@ def api_dashboard():
         # Update cache
         _dashboard_cache['data'] = stats
         _dashboard_cache['timestamp'] = now
-        logger.debug('Dashboard cache updated')
+        logger.info(f'Dashboard cache updated: {stats}')
         
         return api_response(data=stats)
         
     except Exception as e:
-        logger.error(f'Dashboard error: {str(e)}')
+        logger.error(f'Dashboard error: {str(e)}', exc_info=True)
         return api_response(error='Failed to load dashboard data', status=500)
 
 # ==================== MACHINES ENDPOINTS ====================
@@ -285,22 +291,42 @@ def api_get_machines():
 @api_v1.route('/maintenance', methods=['GET'])
 @api_login_required
 def api_get_maintenance():
-    """Get list of maintenance tasks based on parts with due maintenance"""
+    """Get list of maintenance tasks based on parts with due maintenance
+    
+    Query parameters:
+    - status: Filter by status ('overdue', 'due_soon', 'pending')
+    - site_id: Filter by site ID
+    """
     try:
-        from models import Part, Machine
+        from models import Part, Machine, Site
         from sqlalchemy.orm import joinedload
         from sqlalchemy import and_
         
-        today = datetime.now().date()
+        # Use datetime for consistent comparisons (parts store datetime, not just date)
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         due_soon_date = today + timedelta(days=7)
+        
+        # Get query parameters
+        status_filter = request.args.get('status', None)
+        site_id_filter = request.args.get('site_id', None)
         
         # Get all parts that have upcoming or overdue maintenance
         # Optimize with eager loading to avoid N+1 queries
-        parts = Part.query.options(
+        query = Part.query.options(
             joinedload(Part.machine).joinedload(Machine.site)
         ).filter(
             Part.next_maintenance.isnot(None)
-        ).all()
+        )
+        
+        # Apply site filter if provided
+        if site_id_filter and site_id_filter != 'all':
+            try:
+                site_id = int(site_id_filter)
+                query = query.join(Part.machine).filter(Machine.site_id == site_id)
+            except (ValueError, TypeError):
+                pass
+        
+        parts = query.all()
         
         tasks_data = []
         for part in parts:
@@ -312,33 +338,300 @@ def api_get_maintenance():
             if part.next_maintenance < today:
                 status = 'overdue'
             elif part.next_maintenance <= due_soon_date:
-                status = 'due-soon'
+                status = 'due_soon'  # Changed from 'due-soon' to match frontend
+            
+            # Apply status filter if provided
+            if status_filter and status != status_filter:
+                continue
             
             # Get machine and site info
             machine_name = part.machine.name if part.machine else 'Unknown'
+            machine_id = part.machine.id if part.machine else None
             site_name = part.machine.site.name if part.machine and part.machine.site else ''
+            site_id = part.machine.site.id if part.machine and part.machine.site else None
             
-            tasks_data.append({
+            # Calculate days overdue or days until due
+            days_diff = (part.next_maintenance - today).days
+            
+            task_dict = {
                 'id': part.id,
+                'part_name': part.name,
                 'machine': machine_name,
+                'machine_name': machine_name,
+                'machine_id': machine_id,
                 'task': f"{part.name} - {part.description}" if part.description else part.name,
                 'dueDate': part.next_maintenance.strftime('%Y-%m-%d'),
+                'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d'),
                 'status': status,
                 'assignedTo': '',  # Can be added from maintenance records if needed
                 'site': site_name,
-                'priority': 'high' if status == 'overdue' else 'medium' if status == 'due-soon' else 'low',
+                'site_name': site_name,
+                'site_id': site_id,
+                'priority': 'high' if status == 'overdue' else 'medium' if status == 'due_soon' else 'low',
                 'lastMaintenance': part.last_maintenance.strftime('%Y-%m-%d') if part.last_maintenance else None,
                 'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}" if part.maintenance_frequency else None,
-            })
+            }
+            
+            # Add days_overdue or days_until based on status
+            if status == 'overdue':
+                task_dict['days_overdue'] = abs(days_diff)
+            else:
+                task_dict['days_until'] = days_diff
+            
+            tasks_data.append(task_dict)
         
         # Sort by due date (overdue first, then upcoming)
         tasks_data.sort(key=lambda x: (x['status'] != 'overdue', x['dueDate']))
         
+        logger.info(f'Returning {len(tasks_data)} maintenance tasks (status_filter={status_filter}, site_filter={site_id_filter})')
         return api_response(data=tasks_data)
         
     except Exception as e:
         logger.error(f'Get maintenance error: {str(e)}', exc_info=True)
         return api_response(error='Failed to load maintenance tasks', status=500)
+
+@api_v1.route('/maintenance/history', methods=['GET'])
+@api_login_required
+def api_get_maintenance_history():
+    """Get list of all completed maintenance records
+    
+    Query parameters:
+    - site_id: Filter by site ID
+    - search: Search in machine name, part name, or notes
+    """
+    try:
+        from models import MaintenanceRecord, Machine, Part, Site, User
+        from sqlalchemy.orm import joinedload
+        
+        # Get query parameters
+        site_id_filter = request.args.get('site_id', None)
+        search_query = request.args.get('search', '').strip()
+        
+        # Build query with eager loading to avoid N+1 queries
+        query = MaintenanceRecord.query.options(
+            joinedload(MaintenanceRecord.machine).joinedload(Machine.site),
+            joinedload(MaintenanceRecord.part),
+            joinedload(MaintenanceRecord.user)
+        )
+        
+        # Apply site filter if provided
+        if site_id_filter and site_id_filter != 'all':
+            try:
+                site_id = int(site_id_filter)
+                query = query.join(MaintenanceRecord.machine).filter(Machine.site_id == site_id)
+            except (ValueError, TypeError):
+                pass
+        
+        # Get all records
+        records = query.order_by(MaintenanceRecord.date.desc()).all()
+        
+        # Build response data
+        records_data = []
+        for record in records:
+            # Get related entities
+            machine_name = record.machine.name if record.machine else 'Unknown'
+            machine_id = record.machine.id if record.machine else None
+            part_name = record.part.name if hasattr(record, 'part') and record.part else 'Unknown'
+            part_id = record.part.id if hasattr(record, 'part') and record.part else None
+            site_name = record.machine.site.name if record.machine and record.machine.site else ''
+            site_id = record.machine.site.id if record.machine and record.machine.site else None
+            
+            # Get completed_by - prefer performed_by, fallback to user relationship
+            completed_by = record.performed_by or ''
+            if not completed_by and record.user:
+                completed_by = record.user.username
+            
+            # Apply search filter if provided
+            if search_query:
+                search_lower = search_query.lower()
+                if not any([
+                    search_lower in machine_name.lower(),
+                    search_lower in part_name.lower(),
+                    search_lower in (record.notes or '').lower(),
+                    search_lower in (record.description or '').lower(),
+                    search_lower in completed_by.lower()
+                ]):
+                    continue
+            
+            record_dict = {
+                'id': record.id,
+                'machine': machine_name,
+                'machineName': machine_name,
+                'machine_id': machine_id,
+                'part': part_name,
+                'partName': part_name,
+                'part_id': part_id,
+                'completedDate': record.date.strftime('%Y-%m-%d') if record.date else '',
+                'completedBy': completed_by,
+                'site': site_name,
+                'siteName': site_name,
+                'site_id': site_id,
+                'notes': record.notes or record.description or record.comments or '',
+                'maintenanceType': record.maintenance_type or 'Routine',
+                'status': record.status or 'completed',
+            }
+            
+            records_data.append(record_dict)
+        
+        logger.info(f'Returning {len(records_data)} maintenance history records (site_filter={site_id_filter}, search={search_query})')
+        return api_response(data=records_data)
+        
+    except Exception as e:
+        logger.error(f'Get maintenance history error: {str(e)}', exc_info=True)
+        return api_response(error='Failed to load maintenance history', status=500)
+
+@api_v1.route('/machines/<int:machine_id>/parts', methods=['GET'])
+@api_login_required
+def api_get_machine_parts(machine_id):
+    """Get all parts for a specific machine with their maintenance status"""
+    try:
+        from models import Machine, Part
+        from sqlalchemy.orm import joinedload
+        
+        machine = Machine.query.options(joinedload(Machine.parts)).get_or_404(machine_id)
+        
+        # Check permissions
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
+            if machine.site_id not in user_site_ids:
+                return api_response(error='Access denied', status=403)
+        
+        today = datetime.now().date()
+        parts_data = []
+        
+        for part in machine.parts:
+            # Determine status
+            status = 'up-to-date'
+            days_info = None
+            
+            if part.next_maintenance:
+                if part.next_maintenance < today:
+                    status = 'overdue'
+                    days_info = (today - part.next_maintenance).days
+                elif part.next_maintenance <= today + timedelta(days=7):
+                    status = 'due-soon'
+                    days_info = (part.next_maintenance - today).days
+            
+            parts_data.append({
+                'id': part.id,
+                'name': part.name,
+                'description': part.description if hasattr(part, 'description') else '',
+                'last_maintenance': part.last_maintenance.strftime('%Y-%m-%d') if part.last_maintenance else None,
+                'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d') if part.next_maintenance else None,
+                'maintenance_frequency': part.maintenance_frequency if hasattr(part, 'maintenance_frequency') else None,
+                'maintenance_unit': part.maintenance_unit if hasattr(part, 'maintenance_unit') else 'days',
+                'status': status,
+                'days_info': days_info,
+            })
+        
+        return api_response(data=parts_data)
+        
+    except Exception as e:
+        logger.error(f'Get machine parts error: {str(e)}')
+        return api_response(error='Failed to load machine parts', status=500)
+
+@api_v1.route('/maintenance/complete-multiple', methods=['POST'])
+@api_login_required
+def api_complete_multiple_maintenance():
+    """Complete maintenance for multiple parts in a single operation"""
+    try:
+        from models import Part, Machine, MaintenanceRecord
+        from datetime import datetime, timedelta
+        from sync_db import add_to_sync_queue_enhanced
+        from datetime_utils import get_timezone_aware_now
+        
+        data = request.get_json()
+        part_ids = data.get('part_ids', [])
+        machine_id = data.get('machine_id')
+        maintenance_date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+        maintenance_type = data.get('type', 'Routine')
+        description = data.get('description', '')
+        notes = data.get('notes', '')
+        
+        if not part_ids or not machine_id:
+            return api_response(error='Machine ID and at least one part required', status=400)
+        
+        # Verify machine exists and user has access
+        machine = Machine.query.get_or_404(machine_id)
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
+            if machine.site_id not in user_site_ids:
+                return api_response(error='Access denied', status=403)
+        
+        completed_count = 0
+        maintenance_records = []
+        
+        for part_id in part_ids:
+            part = Part.query.get(part_id)
+            if not part or part.machine_id != machine_id:
+                continue
+            
+            # Create maintenance record
+            maintenance_record = MaintenanceRecord(
+                machine_id=machine_id,
+                part_id=part_id,
+                user_id=current_user.id,
+                maintenance_type=maintenance_type,
+                description=description or f"Maintenance completed for {part.name}",
+                date=datetime.strptime(maintenance_date, '%Y-%m-%d').date(),
+                performed_by=current_user.username if hasattr(current_user, 'username') else 'Unknown',
+                status='completed',
+                notes=notes
+            )
+            db.session.add(maintenance_record)
+            
+            # Update part's last_maintenance and calculate next_maintenance
+            part.last_maintenance = datetime.strptime(maintenance_date, '%Y-%m-%d').date()
+            
+            if part.maintenance_frequency and part.maintenance_unit:
+                if part.maintenance_unit == 'days':
+                    part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_frequency)
+                elif part.maintenance_unit == 'weeks':
+                    part.next_maintenance = part.last_maintenance + timedelta(weeks=part.maintenance_frequency)
+                elif part.maintenance_unit == 'months':
+                    part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_frequency * 30)
+                elif part.maintenance_unit == 'years':
+                    part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_frequency * 365)
+            
+            maintenance_records.append(maintenance_record)
+            completed_count += 1
+        
+        db.session.commit()
+        
+        # Sync to cloud
+        for record in maintenance_records:
+            add_to_sync_queue_enhanced('maintenance_records', record.id, 'insert', {
+                'id': record.id,
+                'machine_id': record.machine_id,
+                'part_id': record.part_id,
+                'user_id': record.user_id,
+                'maintenance_type': record.maintenance_type,
+                'description': record.description,
+                'date': record.date.isoformat() if record.date else None,
+                'performed_by': record.performed_by,
+                'status': record.status,
+                'notes': record.notes
+            }, immediate_sync=True)
+        
+        # Sync part updates
+        for part_id in part_ids:
+            part = Part.query.get(part_id)
+            if part:
+                add_to_sync_queue_enhanced('parts', part.id, 'update', {
+                    'id': part.id,
+                    'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+                    'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
+                }, immediate_sync=True)
+        
+        return api_response(
+            data={'completed_count': completed_count},
+            message=f'Successfully completed maintenance for {completed_count} part(s)'
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Complete multiple maintenance error: {str(e)}')
+        return api_response(error='Failed to complete maintenance', status=500)
 
 # ==================== SITES ENDPOINTS ====================
 
@@ -431,6 +724,165 @@ def api_get_audits():
         logger.error(f'Get audits error: {str(e)}')
         return api_response(error='Failed to load audits', status=500)
 
+@api_v1.route('/audits/<int:audit_id>/machines', methods=['GET'])
+@api_login_required
+def api_get_audit_machines(audit_id):
+    """Get machines for a specific audit task with their completion status"""
+    try:
+        from models import AuditTask, AuditTaskCompletion
+        from datetime import datetime
+        
+        audit_task = AuditTask.query.get_or_404(audit_id)
+        
+        # Check permissions
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
+            if audit_task.site_id not in user_site_ids:
+                return api_response(error='Access denied', status=403)
+        
+        today = datetime.utcnow().date()
+        machines_data = []
+        
+        for machine in audit_task.machines:
+            # Check if completed today
+            completion = AuditTaskCompletion.query.filter_by(
+                audit_task_id=audit_id,
+                machine_id=machine.id,
+                date=today
+            ).first()
+            
+            machines_data.append({
+                'id': machine.id,
+                'name': machine.name,
+                'model': machine.model if hasattr(machine, 'model') else '',
+                'serial_number': machine.serial_number if hasattr(machine, 'serial_number') else '',
+                'completed': completion.completed if completion else False,
+                'completed_at': completion.completed_at.isoformat() if completion and completion.completed_at else None,
+                'completed_by': completion.completed_by if completion else None,
+            })
+        
+        return api_response(data=machines_data)
+        
+    except Exception as e:
+        logger.error(f'Get audit machines error: {str(e)}')
+        return api_response(error='Failed to load audit machines', status=500)
+
+@api_v1.route('/audits/<int:audit_id>/complete', methods=['POST', 'OPTIONS'])
+@api_login_required
+def api_complete_audit_task(audit_id):
+    """Complete audit task for specific machines"""
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+    
+    # Move imports outside try block to see import errors
+    from models import AuditTask, AuditTaskCompletion, Machine
+    from datetime import datetime, timedelta
+    from sync_utils_enhanced import add_to_sync_queue_enhanced
+    from timezone_utils import get_timezone_aware_now
+    
+    try:
+        logger.info(f'[AUDIT COMPLETE] Received POST request for audit_id={audit_id}')
+        logger.info(f'[AUDIT COMPLETE] Request data: {request.get_json()}')
+        logger.info('[AUDIT COMPLETE] Imports successful')
+        audit_task = AuditTask.query.get_or_404(audit_id)
+        logger.info(f'[AUDIT COMPLETE] Found audit task: {audit_task.id}')
+        
+        # Check permissions
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
+            if audit_task.site_id not in user_site_ids:
+                return api_response(error='Access denied', status=403)
+        
+        data = request.get_json()
+        machine_ids = data.get('machine_ids', [])
+        
+        if not machine_ids:
+            return api_response(error='No machines selected', status=400)
+        
+        today = datetime.utcnow().date()
+        completed_count = 0
+        
+        for machine_id in machine_ids:
+            machine = Machine.query.get(machine_id)
+            if not machine or machine not in audit_task.machines:
+                continue
+            
+            # Check if already completed today
+            existing_completion = AuditTaskCompletion.query.filter_by(
+                audit_task_id=audit_id,
+                machine_id=machine_id,
+                date=today
+            ).first()
+            
+            if existing_completion:
+                if existing_completion.completed:
+                    continue  # Already completed
+                # Update existing record
+                existing_completion.completed = True
+                existing_completion.completed_by = current_user.id
+                existing_completion.completed_at = get_timezone_aware_now()
+                completion = existing_completion
+            else:
+                # Create new completion record
+                completion = AuditTaskCompletion(
+                    audit_task_id=audit_id,
+                    machine_id=machine_id,
+                    date=today,
+                    completed=True,
+                    completed_by=current_user.id,
+                    completed_at=get_timezone_aware_now()
+                )
+                db.session.add(completion)
+            
+            completed_count += 1
+        
+        logger.info(f'[AUDIT COMPLETE] About to commit {completed_count} completions')
+        db.session.commit()
+        logger.info('[AUDIT COMPLETE] Database commit successful')
+        
+        # Sync to cloud
+        logger.info(f'[AUDIT COMPLETE] Starting sync for {len(machine_ids)} machines')
+        for machine_id in machine_ids:
+            completion = AuditTaskCompletion.query.filter_by(
+                audit_task_id=audit_id,
+                machine_id=machine_id,
+                date=today
+            ).first()
+            if completion:
+                # Format dates safely
+                completion_date = completion.date.isoformat() if completion.date else None
+                completion_at = completion.completed_at.isoformat() if completion.completed_at else None
+                
+                add_to_sync_queue_enhanced('audit_task_completions', completion.id, 'upsert', {
+                    'id': completion.id,
+                    'audit_task_id': completion.audit_task_id,
+                    'machine_id': completion.machine_id,
+                    'date': completion_date,
+                    'completed': completion.completed,
+                    'completed_by': completion.completed_by,
+                    'completed_at': completion_at
+                }, immediate_sync=True)
+        
+        logger.info(f'[AUDIT COMPLETE] Sync queue updated, preparing response')
+        response = api_response(
+            data={'completed_count': completed_count},
+            message=f'Successfully completed {completed_count} audit task(s)'
+        )
+        logger.info(f'[AUDIT COMPLETE] Returning success response: {response}')
+        return response
+        
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        error_details = traceback.format_exc()
+        logger.error(f'Complete audit task error: {str(e)}')
+        logger.error(f'Full traceback:\n{error_details}')
+        return api_response(error=f'Failed to complete audit task: {str(e)}', status=500)
+
 # ==================== USERS ENDPOINTS ====================
 
 @api_v1.route('/users', methods=['GET'])
@@ -447,10 +899,34 @@ def api_get_users():
         users_data = []
         for user in users:
             role = user.role if hasattr(user, 'role') else None
+            
+            # Debug: Log raw values
+            logger.info(f'Processing user {user.id}: raw _username length={len(user._username) if user._username else 0}')
+            
+            # Explicitly call the property getters to decrypt values
+            try:
+                username = user.username  # This calls the @property getter which decrypts
+                logger.info(f'User {user.id}: Successfully decrypted username: {username}')
+            except Exception as e:
+                logger.error(f'Failed to decrypt username for user {user.id}: {str(e)}', exc_info=True)
+                # If it looks like encrypted data (long string), note that
+                if user._username and len(user._username) > 50:
+                    logger.error(f'User {user.id}: Value appears to be encrypted (length={len(user._username)})')
+                username = f'user_{user.id}'  # Fallback
+            
+            try:
+                email = user.email  # This calls the @property getter which decrypts
+                logger.info(f'User {user.id}: Successfully decrypted email: {email}')
+            except Exception as e:
+                logger.error(f'Failed to decrypt email for user {user.id}: {str(e)}', exc_info=True)
+                if user._email and len(user._email) > 50:
+                    logger.error(f'User {user.id}: Email value appears to be encrypted (length={len(user._email)})')
+                email = f'user_{user.id}@example.com'  # Fallback
+            
             users_data.append({
                 'id': user.id,
-                'username': user.username,
-                'email': user.email,
+                'username': username,
+                'email': email,
                 'full_name': user.full_name if hasattr(user, 'full_name') else '',
                 'role': role.name if role and hasattr(role, 'name') else (role if isinstance(role, str) else 'User'),
                 'role_id': user.role_id if hasattr(user, 'role_id') else None,

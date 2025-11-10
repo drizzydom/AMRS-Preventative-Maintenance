@@ -3,6 +3,7 @@ import { Menu, Dropdown, Space } from 'antd'
 import type { MenuProps } from 'antd'
 import { DownOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
+import ConnectionStatus from './ConnectionStatus'
 import '../styles/menubar.css'
 
 const MenuBar: React.FC = () => {
@@ -59,46 +60,51 @@ const MenuBar: React.FC = () => {
 
   return (
     <div className="menu-bar">
-      <Dropdown menu={{ items: fileMenuItems }} trigger={['click']}>
-        <a onClick={(e) => e.preventDefault()}>
-          <Space>
-            File
-            <DownOutlined style={{ fontSize: '10px' }} />
-          </Space>
-        </a>
-      </Dropdown>
-      <Dropdown menu={{ items: editMenuItems }} trigger={['click']}>
-        <a onClick={(e) => e.preventDefault()}>
-          <Space>
-            Edit
-            <DownOutlined style={{ fontSize: '10px' }} />
-          </Space>
-        </a>
-      </Dropdown>
-      <Dropdown menu={{ items: viewMenuItems }} trigger={['click']}>
-        <a onClick={(e) => e.preventDefault()}>
-          <Space>
-            View
-            <DownOutlined style={{ fontSize: '10px' }} />
-          </Space>
-        </a>
-      </Dropdown>
-      <Dropdown menu={{ items: toolsMenuItems }} trigger={['click']}>
-        <a onClick={(e) => e.preventDefault()}>
-          <Space>
-            Tools
-            <DownOutlined style={{ fontSize: '10px' }} />
-          </Space>
-        </a>
-      </Dropdown>
-      <Dropdown menu={{ items: helpMenuItems }} trigger={['click']}>
-        <a onClick={(e) => e.preventDefault()}>
-          <Space>
-            Help
-            <DownOutlined style={{ fontSize: '10px' }} />
-          </Space>
-        </a>
-      </Dropdown>
+      <div className="menu-bar-left">
+        <Dropdown menu={{ items: fileMenuItems }} trigger={['click']}>
+          <a onClick={(e) => e.preventDefault()}>
+            <Space>
+              File
+              <DownOutlined style={{ fontSize: '10px' }} />
+            </Space>
+          </a>
+        </Dropdown>
+        <Dropdown menu={{ items: editMenuItems }} trigger={['click']}>
+          <a onClick={(e) => e.preventDefault()}>
+            <Space>
+              Edit
+              <DownOutlined style={{ fontSize: '10px' }} />
+            </Space>
+          </a>
+        </Dropdown>
+        <Dropdown menu={{ items: viewMenuItems }} trigger={['click']}>
+          <a onClick={(e) => e.preventDefault()}>
+            <Space>
+              View
+              <DownOutlined style={{ fontSize: '10px' }} />
+            </Space>
+          </a>
+        </Dropdown>
+        <Dropdown menu={{ items: toolsMenuItems }} trigger={['click']}>
+          <a onClick={(e) => e.preventDefault()}>
+            <Space>
+              Tools
+              <DownOutlined style={{ fontSize: '10px' }} />
+            </Space>
+          </a>
+        </Dropdown>
+        <Dropdown menu={{ items: helpMenuItems }} trigger={['click']}>
+          <a onClick={(e) => e.preventDefault()}>
+            <Space>
+              Help
+              <DownOutlined style={{ fontSize: '10px' }} />
+            </Space>
+          </a>
+        </Dropdown>
+      </div>
+      <div className="menu-bar-right">
+        <ConnectionStatus />
+      </div>
     </div>
   )
 }

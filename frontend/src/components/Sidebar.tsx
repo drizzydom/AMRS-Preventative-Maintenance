@@ -11,6 +11,7 @@ import {
   FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  SafetyOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import '../styles/sidebar.css'
@@ -59,6 +60,11 @@ const Sidebar: React.FC = () => {
       key: '/users',
       icon: <TeamOutlined />,
       label: 'Users',
+    },
+    {
+      key: '/admin',
+      icon: <SafetyOutlined />,
+      label: 'Admin Panel',
     },
   ]
 

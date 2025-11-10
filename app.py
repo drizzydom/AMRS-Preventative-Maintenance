@@ -831,7 +831,6 @@ mail = Mail(app)
 
 
 # --- Start Security Event Email Batcher on App Startup (inside app context) ---
-@app.before_first_request
 def start_security_event_batcher():
     try:
         from security_event_batcher import SecurityEventBatcher
@@ -860,10 +859,14 @@ def delete_old_security_events():
         print(f"[SECURITY LOG RETENTION] Deleted {num_deleted} security events older than {retention_days} days.")
 
 def start_security_event_retention_job():
+    # Get the app instance for use in the background thread
+    from flask import current_app
+    app_instance = current_app._get_current_object()
+    
     def job():
         while True:
             try:
-                with current_app.app_context():
+                with app_instance.app_context():
                     delete_old_security_events()
             except Exception as e:
                 print(f"[SECURITY LOG RETENTION] Error: {e}")
@@ -872,7 +875,6 @@ def start_security_event_retention_job():
     t.start()
 
 # Start the retention job after app is initialized
-@app.before_first_request
 def start_retention_job():
     start_security_event_retention_job()
 
@@ -4512,6 +4514,13 @@ def serve_react_assets(filename):
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    """Redirect old dashboard route to React app"""
+    # Serve the React frontend application for logged-in users
+    frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+    if os.path.exists(frontend_path):
+        return send_file(frontend_path)
+    
+    # Fallback to old dashboard if React build doesn't exist
     try:
         # Check if user wants to see decommissioned machines
         show_decommissioned = request.args.get('show_decommissioned', 'false').lower() == 'true'
@@ -7181,9 +7190,19 @@ def update_notification_preferences():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Handle userlogin."""
+    """Handle user login."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
+    
+    # For GET requests, serve the React app
+    if request.method == 'GET':
+        frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+        if os.path.exists(frontend_path):
+            return send_file(frontend_path)
+        # Fallback to old template if React build doesn't exist
+        return render_template('login.html')
+    
+    # Handle POST request for authentication
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -10970,12 +10989,34 @@ def initialize_bootstrap_only():
     
     return offline_mode  # Return offline_mode for use in socketio.run
 
+# Catch-all route: serve React app for any unmatched routes (must be last before __main__)
+# This allows React Router to handle all client-side routing
+@app.route('/<path:path>')
+def catch_all(path):
+    """Serve React app for all unmatched routes (except /api and /static)"""
+    # Don't intercept API routes or static files
+    if path.startswith('api/') or path.startswith('static/'):
+        abort(404)
+    
+    # Serve the React frontend for all other routes
+    frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+    if os.path.exists(frontend_path):
+        return send_file(frontend_path)
+    
+    # Fallback: if React build doesn't exist, show 404
+    abort(404)
+
 # Standard Flask app runner for local/offline mode (must be at the very end of the file)
 if __name__ == "__main__":
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')
     print(f"[AMRS] Launching app with database URI: {db_uri}")
     # Initialize bootstrap operations - database is already initialized above
     offline_mode = initialize_bootstrap_only()
+    
+    # Start security event batcher and retention job (Flask 3.0+ compatible)
+    with app.app_context():
+        start_security_event_batcher()
+        start_retention_job()
     
     # Run the Flask app with SocketIO for WebSocket support
     port = int(os.environ.get("PORT", 10000))
