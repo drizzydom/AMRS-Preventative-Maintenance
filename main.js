@@ -1148,9 +1148,24 @@ function stopFlaskServer() {
 
 // Create the main application window
 function createWindow() {
+    // Restore window bounds if previously saved
+    const statePath = path.join(app.getPath('userData'), 'window-state.json');
+    let savedBounds = null;
+    try {
+        if (fs.existsSync(statePath)) {
+            const raw = fs.readFileSync(statePath, 'utf8');
+            savedBounds = JSON.parse(raw);
+            writeLog('[Electron] Restored window bounds from store');
+        }
+    } catch (err) {
+        writeLog(`[Electron] Failed to read window state: ${err.message}`);
+    }
+
     mainWindow = new BrowserWindow({
-        width: 1400,
-        height: 900,
+        width: savedBounds?.width || 1400,
+        height: savedBounds?.height || 900,
+        x: savedBounds?.x,
+        y: savedBounds?.y,
         minWidth: 800,
         minHeight: 600,
         show: false, // Don't show until ready
@@ -1187,124 +1202,120 @@ function createWindow() {
         mainWindow = null;
         stopFlaskServer();
     });
-    
-    // Handle external links
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        shell.openExternal(url);
-        return { action: 'deny' };
-    });
-    
-    // Prevent navigation away from the app
-    mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
-        const parsedUrl = new URL(navigationUrl);
-        const currentUrl = new URL(mainWindow.webContents.getURL());
-        
-        if (parsedUrl.origin !== currentUrl.origin) {
-            event.preventDefault();
-            shell.openExternal(navigationUrl);
-        }
-    });
-    
-    // Development: Open DevTools (remove in production)
-    if (process.env.NODE_ENV === 'development') {
-        mainWindow.webContents.openDevTools();
-    }
-}
 
-// Create application menu with debugging options
-function createMenu() {
-    const template = [
-        {
-            label: 'File',
-            submenu: [
-                {
-                    label: 'Quit',
-                    accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
-                    click: () => {
-                        app.quit();
-                    }
-                }
-            ]
-        },
-        {
-            label: 'Help',
-            submenu: [
-                {
-                    label: 'Show Debug Info',
-                    click: async () => {
-                        const debugInfo = [
-                            `Platform: ${process.platform}`,
-                            `Electron Version: ${process.versions.electron}`,
-                            `Node Version: ${process.versions.node}`,
-                            `Working Directory: ${process.cwd()}`,
-                            `App Directory: ${__dirname}`,
-                            `Flask Process: ${flaskProcess ? `Running (PID: ${flaskProcess.pid})` : 'Not running'}`,
-                            `Flask Port: ${FLASK_PORT}`,
-                            `Log File: ${LOG_FILE}`
-                        ].join('\n');
-                        
-                        await dialog.showMessageBox(mainWindow, {
-                            type: 'info',
-                            title: 'Debug Information',
-                            message: 'AMRS Maintenance Tracker Debug Info',
-                            detail: debugInfo,
-                            buttons: ['OK']
-                        });
-                    }
-                },
-                {
-                    label: 'Show Application Logs',
-                    click: async () => {
-                        const recentLogs = logMessages.slice(-50).join('\n'); // Show last 50 messages
-                        await dialog.showMessageBox(mainWindow, {
-                            type: 'info',
-                            title: 'Application Logs',
-                            message: 'Recent application logs (last 50 messages)',
-                            detail: recentLogs || 'No logs available',
-                            buttons: ['OK', 'Open Log File']
-                        }).then((result) => {
-                            if (result.response === 1) { // Open Log File button
-                                shell.showItemInFolder(LOG_FILE);
-                            }
-                        });
-                    }
-                },
-                {
-                    label: 'Open Log File Location',
-                    click: () => {
-                        shell.showItemInFolder(LOG_FILE);
-                    }
-                },
-                {
-                    label: 'Restart Flask Backend',
-                    click: async () => {
-                        writeLog('[Menu] Restarting Flask backend...');
-                        stopFlaskServer();
-                        
-                        setTimeout(async () => {
-                            const started = await startFlaskServer();
-                            if (started) {
-                                mainWindow.reload();
-                            } else {
-                                await dialog.showErrorBox('Restart Failed', 'Could not restart the Flask backend. Check Help → Show Application Logs for details.');
-                            }
-                        }, 2000);
-                    }
-                },
-                {
-                    label: 'Open Developer Tools',
-                    click: () => {
-                        if (mainWindow) {
-                            mainWindow.webContents.openDevTools();
-                        }
-                    }
-                }
-            ]
+    // Persist window bounds on close
+    mainWindow.on('close', () => {
+        try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                const bounds = mainWindow.getBounds();
+                fs.writeFileSync(statePath, JSON.stringify(bounds));
+                writeLog('[Electron] Window bounds saved');
+            }
+        } catch (err) {
+            writeLog(`[Electron] Failed to save window bounds: ${err.message}`);
         }
-    ];
+    });
     
-    const menu = Menu.buildFromTemplate(template);
-    Menu.setApplicationMenu(menu);
+    // Handle external links (open external URLs in default browser)
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        const { shell } = require('electron');
+        try {
+            if (url && typeof url === 'string' && !url.startsWith(frontendURL) && (url.startsWith('http://') || url.startsWith('https://'))) {
+                shell.openExternal(url);
+                return { action: 'deny' };
+            }
+        } catch (err) {
+            writeLog(`[Electron] Error handling external link: ${err.message}`);
+        }
+        return { action: 'allow' };
+    });
+
+    // Build application menu (native)
+    try {
+        const template = [
+            {
+                label: 'File',
+                submenu: [
+                    {
+                        label: 'New Maintenance Record',
+                        accelerator: 'CmdOrCtrl+N',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-new-maintenance') }
+                    },
+                    { type: 'separator' },
+                    {
+                        label: 'Print',
+                        accelerator: 'CmdOrCtrl+P',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-print') }
+                    },
+                    { type: 'separator' },
+                    { role: 'quit' }
+                ]
+            },
+            {
+                label: 'Edit',
+                submenu: [
+                    { role: 'undo' },
+                    { role: 'redo' },
+                    { type: 'separator' },
+                    { role: 'cut' },
+                    { role: 'copy' },
+                    { role: 'paste' },
+                ]
+            },
+            {
+                label: 'View',
+                submenu: [
+                    {
+                        label: 'Dashboard',
+                        accelerator: 'CmdOrCtrl+1',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/dashboard') }
+                    },
+                    {
+                        label: 'Sites',
+                        accelerator: 'CmdOrCtrl+2',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/sites') }
+                    },
+                    {
+                        label: 'Machines',
+                        accelerator: 'CmdOrCtrl+3',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/machines') }
+                    },
+                    { type: 'separator' },
+                    { role: 'reload' },
+                    { role: 'forceReload' },
+                    { role: 'toggleDevTools' },
+                ]
+            },
+            {
+                label: 'Window',
+                submenu: [
+                    { role: 'minimize' },
+                    { role: 'zoom' },
+                    { type: 'separator' },
+                    { role: 'front' },
+                ]
+            },
+            {
+                label: 'Help',
+                submenu: [
+                    {
+                        label: 'Documentation',
+                        click: () => { require('electron').shell.openExternal('https://docs.accuratemachinerepair.com') }
+                    },
+                    {
+                        label: 'About',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-about') }
+                    }
+                ]
+            }
+        ];
+
+        const menu = Menu.buildFromTemplate(template);
+        Menu.setApplicationMenu(menu);
+        writeLog('[Electron] Application menu initialized');
+    } catch (err) {
+        writeLog(`[Electron] Failed to build application menu: ${err.message}`);
+    }
 }
 
 // --- Add Developer Menu for Manual Update Check ---

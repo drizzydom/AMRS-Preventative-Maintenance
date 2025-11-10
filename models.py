@@ -189,14 +189,40 @@ def encrypt_value(value):
 def decrypt_value(value):
     if value is None:
         return None
+    
+    # If it's not a string, return as-is
+    if not isinstance(value, str):
+        return value
+    
+    # If it's empty, return empty string
+    if not value:
+        return ''
+    
     try:
         # First try to decrypt as if it's encrypted
         f = get_fernet()
-        return f.decrypt(value.encode()).decode()
-    except (InvalidToken, AttributeError):
-        # If decryption fails, assume it's plain text and return as-is
-        # This handles legacy data that wasn't encrypted
+        decrypted = f.decrypt(value.encode()).decode()
+        return decrypted
+    except InvalidToken as e:
+        # Log the failure for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f'Failed to decrypt value (InvalidToken): {str(e)[:100]}')
+        # If decryption fails with InvalidToken, the key might be wrong or data corrupted
+        # Return a placeholder to make it obvious
+        return f'[ENCRYPTED:{value[:20]}...]'
+    except (AttributeError, ValueError, UnicodeDecodeError) as e:
+        # If there's an attribute/encoding error, assume it's plain text
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f'Decrypt error (likely plaintext): {str(e)}')
         return value
+    except Exception as e:
+        # Catch any other unexpected errors
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f'Unexpected decrypt error: {str(e)}', exc_info=True)
+        return f'[ERROR:{str(e)[:30]}]'
 
 
 def maybe_decrypt(value):

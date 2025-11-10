@@ -143,7 +143,8 @@ def trigger_delayed_sync():
     
     def delayed_sync():
         time.sleep(5)  # Wait 5 seconds to batch multiple changes
-        if should_trigger_sync():
+        # Force override cooldown for user-initiated actions
+        if should_trigger_sync(force_override_cooldown=True):
             trigger_immediate_sync()
     
     # Run in background thread to avoid blocking
@@ -154,7 +155,8 @@ def trigger_immediate_sync():
     Trigger immediate sync by signaling the background worker.
     Only works for offline clients.
     """
-    if should_trigger_sync():
+    # Force override cooldown for immediate sync trigger
+    if should_trigger_sync(force_override_cooldown=True):
         sync_event.set()
         print("[SYNC] Immediate sync triggered")
     else:

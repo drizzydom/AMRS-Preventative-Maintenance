@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons'
 import apiClient from '../utils/api'
 import AuditModal from '../components/modals/AuditModal'
+import AuditCompletionModal from '../components/modals/AuditCompletionModal'
 import '../styles/audits.css'
 
 const { Title } = Typography
@@ -42,6 +43,7 @@ const Audits: React.FC = () => {
   const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [completionModalOpen, setCompletionModalOpen] = useState(false)
   const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -174,6 +176,15 @@ const Audits: React.FC = () => {
     })
   }
 
+  const handleCompleteAudit = (audit: Audit) => {
+    setSelectedAudit(audit)
+    setCompletionModalOpen(true)
+  }
+
+  const handleCompletionSuccess = async () => {
+    await fetchAudits()
+  }
+
   // Mock data removed - now using real API data from fetchAudits()
 
   const columns: ColumnsType<Audit> = [
@@ -250,9 +261,19 @@ const Audits: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      width: 120,
+      width: 180,
       render: (_, record) => (
         <Space size="small">
+          <Button
+            type="primary"
+            icon={<CheckOutlined />}
+            size="small"
+            title="Complete Audit"
+            onClick={() => handleCompleteAudit(record)}
+            disabled={record.status === 'completed'}
+          >
+            Complete
+          </Button>
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -363,6 +384,17 @@ const Audits: React.FC = () => {
         sites={sites}
         machines={machines}
         loading={submitting}
+      />
+
+      <AuditCompletionModal
+        open={completionModalOpen}
+        onClose={() => {
+          setCompletionModalOpen(false)
+          setSelectedAudit(null)
+        }}
+        auditId={selectedAudit?.id || null}
+        auditName={selectedAudit?.name || ''}
+        onComplete={handleCompletionSuccess}
       />
     </div>
   )
