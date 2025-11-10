@@ -181,68 +181,152 @@
   font-size: 13px;
 }
 
-/* Option C: Timeline Layout */
+/* Option C: Professional Timeline Layout - Enhanced */
 
 .option-c .report-header-timeline {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   color: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 32px;
 }
 
 .option-c .report-header-timeline .ant-typography {
   color: white;
 }
 
+.option-c .report-header-timeline .ant-typography h2 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+}
+
+.option-c .report-header-timeline .ant-typography .ant-typography-secondary {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 16px;
+}
+
 .option-c .ant-tag {
   color: white;
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.option-c .report-metadata {
+  text-align: right;
+  padding-top: 8px;
+}
+
+.option-c .report-metadata .ant-typography {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
 }
 
 .statistics-panel {
-  background: #fafafa;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+}
+
+.statistics-panel .ant-statistic-title {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #595959;
+}
+
+.statistics-panel .ant-statistic-content {
+  font-size: 32px;
+  font-weight: 700;
 }
 
 .timeline-container {
   margin-top: 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.timeline-container .ant-timeline {
+  padding: 24px 0;
 }
 
 .timeline-record-card {
-  background: #fafafa;
-  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .timeline-record-card:hover {
   background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
 }
 
 .ant-timeline-item-label {
   width: 120px;
+  font-weight: 600;
+  color: #262626;
 }
 
-/* Print Styles */
+/* Professional Print Styles */
 
 @media print {
+  /* Hide UI elements */
   .reports-preview-container,
   .reports-header,
   .option-description,
-  .ant-tabs-nav {
-    display: none;
+  .ant-tabs-nav,
+  .ant-btn,
+  button {
+    display: none !important;
   }
 
   .report-preview-wrapper {
     box-shadow: none;
     padding: 0;
+    margin: 0;
   }
 
   .report-container {
     padding: 20px;
+    max-width: 100%;
+  }
+
+  /* Page breaks */
+  .report-header-timeline,
+  .compliance-header,
+  .statistics-panel,
+  .audit-summary-compliance {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .metric-card,
   .maintenance-record-card,
-  .timeline-record-card {
+  .timeline-record-card,
+  .compliance-item-card {
+    page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  /* Ensure proper spacing between sections */
+  .ant-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+
+  .timeline-container {
+    page-break-before: auto;
   }
 
   /* Ensure colored backgrounds print */
@@ -250,9 +334,68 @@
   .metric-card.warning,
   .metric-card.danger,
   .option-b .report-header-card,
-  .option-c .report-header-timeline {
+  .option-c .report-header-timeline,
+  .compliance-header,
+  .statistics-panel,
+  .audit-summary-compliance,
+  .compliance-item-card.pass,
+  .compliance-item-card.fail {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* Professional typography for print */
+  body {
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Signature section always at bottom of page */
+  .signature-section,
+  .certification-section {
+    page-break-before: always;
+    break-before: always;
+  }
+
+  /* Footer on every page */
+  .report-footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    border-top: 2px solid #d9d9d9;
+    padding-top: 8px;
+    font-size: 9pt;
+    color: #8c8c8c;
+  }
+
+  /* Professional page header */
+  @page {
+    margin: 2cm 1.5cm;
+    
+    @top-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 9pt;
+      color: #8c8c8c;
+    }
+    
+    @top-left {
+      content: "AMRS Maintenance Tracker";
+      font-size: 9pt;
+      color: #8c8c8c;
+      font-weight: 600;
+    }
+  }
+
+  /* Optimize shadows for print */
+  .ant-card,
+  .timeline-record-card,
+  .compliance-item-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   }
 }
 
@@ -405,52 +548,123 @@
   background: #fff1f0;
 }
 
-/* Option C: Compliance Audit Styles */
+/* Option C: Professional Compliance Audit Styles - Enhanced */
 
 .audit-report-compliance .compliance-header {
-  background: linear-gradient(to right, #f5f5f5, #fafafa);
-  border-left: 4px solid #1890ff;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 32px;
+  border-left: 8px solid #1890ff;
+}
+
+.audit-report-compliance .compliance-header .ant-typography {
+  color: white;
+}
+
+.audit-report-compliance .compliance-header .ant-typography h2 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.audit-report-compliance .compliance-header .ant-typography h4 {
+  font-size: 20px;
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+.audit-report-compliance .compliance-header .ant-tag {
+  color: white;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 6px;
 }
 
 .compliance-score-card {
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+}
+
+.compliance-score-card .ant-card-body {
+  padding: 24px;
+}
+
+.compliance-score-card .ant-typography h4 {
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.audit-summary-compliance {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.audit-summary-compliance .ant-typography h4 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: #262626;
 }
 
 .compliance-stat {
   text-align: center;
-  padding: 16px;
-}
-
-.stat-value-comp {
-  font-size: 32px;
-  font-weight: 700;
-  margin-top: 8px;
-  margin-bottom: 4px;
-}
-
-.stat-label-comp {
-  font-size: 12px;
-  color: #8c8c8c;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.compliance-item-card {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
   transition: all 0.3s ease;
 }
 
+.compliance-stat:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.stat-value-comp {
+  font-size: 40px;
+  font-weight: 800;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-label-comp {
+  font-size: 13px;
+  color: #595959;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.compliance-item-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
 .compliance-item-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateX(4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateX(6px) translateY(-2px);
 }
 
 .compliance-item-card.pass {
-  background: #f6ffed;
+  background: linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%);
+  border-left: 4px solid #52c41a;
 }
 
 .compliance-item-card.fail {
-  background: #fff1f0;
+  background: linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%);
+  border-left: 4px solid #ff4d4f;
 }
 
 .non-compliance-section .finding-number {

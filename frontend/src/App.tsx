@@ -1,11 +1,13 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { Layout, Spin } from 'antd'
 import TitleBar from './components/TitleBar'
 import MenuBar from './components/MenuBar'
 import Sidebar from './components/Sidebar'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
+import { initializeSocket, disconnectSocket } from './utils/socket'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import './styles/App.css'
 
 const { Content } = Layout
@@ -19,6 +21,7 @@ const Audits = lazy(() => import('./pages/Audits'))
 const Sites = lazy(() => import('./pages/Sites'))
 const Users = lazy(() => import('./pages/admin/Users'))
 const Settings = lazy(() => import('./pages/Settings'))
+const AdminPanel = lazy(() => import('./pages/AdminPanel'))
 const ReportsPreview = lazy(() => import('./pages/reports/ReportsPreview'))
 const AuditReportsPreview = lazy(() => import('./pages/reports/AuditReportsPreview'))
 
@@ -36,6 +39,18 @@ const PageLoader = () => (
 )
 
 function App() {
+  // Initialize Socket.IO connection when app mounts
+  useEffect(() => {
+    console.log('[App] Initializing Socket.IO connection')
+    const socket = initializeSocket()
+
+    // Cleanup on unmount
+    return () => {
+      console.log('[App] Disconnecting Socket.IO')
+      disconnectSocket()
+    }
+  }, [])
+
   return (
     <AuthProvider>
       <Suspense fallback={<PageLoader />}>
@@ -48,35 +63,90 @@ function App() {
             path="/*"
             element={
               <ProtectedRoute>
-                <Layout className="app-layout">
-                  <TitleBar />
-                  <MenuBar />
-                  <Layout hasSider>
-                    <Sidebar />
-                    <Layout className="content-layout">
-                      <Content className="app-content">
-                        <Routes>
-                          <Route path="/dashboard" element={<Dashboard />} />
-                          <Route path="/machines" element={<Machines />} />
-                          <Route path="/maintenance" element={<Maintenance />} />
-                          <Route path="/audits" element={<Audits />} />
-                          <Route path="/sites" element={<Sites />} />
-                          <Route path="/users" element={<Users />} />
-                          <Route path="/settings" element={<Settings />} />
-                          <Route path="/reports" element={<ReportsPreview />} />
-                          <Route path="/reports/audits" element={<AuditReportsPreview />} />
-                          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                        </Routes>
-                      </Content>
-                    </Layout>
-                  </Layout>
-                </Layout>
+                <AppLayout />
               </ProtectedRoute>
             }
           />
         </Routes>
       </Suspense>
     </AuthProvider>
+  )
+}
+
+// Separate component for app layout to use hooks (useNavigate for IPC handlers)
+function AppLayout() {
+  const navigate = useNavigate()
+
+  // Initialize keyboard shortcuts
+  useKeyboardShortcuts()
+
+  // Handle Electron IPC messages for native menu actions
+  useEffect(() => {
+    // Check if running in Electron
+    const isElectron = window.navigator.userAgent.toLowerCase().includes('electron')
+    
+    if (isElectron && (window as any).electron?.ipcRenderer) {
+      const { ipcRenderer } = (window as any).electron
+
+      // Navigation events from menu
+      ipcRenderer.on('menu-navigate', (_event: any, path: string) => {
+        console.log('[IPC] Menu navigate to:', path)
+        navigate(path)
+      })
+
+      // New maintenance record action
+      ipcRenderer.on('menu-new-maintenance', () => {
+        console.log('[IPC] New maintenance triggered')
+        navigate('/maintenance')
+      })
+
+      // Print action
+      ipcRenderer.on('menu-print', () => {
+        console.log('[IPC] Print triggered')
+        window.print()
+      })
+
+      // About dialog (could open modal)
+      ipcRenderer.on('menu-about', () => {
+        console.log('[IPC] About triggered')
+        // Could show about modal here
+      })
+
+      // Cleanup listeners on unmount
+      return () => {
+        ipcRenderer.removeAllListeners('menu-navigate')
+        ipcRenderer.removeAllListeners('menu-new-maintenance')
+        ipcRenderer.removeAllListeners('menu-print')
+        ipcRenderer.removeAllListeners('menu-about')
+      }
+    }
+  }, [navigate])
+
+  return (
+    <Layout className="app-layout">
+      <TitleBar />
+      <MenuBar />
+      <Layout hasSider>
+        <Sidebar />
+        <Layout className="content-layout">
+          <Content className="app-content">
+            <Routes>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/machines" element={<Machines />} />
+              <Route path="/maintenance" element={<Maintenance />} />
+              <Route path="/audits" element={<Audits />} />
+              <Route path="/sites" element={<Sites />} />
+              <Route path="/users" element={<Users />} />
+              <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/reports" element={<ReportsPreview />} />
+              <Route path="/reports/audits" element={<AuditReportsPreview />} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </Content>
+        </Layout>
+      </Layout>
+    </Layout>
   )
 }
 
