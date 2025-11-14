@@ -121,8 +121,8 @@ def add_to_sync_queue_enhanced(table_name, record_id, operation, payload_dict, i
         print(f"[SYNC_QUEUE] Added {operation} for {table_name}:{record_id} to sync_queue (immediate_sync={immediate_sync})")
         
         # Only trigger immediate sync for critical operations and when in true offline mode
-        if immediate_sync and is_offline_mode() and should_trigger_sync():
-            # Don't trigger for every single change - batch them
+        if immediate_sync and is_offline_mode():
+            # Bypass cooldown for immediate sync - batch with 5 second delay
             trigger_delayed_sync()
             
     except Exception as e:
@@ -137,15 +137,14 @@ def trigger_delayed_sync():
     """
     Trigger sync with a small delay to allow batching of multiple changes.
     This prevents sync from firing on every single database change.
+    Bypasses cooldown for immediate user-initiated actions.
     """
     import threading
     import time
     
     def delayed_sync():
         time.sleep(5)  # Wait 5 seconds to batch multiple changes
-        # Force override cooldown for user-initiated actions
-        if should_trigger_sync(force_override_cooldown=True):
-            trigger_immediate_sync()
+        trigger_immediate_sync()  # This already uses force_override_cooldown=True
     
     # Run in background thread to avoid blocking
     threading.Thread(target=delayed_sync, daemon=True).start()
@@ -296,7 +295,7 @@ def download_and_import_server_data():
                 else:
                     print(f"[SYNC] Requesting full sync (no previous sync timestamp)")
                 
-                download_resp = session.get(download_url, timeout=30)
+                download_resp = session.get(download_url, timeout=90)  # Increased for Render free tier
                 
                 if download_resp.status_code != 200:
                     print(f"[SYNC] Download failed: {download_resp.status_code}")
@@ -633,27 +632,50 @@ def enhanced_upload_pending_sync_queue():
                     print(f"[SYNC] Error parsing payload for sync_queue id {item[0]}: {e}")
                     continue
             
-            # Upload to server (this doesn't need app context)
-            success = upload_to_server(upload_payload)
+            # Upload tables separately to isolate failures
+            # Priority order: audit_task_completions first (most critical)
+            priority_tables = ['audit_task_completions', 'users', 'sites', 'machines', 'parts']
+            table_order = priority_tables + [t for t in upload_payload.keys() if t not in priority_tables]
             
-            if success:
-                # Mark items as synced with timezone-aware timestamp
+            successfully_synced_ids = []
+            failed_tables = []
+            
+            for table_name in table_order:
+                if table_name not in upload_payload:
+                    continue
+                    
+                # Upload just this table
+                single_table_payload = {table_name: upload_payload[table_name]}
+                success = upload_to_server(single_table_payload)
+                
+                if success:
+                    # Mark these specific items as synced
+                    table_item_ids = [record['__sync_queue_id__'] for record in upload_payload[table_name]]
+                    successfully_synced_ids.extend(table_item_ids)
+                    print(f"[SYNC] Successfully uploaded {len(table_item_ids)} items from {table_name}")
+                else:
+                    failed_tables.append(table_name)
+                    print(f"[SYNC] Upload failed for table {table_name}, will retry later")
+            
+            # Mark successfully synced items
+            if successfully_synced_ids:
                 now = get_timezone_aware_now()
-                if item_ids:
-                    placeholders = ','.join([f':id_{i}' for i in range(len(item_ids))])
-                    query = f"UPDATE sync_queue SET status = 'synced', synced_at = :now WHERE id IN ({placeholders})"
-                    params = {'now': now}
-                    for i, id_val in enumerate(item_ids):
-                        params[f'id_{i}'] = id_val
-                    
-                    db.session.execute(sa_text(query), params)
-                    db.session.commit()
-                    
-                print(f"[SYNC] Successfully uploaded and marked {len(item_ids)} sync_queue items as synced.")
-                return {"status": "success", "uploaded": len(item_ids)}
+                placeholders = ','.join([f':id_{i}' for i in range(len(successfully_synced_ids))])
+                query = f"UPDATE sync_queue SET status = 'synced', synced_at = :now WHERE id IN ({placeholders})"
+                params = {'now': now}
+                for i, id_val in enumerate(successfully_synced_ids):
+                    params[f'id_{i}'] = id_val
+                
+                db.session.execute(sa_text(query), params)
+                db.session.commit()
+                
+                print(f"[SYNC] Successfully uploaded and marked {len(successfully_synced_ids)} sync_queue items as synced.")
+            
+            if failed_tables:
+                print(f"[SYNC] Failed tables (will retry): {', '.join(failed_tables)}")
+                return {"status": "partial", "uploaded": len(successfully_synced_ids), "failed_tables": failed_tables}
             else:
-                print("[SYNC] Upload failed, items remain pending for retry")
-                return {"status": "failed", "uploaded": 0}
+                return {"status": "success", "uploaded": len(successfully_synced_ids)}
                 
     except Exception as e:
         print(f"[SYNC] Enhanced upload error: {e}")
@@ -686,7 +708,7 @@ def upload_to_server(upload_payload):
             json=upload_payload,
             headers={"Content-Type": "application/json"},
             auth=(admin_username, admin_password),
-            timeout=30
+            timeout=90  # Increased for Render free tier cold starts
         )
         
         if resp.status_code == 200:

@@ -328,10 +328,36 @@ def api_get_maintenance():
         
         parts = query.all()
         
+        # Define patterns for import artifacts that should be excluded
+        import_artifact_patterns = [
+            'maintenance done',
+            'maintenance type',
+            'maintenance - ',
+            'maint done',
+            'maint type',
+            'inspection done',
+            'inspection type',
+            'service done',
+            'service type',
+        ]
+        
         tasks_data = []
         for part in parts:
             if not part.next_maintenance:
                 continue
+            
+            # Filter out import artifacts - check both part name and description
+            part_name_lower = part.name.lower() if part.name else ''
+            part_desc_lower = part.description.lower() if part.description else ''
+            
+            is_artifact = False
+            for pattern in import_artifact_patterns:
+                if pattern in part_name_lower or pattern in part_desc_lower:
+                    is_artifact = True
+                    break
+            
+            if is_artifact:
+                continue  # Skip this part as it's an import artifact
                 
             # Determine status based on next_maintenance date
             status = 'pending'
@@ -353,13 +379,19 @@ def api_get_maintenance():
             # Calculate days overdue or days until due
             days_diff = (part.next_maintenance - today).days
             
+            # Build task name, avoiding duplication of machine name
+            task_name = part.name
+            if part.description and part.description != part.name:
+                # Only add description if it's different from part name
+                task_name = f"{part.name} - {part.description}"
+            
             task_dict = {
                 'id': part.id,
                 'part_name': part.name,
                 'machine': machine_name,
                 'machine_name': machine_name,
                 'machine_id': machine_id,
-                'task': f"{part.name} - {part.description}" if part.description else part.name,
+                'task': task_name,
                 'dueDate': part.next_maintenance.strftime('%Y-%m-%d'),
                 'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d'),
                 'status': status,
@@ -389,6 +421,180 @@ def api_get_maintenance():
     except Exception as e:
         logger.error(f'Get maintenance error: {str(e)}', exc_info=True)
         return api_response(error='Failed to load maintenance tasks', status=500)
+
+@api_v1.route('/maintenance/part/<int:part_id>', methods=['GET'])
+@api_login_required
+def api_get_part_maintenance_detail(part_id):
+    """Get detailed information for a part including its last maintenance record"""
+    try:
+        from models import MaintenanceRecord, Machine, Part, User
+        from sqlalchemy.orm import joinedload
+        import re
+        
+        # Get the part with eager loading
+        part = Part.query.options(
+            joinedload(Part.machine).joinedload(Machine.site)
+        ).get_or_404(part_id)
+        
+        # Check permissions
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
+            if part.machine and part.machine.site_id not in user_site_ids:
+                return api_response(error='Access denied', status=403)
+        
+        # Get the last maintenance record for this part
+        last_record = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(
+            MaintenanceRecord.date.desc()
+        ).first()
+        
+        # Build basic part info
+        machine_name = part.machine.name if part.machine else 'Unknown'
+        site_name = part.machine.site.name if part.machine and part.machine.site else ''
+        
+        # Parse materials and quantity from notes if there's a last record
+        materials = ''
+        quantity = ''
+        frequency = f"{part.maintenance_frequency} {part.maintenance_unit}" if part.maintenance_frequency else ''
+        notes_text = ''
+        completed_by = ''
+        completed_date = ''
+        maintenance_type = ''
+        description = part.description or ''
+        comments = ''
+        
+        if last_record:
+            notes_text = last_record.notes or last_record.description or last_record.comments or ''
+            completed_by = last_record.performed_by or (last_record.user.username if last_record.user else '')
+            completed_date = last_record.date.strftime('%Y-%m-%d %H:%M') if last_record.date else ''
+            maintenance_type = last_record.maintenance_type or 'Routine'
+            comments = last_record.comments or ''
+            
+            # Try to extract structured data from notes
+            materials_match = re.search(r'Materials:\s*([^,]+)', notes_text)
+            quantity_match = re.search(r'Qty:\s*([^,]+)', notes_text)
+            frequency_match = re.search(r'Frequency:\s*(.+?)(?:,|$)', notes_text)
+            
+            if materials_match:
+                materials = materials_match.group(1).strip()
+            if quantity_match:
+                quantity = quantity_match.group(1).strip()
+            if frequency_match and not frequency:
+                frequency = frequency_match.group(1).strip()
+        
+        # Calculate status
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        status = 'up-to-date'
+        days_info = None
+        
+        if part.next_maintenance:
+            if part.next_maintenance < today:
+                status = 'overdue'
+                days_info = (today - part.next_maintenance).days
+            elif part.next_maintenance <= today + timedelta(days=7):
+                status = 'due_soon'
+                days_info = (part.next_maintenance - today).days
+        
+        part_data = {
+            'id': part.id,
+            'part_name': part.name,
+            'machine': machine_name,
+            'machine_id': part.machine.id if part.machine else None,
+            'site': site_name,
+            'site_id': part.machine.site.id if part.machine and part.machine.site else None,
+            'description': description,
+            'status': status,
+            'days_info': days_info,
+            'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d') if part.next_maintenance else None,
+            'last_maintenance': part.last_maintenance.strftime('%Y-%m-%d') if part.last_maintenance else None,
+            'maintenance_frequency': part.maintenance_frequency,
+            'maintenance_unit': part.maintenance_unit if hasattr(part, 'maintenance_unit') else 'days',
+            'frequency': frequency,
+            'materials': materials,
+            'quantity': quantity,
+            'notes': notes_text,
+            'lastCompletedDate': completed_date,
+            'lastCompletedBy': completed_by,
+            'lastMaintenanceType': maintenance_type,
+            'comments': comments,
+        }
+        
+        return api_response(data=part_data)
+        
+    except Exception as e:
+        logger.error(f'Get part maintenance detail error: {str(e)}', exc_info=True)
+        return api_response(error='Failed to load part maintenance details', status=500)
+
+@api_v1.route('/maintenance/<int:record_id>', methods=['GET'])
+@api_login_required
+def api_get_maintenance_record(record_id):
+    """Get detailed information for a specific maintenance record"""
+    try:
+        from models import MaintenanceRecord, Machine, Part, User
+        from sqlalchemy.orm import joinedload
+        import re
+        
+        # Get the record with eager loading
+        record = MaintenanceRecord.query.options(
+            joinedload(MaintenanceRecord.machine).joinedload(Machine.site),
+            joinedload(MaintenanceRecord.part),
+            joinedload(MaintenanceRecord.user)
+        ).get_or_404(record_id)
+        
+        # Check permissions
+        if not current_user.is_admin:
+            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
+            if record.machine and record.machine.site_id not in user_site_ids:
+                return api_response(error='Access denied', status=403)
+        
+        # Build detailed response
+        machine_name = record.machine.name if record.machine else 'Unknown'
+        part_name = record.part.name if hasattr(record, 'part') and record.part else 'Unknown'
+        site_name = record.machine.site.name if record.machine and record.machine.site else ''
+        completed_by = record.performed_by or (record.user.username if record.user else '')
+        
+        # Parse materials and quantity from notes if available
+        materials = ''
+        quantity = ''
+        frequency = ''
+        notes_text = record.notes or record.description or record.comments or ''
+        
+        # Try to extract structured data from notes
+        materials_match = re.search(r'Materials:\s*([^,]+)', notes_text)
+        quantity_match = re.search(r'Qty:\s*([^,]+)', notes_text)
+        frequency_match = re.search(r'Frequency:\s*(.+?)(?:,|$)', notes_text)
+        
+        if materials_match:
+            materials = materials_match.group(1).strip()
+        if quantity_match:
+            quantity = quantity_match.group(1).strip()
+        if frequency_match:
+            frequency = frequency_match.group(1).strip()
+        
+        record_data = {
+            'id': record.id,
+            'machine': machine_name,
+            'machine_id': record.machine.id if record.machine else None,
+            'part': part_name,
+            'part_id': record.part.id if hasattr(record, 'part') and record.part else None,
+            'completedDate': record.date.strftime('%Y-%m-%d %H:%M') if record.date else '',
+            'completedBy': completed_by,
+            'site': site_name,
+            'site_id': record.machine.site.id if record.machine and record.machine.site else None,
+            'maintenanceType': record.maintenance_type or 'Routine',
+            'description': record.description or '',
+            'comments': record.comments or '',
+            'notes': notes_text,
+            'materials': materials,
+            'quantity': quantity,
+            'frequency': frequency,
+            'status': record.status or 'completed',
+        }
+        
+        return api_response(data=record_data)
+        
+    except Exception as e:
+        logger.error(f'Get maintenance record error: {str(e)}', exc_info=True)
+        return api_response(error='Failed to load maintenance record', status=500)
 
 @api_v1.route('/maintenance/history', methods=['GET'])
 @api_login_required
@@ -505,12 +711,15 @@ def api_get_machine_parts(machine_id):
             days_info = None
             
             if part.next_maintenance:
-                if part.next_maintenance < today:
+                # Convert next_maintenance to date for comparison if it's a datetime
+                next_maint_date = part.next_maintenance.date() if isinstance(part.next_maintenance, datetime) else part.next_maintenance
+                
+                if next_maint_date < today:
                     status = 'overdue'
-                    days_info = (today - part.next_maintenance).days
-                elif part.next_maintenance <= today + timedelta(days=7):
+                    days_info = (today - next_maint_date).days
+                elif next_maint_date <= today + timedelta(days=7):
                     status = 'due-soon'
-                    days_info = (part.next_maintenance - today).days
+                    days_info = (next_maint_date - today).days
             
             parts_data.append({
                 'id': part.id,
@@ -537,8 +746,7 @@ def api_complete_multiple_maintenance():
     try:
         from models import Part, Machine, MaintenanceRecord
         from datetime import datetime, timedelta
-        from sync_db import add_to_sync_queue_enhanced
-        from datetime_utils import get_timezone_aware_now
+        from sync_utils_enhanced import add_to_sync_queue_enhanced
         
         data = request.get_json()
         part_ids = data.get('part_ids', [])
@@ -619,8 +827,14 @@ def api_complete_multiple_maintenance():
             if part:
                 add_to_sync_queue_enhanced('parts', part.id, 'update', {
                     'id': part.id,
+                    'name': part.name,
+                    'description': part.description,
+                    'machine_id': part.machine_id,
+                    'maintenance_frequency': part.maintenance_frequency,
+                    'maintenance_unit': part.maintenance_unit,
                     'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
-                    'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None
+                    'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None,
+                    'notes': part.notes if hasattr(part, 'notes') else None
                 }, immediate_sync=True)
         
         return api_response(
