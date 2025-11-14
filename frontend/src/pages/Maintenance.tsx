@@ -1,37 +1,47 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Table, Button, Input, Space, Select, Typography, message, Tag } from 'antd'
+import { Card, Table, Button, Input, Space, Select, Typography, message, Tag, Switch } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
   SearchOutlined,
   ReloadOutlined,
   ToolOutlined,
+  WarningOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons'
 import MaintenanceCompletionModal from '../components/modals/MaintenanceCompletionModal'
+import MaintenanceDetailModal from '../components/modals/MaintenanceDetailModal'
 import apiClient from '../utils/api'
 import '../styles/maintenance.css'
 
 const { Title } = Typography
 const { Search } = Input
 
-interface MaintenanceRecord {
+interface MaintenanceTask {
   key: string
   id: number
+  part_name: string
   machine: string
-  machineName: string
-  part: string
-  partName: string
-  completedDate: string
-  completedBy: string
+  machine_name: string
+  machine_id: number
+  task: string
+  dueDate: string
+  next_maintenance: string
+  status: 'overdue' | 'due_soon' | 'completed'
   site: string
-  siteName: string
-  notes: string | null
+  site_name: string
+  site_id: number
+  lastMaintenance: string | null
+  frequency: string | null
+  days_overdue?: number
+  days_until?: number
 }
 
 interface Machine {
   id: number
   name: string
   site_name: string
+  site_id: number
 }
 
 interface Site {
@@ -39,53 +49,70 @@ interface Site {
   name: string
 }
 
+interface Part {
+  id: number
+  name: string
+  description: string
+}
+
 const Maintenance: React.FC = () => {
   const [selectedSite, setSelectedSite] = useState<string>('all')
+  const [selectedStatus, setSelectedStatus] = useState<string>('all')
   const [searchText, setSearchText] = useState<string>('')
+  const [showInactive, setShowInactive] = useState<boolean>(false)
   const [completionModalVisible, setCompletionModalVisible] = useState(false)
-  const [selectedMachine, setSelectedMachine] = useState<{ id: number; name: string } | null>(null)
-  const [records, setRecords] = useState<MaintenanceRecord[]>([])
-  const [filteredRecords, setFilteredRecords] = useState<MaintenanceRecord[]>([])
+  const [detailModalVisible, setDetailModalVisible] = useState(false)
+  const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null)
+  const [selectedMachine, setSelectedMachine] = useState<{ id: number; name: string; site_id: number } | null>(null)
+  const [tasks, setTasks] = useState<MaintenanceTask[]>([])
+  const [filteredTasks, setFilteredTasks] = useState<MaintenanceTask[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
+  const [machineParts, setMachineParts] = useState<Part[]>([])
   const [sites, setSites] = useState<Site[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetchMaintenanceHistory = async () => {
+  const fetchMaintenanceTasks = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.get('/api/v1/maintenance/history')
-      console.log('Maintenance history API response:', response.data)
+      const response = await apiClient.get('/api/v1/maintenance')
+      console.log('Maintenance tasks API response:', response.data)
       
       if (!response.data || !response.data.data) {
-        console.warn('No data received from maintenance history API')
-        setRecords([])
-        setFilteredRecords([])
+        console.warn('No data received from maintenance API')
+        setTasks([])
+        setFilteredTasks([])
         return
       }
       
-      const historyData = response.data.data.map((record: any) => ({
-        key: record.id.toString(),
-        id: record.id,
-        machine: record.machine_id?.toString() || '',
-        machineName: record.machine_name || record.machine || 'Unknown Machine',
-        part: record.part_id?.toString() || '',
-        partName: record.part_name || record.part || 'Unknown Part',
-        completedDate: record.completed_date || record.date || record.created_at,
-        completedBy: record.completed_by || record.user || 'N/A',
-        site: record.site_id?.toString() || '',
-        siteName: record.site_name || record.site || 'N/A',
-        notes: record.notes || null,
+      const tasksData = response.data.data.map((task: any) => ({
+        key: task.id.toString(),
+        id: task.id,
+        part_name: task.part_name || 'Unknown Part',
+        machine: task.machine || task.machine_name || 'Unknown Machine',
+        machine_name: task.machine_name || task.machine || 'Unknown Machine',
+        machine_id: task.machine_id || 0,
+        task: task.task || task.part_name || 'Unknown Task',
+        dueDate: task.dueDate || task.next_maintenance || '',
+        next_maintenance: task.next_maintenance || task.dueDate || '',
+        status: task.status || 'pending',
+        site: task.site || task.site_name || '',
+        site_name: task.site_name || task.site || '',
+        site_id: task.site_id || 0,
+        lastMaintenance: task.lastMaintenance || null,
+        frequency: task.frequency || null,
+        days_overdue: task.days_overdue,
+        days_until: task.days_until,
       }))
       
-      console.log(`Loaded ${historyData.length} maintenance records`)
-      setRecords(historyData)
-      setFilteredRecords(historyData)
+      console.log(`Loaded ${tasksData.length} maintenance tasks`)
+      setTasks(tasksData)
+      setFilteredTasks(tasksData)
     } catch (error: any) {
-      console.error('Failed to load maintenance history:', error)
+      console.error('Failed to load maintenance tasks:', error)
       console.error('Error details:', error.response?.data)
-      message.error(error.response?.data?.error || 'Failed to load maintenance history')
-      setRecords([])
-      setFilteredRecords([])
+      message.error(error.response?.data?.error || 'Failed to load maintenance tasks')
+      setTasks([])
+      setFilteredTasks([])
     } finally {
       setLoading(false)
     }
@@ -115,33 +142,60 @@ const Maintenance: React.FC = () => {
     }
   }
 
+  const fetchMachineParts = async (machineId: number) => {
+    try {
+      const response = await apiClient.get(`/api/v1/machines/${machineId}/parts`)
+      if (response.data && response.data.data) {
+        setMachineParts(response.data.data)
+      }
+    } catch (error: any) {
+      console.error('Failed to load machine parts:', error)
+      message.error('Failed to load machine parts')
+    }
+  }
+
   useEffect(() => {
-    fetchMaintenanceHistory()
+    fetchMaintenanceTasks()
     fetchMachines()
     fetchSites()
   }, [])
 
   useEffect(() => {
-    let filtered = records
+    let filtered = tasks
+
+    // Filter out inactive tasks (last maintenance before 2015) unless showInactive is true
+    if (!showInactive) {
+      filtered = filtered.filter(task => {
+        if (!task.lastMaintenance) return true // Keep tasks with no history
+        const lastMaintenanceYear = new Date(task.lastMaintenance).getFullYear()
+        return lastMaintenanceYear >= 2015
+      })
+    }
 
     // Filter by site
     if (selectedSite && selectedSite !== 'all') {
-      filtered = filtered.filter(record => record.siteName === selectedSite)
+      const siteId = parseInt(selectedSite)
+      filtered = filtered.filter(task => task.site_id === siteId)
+    }
+
+    // Filter by status
+    if (selectedStatus && selectedStatus !== 'all') {
+      filtered = filtered.filter(task => task.status === selectedStatus)
     }
 
     // Filter by search text
     if (searchText) {
       const search = searchText.toLowerCase()
-      filtered = filtered.filter(record =>
-        record.machineName.toLowerCase().includes(search) ||
-        record.partName.toLowerCase().includes(search) ||
-        record.completedBy.toLowerCase().includes(search) ||
-        record.siteName.toLowerCase().includes(search)
+      filtered = filtered.filter(task =>
+        task.machine_name.toLowerCase().includes(search) ||
+        task.part_name.toLowerCase().includes(search) ||
+        task.task.toLowerCase().includes(search) ||
+        task.site_name.toLowerCase().includes(search)
       )
     }
 
-    setFilteredRecords(filtered)
-  }, [selectedSite, searchText, records])
+    setFilteredTasks(filtered)
+  }, [selectedSite, selectedStatus, searchText, showInactive, tasks])
 
   const handleAddMaintenance = () => {
     // Open modal without a pre-selected machine
@@ -149,31 +203,97 @@ const Maintenance: React.FC = () => {
     setCompletionModalVisible(true)
   }
 
-  const handleSelectMachine = (machineId: number) => {
+  const handleSelectMachine = async (machineId: number) => {
     const machine = machines.find(m => m.id === machineId)
     if (machine) {
-      setSelectedMachine({ id: machine.id, name: machine.name })
+      setSelectedMachine({ id: machine.id, name: machine.name, site_id: machine.site_id })
+      await fetchMachineParts(machine.id)
       setCompletionModalVisible(true)
     }
   }
 
-  const columns: ColumnsType<MaintenanceRecord> = [
+  const handleSiteFilterChange = (value: string) => {
+    setSelectedSite(value)
+    // Reset machine selection when site changes
+    setSelectedMachine(null)
+  }
+
+  const columns: ColumnsType<MaintenanceTask> = [
     {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 60,
-      sorter: (a, b) => a.id - b.id,
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      sorter: (a, b) => {
+        const statusOrder = { overdue: 0, due_soon: 1, completed: 2 }
+        return statusOrder[a.status] - statusOrder[b.status]
+      },
+      render: (status: string, record: MaintenanceTask) => {
+        if (status === 'overdue') {
+          return (
+            <Tag color="red" icon={<WarningOutlined />}>
+              Overdue {record.days_overdue ? `(${record.days_overdue}d)` : ''}
+            </Tag>
+          )
+        } else if (status === 'due_soon') {
+          return (
+            <Tag color="orange" icon={<ClockCircleOutlined />}>
+              Due Soon {record.days_until ? `(${record.days_until}d)` : ''}
+            </Tag>
+          )
+        } else {
+          return <Tag color="green">Completed</Tag>
+        }
+      },
     },
     {
-      title: 'Date',
-      dataIndex: 'completedDate',
-      key: 'completedDate',
+      title: 'Machine',
+      dataIndex: 'machine_name',
+      key: 'machine_name',
+      sorter: (a, b) => a.machine_name.localeCompare(b.machine_name),
+      render: (text) => <strong>{text}</strong>,
+    },
+    {
+      title: 'Part / Task',
+      dataIndex: 'part_name',
+      key: 'part_name',
+      sorter: (a, b) => a.part_name.localeCompare(b.part_name),
+      render: (text: string, record: MaintenanceTask) => {
+        // Clean up task name: remove duplicate machine name if present
+        let displayName = text
+        if (record.task && record.task.includes(' - ')) {
+          const parts = record.task.split(' - ')
+          // If first part is machine name and duplicated, remove it
+          if (parts[0] === parts[1]) {
+            displayName = parts.slice(1).join(' - ')
+          } else if (parts.length === 3 && parts[0] === parts[1]) {
+            // Handle case like "Machine - Machine - Part"
+            displayName = `${parts[0]} - ${parts[2]}`
+          } else {
+            displayName = record.task
+          }
+        }
+        return <div>{displayName}</div>
+      },
+    },
+    {
+      title: 'Site',
+      dataIndex: 'site_name',
+      key: 'site_name',
+      width: 120,
+      render: (site: string) => (
+        <Tag color="blue">{site}</Tag>
+      ),
+    },
+    {
+      title: 'Due Date',
+      dataIndex: 'dueDate',
+      key: 'dueDate',
       width: 120,
       sorter: (a, b) => {
-        const dateA = a.completedDate ? new Date(a.completedDate).getTime() : 0
-        const dateB = b.completedDate ? new Date(b.completedDate).getTime() : 0
-        return dateB - dateA // Most recent first
+        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0
+        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0
+        return dateA - dateB
       },
       render: (date: string) => {
         if (!date) return 'N/A'
@@ -181,71 +301,102 @@ const Maintenance: React.FC = () => {
       },
     },
     {
-      title: 'Machine',
-      dataIndex: 'machineName',
-      key: 'machineName',
-      sorter: (a, b) => a.machineName.localeCompare(b.machineName),
-      render: (text) => <strong>{text}</strong>,
+      title: 'Last Maintenance',
+      dataIndex: 'lastMaintenance',
+      key: 'lastMaintenance',
+      width: 140,
+      render: (date: string | null) => {
+        if (!date) return <span style={{ color: '#999' }}>Never</span>
+        return new Date(date).toLocaleDateString()
+      },
     },
     {
-      title: 'Part',
-      dataIndex: 'partName',
-      key: 'partName',
-      sorter: (a, b) => a.partName.localeCompare(b.partName),
-    },
-    {
-      title: 'Site',
-      dataIndex: 'siteName',
-      key: 'siteName',
+      title: 'Frequency',
+      dataIndex: 'frequency',
+      key: 'frequency',
       width: 120,
-      render: (site: string) => (
-        <Tag color="blue">{site}</Tag>
-      ),
-    },
-    {
-      title: 'Completed By',
-      dataIndex: 'completedBy',
-      key: 'completedBy',
-      width: 150,
-    },
-    {
-      title: 'Notes',
-      dataIndex: 'notes',
-      key: 'notes',
-      ellipsis: true,
-      render: (notes: string | null) => notes || '-',
+      render: (freq: string | null) => freq || '-',
     },
   ]
 
-  // Get unique site names from records for the filter
+  // Get site options from fetched sites
   const siteOptions = [
     { value: 'all', label: 'All Sites' },
-    ...Array.from(new Set(records.map(r => r.siteName)))
-      .filter(Boolean)
-      .map(site => ({ value: site, label: site }))
+    ...sites.map(site => ({ value: site.id.toString(), label: site.name }))
   ]
+
+  const statusOptions = [
+    { value: 'all', label: 'All Status' },
+    { value: 'overdue', label: 'Overdue' },
+    { value: 'due_soon', label: 'Due Soon' },
+    { value: 'completed', label: 'Completed' },
+  ]
+
+  // Get machines filtered by selected site for the quick access section
+  const filteredMachines = selectedSite === 'all' 
+    ? machines 
+    : machines.filter(m => m.site_id.toString() === selectedSite)
 
   return (
     <div className="maintenance-container">
       <div className="maintenance-header">
         <Title level={2}>
-          <ToolOutlined /> Maintenance Records
+          <ToolOutlined /> Maintenance Tasks
         </Title>
         <p style={{ color: '#666', marginTop: 8 }}>
-          Record and track maintenance activities performed on machines and parts
+          Track and complete scheduled maintenance for machines and parts
         </p>
       </div>
+
+      {/* Quick Access Multi-Part Maintenance - Moved to top */}
+      <Card 
+        title="Quick Access: Complete Multi-Part Maintenance" 
+        className="maintenance-completion-card"
+        style={{ marginBottom: 20 }}
+      >
+        <p style={{ marginBottom: 16, color: '#666' }}>
+          Select a site and machine to quickly complete maintenance on multiple parts at once. 
+          This is useful for routine maintenance that affects several components.
+        </p>
+        <Space wrap>
+          <span style={{ fontWeight: 500 }}>Site:</span>
+          <Select
+            style={{ width: 200 }}
+            placeholder="Select a site..."
+            value={selectedSite}
+            onChange={handleSiteFilterChange}
+            options={siteOptions}
+          />
+          <span style={{ fontWeight: 500 }}>Machine:</span>
+          <Select
+            style={{ width: 350 }}
+            placeholder="Choose a machine..."
+            showSearch
+            optionFilterProp="children"
+            onChange={handleSelectMachine}
+            value={selectedMachine?.id || null}
+            disabled={!filteredMachines.length}
+            filterOption={(input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={filteredMachines.map(machine => ({
+              value: machine.id,
+              label: `${machine.name} (${machine.site_name || 'No Site'})`,
+            }))}
+          />
+        </Space>
+      </Card>
 
       <Card className="maintenance-table-card">
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <div className="maintenance-controls">
             <Space wrap>
               <Search
-                placeholder="Search machines, parts, or people..."
+                placeholder="Search machines, parts, or tasks..."
                 allowClear
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                style={{ width: 350 }}
+                style={{ width: 300 }}
                 prefix={<SearchOutlined />}
               />
               <Select
@@ -253,22 +404,32 @@ const Maintenance: React.FC = () => {
                 onChange={setSelectedSite}
                 style={{ width: 180 }}
                 options={siteOptions}
+                placeholder="Filter by site"
               />
+              <Select
+                value={selectedStatus}
+                onChange={setSelectedStatus}
+                style={{ width: 180 }}
+                options={statusOptions}
+                placeholder="Filter by status"
+              />
+              <Space>
+                <span style={{ fontSize: '14px', color: '#666' }}>Show Inactive:</span>
+                <Switch 
+                  checked={showInactive}
+                  onChange={setShowInactive}
+                  checkedChildren="Yes"
+                  unCheckedChildren="No"
+                />
+              </Space>
             </Space>
             <Space>
               <Button 
                 icon={<ReloadOutlined />} 
-                onClick={fetchMaintenanceHistory} 
+                onClick={fetchMaintenanceTasks} 
                 loading={loading}
               >
                 Refresh
-              </Button>
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />}
-                onClick={handleAddMaintenance}
-              >
-                Add Maintenance Record
               </Button>
             </Space>
           </div>
@@ -281,11 +442,21 @@ const Maintenance: React.FC = () => {
           }}>
             <Space size="large">
               <span>
-                <strong>Total Records:</strong> {filteredRecords.length}
+                <strong>Total Tasks:</strong> {filteredTasks.length}
               </span>
               {selectedSite !== 'all' && (
                 <span>
-                  <strong>Site:</strong> {selectedSite}
+                  <strong>Site:</strong> {sites.find(s => s.id.toString() === selectedSite)?.name}
+                </span>
+              )}
+              {selectedStatus !== 'all' && (
+                <span>
+                  <strong>Status:</strong> {selectedStatus.replace('_', ' ').toUpperCase()}
+                </span>
+              )}
+              {!showInactive && (
+                <span style={{ color: '#999', fontSize: '13px' }}>
+                  (Hiding tasks last maintained before 2015)
                 </span>
               )}
             </Space>
@@ -293,23 +464,25 @@ const Maintenance: React.FC = () => {
 
           <Table
             columns={columns}
-            dataSource={filteredRecords}
+            dataSource={filteredTasks}
             loading={loading}
+            onRow={(record) => ({
+              onClick: () => {
+                setSelectedRecordId(record.id)
+                setDetailModalVisible(true)
+              },
+              style: { cursor: 'pointer' }
+            })}
             locale={{
               emptyText: (
                 <div style={{ padding: '40px 0' }}>
                   <ToolOutlined style={{ fontSize: 48, color: '#bfbfbf', marginBottom: 16 }} />
-                  <h3 style={{ color: '#8c8c8c' }}>No Maintenance Records Found</h3>
+                  <h3 style={{ color: '#8c8c8c' }}>No Maintenance Tasks Found</h3>
                   <p style={{ color: '#bfbfbf', marginBottom: 16 }}>
-                    Start recording maintenance activities by clicking "Add Maintenance Record" above.
+                    {!showInactive 
+                      ? 'Try enabling "Show Inactive" to see older maintenance tasks.'
+                      : 'No maintenance tasks match your current filters.'}
                   </p>
-                  <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />}
-                    onClick={handleAddMaintenance}
-                  >
-                    Add First Record
-                  </Button>
                 </div>
               ),
             }}
@@ -317,45 +490,16 @@ const Maintenance: React.FC = () => {
               pageSize: 25,
               showSizeChanger: true,
               pageSizeOptions: ['25', '50', '100', '200'],
-              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} records`,
+              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} tasks`,
             }}
-            scroll={{ x: 1200 }}
-          />
-        </Space>
-      </Card>
-
-      <Card 
-        title="Quick Access: Complete Multi-Part Maintenance" 
-        className="maintenance-completion-card"
-        style={{ marginTop: 20 }}
-      >
-        <p style={{ marginBottom: 16, color: '#666' }}>
-          Select a machine to quickly complete maintenance on multiple parts at once. 
-          This is useful for routine maintenance that affects several components.
-        </p>
-        <Space>
-          <span style={{ fontWeight: 500 }}>Select Machine:</span>
-          <Select
-            style={{ width: 350 }}
-            placeholder="Choose a machine..."
-            showSearch
-            optionFilterProp="children"
-            onChange={handleSelectMachine}
-            value={null}
-            filterOption={(input, option) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-            }
-            options={machines.map(machine => ({
-              value: machine.id,
-              label: `${machine.name} (${machine.site_name || 'No Site'})`,
-            }))}
+            scroll={{ x: 1400 }}
           />
         </Space>
       </Card>
 
       <MaintenanceCompletionModal
         open={completionModalVisible}
-        machineId={selectedMachine?.id || 0}
+        machineId={selectedMachine?.id || null}
         machineName={selectedMachine?.name || ''}
         onClose={() => {
           setCompletionModalVisible(false)
@@ -364,9 +508,18 @@ const Maintenance: React.FC = () => {
         onComplete={() => {
           setCompletionModalVisible(false)
           setSelectedMachine(null)
-          fetchMaintenanceHistory()
+          fetchMaintenanceTasks()
           message.success('Maintenance recorded successfully')
         }}
+      />
+
+      <MaintenanceDetailModal
+        open={detailModalVisible}
+        onClose={() => {
+          setDetailModalVisible(false)
+          setSelectedRecordId(null)
+        }}
+        recordId={selectedRecordId}
       />
     </div>
   )

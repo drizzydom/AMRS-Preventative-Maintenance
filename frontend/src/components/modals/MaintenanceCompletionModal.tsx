@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Modal, Checkbox, Button, message, Space, List, Typography, Input, Select, DatePicker, Divider } from 'antd'
+import { Modal, Checkbox, Button, message, Space, List, Typography, Input, Select, DatePicker, Divider, Alert } from 'antd'
 import { CheckOutlined, WarningOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import apiClient from '../../utils/api'
 import dayjs from 'dayjs'
@@ -82,6 +82,11 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
   }
 
   const handleSubmit = async () => {
+    if (!machineId) {
+      message.error('No machine selected. Please select a machine first.')
+      return
+    }
+
     if (selectedParts.length === 0) {
       message.warning('Please select at least one part to complete maintenance')
       return
@@ -163,7 +168,14 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
       ]}
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        {loading ? (
+        {!machineId ? (
+          <Alert 
+            message="No Machine Selected" 
+            description="Please select a machine from the maintenance page to complete maintenance." 
+            type="info" 
+            showIcon 
+          />
+        ) : loading ? (
           <Text>Loading parts...</Text>
         ) : (
           <>
