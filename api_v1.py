@@ -20,6 +20,97 @@ logger = logging.getLogger(__name__)
 _dashboard_cache = {'data': None, 'timestamp': None}
 CACHE_DURATION = 300  # 5 minutes in seconds
 
+
+def _get_role_name(role):
+    if isinstance(role, str):
+        return role
+    if hasattr(role, 'name') and role.name:
+        return role.name
+    return ''
+
+
+def _get_role_permissions(role):
+    permissions = []
+    try:
+        if isinstance(role, str):
+            from models import Role
+
+            db_role = Role.query.filter_by(name=role).first()
+            if db_role and db_role.permissions:
+                permissions = [p.strip() for p in db_role.permissions.split(',') if p.strip()]
+        elif role and hasattr(role, 'permissions') and role.permissions:
+            permissions = [p.strip() for p in role.permissions.split(',') if p.strip()]
+    except Exception as exc:
+        logger.debug(f'Permission lookup failed: {exc}')
+    return permissions
+
+
+def _current_permissions():
+    if not current_user or not current_user.is_authenticated:
+        return set()
+
+    permissions = set()
+    if getattr(current_user, 'is_admin', False):
+        permissions.add('admin.full')
+
+    permissions.update(_get_role_permissions(getattr(current_user, 'role', None)))
+    return permissions
+
+
+def _is_admin_user():
+    if not current_user or not current_user.is_authenticated:
+        return False
+    if getattr(current_user, 'is_admin', False):
+        return True
+    role_name = _get_role_name(getattr(current_user, 'role', None))
+    return role_name.lower() == 'admin'
+
+
+def _has_permission(permission: str) -> bool:
+    if not permission:
+        return False
+    if _is_admin_user():
+        return True
+    return permission in _current_permissions()
+
+
+def _user_site_ids():
+    try:
+        return [site.id for site in getattr(current_user, 'sites', []) if getattr(site, 'id', None) is not None]
+    except Exception:
+        return []
+
+
+def _can_view_all_sites():
+    if _is_admin_user():
+        return True
+    return 'maintenance.record' in _current_permissions()
+
+
+def _has_any_permission(*permissions):
+    """Return True if user has at least one of the given permissions."""
+    for permission in permissions:
+        if permission and _has_permission(permission):
+            return True
+    return False
+
+
+def _allowed_site_ids():
+    """Return list of site IDs the current user can access or None for all."""
+    if _can_view_all_sites():
+        return None
+    return _user_site_ids()
+
+
+def _has_site_access(site_id):
+    """Check whether the current user can access the provided site ID."""
+    if site_id is None:
+        return True
+    allowed = _allowed_site_ids()
+    if allowed is None:
+        return True
+    return site_id in allowed
+
 def api_response(data=None, message=None, error=None, status=200):
     """Standard API response format"""
     response = {}
@@ -118,6 +209,7 @@ def api_login():
             'email': user.email,
             'role': role_name,
             'permissions': permissions,
+            'is_admin': bool(getattr(user, 'is_admin', False) or role_name.lower() == 'admin'),
         }
         
         return api_response(
@@ -151,19 +243,8 @@ def api_current_user():
     """Get current user information"""
     try:
         # Handle role safely - it might be a string or None
-        role_name = 'user'
-        permissions = []
-        
-        if hasattr(current_user, 'role') and current_user.role:
-            if isinstance(current_user.role, str):
-                role_name = current_user.role
-            elif hasattr(current_user.role, 'name'):
-                role_name = current_user.role.name
-                if hasattr(current_user.role, 'permissions'):
-                    try:
-                        permissions = [perm.name for perm in current_user.role.permissions]
-                    except:
-                        permissions = []
+        role_name = _get_role_name(getattr(current_user, 'role', None)) or 'user'
+        permissions = list(_current_permissions())
         
         user_data = {
             'id': current_user.id,
@@ -171,6 +252,7 @@ def api_current_user():
             'email': current_user.email,
             'role': role_name,
             'permissions': permissions,
+            'is_admin': _is_admin_user(),
         }
         return api_response(data=user_data)
     except Exception as e:
@@ -184,9 +266,22 @@ def api_current_user():
 def api_get_dashboard():
     """Get dashboard statistics with 5-minute caching"""
     try:
+        site_scope = None
+        if not _can_view_all_sites():
+            site_scope = _user_site_ids()
+            if not site_scope:
+                stats = {
+                    'total_machines': 0,
+                    'overdue': 0,
+                    'due_soon': 0,
+                    'completed': 0,
+                }
+                return api_response(data=stats)
+        use_cache = site_scope is None
+
         # Check cache first
         now = datetime.now()
-        if (_dashboard_cache['data'] is not None and 
+        if (use_cache and _dashboard_cache['data'] is not None and 
             _dashboard_cache['timestamp'] is not None and
             (now - _dashboard_cache['timestamp']).total_seconds() < CACHE_DURATION):
             logger.debug('Returning cached dashboard data')
@@ -206,30 +301,45 @@ def api_get_dashboard():
         logger.debug(f'Dashboard date filters: today={today}, due_soon_date={due_soon_date}, first_day_of_month={first_day_of_month}')
         
         # Single query for machine count
-        total_machines = db.session.query(func.count(Machine.id)).filter_by(
-            decommissioned=False
-        ).scalar()
+        machine_query = db.session.query(func.count(Machine.id)).filter_by(decommissioned=False)
+        if site_scope is not None:
+            machine_query = machine_query.filter(Machine.site_id.in_(site_scope))
+        total_machines = machine_query.scalar()
         logger.debug(f'Total machines (not decommissioned): {total_machines}')
         
         # Query parts for maintenance statistics (parts have next_maintenance dates)
-        overdue_parts = db.session.query(func.count(Part.id)).filter(
+        overdue_query = db.session.query(func.count(Part.id)).filter(
             and_(Part.next_maintenance < today, Part.next_maintenance.isnot(None))
-        ).scalar()
-        logger.debug(f'Overdue parts: {overdue_parts}')
-        
-        due_soon_parts = db.session.query(func.count(Part.id)).filter(
+        )
+        due_soon_query = db.session.query(func.count(Part.id)).filter(
             and_(
                 Part.next_maintenance >= today,
                 Part.next_maintenance <= due_soon_date,
                 Part.next_maintenance.isnot(None)
             )
-        ).scalar()
+        )
+
+        if site_scope is not None:
+            overdue_query = overdue_query.join(Machine, Part.machine_id == Machine.id).filter(Machine.site_id.in_(site_scope))
+            due_soon_query = due_soon_query.join(Machine, Part.machine_id == Machine.id).filter(Machine.site_id.in_(site_scope))
+
+        overdue_parts = overdue_query.scalar()
+        logger.debug(f'Overdue parts: {overdue_parts}')
+        
+        due_soon_parts = due_soon_query.scalar()
         logger.debug(f'Due soon parts: {due_soon_parts}')
         
         # Count completed maintenance records this month
-        completed_this_month = db.session.query(func.count(MaintenanceRecord.id)).filter(
+        completed_query = db.session.query(func.count(MaintenanceRecord.id)).filter(
             MaintenanceRecord.date >= first_day_of_month
-        ).scalar()
+        )
+
+        if site_scope is not None:
+            completed_query = completed_query.join(Machine, MaintenanceRecord.machine_id == Machine.id).filter(
+                Machine.site_id.in_(site_scope)
+            )
+
+        completed_this_month = completed_query.scalar()
         logger.debug(f'Completed maintenance this month: {completed_this_month}')
         
         stats = {
@@ -240,9 +350,10 @@ def api_get_dashboard():
         }
         
         # Update cache
-        _dashboard_cache['data'] = stats
-        _dashboard_cache['timestamp'] = now
-        logger.info(f'Dashboard cache updated: {stats}')
+        if use_cache:
+            _dashboard_cache['data'] = stats
+            _dashboard_cache['timestamp'] = now
+            logger.info(f'Dashboard cache updated: {stats}')
         
         return api_response(data=stats)
         
@@ -257,13 +368,22 @@ def api_get_dashboard():
 def api_get_machines():
     """Get list of machines with optimized queries"""
     try:
+        if not (_has_permission('machines.view') or _has_permission('maintenance.record') or _is_admin_user()):
+            return api_response(error='Insufficient permissions', status=403)
+
         from models import Machine
         from sqlalchemy.orm import joinedload
         
         # Optimize with eager loading to avoid N+1 queries
-        machines = Machine.query.options(
-            joinedload(Machine.site)
-        ).filter_by(decommissioned=False).all()
+        query = Machine.query.options(joinedload(Machine.site)).filter_by(decommissioned=False)
+
+        if not _can_view_all_sites():
+            site_ids = _user_site_ids()
+            if not site_ids:
+                return api_response(data=[])
+            query = query.filter(Machine.site_id.in_(site_ids))
+
+        machines = query.all()
         
         machines_data = []
         for machine in machines:
@@ -274,6 +394,7 @@ def api_get_machines():
                 'model': machine.model if hasattr(machine, 'model') else '',
                 'machine_number': machine.machine_number if hasattr(machine, 'machine_number') else '',
                 'site': machine.site.name if machine.site else '',
+                'site_name': machine.site.name if machine.site else '',
                 'site_id': machine.site_id if hasattr(machine, 'site_id') else None,
                 'status': 'active',  # Add status logic as needed
                 'lastMaintenance': machine.last_maintenance.strftime('%Y-%m-%d') if hasattr(machine, 'last_maintenance') and machine.last_maintenance else None,
@@ -298,6 +419,9 @@ def api_get_maintenance():
     - site_id: Filter by site ID
     """
     try:
+        if not (_has_permission('maintenance.view') or _has_permission('maintenance.record') or _is_admin_user()):
+            return api_response(error='Insufficient permissions', status=403)
+
         from models import Part, Machine, Site
         from sqlalchemy.orm import joinedload
         from sqlalchemy import and_
@@ -314,18 +438,31 @@ def api_get_maintenance():
         # Optimize with eager loading to avoid N+1 queries
         query = Part.query.options(
             joinedload(Part.machine).joinedload(Machine.site)
-        ).filter(
-            Part.next_maintenance.isnot(None)
-        )
+        ).filter(Part.next_maintenance.isnot(None))
+        joined_machine = False
         
         # Apply site filter if provided
         if site_id_filter and site_id_filter != 'all':
             try:
                 site_id = int(site_id_filter)
+                if not _can_view_all_sites():
+                    allowed_site_ids = _user_site_ids()
+                    if site_id not in allowed_site_ids:
+                        return api_response(error='Site access denied', status=403)
                 query = query.join(Part.machine).filter(Machine.site_id == site_id)
+                joined_machine = True
             except (ValueError, TypeError):
                 pass
         
+        if not _can_view_all_sites():
+            allowed_site_ids = _user_site_ids()
+            if not allowed_site_ids:
+                return api_response(data=[])
+            if not joined_machine:
+                query = query.join(Part.machine)
+                joined_machine = True
+            query = query.filter(Machine.site_id.in_(allowed_site_ids))
+
         parts = query.all()
         
         # Define patterns for import artifacts that should be excluded
@@ -373,6 +510,7 @@ def api_get_maintenance():
             # Get machine and site info
             machine_name = part.machine.name if part.machine else 'Unknown'
             machine_id = part.machine.id if part.machine else None
+            machine_serial = part.machine.serial_number if part.machine and hasattr(part.machine, 'serial_number') else ''
             site_name = part.machine.site.name if part.machine and part.machine.site else ''
             site_id = part.machine.site.id if part.machine and part.machine.site else None
             
@@ -391,6 +529,7 @@ def api_get_maintenance():
                 'machine': machine_name,
                 'machine_name': machine_name,
                 'machine_id': machine_id,
+                'machine_serial': machine_serial,
                 'task': task_name,
                 'dueDate': part.next_maintenance.strftime('%Y-%m-%d'),
                 'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d'),
@@ -427,7 +566,9 @@ def api_get_maintenance():
 def api_get_part_maintenance_detail(part_id):
     """Get detailed information for a part including its last maintenance record"""
     try:
-        from models import MaintenanceRecord, Machine, Part, User
+        if not _has_any_permission('maintenance.view', 'maintenance.record', 'maintenance.complete'):
+            return api_response(error='Insufficient permissions', status=403)
+        from models import MaintenanceRecord, Machine, Part
         from sqlalchemy.orm import joinedload
         import re
         
@@ -436,11 +577,8 @@ def api_get_part_maintenance_detail(part_id):
             joinedload(Part.machine).joinedload(Machine.site)
         ).get_or_404(part_id)
         
-        # Check permissions
-        if not current_user.is_admin:
-            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
-            if part.machine and part.machine.site_id not in user_site_ids:
-                return api_response(error='Access denied', status=403)
+        if not _has_site_access(part.machine.site_id if part.machine else None):
+            return api_response(error='Access denied', status=403)
         
         # Get the last maintenance record for this part
         last_record = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(
@@ -529,7 +667,9 @@ def api_get_part_maintenance_detail(part_id):
 def api_get_maintenance_record(record_id):
     """Get detailed information for a specific maintenance record"""
     try:
-        from models import MaintenanceRecord, Machine, Part, User
+        if not _has_any_permission('maintenance.view', 'maintenance.record', 'maintenance.complete'):
+            return api_response(error='Insufficient permissions', status=403)
+        from models import MaintenanceRecord, Machine, Part
         from sqlalchemy.orm import joinedload
         import re
         
@@ -540,11 +680,8 @@ def api_get_maintenance_record(record_id):
             joinedload(MaintenanceRecord.user)
         ).get_or_404(record_id)
         
-        # Check permissions
-        if not current_user.is_admin:
-            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
-            if record.machine and record.machine.site_id not in user_site_ids:
-                return api_response(error='Access denied', status=403)
+        if not _has_site_access(record.machine.site_id if record.machine else None):
+            return api_response(error='Access denied', status=403)
         
         # Build detailed response
         machine_name = record.machine.name if record.machine else 'Unknown'
@@ -606,7 +743,9 @@ def api_get_maintenance_history():
     - search: Search in machine name, part name, or notes
     """
     try:
-        from models import MaintenanceRecord, Machine, Part, Site, User
+        if not _has_any_permission('maintenance.view', 'maintenance.record', 'maintenance.complete'):
+            return api_response(error='Insufficient permissions', status=403)
+        from models import MaintenanceRecord, Machine, Part
         from sqlalchemy.orm import joinedload
         
         # Get query parameters
@@ -619,14 +758,27 @@ def api_get_maintenance_history():
             joinedload(MaintenanceRecord.part),
             joinedload(MaintenanceRecord.user)
         )
+        joined_machine = False
         
         # Apply site filter if provided
         if site_id_filter and site_id_filter != 'all':
             try:
                 site_id = int(site_id_filter)
+                if not _has_site_access(site_id):
+                    return api_response(error='Site access denied', status=403)
                 query = query.join(MaintenanceRecord.machine).filter(Machine.site_id == site_id)
+                joined_machine = True
             except (ValueError, TypeError):
                 pass
+
+        allowed_site_ids = _allowed_site_ids()
+        if allowed_site_ids is not None:
+            if not allowed_site_ids:
+                return api_response(data=[])
+            if not joined_machine:
+                query = query.join(MaintenanceRecord.machine)
+                joined_machine = True
+            query = query.filter(Machine.site_id.in_(allowed_site_ids))
         
         # Get all records
         records = query.order_by(MaintenanceRecord.date.desc()).all()
@@ -691,16 +843,15 @@ def api_get_maintenance_history():
 def api_get_machine_parts(machine_id):
     """Get all parts for a specific machine with their maintenance status"""
     try:
+        if not _has_any_permission('maintenance.view', 'maintenance.record', 'maintenance.complete'):
+            return api_response(error='Insufficient permissions', status=403)
         from models import Machine, Part
         from sqlalchemy.orm import joinedload
         
         machine = Machine.query.options(joinedload(Machine.parts)).get_or_404(machine_id)
         
-        # Check permissions
-        if not current_user.is_admin:
-            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
-            if machine.site_id not in user_site_ids:
-                return api_response(error='Access denied', status=403)
+        if not _has_site_access(machine.site_id):
+            return api_response(error='Access denied', status=403)
         
         today = datetime.now().date()
         parts_data = []
@@ -744,6 +895,8 @@ def api_get_machine_parts(machine_id):
 def api_complete_multiple_maintenance():
     """Complete maintenance for multiple parts in a single operation"""
     try:
+        if not _has_any_permission('maintenance.complete', 'maintenance.record'):
+            return api_response(error='Insufficient permissions', status=403)
         from models import Part, Machine, MaintenanceRecord
         from datetime import datetime, timedelta
         from sync_utils_enhanced import add_to_sync_queue_enhanced
@@ -761,10 +914,8 @@ def api_complete_multiple_maintenance():
         
         # Verify machine exists and user has access
         machine = Machine.query.get_or_404(machine_id)
-        if not current_user.is_admin:
-            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
-            if machine.site_id not in user_site_ids:
-                return api_response(error='Access denied', status=403)
+        if not _has_site_access(machine.site_id):
+            return api_response(error='Access denied', status=403)
         
         completed_count = 0
         maintenance_records = []
@@ -854,8 +1005,16 @@ def api_complete_multiple_maintenance():
 def api_get_sites():
     """Get list of sites"""
     try:
+        if not _has_permission('sites.view'):
+            return api_response(error='Insufficient permissions', status=403)
         from models import Site
-        sites = Site.query.all()
+        query = Site.query
+        allowed_site_ids = _allowed_site_ids()
+        if allowed_site_ids is not None:
+            if not allowed_site_ids:
+                return api_response(data=[])
+            query = query.filter(Site.id.in_(allowed_site_ids))
+        sites = query.all()
         
         sites_data = []
         for site in sites:
@@ -884,17 +1043,18 @@ def api_get_sites():
 def api_get_audits():
     """Get list of audit tasks"""
     try:
+        if not _has_any_permission('audits.view', 'audits.edit', 'audits.create'):
+            return api_response(error='Insufficient permissions', status=403)
         from models import AuditTask, AuditTaskCompletion
         from sqlalchemy.orm import joinedload
         
-        # Get audit tasks based on user permissions
-        if current_user.is_admin:
-            audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).all()
-        else:
-            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
-            audit_tasks = AuditTask.query.options(joinedload(AuditTask.machines)).filter(
-                AuditTask.site_id.in_(user_site_ids)
-            ).all() if user_site_ids else []
+        query = AuditTask.query.options(joinedload(AuditTask.machines))
+        allowed_site_ids = _allowed_site_ids()
+        if allowed_site_ids is not None:
+            if not allowed_site_ids:
+                return api_response(data=[])
+            query = query.filter(AuditTask.site_id.in_(allowed_site_ids))
+        audit_tasks = query.all()
         
         audits_data = []
         for task in audit_tasks:
@@ -943,16 +1103,15 @@ def api_get_audits():
 def api_get_audit_machines(audit_id):
     """Get machines for a specific audit task with their completion status"""
     try:
+        if not _has_any_permission('audits.view', 'audits.edit', 'audits.create'):
+            return api_response(error='Insufficient permissions', status=403)
         from models import AuditTask, AuditTaskCompletion
         from datetime import datetime
         
         audit_task = AuditTask.query.get_or_404(audit_id)
         
-        # Check permissions
-        if not current_user.is_admin:
-            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
-            if audit_task.site_id not in user_site_ids:
-                return api_response(error='Access denied', status=403)
+        if not _has_site_access(audit_task.site_id):
+            return api_response(error='Access denied', status=403)
         
         today = datetime.utcnow().date()
         machines_data = []
@@ -991,10 +1150,12 @@ def api_complete_audit_task(audit_id):
         response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
+    if not _has_any_permission('audits.edit', 'audits.create'):
+        return api_response(error='Insufficient permissions', status=403)
     
     # Move imports outside try block to see import errors
     from models import AuditTask, AuditTaskCompletion, Machine
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from sync_utils_enhanced import add_to_sync_queue_enhanced
     from timezone_utils import get_timezone_aware_now
     
@@ -1005,11 +1166,8 @@ def api_complete_audit_task(audit_id):
         audit_task = AuditTask.query.get_or_404(audit_id)
         logger.info(f'[AUDIT COMPLETE] Found audit task: {audit_task.id}')
         
-        # Check permissions
-        if not current_user.is_admin:
-            user_site_ids = [site.id for site in current_user.sites] if hasattr(current_user, 'sites') else []
-            if audit_task.site_id not in user_site_ids:
-                return api_response(error='Access denied', status=403)
+        if not _has_site_access(audit_task.site_id):
+            return api_response(error='Access denied', status=403)
         
         data = request.get_json()
         machine_ids = data.get('machine_ids', [])
@@ -1105,7 +1263,7 @@ def api_get_users():
     """Get list of users (admin only)"""
     try:
         # Check admin permission
-        if not current_user.is_admin:
+        if not _is_admin_user():
             return api_response(error='Admin access required', status=403)
         
         users = User.query.all()
@@ -1159,6 +1317,8 @@ def api_get_users():
 def api_get_roles():
     """Get list of roles"""
     try:
+        if not _is_admin_user():
+            return api_response(error='Admin access required', status=403)
         from models import Role
         roles = Role.query.all()
         

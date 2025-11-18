@@ -9,6 +9,7 @@ interface User {
   email: string
   role: string
   permissions: string[]
+  is_admin?: boolean
 }
 
 interface AuthContextType {
@@ -18,6 +19,10 @@ interface AuthContextType {
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
+  hasPermission: (permission: string) => boolean
+  hasAnyPermission: (permissions: string[]) => boolean
+  hasAllPermissions: (permissions: string[]) => boolean
+  isAdmin: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -39,11 +44,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
 
+  const normalizePermissions = (perms?: string[]): string[] => {
+    if (!Array.isArray(perms)) {
+      return []
+    }
+
+    const cleaned = perms
+      .map((perm) => (perm || '').trim())
+      .filter((perm) => perm.length > 0)
+
+    return Array.from(new Set(cleaned))
+  }
+
+  const mapUserResponse = (rawUser: any): User => {
+    const safeRole = typeof rawUser?.role === 'string' ? rawUser.role : 'user'
+    return {
+      id: Number(rawUser?.id ?? 0),
+      username: rawUser?.username || '',
+      email: rawUser?.email || '',
+      role: safeRole,
+      permissions: normalizePermissions(rawUser?.permissions),
+      is_admin: Boolean(rawUser?.is_admin),
+    }
+  }
+
   const checkAuth = async () => {
     try {
       const response = await apiClient.get('/api/v1/auth/me')
       // API response structure: { data: {...user data...} }
-      setUser(response.data.data)
+      setUser(mapUserResponse(response.data.data))
     } catch (error) {
       setUser(null)
     } finally {
@@ -65,7 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       })
       
       // API response structure: { data: { user: {...} }, message: '...' }
-      setUser(response.data.data.user)
+      setUser(mapUserResponse(response.data.data.user))
       message.success('Login successful!')
       navigate('/dashboard')
     } catch (error: any) {
@@ -88,6 +117,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
+  const isAdmin = Boolean(
+    user && (user.is_admin || user.role?.toLowerCase() === 'admin' || user.permissions?.includes('admin.full'))
+  )
+
+  const hasPermission = (permission: string) => {
+    if (!permission) return false
+    if (!user) return false
+    if (isAdmin) return true
+    return user.permissions.includes(permission)
+  }
+
+  const hasAnyPermission = (permissions: string[]) => {
+    if (!permissions || permissions.length === 0) {
+      return false
+    }
+    return permissions.some((permission) => hasPermission(permission))
+  }
+
+  const hasAllPermissions = (permissions: string[]) => {
+    if (!permissions || permissions.length === 0) {
+      return false
+    }
+    return permissions.every((permission) => hasPermission(permission))
+  }
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -95,6 +149,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     checkAuth,
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+    isAdmin,
   }
 
   // Show loading screen while checking initial authentication

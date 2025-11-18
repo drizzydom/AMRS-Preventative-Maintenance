@@ -6,6 +6,7 @@ import MenuBar from './components/MenuBar'
 import Sidebar from './components/Sidebar'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
+import PermissionGate from './components/auth/PermissionGate'
 import { initializeSocket, disconnectSocket } from './utils/socket'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import './styles/App.css'
@@ -136,11 +137,39 @@ function AppLayout() {
               <Route path="/maintenance" element={<Maintenance />} />
               <Route path="/audits" element={<Audits />} />
               <Route path="/sites" element={<Sites />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="/admin" element={<AdminPanel />} />
+              <Route
+                path="/users"
+                element={(
+                  <PermissionGate requireAdmin>
+                    <Users />
+                  </PermissionGate>
+                )}
+              />
+              <Route
+                path="/admin"
+                element={(
+                  <PermissionGate requireAdmin>
+                    <AdminPanel />
+                  </PermissionGate>
+                )}
+              />
               <Route path="/settings" element={<Settings />} />
-              <Route path="/reports" element={<ReportsPreview />} />
-              <Route path="/reports/audits" element={<AuditReportsPreview />} />
+              <Route
+                path="/reports"
+                element={(
+                  <PermissionGate requiredPermissions={['reports.view']}>
+                    <ReportsPreview />
+                  </PermissionGate>
+                )}
+              />
+              <Route
+                path="/reports/audits"
+                element={(
+                  <PermissionGate requiredPermissions={['reports.view', 'audits.view']}>
+                    <AuditReportsPreview />
+                  </PermissionGate>
+                )}
+              />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </Content>
