@@ -24,6 +24,7 @@ interface MaintenanceTask {
   machine: string
   machine_name: string
   machine_id: number
+  machine_serial?: string
   task: string
   dueDate: string
   next_maintenance: string
@@ -40,6 +41,7 @@ interface MaintenanceTask {
 interface Machine {
   id: number
   name: string
+  serial: string
   site_name: string
   site_id: number
 }
@@ -190,7 +192,8 @@ const Maintenance: React.FC = () => {
         task.machine_name.toLowerCase().includes(search) ||
         task.part_name.toLowerCase().includes(search) ||
         task.task.toLowerCase().includes(search) ||
-        task.site_name.toLowerCase().includes(search)
+        task.site_name.toLowerCase().includes(search) ||
+        (task.machine_serial && task.machine_serial.toLowerCase().includes(search))
       )
     }
 
@@ -251,7 +254,14 @@ const Maintenance: React.FC = () => {
       dataIndex: 'machine_name',
       key: 'machine_name',
       sorter: (a, b) => a.machine_name.localeCompare(b.machine_name),
-      render: (text) => <strong>{text}</strong>,
+      render: (text: string, record: MaintenanceTask) => (
+        <div>
+          <strong>{text}</strong>
+          {record.machine_serial && (
+            <div style={{ fontSize: '12px', color: '#666' }}>S/N: {record.machine_serial}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Part / Task',
@@ -381,7 +391,9 @@ const Maintenance: React.FC = () => {
             }
             options={filteredMachines.map(machine => ({
               value: machine.id,
-              label: `${machine.name} (${machine.site_name || 'No Site'})`,
+              label: machine.serial 
+                ? `${machine.name} - S/N: ${machine.serial} (${machine.site_name || 'No Site'})`
+                : `${machine.name} (${machine.site_name || 'No Site'})`,
             }))}
           />
         </Space>
@@ -392,7 +404,7 @@ const Maintenance: React.FC = () => {
           <div className="maintenance-controls">
             <Space wrap>
               <Search
-                placeholder="Search machines, parts, or tasks..."
+                placeholder="Search machines, serial numbers, parts..."
                 allowClear
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}

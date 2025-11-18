@@ -21,6 +21,7 @@ import {
   Alert,
   Descriptions,
   Tooltip,
+  Result,
 } from 'antd'
 import {
   SettingOutlined,
@@ -43,6 +44,7 @@ import type { ColumnsType } from 'antd/es/table'
 import apiClient from '../utils/api'
 import dayjs from 'dayjs'
 import '../styles/admin-panel.css'
+import { useAuthorization } from '../hooks/useAuthorization'
 
 const { TabPane } = Tabs
 const { confirm } = Modal
@@ -73,6 +75,7 @@ interface Role {
 }
 
 const AdminPanel: React.FC = () => {
+  const { isAdmin } = useAuthorization()
   const [activeTab, setActiveTab] = useState('system')
   const [loading, setLoading] = useState(false)
   const [systemStats, setSystemStats] = useState<SystemStat[]>([])
@@ -99,6 +102,16 @@ const AdminPanel: React.FC = () => {
       fetchRoles()
     }
   }, [activeTab])
+
+  if (!isAdmin) {
+    return (
+      <Result
+        status="403"
+        title="Admin Access Required"
+        subTitle="Please contact an administrator if you need additional permissions."
+      />
+    )
+  }
 
   const fetchSystemStats = async () => {
     setLoading(true)
