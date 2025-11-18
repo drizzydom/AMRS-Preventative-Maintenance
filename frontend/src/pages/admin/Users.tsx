@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Typography, Badge, message, Modal } from 'antd'
+import { Card, Table, Button, Input, Space, Tag, Typography, Badge, message, Modal, Result } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -15,6 +15,7 @@ import {
 import apiClient from '../../utils/api'
 import UserModal from '../../components/modals/UserModal'
 import '../../styles/users.css'
+import { useAuthorization } from '../../hooks/useAuthorization'
 
 const { Title } = Typography
 const { Search } = Input
@@ -33,6 +34,7 @@ interface User {
 }
 
 const Users: React.FC = () => {
+  const { isAdmin } = useAuthorization()
   const [searchTerm, setSearchTerm] = useState('')
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<any[]>([])
@@ -75,9 +77,22 @@ const Users: React.FC = () => {
   }
 
   useEffect(() => {
+    if (!isAdmin) {
+      return
+    }
     fetchUsers()
     fetchRoles()
-  }, [])
+  }, [isAdmin])
+
+  if (!isAdmin) {
+    return (
+      <Result
+        status="403"
+        title="Admin Access Required"
+        subTitle="You must be an administrator to manage users."
+      />
+    )
+  }
 
   const handleAddUser = () => {
     setSelectedUser(null)

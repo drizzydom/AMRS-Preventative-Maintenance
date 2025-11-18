@@ -171,15 +171,15 @@ const Machines: React.FC = () => {
       key: 'model',
     },
     {
-      title: 'Site',
-      dataIndex: 'site',
-      key: 'site',
-      filters: [
-        { text: 'Main Plant', value: 'Main Plant' },
-        { text: 'Warehouse', value: 'Warehouse' },
-      ],
-      onFilter: (value, record) => record.site === value,
-    },
+        title: 'Site',
+        dataIndex: 'site',
+        key: 'site',
+        filters: sites.map(site => ({
+          text: site.name,
+          value: site.name
+        })),
+        onFilter: (value, record) => record.site === value,
+      },
     {
       title: 'Status',
       dataIndex: 'status',
@@ -291,9 +291,10 @@ const Machines: React.FC = () => {
           <div className="machines-controls">
             <Space wrap>
               <Search
-                placeholder="Search machines..."
+                placeholder="Search machines, serial numbers..."
                 allowClear
-                onSearch={handleSearch}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ width: 300 }}
                 prefix={<SearchOutlined />}
               />
@@ -303,8 +304,10 @@ const Machines: React.FC = () => {
                 style={{ width: 150 }}
                 options={[
                   { value: 'all', label: 'All Sites' },
-                  { value: 'main', label: 'Main Plant' },
-                  { value: 'warehouse', label: 'Warehouse' },
+                  ...sites.map(site => ({
+                    value: site.name,
+                    label: site.name
+                  }))
                 ]}
               />
               <Button
@@ -330,7 +333,15 @@ const Machines: React.FC = () => {
 
           <Table
             columns={columns}
-            dataSource={machines}
+            dataSource={machines.filter(machine => {
+              if (!searchTerm) return true
+              const search = searchTerm.toLowerCase()
+              return (
+                machine.name.toLowerCase().includes(search) ||
+                (machine.serial && machine.serial.toLowerCase().includes(search)) ||
+                (machine.model && machine.model.toLowerCase().includes(search))
+              )
+            })}
             loading={loading}
             pagination={{
               pageSize: 25,
