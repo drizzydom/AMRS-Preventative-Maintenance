@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useNavigate } from 'react-router-dom'
 import { message } from 'antd'
 import apiClient from '../utils/api'
+import { getOrCreateDeviceId } from '../utils/deviceId'
 
 interface User {
   id: number
@@ -91,6 +92,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         username,
         password,
         remember_me: rememberMe,
+        device_id: getOrCreateDeviceId(),
       })
       
       // API response structure: { data: { user: {...} }, message: '...' }

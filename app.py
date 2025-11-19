@@ -448,11 +448,26 @@ except Exception as e:
     print(f"[SCHEMA] Error ensuring schema: {e}")
 
 from datetime import datetime, timedelta
-from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify, Response, abort, make_response
+import uuid
+from flask import Flask, request, render_template, redirect, url_for, flash, current_app, jsonify, Response, abort, make_response, g
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf, validate_csrf
 # Don't import db here - we'll import it after Flask app creation
 from models import SecurityEvent, AppSetting
+from remember_session_manager import (
+    create_or_update_session,
+    validate_session,
+    revoke_session_by_id,
+    revoke_user_sessions,
+    build_fingerprint,
+    queue_cookie_refresh,
+    queue_cookie_clear,
+    apply_cookie_payload,
+    sanitize_device_id,
+    REMEMBER_DEVICE_COOKIE,
+    REMEMBER_SESSION_COOKIE,
+    REMEMBER_TOKEN_COOKIE,
+)
 from sqlalchemy import or_
 
 # Initialize Flask app at the very top
@@ -3090,6 +3105,32 @@ app.config['SESSION_COOKIE_NAME'] = 'amrs_session'
 app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 app.config['REMEMBER_COOKIE_SECURE'] = False
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+app.config.setdefault('REMEMBER_TOKEN_DAYS', int(os.environ.get('REMEMBER_TOKEN_DAYS', 90)))
+app.config.setdefault('REMEMBER_MAX_SESSIONS', int(os.environ.get('REMEMBER_MAX_SESSIONS', 5)))
+
+
+def _request_ip_address() -> str:
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.remote_addr or ''
+
+
+def _user_agent() -> str:
+    return request.headers.get('User-Agent', '')
+
+
+def _resolve_device_id(preferred: str | None = None) -> str:
+    candidates = [preferred, request.headers.get('X-Device-Id'), request.cookies.get(REMEMBER_DEVICE_COOKIE)]
+    for candidate in candidates:
+        device_id = sanitize_device_id(candidate)
+        if device_id:
+            return device_id
+    return str(uuid.uuid4())
+
+
+def _request_fingerprint(device_id: str) -> str:
+    return build_fingerprint(device_id or '', _user_agent(), (_request_ip_address() or '')[:24])
 
 # CORS configuration for Electron app (file:// origin to http://127.0.0.1)
 @app.after_request
@@ -3101,7 +3142,7 @@ def after_request(response):
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-    return response
+    return apply_cookie_payload(response)
 
 # Set up logging
 logging.basicConfig(
@@ -4262,53 +4303,90 @@ def assign_colors_to_audit_tasks():
 # Add database connection check before requests
 @app.before_request
 def check_remember_token():
-    """
-    Check for remember_token cookie and automatically log in user if valid.
-    This enables persistent "Remember Me" functionality across sessions.
-    """
-    from datetime import datetime, timedelta
+    """Attempt auto-login via device-bound remember sessions (with legacy fallback)."""
     from flask_login import login_user
-    
-    # Skip if user is already authenticated
-    if current_user.is_authenticated:
+    from security_event_logger import log_security_event
+
+    if current_user.is_authenticated or request.method == 'OPTIONS':
         return
-    
-    # Skip for static files, API endpoints, login/logout routes
-    if request.path.startswith('/static/') or request.path in ['/login', '/logout', '/api/bootstrap-secrets']:
+
+    # Skip static assets, auth endpoints, and bootstrap secrets
+    skip_paths = ['/login', '/logout', '/api/bootstrap-secrets']
+    if request.path.startswith('/static/') or request.path.startswith('/frontend/'):
         return
-    
-    # Check for remember_token cookie
-    remember_token = request.cookies.get('remember_token')
-    if not remember_token:
+    if request.path in skip_paths:
         return
-    
-    try:
-        # Find user by remember token
-        user = User.find_by_remember_token(remember_token)
-        if user:
-            # Auto-login the user
-            login_user(user, remember=True)
-            
-            # Log the auto-login event
-            from security_event_logger import log_security_event
+    if request.endpoint in {'api_v1.api_login'}:
+        return
+
+    device_id = sanitize_device_id(request.cookies.get(REMEMBER_DEVICE_COOKIE))
+    session_cookie = request.cookies.get(REMEMBER_SESSION_COOKIE)
+    token_cookie = request.cookies.get(REMEMBER_TOKEN_COOKIE)
+
+    # Primary flow: device-bound remember session
+    if session_cookie and token_cookie:
+        try:
+            session_id = int(session_cookie)
+        except (TypeError, ValueError):
+            queue_cookie_clear()
+            return
+
+        fingerprint = _request_fingerprint(device_id or '')
+        validation = validate_session(
+            session_id,
+            token_cookie,
+            device_id=device_id,
+            fingerprint=fingerprint,
+            user_agent=_user_agent(),
+        )
+
+        if validation:
+            session_record, rotated_token = validation
+            login_user(session_record.user, remember=False)
+            queue_cookie_refresh(session_record.id, rotated_token, session_record.device_id)
             log_security_event(
                 event_type="auto_login_success",
-                details=f"Auto-login via remember token from IP: {request.remote_addr}",
+                details=f"Auto-login via device session from IP: {_request_ip_address()}",
                 severity=0,
                 source='web'
             )
-            
-            # Extend token expiration by another 30 days
-            user.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
-            db.session.commit()
-            
-            app.logger.info(f"Auto-login successful for user_id={user.id} via remember token")
-        else:
-            # Invalid or expired token - clear the cookie
-            app.logger.debug("Invalid or expired remember token, will clear cookie")
-    except Exception as e:
-        app.logger.error(f"Error during remember token check: {e}")
-        # Don't crash the request, just continue without auto-login
+            return
+
+        queue_cookie_clear()
+        return
+
+    # Legacy fallback: single remember_token cookie
+    legacy_token = request.cookies.get('remember_token')
+    if not legacy_token:
+        return
+
+    try:
+        user = User.find_by_remember_token(legacy_token)
+        if not user:
+            queue_cookie_clear()
+            return
+
+        login_user(user, remember=False)
+        device_id = device_id or str(uuid.uuid4())
+        session_record, raw_token = create_or_update_session(
+            user,
+            device_id,
+            user_agent=_user_agent(),
+            ip_address=_request_ip_address(),
+            fingerprint=_request_fingerprint(device_id),
+        )
+        queue_cookie_refresh(session_record.id, raw_token, device_id)
+        user.clear_remember_token()
+        db.session.commit()
+
+        log_security_event(
+            event_type="auto_login_success",
+            details=f"Legacy remember token upgraded for IP: {_request_ip_address()}",
+            severity=0,
+            source='web'
+        )
+    except Exception as exc:
+        app.logger.error(f"Error during remember session check: {exc}")
 
 @app.before_request
 def ensure_db_connection():
@@ -7264,23 +7342,28 @@ def login():
                 print(f"[LOGIN DEBUG] Error during password check: {e}")
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
+            device_id = _resolve_device_id(request.form.get('device_id'))
             user.set_remember_preference(remember)
             log_security_event(
                 event_type="login_success",
-                details=f"Login from IP: {request.remote_addr} (username: {username})",
+                details=f"Login from IP: {_request_ip_address()} (username: {username})",
                 severity=0,
                 source='web'
             )
+
             if remember:
-                token = user.generate_remember_token()
-                db.session.commit()
-                resp = redirect(request.args.get('next') or url_for('dashboard'))
-                resp.set_cookie('remember_token', token, max_age=30*24*60*60, httponly=True, samesite='Lax')
-                app.logger.debug(f"Remember token set for user_id={user.id}")
-                return resp
+                session_record, raw_token = create_or_update_session(
+                    user,
+                    device_id,
+                    user_agent=_user_agent(),
+                    ip_address=_request_ip_address(),
+                    fingerprint=_request_fingerprint(device_id),
+                )
+                queue_cookie_refresh(session_record.id, raw_token, device_id)
             else:
-                user.clear_remember_token()
-                db.session.commit()
+                revoke_user_sessions(user.id, device_id=device_id)
+                queue_cookie_clear()
+
             app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
             next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard'))
@@ -7307,12 +7390,12 @@ def logout():
     remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
     username = getattr(current_user, 'username', 'unknown')
     
-    # Clear remember token from database
+    device_id = sanitize_device_id(request.cookies.get(REMEMBER_DEVICE_COOKIE))
     try:
-        current_user.clear_remember_token()
-        db.session.commit()
+        revoke_user_sessions(current_user.id, device_id=device_id)
     except Exception as e:
-        app.logger.error(f"Error clearing remember token during logout: {e}")
+        app.logger.error(f"Error revoking remember sessions during logout: {e}")
+    queue_cookie_clear()
     
     # Log the logout event (user info is automatically extracted from current_user)
     log_security_event(
@@ -7324,12 +7407,8 @@ def logout():
     
     logout_user()
     
-    # Create response and clear remember_token cookie
-    resp = make_response(redirect(url_for('login')))
-    resp.set_cookie('remember_token', '', expires=0, httponly=True, samesite='Lax')
-    
     flash('You have been logged out', 'info')
-    return resp
+    return redirect(url_for('login'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():

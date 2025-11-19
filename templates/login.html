@@ -87,6 +87,8 @@
                         <input type="checkbox" class="form-check-input" id="remember" name="remember">
                         <label class="form-check-label" for="remember">Remember me (private device only)</label>
                     </div>
+
+                    <input type="hidden" name="device_id" id="device-id-field">
                     
                     <button class="w-100 btn btn-lg btn-primary mb-3" type="submit">
                         Sign In
@@ -105,5 +107,32 @@
     
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function() {
+            var STORAGE_KEY = 'amrs-device-id'
+            function generateId() {
+                if (window.crypto && window.crypto.randomUUID) {
+                    return window.crypto.randomUUID()
+                }
+                return 'device-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+            }
+            function getDeviceId() {
+                try {
+                    var existing = localStorage.getItem(STORAGE_KEY)
+                    if (!existing) {
+                        existing = generateId()
+                        localStorage.setItem(STORAGE_KEY, existing)
+                    }
+                    return existing
+                } catch (err) {
+                    return generateId()
+                }
+            }
+            var field = document.getElementById('device-id-field')
+            if (field) {
+                field.value = getDeviceId()
+            }
+        })()
+    </script>
 </body>
 </html>

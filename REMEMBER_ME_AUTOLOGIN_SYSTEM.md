@@ -1,12 +1,64 @@
 # Remember Me / Auto-Login System Implementation
 
-## Overview
+## Current Device-Bound Architecture (November 2025)
 
-This document describes the "Remember Me" persistent authentication system that allows users to bypass the login screen on trusted devices for up to 30 days after their last login.
+The remember-me system now stores one hashed token per device in the new `remember_sessions` table. Each session record tracks the device identifier, fingerprint, user agent, IP fragment, and rotation metadata so we can bind long-lived cookies to specific hardware without ever storing the raw token server-side.
+
+### Highlights
+
+- **90-day rolling TTL** driven by `REMEMBER_TOKEN_DAYS` (default 90) with automatic rotation on every successful validation.
+- **Device-bound cookies**: `remember_session_id` (numeric id), `remember_token` (rotating secret), and `remember_device_id` (client-supplied identifier persisted via localStorage). All cookies support SameSite + Secure/HttpOnly policies configured in Flask.
+- **Session caps** enforced by `REMEMBER_MAX_SESSIONS` (default 5). Oldest sessions are revoked automatically after the limit is exceeded.
+- **Fingerprint enforcement** using a hash of device id + user agent + truncated IP. Mismatches instantly revoke the session.
+- **Legacy compatibility**: existing single `remember_token` cookies are upgraded into a managed `RememberSession` the next time they are presented, so older clients can transition seamlessly.
+
+### Database Schema (Current)
+
+| Table | Key Columns | Purpose |
+|-------|-------------|---------|
+| `users` | `remember_token`, `remember_token_expiration`, `remember_enabled` | Legacy single-token fallback so older offline clients continue working. Automatically cleared once sessions migrate. |
+| `remember_sessions` | `id`, `user_id`, `token_hash`, `device_id`, `device_fingerprint`, `issued_at`, `last_used_at`, `expires_at`, `revoked_at` | Stores one hashed token per device along with auditing metadata. `token_hash` is SHA-256 of the browser secret; `device_id` is a sanitized 64-char identifier sourced from the React/Electron client. |
+
+Table creation is handled by SQLAlchemy's `db.create_all()`/auto-migration flow, so deployments automatically pick up the new schema as long as migrations run during startup.
+
+### Request Lifecycle
+
+1. **Login (`/api/v1/auth/login`)**
+  - Clients send `username`, `password`, `remember_me`, and a stable `device_id` (persisted locally). All API requests also include `X-Device-Id` headers so the server can correlate follow-up traffic.
+  - When `remember_me` is checked, `remember_session_manager.create_or_update_session()` creates/rotates a record, enforces per-user limits, and queues cookies via `queue_cookie_refresh()`.
+  - Unchecked logins revoke existing sessions for that device and queue cookie clearing instructions.
+2. **Auto-login (`before_request` in `app.py`)**
+  - Reads the trio of cookies plus the fingerprint derived from headers and IP.
+  - Calls `validate_session()` which verifies hashes, fingerprint, device id, and expiration before rotating the token and extending TTL.
+  - If validation fails, the session is revoked and cookies are cleared; the legacy cookie (if present) is also invalidated.
+3. **Logout (`/logout` + `/api/v1/auth/logout`)**
+  - Loads the device id from cookies, revokes matching sessions, logs the action, and queues cookie clearing payloads.
+
+### Configuration & Client Requirements
+
+- `REMEMBER_TOKEN_DAYS` (default **90**) controls token TTL; `REMEMBER_MAX_SESSIONS` (default **5**) caps concurrent devices. Both can be set via environment or `config.py`.
+- `REMEMBER_COOKIE_SAMESITE` and `REMEMBER_COOKIE_SECURE` inherit from app config to support hardened deployments.
+- **React/Electron login flows must persist a device identifier** (stored in `localStorage` in the web UI and in the legacy Jinja template via a hidden input). The identifier is sanitized to 64 ASCII chars server-side.
+- API clients automatically send their identifier through the `X-Device-Id` header (configured in `frontend/src/utils/api.ts`). This ensures that server-side fingerprinting works for every request, not just the login POST body.
+
+### Migration & Compatibility Notes
+
+- Existing `remember_token` cookies are still honored. When presented, the backend transparently creates a `RememberSession`, reuses the legacy token as the first rotating secret, and clears the old cookie so future logins rely on the new mechanism.
+- Session rows are automatically pruned/marked revoked when a device logs out, when fingerprints mismatch, or when TTL expires.
+- Because tokens are hashed in the database, leaked backups do not expose reusable browser secrets.
+- Security logging captures device id + fingerprint context for both successful rotations and revocations, enabling admins to investigate suspicious remember-me events.
 
 ---
 
-## Features
+## Legacy Implementation Reference (Pre-November 2025)
+
+> The sections below describe the original single-cookie design. They remain for historical context and to explain the legacy upgrade path that is still available for older offline clients.
+
+### Legacy Overview
+
+This archival section documents the original single-cookie remember-me implementation that stored one token per user in the `users` table for roughly 30 days. All of the material below still applies to offline clients that have not yet upgraded and explains how the legacy cookie behaves before it is auto-migrated into a managed `RememberSession`.
+
+### Legacy Features
 
 ### ✅ Implemented Features
 
@@ -43,7 +95,7 @@ This document describes the "Remember Me" persistent authentication system that 
 
 ---
 
-## Architecture
+### Legacy Architecture
 
 ### Database Schema
 
@@ -63,9 +115,7 @@ def generate_remember_token(self):
     import secrets
     token = secrets.token_urlsafe(32)
     self.remember_token = token
-    # Set token expiration to 30 days from now
     self.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
-    return token
 ```
 
 - Uses `secrets.token_urlsafe(32)` for cryptographically secure randomness
@@ -94,7 +144,6 @@ def verify_remember_token(self, token):
 - Constant-time string comparison (via Python's `==` for strings)
 - Datetime parsing with fallback for various formats
 - Expiration check against UTC now
-
 ### Auto-Login Flow
 
 ```mermaid
@@ -129,9 +178,7 @@ resp.set_cookie('remember_token', token,
 
 ---
 
-## Usage
-
-### For Users
+### Legacy Usage
 
 #### On Login Page:
 1. Enter username and password
@@ -139,21 +186,10 @@ resp.set_cookie('remember_token', token,
 3. Click "Sign In"
 4. Token is automatically set and stored in cookie
 
-#### Auto-Login Behavior:
-- On subsequent visits (within 30 days), user is automatically logged in
-- No need to re-enter credentials
 - Works across browser sessions (even after closing browser)
-
-#### Manual Logout:
-- Click "Logout" button in navigation
 - Token is cleared from database and cookie
-- Next visit requires manual login
-
-#### Security Recommendations for Users:
-- ⚠️ **Only use "Remember Me" on private, trusted devices**
 - ❌ **Never use on shared/public computers**
 - ✅ **Always manually logout on shared devices**
-- ✅ **Use strong passwords even with "Remember Me" enabled**
 
 ### For Developers
 
@@ -179,8 +215,17 @@ WHERE id = <your_user_id>;
 # 7. Check security logs:
 SELECT * FROM security_events 
 WHERE event_type = 'auto_login_success' 
-ORDER BY timestamp DESC LIMIT 10;
+
 ```
+
+### Legacy Key Takeaways
+
+1. **Rolling 30-Day Window:** Legacy tokens extend their expiration on every use, so active users rarely see the login screen.
+2. **Inactive Sessions Expire:** Users who stay away for ~30 days must re-authenticate, which naturally prunes stale cookies.
+3. **Secure by Design:** HttpOnly, SameSite cookies plus server-side expiration checks prevent theft/CSRF from reusing the legacy token.
+4. **Seamless UX:** When the legacy cookie validates, the before-request hook logs the user in without extra prompts.
+5. **Audit Trail:** Every successful auto-login produces a `auto_login_success` log entry for investigations.
+6. **Graceful Failure:** Invalid or expired tokens simply fall back to the login page; no user-facing errors are shown.
 
 #### Debugging:
 ```python
@@ -195,7 +240,7 @@ app.logger.setLevel(logging.DEBUG)
 
 ---
 
-## Security Considerations
+### Legacy Security Considerations
 
 ### ✅ Security Features
 
@@ -263,7 +308,7 @@ app.logger.setLevel(logging.DEBUG)
 
 ---
 
-## Configuration
+### Legacy Configuration
 
 ### Environment Variables
 
@@ -287,7 +332,7 @@ if AppSetting.get('remember_me_enabled', '1') == '0':
 
 ---
 
-## Platform-Specific Behavior
+### Legacy Platform-Specific Behavior
 
 ### Web Application (Flask)
 - Cookies stored in browser's cookie jar
@@ -306,7 +351,7 @@ if AppSetting.get('remember_me_enabled', '1') == '0':
 
 ---
 
-## Testing Checklist
+### Legacy Testing Checklist
 
 ### Manual Testing
 
