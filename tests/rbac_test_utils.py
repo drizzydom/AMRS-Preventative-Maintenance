@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from models import db, User, Role, Site, Machine, Part, AuditTask
 from api_v1 import api_v1
+from remember_session_manager import apply_cookie_payload
 
 
 TEST_ENCRYPTION_KEY = base64.urlsafe_b64encode(b"0123456789ABCDEF0123456789ABCDEF")
@@ -106,6 +107,10 @@ def create_seeded_app():
         return User.query.get(int(user_id))
 
     app.register_blueprint(api_v1)
+
+    @app.after_request
+    def _apply_remember_cookies(response):
+        return apply_cookie_payload(response)
 
     with app.app_context():
         db.create_all()

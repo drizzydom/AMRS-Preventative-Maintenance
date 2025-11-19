@@ -14,9 +14,43 @@ let hasCheckedForUpdates = false;
 let manualUpdateCheck = false;
 
 const UPDATE_FEED_URL = 'https://f005.backblazeb2.com/file/amrs-pm-updates/';
+const UPDATE_FEED_CONFIG = Object.freeze({
+    provider: 'generic',
+    url: UPDATE_FEED_URL,
+    channel: 'latest',
+    useMultipleRangeRequest: false,
+});
 
 // Function to safely check for updates
+let isAutoUpdaterConfigured = false;
+
+function configureAutoUpdaterFeed() {
+    if (isAutoUpdaterConfigured) {
+        return true;
+    }
+
+    if (!app.isPackaged) {
+        writeLog('[AutoUpdate] Skipping feed configuration (app not packaged)');
+        return false;
+    }
+
+    try {
+        autoUpdater.setFeedURL(UPDATE_FEED_CONFIG);
+        isAutoUpdaterConfigured = true;
+        writeLog(`[AutoUpdate] Auto-updater configured with provider=${UPDATE_FEED_CONFIG.provider} (${UPDATE_FEED_URL})`);
+        return true;
+    } catch (error) {
+        writeLog(`[AutoUpdate] Failed to configure auto-updater feed: ${error.message}`);
+        writeLog(`[AutoUpdate] Stack: ${error.stack || 'No stack'}`);
+        return false;
+    }
+}
+
 function checkForUpdatesWhenReady() {
+    if (!app.isPackaged) {
+        writeLog('[AutoUpdate] Skipping update check while running unpackaged build');
+        return;
+    }
     if (hasCheckedForUpdates && !manualUpdateCheck) {
         writeLog(`[AutoUpdate] Already checked for updates, skipping duplicate check`);
         return;
@@ -24,7 +58,10 @@ function checkForUpdatesWhenReady() {
     writeLog(`[AutoUpdate] Attempting to check for updates...`);
     writeLog(`[AutoUpdate] Feed URL: ${UPDATE_FEED_URL}`);
     writeLog(`[AutoUpdate] Current version: ${app.getVersion()}`);
-    autoUpdater.setFeedURL({ url: UPDATE_FEED_URL });
+    if (!configureAutoUpdaterFeed()) {
+        writeLog('[AutoUpdate] Aborting update check because feed configuration failed');
+        return;
+    }
     autoUpdater.checkForUpdatesAndNotify();
 }
 

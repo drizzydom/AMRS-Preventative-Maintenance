@@ -348,6 +348,13 @@ class User(UserMixin, db.Model):
                           backref=db.backref('users', lazy=True))
     # Define the one-to-many relationship with MaintenanceRecord
     maintenance_records = db.relationship('MaintenanceRecord', backref='user', lazy=True)
+    # Device-bound remember-me sessions
+    remember_sessions = db.relationship(
+        'RememberSession',
+        backref='user',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
 
     @property
     def username(self):
@@ -423,8 +430,8 @@ class User(UserMixin, db.Model):
         import secrets
         token = secrets.token_urlsafe(32)
         self.remember_token = token
-        # Set token expiration to 30 days from now
-        self.remember_token_expiration = datetime.utcnow() + timedelta(days=30)
+        # Set token expiration to 90 days from now (legacy fallback)
+        self.remember_token_expiration = datetime.utcnow() + timedelta(days=90)
         return token
 
     def verify_remember_token(self, token):
@@ -489,6 +496,46 @@ class SecurityEvent(db.Model):
 
     def __repr__(self):
         return f'<SecurityEvent {self.event_type} at {self.timestamp}>'
+
+
+class RememberSession(db.Model):
+    __tablename__ = 'remember_sessions'
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'device_id', name='uq_remember_session_user_device'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    token_hash = db.Column(db.String(128), nullable=False, unique=True)
+    device_id = db.Column(db.String(64), nullable=False, index=True)
+    device_fingerprint = db.Column(db.String(128), nullable=True)
+    user_agent = db.Column(db.String(512), nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    issued_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_used_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def mark_used(self):
+        now = datetime.utcnow()
+        self.last_used_at = now
+        if not self.issued_at:
+            self.issued_at = now
+
+    def revoke(self):
+        self.revoked_at = datetime.utcnow()
+
+    @property
+    def is_active(self):
+        if self.revoked_at:
+            return False
+        if self.expires_at and datetime.utcnow() > self.expires_at:
+            return False
+        return True
+
+    def __repr__(self):
+        return f'<RememberSession user_id={self.user_id} device_id={self.device_id}>'
 
 class Role(db.Model):
     """Role model for user permissions"""
