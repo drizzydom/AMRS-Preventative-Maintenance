@@ -2,10 +2,20 @@
 REST API v1 endpoints for React frontend
 Performance optimized with caching and query optimization
 """
+import uuid
 from flask import Blueprint, jsonify, request, session
 from flask_login import login_user, logout_user, current_user, login_required
 from functools import wraps, lru_cache
 from models import User, db, hash_value
+from remember_session_manager import (
+    create_or_update_session,
+    queue_cookie_refresh,
+    queue_cookie_clear,
+    sanitize_device_id,
+    build_fingerprint,
+    revoke_user_sessions,
+    REMEMBER_DEVICE_COOKIE,
+)
 from werkzeug.security import check_password_hash
 import logging
 from datetime import datetime, timedelta
@@ -79,6 +89,26 @@ def _user_site_ids():
         return [site.id for site in getattr(current_user, 'sites', []) if getattr(site, 'id', None) is not None]
     except Exception:
         return []
+
+
+def _request_ip():
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.remote_addr or ''
+
+
+def _resolve_device_id(preferred: str | None = None):
+    candidates = [preferred, request.headers.get('X-Device-Id'), request.cookies.get(REMEMBER_DEVICE_COOKIE)]
+    for candidate in candidates:
+        device_id = sanitize_device_id(candidate)
+        if device_id:
+            return device_id
+    return str(uuid.uuid4())
+
+
+def _request_fingerprint(device_id: str) -> str:
+    return build_fingerprint(device_id or '', request.headers.get('User-Agent', ''), (_request_ip() or '')[:24])
 
 
 def _can_view_all_sites():
@@ -179,8 +209,8 @@ def api_login():
                 status=403
             )
         
-        # Login user
-        login_user(user, remember=remember_me)
+        # Login user (custom remember handled below)
+        login_user(user, remember=False)
         logger.info(f'User logged in successfully: {username}')
         
         # Return user data - handle role safely
@@ -212,6 +242,20 @@ def api_login():
             'is_admin': bool(getattr(user, 'is_admin', False) or role_name.lower() == 'admin'),
         }
         
+        device_id = _resolve_device_id(data.get('device_id'))
+        if remember_me:
+            session_record, raw_token = create_or_update_session(
+                user,
+                device_id,
+                user_agent=request.headers.get('User-Agent', ''),
+                ip_address=_request_ip(),
+                fingerprint=_request_fingerprint(device_id),
+            )
+            queue_cookie_refresh(session_record.id, raw_token, device_id)
+        else:
+            revoke_user_sessions(user.id, device_id=device_id)
+            queue_cookie_clear()
+
         return api_response(
             data={'user': user_data},
             message='Login successful'
@@ -230,6 +274,9 @@ def api_logout():
     """Logout endpoint"""
     try:
         username = current_user.username
+        device_id = sanitize_device_id(request.cookies.get(REMEMBER_DEVICE_COOKIE))
+        revoke_user_sessions(current_user.id, device_id=device_id)
+        queue_cookie_clear()
         logout_user()
         logger.info(f'User logged out: {username}')
         return api_response(message='Logout successful')

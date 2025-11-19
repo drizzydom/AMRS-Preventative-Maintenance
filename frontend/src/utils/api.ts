@@ -1,4 +1,6 @@
-import axios from 'axios'
+import axios, { AxiosHeaders } from 'axios'
+
+import { getOrCreateDeviceId } from './deviceId'
 
 // Get Flask API base URL
 // In Electron, get port from electronAPI
@@ -42,6 +44,18 @@ async function initializeAPI() {
 apiClient.interceptors.request.use(
   async (config) => {
     await initializeAPI()
+    const deviceId = getOrCreateDeviceId()
+    if (deviceId) {
+      const maybeHeaders = config.headers as AxiosHeaders | undefined
+      if (maybeHeaders && typeof maybeHeaders.set === 'function') {
+        maybeHeaders.set('X-Device-Id', deviceId)
+      } else {
+        config.headers = {
+          ...(config.headers || {}),
+          'X-Device-Id': deviceId,
+        }
+      }
+    }
     return config
   },
   (error) => {
