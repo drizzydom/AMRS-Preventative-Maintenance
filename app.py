@@ -385,6 +385,8 @@ try:
             performed_by TEXT,
             status TEXT,
             notes TEXT,
+            po_number TEXT,
+            work_order_number TEXT,
             comments TEXT,
             client_id INTEGER,
             created_at TIMESTAMP,
@@ -2212,6 +2214,8 @@ def create_basic_schema(cursor):
             performed_by TEXT,
             status TEXT,
             notes TEXT,
+            po_number TEXT,
+            work_order_number TEXT,
             comments TEXT,
             client_id INTEGER,
             created_at TIMESTAMP,
@@ -2568,7 +2572,19 @@ ALLOWED_COLUMNS = {
     'sites': {'created_at', 'updated_at'},
     'machines': {'created_at', 'updated_at'},
     'parts': {'created_at', 'updated_at'},
-    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
+    'maintenance_records': {
+        'created_at',
+        'updated_at',
+        'client_id',
+        'machine_id',
+        'maintenance_type',
+        'description',
+        'performed_by',
+        'status',
+        'notes',
+        'po_number',
+        'work_order_number'
+    },
     'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
     'audit_task_completions': {'created_at', 'updated_at'},
     'machine_audit_task': {'audit_task_id', 'machine_id'}
@@ -3737,7 +3753,19 @@ ALLOWED_COLUMNS = {
     'sites': {'created_at', 'updated_at'},
     'machines': {'created_at', 'updated_at'},
     'parts': {'created_at', 'updated_at'},
-    'maintenance_records': {'created_at', 'updated_at', 'client_id', 'machine_id', 'maintenance_type', 'description', 'performed_by', 'status', 'notes'},
+    'maintenance_records': {
+        'created_at',
+        'updated_at',
+        'client_id',
+        'machine_id',
+        'maintenance_type',
+        'description',
+        'performed_by',
+        'status',
+        'notes',
+        'po_number',
+        'work_order_number'
+    },
     'audit_tasks': {'created_at', 'updated_at', 'interval', 'custom_interval_days'},
     'audit_task_completions': {'created_at', 'updated_at'},
     'machine_audit_task': {'audit_task_id', 'machine_id'}
@@ -3782,7 +3810,9 @@ def ensure_db_schema():
                 'description': 'TEXT',
                 'performed_by': 'VARCHAR(100)',
                 'status': 'VARCHAR(50)',
-                'notes': 'TEXT'
+                'notes': 'TEXT',
+                'po_number': 'VARCHAR(32)',
+                'work_order_number': 'VARCHAR(128)'
             },
             'audit_tasks': {
                 'created_at': 'TIMESTAMP',
@@ -3879,6 +3909,17 @@ def ensure_maintenance_records_schema():
                 except Exception as e:
                     print(f"[APP] Note: Could not add foreign key constraint: {str(e)}")
                     print("[APP] This is not critical, the column is still usable.")
+
+            required_tracking_columns = {
+                'po_number': 'VARCHAR(32)',
+                'work_order_number': 'VARCHAR(128)'
+            }
+            for column_name, column_type in required_tracking_columns.items():
+                if column_name not in columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(text(f"ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
+                        conn.commit()
+                    print(f"[APP] Added {column_name} column to maintenance_records table")
     except Exception as e:
         print(f"[APP] Error ensuring maintenance_records schema: {e}")
 
@@ -5672,6 +5713,8 @@ def maintenance_multi():
         notes = request.form.get('notes', '')
         client_id = request.form.get('client_id')
         user_id = current_user.id
+        po_number = (request.form.get('po_number') or '').strip()
+        work_order_number = (request.form.get('work_order_number') or '').strip()
 
         app.logger.info(f"Extracted: part_ids={part_ids}, machine_id={machine_id}, maintenance_type={maintenance_type}")
         app.logger.info(f"Description={description}, date={date_str}, performed_by={performed_by}")
@@ -5680,6 +5723,15 @@ def maintenance_multi():
         if not part_ids or not machine_id or not maintenance_type or not description or not date_str:
             app.logger.warning("Validation failed - missing required fields")
             flash('All fields and at least one part must be selected!', 'danger')
+            return redirect(url_for('maintenance_page'))
+        if not po_number or not work_order_number:
+            flash('PO Number and Work Order Number are required for maintenance completion.', 'danger')
+            return redirect(url_for('maintenance_page'))
+        if len(po_number) > 32:
+            flash('PO Number must be 32 characters or fewer.', 'danger')
+            return redirect(url_for('maintenance_page'))
+        if len(work_order_number) > 128:
+            flash('Work Order Number must be 128 characters or fewer.', 'danger')
             return redirect(url_for('maintenance_page'))
 
         # Convert and validate machine_id
@@ -5750,7 +5802,9 @@ def maintenance_multi():
                     performed_by=performed_by,
                     status=status,
                     notes=notes,
-                    client_id=client_id if client_id else None
+                    client_id=client_id if client_id else None,
+                    po_number=po_number,
+                    work_order_number=work_order_number
                 )
                 db.session.add(new_record)
 
@@ -5765,19 +5819,8 @@ def maintenance_multi():
                     )
                     db.session.add(maintenance_file)
 
-                # Update part's last_maintenance and next_maintenance
-                part.last_maintenance = maintenance_date
-                freq = part.maintenance_frequency or 1
-                unit = part.maintenance_unit or 'day'
-                if unit == 'week':
-                    delta = timedelta(weeks=freq)
-                elif unit == 'month':
-                    delta = timedelta(days=freq * 30)
-                elif unit == 'year':
-                    delta = timedelta(days=freq * 365)
-                else:
-                    delta = timedelta(days=freq)
-                part.next_maintenance = maintenance_date + delta
+                # Update part scheduling to align dashboard + history
+                part.update_next_maintenance(maintenance_date)
                 db.session.add(part)
                 created_records.append(new_record)
             except Exception as e:
@@ -5797,7 +5840,9 @@ def maintenance_multi():
                 'performed_by': rec.performed_by,
                 'status': rec.status,
                 'notes': rec.notes,
-                'client_id': rec.client_id
+                'client_id': rec.client_id,
+                'po_number': rec.po_number,
+                'work_order_number': rec.work_order_number
             })
         flash(f'Maintenance recorded for {len(created_records)} part(s).', 'success')
         return redirect(url_for('maintenance_page'))
@@ -6729,6 +6774,8 @@ def maintenance_page():
             notes = request.form.get('notes', '')
             client_id = request.form.get('client_id')
             parts_used = request.form.getlist('parts_used')
+            po_number = (request.form.get('po_number') or '').strip()
+            work_order_number = (request.form.get('work_order_number') or '').strip()
 
             try:
                 # Check if values are not empty before converting
@@ -6746,6 +6793,15 @@ def maintenance_page():
             if not machine_id or not part_id or not user_id or not maintenance_type or not description or not date_str:
                 flash('Machine, part, user, maintenance type, description, and date are required!', 'danger')
                 return redirect(url_for('maintenance_page'))
+            if not po_number or not work_order_number:
+                flash('PO Number and Work Order Number are required for maintenance completion.', 'danger')
+                return redirect(url_for('maintenance_page'))
+            if len(po_number) > 32:
+                flash('PO Number must be 32 characters or fewer.', 'danger')
+                return redirect(url_for('maintenance_page'))
+            if len(work_order_number) > 128:
+                flash('Work Order Number must be 128 characters or fewer.', 'danger')
+                return redirect(url_for('maintenance_page'))
             else:
                 try:
                     maintenance_date = datetime.strptime(date_str, '%Y-%m-%d')
@@ -6759,7 +6815,9 @@ def maintenance_page():
                         performed_by=performed_by,
                         status=status,
                         notes=notes,
-                        client_id=client_id if client_id else None
+                        client_id=client_id if client_id else None,
+                        po_number=po_number,
+                        work_order_number=work_order_number
                     )
                     db.session.add(new_record)
 
@@ -6791,18 +6849,7 @@ def maintenance_page():
 
                     part = Part.query.get(part_id)
                     if part:
-                        part.last_maintenance = maintenance_date
-                        freq = part.maintenance_frequency or 1
-                        unit = part.maintenance_unit or 'day'
-                        if unit == 'week':
-                            delta = timedelta(weeks=freq)
-                        elif unit == 'month':
-                            delta = timedelta(days=freq * 30)
-                        elif unit == 'year':
-                            delta = timedelta(days=freq * 365)
-                        else:
-                            delta = timedelta(days=freq)
-                        part.next_maintenance = maintenance_date + delta
+                        part.update_next_maintenance(maintenance_date)
                         db.session.add(part)
                     db.session.commit()
                     add_to_sync_queue_enhanced('maintenance_records', new_record.id, 'insert', {
@@ -6816,7 +6863,9 @@ def maintenance_page():
                         'performed_by': new_record.performed_by,
                         'status': new_record.status,
                         'notes': new_record.notes,
-                        'client_id': new_record.client_id
+                        'client_id': new_record.client_id,
+                        'po_number': new_record.po_number,
+                        'work_order_number': new_record.work_order_number
                     })
                     flash('Maintenance record and files added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
@@ -6863,6 +6912,8 @@ def update_maintenance_alt():
     try:
         part_id = request.form.get('part_id')
         comments = request.form.get('comments', '')
+        po_number = (request.form.get('po_number') or '').strip()
+        work_order_number = (request.form.get('work_order_number') or '').strip()
         
         app.logger.info(f"Extracted part_id: {part_id}, comments: {comments}")
         
@@ -6870,29 +6921,21 @@ def update_maintenance_alt():
             app.logger.warning("Missing part ID in form submission")
             flash('Missing part ID', 'error')
             return redirect(url_for('maintenance_page'))
+        if not po_number or not work_order_number:
+            flash('PO Number and Work Order Number are required for maintenance completion.', 'error')
+            return redirect(url_for('maintenance_page'))
+        if len(po_number) > 32:
+            flash('PO Number must be 32 characters or fewer.', 'error')
+            return redirect(url_for('maintenance_page'))
+        if len(work_order_number) > 128:
+            flash('Work Order Number must be 128 characters or fewer.', 'error')
+            return redirect(url_for('maintenance_page'))
             
         part = Part.query.get_or_404(int(part_id))
         app.logger.info(f"Found part: {part.name} (ID: {part.id})")
         
         now = datetime.now()
-        # Update the last maintenance date
-        part.last_maintenance = now
-        
-        # Calculate next maintenance date based on frequency and unit
-        freq = part.maintenance_frequency or 1
-        unit = part.maintenance_unit or 'day'
-        app.logger.info(f"Maintenance frequency: {freq} {unit}")
-        
-        if unit == 'week':
-            delta = timedelta(weeks=freq)
-        elif unit == 'month':
-            delta = timedelta(days=freq * 30)
-        elif unit == 'year':
-            delta = timedelta(days=freq * 365)
-        else:
-            delta = timedelta(days=freq)
-        part.next_maintenance = now + delta
-        
+        part.update_next_maintenance(now)
         app.logger.info(f"Setting next maintenance to: {part.next_maintenance}")
         
         # Create a maintenance record
@@ -6900,7 +6943,10 @@ def update_maintenance_alt():
             part_id=part.id,
             user_id=current_user.id,
             date=now,
-            comments=comments
+            comments=comments,
+            po_number=po_number,
+            work_order_number=work_order_number,
+            machine_id=part.machine_id
         )
         
         app.logger.info(f"Created maintenance record for part {part.id}")
@@ -6917,7 +6963,10 @@ def update_maintenance_alt():
                 'part_id': maintenance_record.part_id,
                 'user_id': maintenance_record.user_id,
                 'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
-                'comments': maintenance_record.comments
+                'comments': maintenance_record.comments,
+                'po_number': maintenance_record.po_number,
+                'work_order_number': maintenance_record.work_order_number,
+                'machine_id': maintenance_record.machine_id
             }, immediate_sync=True)
             add_to_sync_queue_enhanced('parts', part.id, 'update', {
                 'id': part.id,
@@ -6957,22 +7006,18 @@ def update_maintenance(part_id):
         if request.method == 'GET':
             return redirect(url_for('maintenance_page'))
         now = datetime.now()
-        part.last_maintenance = now
-        
-        # Calculate next_maintenance based on part.maintenance_frequency and part.maintenance_unit
-        freq = part.maintenance_frequency or 1
-        unit = part.maintenance_unit or 'day'
-        if unit == 'week':
-            delta = timedelta(weeks=freq)
-        elif unit == 'month':
-            delta = timedelta(days=freq * 30)
-        elif unit == 'year':
-            delta = timedelta(days=freq * 365)
-        else:
-            delta = timedelta(days=freq)
-            
-        # Set the next maintenance date
-        part.next_maintenance = now + delta
+        part.update_next_maintenance(now)
+        po_number = (request.form.get('po_number') or '').strip()
+        work_order_number = (request.form.get('work_order_number') or '').strip()
+        if not po_number or not work_order_number:
+            flash('PO Number and Work Order Number are required for maintenance completion.', 'error')
+            return redirect(request.referrer or url_for('manage_parts', machine_id=part.machine_id))
+        if len(po_number) > 32:
+            flash('PO Number must be 32 characters or fewer.', 'error')
+            return redirect(request.referrer or url_for('manage_parts', machine_id=part.machine_id))
+        if len(work_order_number) > 128:
+            flash('Work Order Number must be 128 characters or fewer.', 'error')
+            return redirect(request.referrer or url_for('manage_parts', machine_id=part.machine_id))
         
         # Create a maintenance record
         maintenance_record = MaintenanceRecord(
@@ -6981,7 +7026,9 @@ def update_maintenance(part_id):
             date=now,
             comments=request.form.get('comments', ''),
             description=request.form.get('description', None),
-            machine_id=part.machine_id
+            machine_id=part.machine_id,
+            po_number=po_number,
+            work_order_number=work_order_number
         )
         db.session.add(maintenance_record)
         db.session.commit()
@@ -6993,7 +7040,9 @@ def update_maintenance(part_id):
             'date': maintenance_record.date.isoformat() if maintenance_record.date else None,
             'comments': maintenance_record.comments,
             'description': maintenance_record.description,
-            'machine_id': maintenance_record.machine_id
+            'machine_id': maintenance_record.machine_id,
+            'po_number': maintenance_record.po_number,
+            'work_order_number': maintenance_record.work_order_number
         })
         add_to_sync_queue_enhanced('parts', part.id, 'update', {
             'id': part.id,
@@ -10555,23 +10604,8 @@ def update_part_maintenance_dates(part):
     ).order_by(MaintenanceRecord.date.desc()).first()
     
     if latest_maintenance:
-        # Update last_maintenance to the actual latest date
-        part.last_maintenance = latest_maintenance.date
-        
-        # Calculate next maintenance date based on frequency
-        freq = part.maintenance_frequency or 30
-        unit = part.maintenance_unit or 'day'
-        
-        if unit == 'week':
-            delta = timedelta(weeks=freq)
-        elif unit == 'month':
-            delta = timedelta(days=freq * 30)
-        elif unit == 'year':
-            delta = timedelta(days=freq * 365)
-        else:
-            delta = timedelta(days=freq)
-            
-        part.next_maintenance = part.last_maintenance + delta
+        # Update scheduling to reflect the latest record
+        part.update_next_maintenance(latest_maintenance.date)
         
         app.logger.info(f"Updated part '{part.name}' - Last maintenance: {part.last_maintenance}, Next: {part.next_maintenance}")
     else:

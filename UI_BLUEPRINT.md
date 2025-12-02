@@ -914,7 +914,19 @@ function createWindow() {
     }
   },
   "message": "Login successful",
-  "status": "success"
+  "status": "success",
+  "meta": {
+    "login_feedback": {
+      "attempt_id": "2f31c2a4",
+      "final_status": "session_ready",
+      "steps": [
+        { "key": "credentials", "label": "Verify credentials", "status": "success" },
+        { "key": "session", "label": "Secure session", "status": "success" },
+        { "key": "trust_device", "label": "Trust this device", "status": "success" },
+        { "key": "workspace", "label": "Prepare workspace", "status": "pending" }
+      ]
+    }
+  }
 }
 ```
 

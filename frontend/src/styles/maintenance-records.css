@@ -1,0 +1,20 @@
+.maintenance-records-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.maintenance-records-header p {
+  color: #595959;
+  margin: 4px 0 0;
+}
+
+.maintenance-records-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.maintenance-records-table-card {
+  overflow: hidden;
+}

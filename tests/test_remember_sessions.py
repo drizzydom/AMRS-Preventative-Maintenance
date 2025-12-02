@@ -10,12 +10,12 @@ from remember_session_manager import (
 )
 
 
-def _login(client, *, device_id: str, remember: bool = True):
+def _login(client, *, device_id: str, remember: bool = True, password: str = 'password'):
     return client.post(
         '/api/v1/auth/login',
         json={
             'username': 'admin',
-            'password': 'password',
+            'password': password,
             'remember_me': remember,
             'device_id': device_id,
         },
@@ -92,3 +92,27 @@ def test_validate_session_rotates_token(app):
         assert updated_session.token_hash != original_hash
         assert updated_session.last_used_at >= original_last_used
         assert updated_session.expires_at > datetime.utcnow()
+
+
+def test_login_success_includes_feedback_meta(client):
+    response = _login(client, device_id='feedback-success', remember=True)
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload['meta']['login_feedback']['final_status'] == 'session_ready'
+    context = payload['meta']['login_feedback'].get('context', {})
+    assert 'device_hint' in context
+
+    step_keys = {step['key'] for step in payload['meta']['login_feedback']['steps']}
+    assert {'credentials', 'session', 'trust_device', 'workspace'}.issubset(step_keys)
+
+
+def test_login_invalid_credentials_feedback(client):
+    response = _login(client, device_id='feedback-failure', remember=True, password='wrong-password')
+    payload = response.get_json()
+
+    assert response.status_code == 401
+    assert payload['message'] == 'Invalid username or password'
+    assert payload['meta']['login_feedback']['final_status'] == 'invalid_credentials'
+    first_step = payload['meta']['login_feedback']['steps'][0]
+    assert first_step['status'] == 'error'

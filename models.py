@@ -1,7 +1,7 @@
 
 from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
-from datetime import datetime
+from datetime import datetime, timedelta, date
 
 def safe_parse_datetime_field(dt_field):
     """Safely parse a datetime field that might be a string or datetime object."""
@@ -91,7 +91,6 @@ class AppSetting(db.Model):
 
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from datetime import timedelta
 import uuid
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 from sqlalchemy.types import JSON as SA_JSON
@@ -686,6 +685,50 @@ class Part(db.Model):
         elif unit == 'year':
             return f"Every {freq} year{'s' if freq != 1 else ''}"
         return f"Every {freq} {unit}(s)"
+
+    def _normalize_completion_datetime(self, completed_at=None):
+        """Normalize completion input into a datetime object."""
+        if completed_at is None:
+            return datetime.utcnow()
+        if isinstance(completed_at, datetime):
+            return completed_at
+        if isinstance(completed_at, date):
+            return datetime.combine(completed_at, datetime.min.time())
+        return datetime.utcnow()
+
+    def maintenance_interval_days(self):
+        """Return the number of days between maintenance events."""
+        unit_map = {
+            'day': 1,
+            'days': 1,
+            'week': 7,
+            'weeks': 7,
+            'month': 30,
+            'months': 30,
+            'year': 365,
+            'years': 365,
+        }
+
+        if self.maintenance_frequency:
+            unit = (self.maintenance_unit or 'day').lower()
+            multiplier = unit_map.get(unit)
+            if multiplier:
+                return self.maintenance_frequency * multiplier
+
+        if self.maintenance_days and self.maintenance_days > 0:
+            return self.maintenance_days
+
+        return 30
+
+    def update_next_maintenance(self, completed_at=None):
+        """Update last/next maintenance fields using normalized scheduling rules."""
+        completion_dt = self._normalize_completion_datetime(completed_at)
+        interval_days = self.maintenance_interval_days()
+
+        self.last_maintenance = completion_dt
+        self.next_maintenance = completion_dt + timedelta(days=interval_days)
+        self.maintenance_days = interval_days
+        return self.next_maintenance
     
     def __repr__(self):
         return f'<Part {self.name}>'
@@ -705,6 +748,8 @@ class MaintenanceRecord(db.Model):
     performed_by = db.Column(db.String(100), nullable=True)  # Add this field for the user who performed the maintenance
     status = db.Column(db.String(50), nullable=True)  # Add this field for maintenance status
     notes = db.Column(db.Text, nullable=True)  # Add this field for maintenance notes
+    po_number = db.Column(db.String(32), nullable=True)
+    work_order_number = db.Column(db.String(128), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
