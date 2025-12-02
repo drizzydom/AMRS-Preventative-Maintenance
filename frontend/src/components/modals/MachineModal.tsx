@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { Form, Input, Select, Button, Space, message } from 'antd'
+import { Form, Input, InputNumber, Select, Button, Space, message } from 'antd'
 import BaseModal from './BaseModal'
 
 interface Machine {
@@ -11,6 +11,7 @@ interface Machine {
   site: string
   site_id?: number
   status: 'active' | 'inactive' | 'maintenance'
+  cycle_count?: number
 }
 
 interface MachineModalProps {
@@ -39,7 +40,8 @@ const MachineModal: React.FC<MachineModalProps> = ({
         model: machine.model,
         machine_number: machine.machine_number,
         site_id: machine.site_id,
-        status: machine.status
+        status: machine.status,
+        cycle_count: machine.cycle_count || 0
       })
     } else if (visible) {
       form.resetFields()
@@ -131,6 +133,20 @@ const MachineModal: React.FC<MachineModalProps> = ({
               </Select.Option>
             ))}
           </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="cycle_count"
+          label="Cycle Count"
+          tooltip="Total number of operating cycles for this machine"
+        >
+          <InputNumber 
+            min={0} 
+            style={{ width: '100%' }} 
+            placeholder="Enter current cycle count"
+            formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={(value) => value?.replace(/,/g, '') as any}
+          />
         </Form.Item>
 
         <Form.Item

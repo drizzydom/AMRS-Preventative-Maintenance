@@ -30,9 +30,11 @@ def test_complete_multiple_advances_schedule(app, client):
             'machine_id': machine_id,
             'part_ids': [part_id],
             'date': completion_date.isoformat(),
-            'type': 'Routine',
+            'type': 'Scheduled',
             'description': 'Cycle clean',
             'notes': '',
+            'po_number': 'TEST-PO-123',
+            'work_order_number': 'WO-2025-0001',
         },
     )
     assert response.status_code == 200, response.get_json()

@@ -539,6 +539,8 @@ def api_get_machines():
                 'site': machine.site.name if machine.site else '',
                 'site_name': machine.site.name if machine.site else '',
                 'site_id': machine.site_id if hasattr(machine, 'site_id') else None,
+                'cycle_count': machine.cycle_count if hasattr(machine, 'cycle_count') else 0,
+                'last_cycle_update': machine.last_cycle_update.strftime('%Y-%m-%d %H:%M:%S') if hasattr(machine, 'last_cycle_update') and machine.last_cycle_update else None,
                 'status': 'active',  # Add status logic as needed
                 'lastMaintenance': machine.last_maintenance.strftime('%Y-%m-%d') if hasattr(machine, 'last_maintenance') and machine.last_maintenance else None,
                 'nextMaintenance': machine.next_maintenance.strftime('%Y-%m-%d') if hasattr(machine, 'next_maintenance') and machine.next_maintenance else None,
@@ -549,6 +551,58 @@ def api_get_machines():
     except Exception as e:
         logger.error(f'Get machines error: {str(e)}')
         return api_response(error='Failed to load machines', status=500)
+
+
+@api_v1.route('/machines/<int:machine_id>/cycle-count', methods=['PUT', 'PATCH'])
+@api_login_required
+def api_update_machine_cycle_count(machine_id):
+    """Update the cycle count for a machine (for cycle-based maintenance tracking)
+    
+    Request body:
+    - cycle_count: New cycle count value (absolute)
+    - OR increment: Number to add to current cycle count
+    """
+    try:
+        if not (_has_permission('machines.edit') or _is_admin_user()):
+            return api_response(error='Insufficient permissions', status=403)
+        
+        from models import Machine
+        
+        machine = Machine.query.get(machine_id)
+        if not machine:
+            return api_response(error='Machine not found', status=404)
+        
+        # Check site access
+        if not _can_view_all_sites():
+            site_ids = _user_site_ids()
+            if machine.site_id not in site_ids:
+                return api_response(error='Access denied to this machine', status=403)
+        
+        data = request.get_json() or {}
+        
+        if 'cycle_count' in data:
+            # Set absolute cycle count
+            machine.update_cycle_count(int(data['cycle_count']))
+        elif 'increment' in data:
+            # Increment cycle count
+            machine.increment_cycles(int(data['increment']))
+        else:
+            return api_response(error='Must provide cycle_count or increment', status=400)
+        
+        db.session.commit()
+        
+        return api_response(data={
+            'id': machine.id,
+            'name': machine.name,
+            'cycle_count': machine.cycle_count,
+            'last_cycle_update': machine.last_cycle_update.strftime('%Y-%m-%d %H:%M:%S') if machine.last_cycle_update else None,
+        }, message='Cycle count updated')
+        
+    except Exception as e:
+        logger.error(f'Update machine cycle count error: {str(e)}')
+        db.session.rollback()
+        return api_response(error='Failed to update cycle count', status=500)
+
 
 # ==================== MAINTENANCE ENDPOINTS ====================
 
@@ -639,12 +693,21 @@ def api_get_maintenance():
             if is_artifact:
                 continue  # Skip this part as it's an import artifact
                 
-            # Determine status based on next_maintenance date
+            # Determine status based on maintenance type (cycle-based or time-based)
             status = 'pending'
-            if part.next_maintenance < today:
-                status = 'overdue'
-            elif part.next_maintenance <= due_soon_date:
-                status = 'due_soon'  # Changed from 'due-soon' to match frontend
+            is_cycle_based = getattr(part, 'is_cycle_based', False) if hasattr(part, 'is_cycle_based') else False
+            
+            if is_cycle_based:
+                # Use cycle-based status calculation
+                cycle_status = part.get_cycle_status() if hasattr(part, 'get_cycle_status') else None
+                if cycle_status:
+                    status = cycle_status
+            else:
+                # Time-based status calculation
+                if part.next_maintenance < today:
+                    status = 'overdue'
+                elif part.next_maintenance <= due_soon_date:
+                    status = 'due_soon'
             
             # Apply status filter if provided
             if status_filter and status != status_filter:
@@ -654,10 +717,11 @@ def api_get_maintenance():
             machine_name = part.machine.name if part.machine else 'Unknown'
             machine_id = part.machine.id if part.machine else None
             machine_serial = part.machine.serial_number if part.machine and hasattr(part.machine, 'serial_number') else ''
+            machine_cycle_count = part.machine.cycle_count if part.machine and hasattr(part.machine, 'cycle_count') else 0
             site_name = part.machine.site.name if part.machine and part.machine.site else ''
             site_id = part.machine.site.id if part.machine and part.machine.site else None
             
-            # Calculate days overdue or days until due
+            # Calculate days overdue or days until due (for time-based)
             days_diff = (part.next_maintenance - today).days
             
             # Build task name, avoiding duplication of machine name
@@ -666,6 +730,14 @@ def api_get_maintenance():
                 # Only add description if it's different from part name
                 task_name = f"{part.name} - {part.description}"
             
+            # Build frequency display
+            frequency_display = None
+            if is_cycle_based:
+                cycle_freq = getattr(part, 'maintenance_cycle_frequency', None) or part.maintenance_frequency
+                frequency_display = f"Every {cycle_freq} cycles"
+            elif part.maintenance_frequency:
+                frequency_display = f"{part.maintenance_frequency} {part.maintenance_unit}"
+            
             task_dict = {
                 'id': part.id,
                 'part_name': part.name,
@@ -673,24 +745,36 @@ def api_get_maintenance():
                 'machine_name': machine_name,
                 'machine_id': machine_id,
                 'machine_serial': machine_serial,
+                'machine_cycle_count': machine_cycle_count,
                 'task': task_name,
                 'dueDate': part.next_maintenance.strftime('%Y-%m-%d'),
                 'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d'),
                 'status': status,
+                'is_cycle_based': is_cycle_based,
                 'assignedTo': '',  # Can be added from maintenance records if needed
                 'site': site_name,
                 'site_name': site_name,
                 'site_id': site_id,
                 'priority': 'high' if status == 'overdue' else 'medium' if status == 'due_soon' else 'low',
                 'lastMaintenance': part.last_maintenance.strftime('%Y-%m-%d') if part.last_maintenance else None,
-                'frequency': f"{part.maintenance_frequency} {part.maintenance_unit}" if part.maintenance_frequency else None,
+                'frequency': frequency_display,
             }
             
-            # Add days_overdue or days_until based on status
-            if status == 'overdue':
-                task_dict['days_overdue'] = abs(days_diff)
+            # Add cycle-specific info for cycle-based parts
+            if is_cycle_based:
+                cycle_freq = getattr(part, 'maintenance_cycle_frequency', None) or part.maintenance_frequency
+                task_dict['cycle_frequency'] = cycle_freq
+                task_dict['next_cycle'] = getattr(part, 'next_maintenance_cycle', None)
+                task_dict['last_cycle'] = getattr(part, 'last_maintenance_cycle', 0)
+                cycles_remaining = (task_dict['next_cycle'] or 0) - machine_cycle_count
+                task_dict['cycles_remaining'] = cycles_remaining  # Can be negative if overdue
+                task_dict['cycles_overdue'] = abs(min(0, cycles_remaining))
             else:
-                task_dict['days_until'] = days_diff
+                # Add days_overdue or days_until based on status
+                if status == 'overdue':
+                    task_dict['days_overdue'] = abs(days_diff)
+                else:
+                    task_dict['days_until'] = days_diff
             
             tasks_data.append(task_dict)
         
@@ -755,7 +839,7 @@ def api_get_part_maintenance_detail(part_id):
             notes_text = last_record.notes or last_record.description or last_record.comments or ''
             completed_by = last_record.performed_by or (last_record.user.username if last_record.user else '')
             completed_date = last_record.date.strftime('%Y-%m-%d %H:%M') if last_record.date else ''
-            maintenance_type = last_record.maintenance_type or 'Routine'
+            maintenance_type = last_record.maintenance_type or 'Scheduled'
             comments = last_record.comments or ''
             
             # Try to extract structured data from notes
@@ -789,7 +873,7 @@ def api_get_part_maintenance_detail(part_id):
                 'id': record.id,
                 'date': record.date.isoformat() if record.date else None,
                 'performed_by': record.performed_by or (record.user.username if record.user else ''),
-                'maintenance_type': record.maintenance_type or 'Routine',
+                'maintenance_type': record.maintenance_type or 'Scheduled',
                 'description': record.description or '',
                 'notes': record.notes or record.comments or '',
                 'status': record.status or 'completed',
@@ -883,7 +967,7 @@ def api_get_maintenance_record(record_id):
             'completedBy': completed_by,
             'site': site_name,
             'site_id': record.machine.site.id if record.machine and record.machine.site else None,
-            'maintenanceType': record.maintenance_type or 'Routine',
+            'maintenanceType': record.maintenance_type or 'Scheduled',
             'description': record.description or '',
             'comments': record.comments or '',
             'notes': notes_text,
@@ -1014,7 +1098,7 @@ def api_get_maintenance_history():
                 'siteName': site_name,
                 'site_id': site_id,
                 'notes': record.notes or record.description or record.comments or '',
-                'maintenanceType': record.maintenance_type or 'Routine',
+                'maintenanceType': record.maintenance_type or 'Scheduled',
                 'status': record.status or 'completed',
             })
         
@@ -1109,7 +1193,7 @@ def api_complete_multiple_maintenance():
         part_ids = data.get('part_ids', [])
         machine_id = data.get('machine_id')
         maintenance_date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
-        maintenance_type = data.get('type', 'Routine')
+        maintenance_type = data.get('type', 'Scheduled')
         description = data.get('description', '')
         notes = data.get('notes', '')
         po_number = (data.get('po_number') or '').strip()
@@ -1265,13 +1349,17 @@ def api_get_audits():
             query = query.filter(AuditTask.site_id.in_(allowed_site_ids))
         audit_tasks = query.all()
         
+        # Use Eastern timezone for consistent date boundaries with audit completions
+        from timezone_utils import get_eastern_date
+        today = get_eastern_date()
+        
         audits_data = []
         for task in audit_tasks:
             # Get completion stats
             total_machines = len(task.machines) if hasattr(task, 'machines') else 0
             completed_today = AuditTaskCompletion.query.filter_by(
                 audit_task_id=task.id,
-                date=datetime.utcnow().date(),
+                date=today,
                 completed=True
             ).count()
             
@@ -1315,14 +1403,15 @@ def api_get_audit_machines(audit_id):
         if not _has_any_permission('audits.view', 'audits.edit', 'audits.create'):
             return api_response(error='Insufficient permissions', status=403)
         from models import AuditTask, AuditTaskCompletion
-        from datetime import datetime
+        from timezone_utils import get_eastern_date
         
         audit_task = AuditTask.query.get_or_404(audit_id)
         
         if not _has_site_access(audit_task.site_id):
             return api_response(error='Access denied', status=403)
         
-        today = datetime.utcnow().date()
+        # Use Eastern timezone for consistent date boundaries with audit completions
+        today = get_eastern_date()
         machines_data = []
         
         for machine in audit_task.machines:
@@ -1364,9 +1453,8 @@ def api_complete_audit_task(audit_id):
     
     # Move imports outside try block to see import errors
     from models import AuditTask, AuditTaskCompletion, Machine
-    from datetime import datetime
     from sync_utils_enhanced import add_to_sync_queue_enhanced
-    from timezone_utils import get_timezone_aware_now
+    from timezone_utils import get_timezone_aware_now, get_eastern_date
     
     try:
         logger.info(f'[AUDIT COMPLETE] Received POST request for audit_id={audit_id}')
@@ -1384,7 +1472,8 @@ def api_complete_audit_task(audit_id):
         if not machine_ids:
             return api_response(error='No machines selected', status=400)
         
-        today = datetime.utcnow().date()
+        # Use Eastern timezone for consistent date boundaries with audit completions
+        today = get_eastern_date()
         completed_count = 0
         
         for machine_id in machine_ids:

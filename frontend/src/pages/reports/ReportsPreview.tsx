@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { Card, Tabs, Typography, Space, Button, DatePicker, Select, Row, Col, Divider } from 'antd'
 import { DownloadOutlined, PrinterOutlined, EyeOutlined } from '@ant-design/icons'
 import MaintenanceReportOptionA from '../../components/reports/MaintenanceReportOptionA'
-import MaintenanceReportOptionB from '../../components/reports/MaintenanceReportOptionB'
 import MaintenanceReportOptionC from '../../components/reports/MaintenanceReportOptionC'
 import '../../styles/reports.css'
 
@@ -13,6 +12,10 @@ const { TabPane } = Tabs
 const ReportsPreview: React.FC = () => {
   const [dateRange, setDateRange] = useState<[string, string]>(['2025-10-01', '2025-10-31'])
   const [selectedSite, setSelectedSite] = useState('All Sites')
+
+  const handlePrint = () => {
+    window.print()
+  }
 
   // Sample maintenance data for preview
   const sampleData = [
@@ -146,7 +149,7 @@ const ReportsPreview: React.FC = () => {
             <Button icon={<DownloadOutlined />}>
               Export to PDF
             </Button>
-            <Button icon={<PrinterOutlined />}>
+            <Button icon={<PrinterOutlined />} onClick={handlePrint}>
               Print
             </Button>
           </Space>
@@ -162,7 +165,7 @@ const ReportsPreview: React.FC = () => {
             tab={
               <span>
                 <EyeOutlined />
-                Option A: Minimalist Table
+                Compact
               </span>
             } 
             key="1"
@@ -170,11 +173,11 @@ const ReportsPreview: React.FC = () => {
             <div className="option-description">
               <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
                 <Space direction="vertical">
-                  <Text strong>Option A: Minimalist Table Layout</Text>
+                  <Text strong>Compact Report Layout</Text>
                   <Paragraph style={{ marginBottom: 0 }}>
                     <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
                       <li>Clean, professional table with clear hierarchy</li>
-                      <li>Compact design fits more data on a page</li>
+                      <li>Space-efficient design fits more data on a page</li>
                       <li>Easy to scan and read</li>
                       <li>Excellent for printing and PDF export</li>
                       <li><strong>Best for:</strong> Monthly reports, management reviews, formal documentation</li>
@@ -197,7 +200,7 @@ const ReportsPreview: React.FC = () => {
             tab={
               <span>
                 <EyeOutlined />
-                Option B: Card-Based Visual
+                Detailed
               </span>
             } 
             key="2"
@@ -205,48 +208,13 @@ const ReportsPreview: React.FC = () => {
             <div className="option-description">
               <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
                 <Space direction="vertical">
-                  <Text strong>Option B: Card-Based Layout with Visual Indicators</Text>
-                  <Paragraph style={{ marginBottom: 0 }}>
-                    <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
-                      <li>Modern, visual approach with cards and icons</li>
-                      <li>Color-coded status indicators</li>
-                      <li>Performance dashboard with metrics</li>
-                      <li>Easy to understand at a glance</li>
-                      <li><strong>Best for:</strong> Executive summaries, visual presentations, stakeholder meetings</li>
-                    </ul>
-                  </Paragraph>
-                </Space>
-              </Card>
-            </div>
-            <div className="report-preview-wrapper">
-              <MaintenanceReportOptionB
-                startDate={dateRange[0]}
-                endDate={dateRange[1]}
-                site={selectedSite}
-                data={sampleData}
-              />
-            </div>
-          </TabPane>
-
-          <TabPane 
-            tab={
-              <span>
-                <EyeOutlined />
-                Option C: Timeline View
-              </span>
-            } 
-            key="3"
-          >
-            <div className="option-description">
-              <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
-                <Space direction="vertical">
-                  <Text strong>Option C: Timeline-Based Layout</Text>
+                  <Text strong>Detailed Timeline Layout</Text>
                   <Paragraph style={{ marginBottom: 0 }}>
                     <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
                       <li>Chronological view showing maintenance history</li>
                       <li>Timeline visualization of activities</li>
                       <li>Grouped by date for easy tracking</li>
-                      <li>Shows progression over time</li>
+                      <li>Shows progression over time with notes</li>
                       <li><strong>Best for:</strong> Historical tracking, compliance audits, regulatory reports</li>
                     </ul>
                   </Paragraph>
@@ -267,38 +235,29 @@ const ReportsPreview: React.FC = () => {
 
       {/* Decision Helper */}
       <Card style={{ marginTop: 16 }}>
-        <Title level={4}>Which Option Should I Choose?</Title>
+        <Title level={4}>Which Format Should I Choose?</Title>
         <Row gutter={16}>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={12}>
             <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Option A if:</Text>
+              <Text strong>Choose Compact if:</Text>
               <ul style={{ paddingLeft: 20 }}>
                 <li>You need formal documentation</li>
                 <li>You're printing physical copies</li>
                 <li>You want maximum data density</li>
                 <li>Your audience prefers traditional reports</li>
+                <li>You need to fit more records on a single page</li>
               </ul>
             </Card>
           </Col>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={12}>
             <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Option B if:</Text>
+              <Text strong>Choose Detailed if:</Text>
               <ul style={{ paddingLeft: 20 }}>
-                <li>You're presenting to executives</li>
-                <li>You need visual impact</li>
-                <li>You want quick insights</li>
-                <li>Your audience prefers dashboards</li>
-              </ul>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Option C if:</Text>
-              <ul style={{ paddingLeft: 20 }}>
-                <li>You need historical tracking</li>
+                <li>You need historical tracking with full context</li>
                 <li>You're doing compliance audits</li>
-                <li>You want chronological order</li>
-                <li>Your audience needs context</li>
+                <li>You want chronological timeline view</li>
+                <li>You need to see notes and progression</li>
+                <li>Your audience needs comprehensive details</li>
               </ul>
             </Card>
           </Col>

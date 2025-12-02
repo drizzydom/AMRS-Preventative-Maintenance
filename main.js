@@ -331,7 +331,7 @@ function createSplashScreen() {
                 height: 100%;
                 background: linear-gradient(90deg, #4CAF50, #45a049, #66BB6A);
                 border-radius: 3px;
-                transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+                transition: width 0.4s ease-out;
                 width: 0%;
                 position: relative;
                 box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
@@ -343,8 +343,8 @@ function createSplashScreen() {
                 left: 0;
                 right: 0;
                 bottom: 0;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-                animation: shimmer 2s infinite;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+                animation: shimmer 1.5s infinite;
             }
             @keyframes shimmer {
                 0% { transform: translateX(-100%); }
@@ -356,13 +356,18 @@ function createSplashScreen() {
                 margin-top: 15px;
                 min-height: 22px;
                 font-weight: 500;
-                transition: all 0.3s ease;
+                transition: opacity 0.3s ease, transform 0.3s ease;
+            }
+            .status-text.updating {
+                opacity: 0.7;
+                transform: translateY(-2px);
             }
             .progress-percent {
                 font-size: 13px;
                 opacity: 0.8;
                 margin-top: 8px;
                 font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+                transition: all 0.2s ease;
             }
             .spinner {
                 border: 3px solid rgba(255,255,255,0.3);
@@ -440,15 +445,41 @@ function createSplashScreen() {
             };
             
             // Use the exposed electronAPI instead of require('electron')
+            let currentProgress = 0;
+            let targetProgress = 0;
+            let animationFrame = null;
+            
+            // Smooth progress animation function
+            function animateProgress() {
+                const diff = targetProgress - currentProgress;
+                if (Math.abs(diff) > 0.1) {
+                    // Ease-out animation: move faster when far, slower when close
+                    currentProgress += diff * 0.15;
+                    document.getElementById('progress').style.width = currentProgress + '%';
+                    document.getElementById('percent').textContent = Math.round(currentProgress) + '%';
+                    animationFrame = requestAnimationFrame(animateProgress);
+                } else {
+                    currentProgress = targetProgress;
+                    document.getElementById('progress').style.width = currentProgress + '%';
+                    document.getElementById('percent').textContent = Math.round(currentProgress) + '%';
+                }
+            }
+            
             window.electronAPI.onSplashStatus((event, data) => {
                 const statusEl = document.getElementById('status');
                 const progressEl = document.getElementById('progress');
                 const percentEl = document.getElementById('percent');
                 const infoEl = document.getElementById('info');
                 
-                // Update progress bar and percentage
-                progressEl.style.width = data.progress + '%';
-                percentEl.textContent = Math.round(data.progress) + '%';
+                // Set target progress for smooth animation
+                targetProgress = data.progress;
+                if (!animationFrame) {
+                    animationFrame = requestAnimationFrame(animateProgress);
+                }
+                
+                // Add brief fade effect on status change
+                statusEl.classList.add('updating');
+                setTimeout(() => statusEl.classList.remove('updating'), 150);
                 
                 // Update status message with icon
                 const messageInfo = statusMessages[data.message];
@@ -1316,6 +1347,27 @@ function createWindow() {
                         label: 'Machines',
                         accelerator: 'CmdOrCtrl+3',
                         click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/machines') }
+                    },
+                    {
+                        label: 'Maintenance',
+                        accelerator: 'CmdOrCtrl+4',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/maintenance') }
+                    },
+                    {
+                        label: 'Audits',
+                        accelerator: 'CmdOrCtrl+5',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/audits') }
+                    },
+                    {
+                        label: 'Users',
+                        accelerator: 'CmdOrCtrl+6',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/users') }
+                    },
+                    { type: 'separator' },
+                    {
+                        label: 'Settings',
+                        accelerator: 'CmdOrCtrl+,',
+                        click: () => { if (mainWindow) mainWindow.webContents.send('menu-navigate', '/settings') }
                     },
                     { type: 'separator' },
                     { role: 'reload' },

@@ -1094,7 +1094,7 @@ function createWindow() {
   "site_id": 1,
   "machine_id": 1,
   "part_id": 5,
-  "maintenance_type": "Routine",
+  "maintenance_type": "Scheduled",
   "date": "2025-11-02",
   "description": "Changed hydraulic oil",
   "notes": "Oil was dirty, changed filter as well"
@@ -1106,7 +1106,7 @@ function createWindow() {
     "id": 123,
     "machine_id": 1,
     "part_id": 5,
-    "maintenance_type": "Routine",
+    "maintenance_type": "Scheduled",
     "date": "2025-11-02",
     "description": "Changed hydraulic oil",
     "notes": "Oil was dirty, changed filter as well",

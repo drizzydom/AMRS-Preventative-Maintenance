@@ -58,7 +58,7 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
   const [selectedParts, setSelectedParts] = useState<number[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [maintenanceType, setMaintenanceType] = useState('Routine')
+  const [maintenanceType, setMaintenanceType] = useState('Scheduled')
   const [maintenanceDate, setMaintenanceDate] = useState(dayjs())
   const [description, setDescription] = useState('')
   const [notes, setNotes] = useState('')
@@ -95,7 +95,7 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
       setHistoryError('')
     } catch (error: any) {
       console.error('Failed to load parts:', error)
-      message.error('Failed to load parts for machine')
+      message.error('Failed to load services for machine')
     } finally {
       setLoading(false)
     }
@@ -116,7 +116,7 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
     }
 
     if (selectedParts.length === 0) {
-      message.warning('Please select at least one part to complete maintenance')
+      message.warning('Please select at least one service to complete maintenance')
       return
     }
 
@@ -146,13 +146,13 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
         part_ids: selectedParts,
         date: maintenanceDate.format('YYYY-MM-DD'),
         type: maintenanceType,
-        description: description || `Maintenance completed for ${selectedParts.length} part(s)`,
+        description: description || `Maintenance completed for ${selectedParts.length} service(s)`,
         notes: notes,
         po_number: trimmedPo,
         work_order_number: trimmedWorkOrder,
       })
 
-      message.success(`Successfully completed maintenance for ${selectedParts.length} part(s)`)
+      message.success(`Successfully completed maintenance for ${selectedParts.length} service(s)`)
       onComplete()
       handleCancel()
     } catch (error: any) {
@@ -166,7 +166,7 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
 
   const handleCancel = () => {
     setSelectedParts([])
-    setMaintenanceType('Routine')
+    setMaintenanceType('Scheduled')
     setMaintenanceDate(dayjs())
     setDescription('')
     setNotes('')
@@ -276,7 +276,7 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
             showIcon 
           />
         ) : loading ? (
-          <Text>Loading parts...</Text>
+          <Text>Loading services...</Text>
         ) : (
           <>
             {/* Maintenance Details */}
@@ -290,7 +290,7 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
                     onChange={setMaintenanceType}
                     style={{ width: '100%', marginTop: 4 }}
                   >
-                    <Option value="Routine">Routine</Option>
+                    <Option value="Scheduled">Scheduled</Option>
                     <Option value="Preventive">Preventive</Option>
                     <Option value="Corrective">Corrective</Option>
                     <Option value="Emergency">Emergency</Option>
@@ -352,16 +352,16 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
 
             {/* Parts Selection */}
             <div>
-              <Title level={5}>Select Parts Completed</Title>
+              <Title level={5}>Select Services Completed</Title>
               <Text type="secondary">
-                Check the parts you completed maintenance on.
+                Check the services you completed maintenance on.
               </Text>
             </div>
 
             {overdueParts.length > 0 && (
               <>
                 <Text strong style={{ color: '#ff4d4f' }}>
-                  ⚠️ Overdue Parts ({overdueParts.length}):
+                  ⚠️ Overdue Services ({overdueParts.length}):
                 </Text>
                 <List
                   size="small"
@@ -507,12 +507,12 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
             )}
 
             {parts.length === 0 && !loading && (
-              <Text type="secondary">No parts found for this machine.</Text>
+              <Text type="secondary">No services found for this machine.</Text>
             )}
 
             {selectedParts.length > 0 && (
               <Text strong>
-                {selectedParts.length} part(s) selected for completion
+                {selectedParts.length} service(s) selected for completion
               </Text>
             )}
 
@@ -571,10 +571,10 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
                   )}
                 </>
               ) : (
-                <Text type="secondary">No maintenance history recorded for this part yet.</Text>
+                <Text type="secondary">No maintenance history recorded for this service yet.</Text>
               )
             ) : (
-              <Text type="secondary">Select "View history" on a part above to see recent maintenance entries.</Text>
+              <Text type="secondary">Select "View history" on a service above to see recent maintenance entries.</Text>
             )}
           </>
         )}

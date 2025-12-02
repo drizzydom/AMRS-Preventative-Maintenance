@@ -1,5 +1,11 @@
 .admin-panel-page {
   padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.admin-panel-page .page-header {
+  margin-bottom: 24px;
 }
 
 .admin-panel-page .page-header h1 {
@@ -16,14 +22,47 @@
   margin-bottom: 24px;
 }
 
+/* Quick Actions Card */
+.admin-panel-page .quick-actions-card {
+  border-radius: 12px;
+  border: none;
+}
+
+.admin-panel-page .quick-actions-card .ant-btn {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.admin-panel-page .quick-actions-card .ant-btn:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+/* Tabs Styling */
 .admin-panel-page .ant-tabs-nav {
   margin-bottom: 24px;
 }
 
 .admin-panel-page .ant-tabs-tab {
   font-weight: 500;
+  padding: 12px 20px !important;
 }
 
+.admin-panel-page .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
+  border-radius: 8px 8px 0 0;
+}
+
+.admin-panel-page .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.admin-panel-page .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: white;
+}
+
+/* Stats Cards */
 .admin-panel-page .ant-statistic {
   text-align: center;
 }
@@ -40,41 +79,87 @@
   color: #1890ff;
 }
 
+/* Descriptions */
 .admin-panel-page .ant-descriptions-item-label {
   font-weight: 600;
   background-color: #fafafa;
 }
 
+/* Cards */
 .admin-panel-page .ant-card {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
 }
 
 .admin-panel-page .ant-card-head-title {
   font-weight: 600;
 }
 
-.admin-panel-page .ant-alert {
-  border-radius: 6px;
+.admin-panel-page .ant-card-type-inner {
+  margin-bottom: 0;
 }
 
+.admin-panel-page .ant-card-type-inner .ant-card-head {
+  background: #fafafa;
+}
+
+/* Alerts */
+.admin-panel-page .ant-alert {
+  border-radius: 8px;
+}
+
+/* Dividers */
 .admin-panel-page .ant-divider-horizontal.ant-divider-with-text {
   margin: 24px 0;
   font-weight: 600;
   color: #333;
 }
 
+/* Form Items */
 .admin-panel-page .ant-form-item-label > label {
   font-weight: 500;
+  font-size: 14px;
 }
 
+/* Tags */
 .admin-panel-page .ant-tag {
   border-radius: 4px;
   font-size: 12px;
+  padding: 4px 8px;
 }
 
+/* Headings */
 .admin-panel-page h4 {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 12px;
   color: #333;
 }
+
+/* Buttons */
+.admin-panel-page .ant-btn-lg {
+  height: 44px;
+  font-size: 15px;
+  border-radius: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .admin-panel-page {
+    padding: 16px;
+  }
+
+  .admin-panel-page .quick-actions-card .ant-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .admin-panel-page .quick-actions-card .ant-btn {
+    width: 100%;
+  }
+
+  .admin-panel-page .ant-tabs-tab {
+    padding: 8px 12px !important;
+  }
+}
+

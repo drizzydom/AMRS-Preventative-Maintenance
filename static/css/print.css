@@ -254,6 +254,227 @@
     }
 }
 
+/* ===== REPORT PRINT STYLES - SINGLE PAGE SCALING ===== */
+
+/* Define portrait page for reports */
+@page report-page {
+    size: letter portrait !important;
+    margin: 0.35in !important;
+}
+
+@media print {
+    /* Apply report page settings */
+    .report-container,
+    .audit-report-compact,
+    .audit-report-detailed,
+    .report-preview-wrapper {
+        page: report-page;
+    }
+    
+    /* Scale reports to fit on single page */
+    .report-container {
+        transform-origin: top left !important;
+        width: 100% !important;
+        max-width: 7.8in !important; /* 8.5 - 0.7 margins */
+        font-size: 9pt !important;
+        line-height: 1.2 !important;
+    }
+    
+    /* Compact Audit Report - maximum density for single page */
+    .audit-report-compact .report-container,
+    .report-container.option-a {
+        font-size: 8pt !important;
+        line-height: 1.15 !important;
+    }
+    
+    .audit-report-compact .ant-card,
+    .report-container.option-a .ant-card {
+        margin-bottom: 4px !important;
+        padding: 4px !important;
+    }
+    
+    .audit-report-compact .ant-card-body,
+    .report-container.option-a .ant-card-body {
+        padding: 6px !important;
+    }
+    
+    .audit-report-compact h1,
+    .audit-report-compact .ant-typography h1,
+    .report-container.option-a h1,
+    .report-container.option-a .ant-typography h1 {
+        font-size: 14pt !important;
+        margin-bottom: 4px !important;
+    }
+    
+    .audit-report-compact h2,
+    .audit-report-compact .ant-typography h2,
+    .report-container.option-a h2,
+    .report-container.option-a .ant-typography h2 {
+        font-size: 12pt !important;
+        margin-bottom: 3px !important;
+    }
+    
+    .audit-report-compact h3, .audit-report-compact h4,
+    .audit-report-compact .ant-typography h3, .audit-report-compact .ant-typography h4,
+    .report-container.option-a h3, .report-container.option-a h4,
+    .report-container.option-a .ant-typography h3, .report-container.option-a .ant-typography h4 {
+        font-size: 10pt !important;
+        margin-bottom: 2px !important;
+    }
+    
+    /* Compact table styling */
+    .audit-report-compact table,
+    .audit-report-compact .ant-table,
+    .report-container.option-a table,
+    .report-container.option-a .ant-table {
+        font-size: 7pt !important;
+    }
+    
+    .audit-report-compact th,
+    .audit-report-compact td,
+    .audit-report-compact .ant-table-cell,
+    .report-container.option-a th,
+    .report-container.option-a td,
+    .report-container.option-a .ant-table-cell {
+        padding: 2px 4px !important;
+        line-height: 1.1 !important;
+    }
+    
+    /* Compact progress circles */
+    .audit-report-compact .ant-progress-circle,
+    .report-container.option-a .ant-progress-circle {
+        width: 60px !important;
+        height: 60px !important;
+    }
+    
+    /* Compact signature blocks */
+    .audit-report-compact .signature-box,
+    .report-container.option-a .signature-box {
+        padding: 4px !important;
+        margin-bottom: 4px !important;
+    }
+    
+    .audit-report-compact .signature-line,
+    .report-container.option-a .signature-line {
+        margin-bottom: 2px !important;
+        height: 16px !important;
+    }
+    
+    /* Detailed Audit Report - moderate compression */
+    .audit-report-detailed .report-container,
+    .report-container.option-c {
+        font-size: 8.5pt !important;
+        line-height: 1.2 !important;
+    }
+    
+    .audit-report-detailed .ant-card,
+    .report-container.option-c .ant-card {
+        margin-bottom: 6px !important;
+        padding: 6px !important;
+    }
+    
+    /* Hide collapsible panels expand icons in print */
+    .audit-report-detailed .ant-collapse-expand-icon,
+    .report-container.option-c .ant-collapse-expand-icon {
+        display: none !important;
+    }
+    
+    /* Expand all collapse panels for print */
+    .audit-report-detailed .ant-collapse-content,
+    .report-container.option-c .ant-collapse-content {
+        display: block !important;
+        height: auto !important;
+    }
+    
+    /* Compact stats display for print */
+    .audit-report-compact .ant-statistic,
+    .audit-report-detailed .ant-statistic,
+    .report-container .ant-statistic {
+        margin-bottom: 2px !important;
+    }
+    
+    .audit-report-compact .ant-statistic-title,
+    .audit-report-detailed .ant-statistic-title,
+    .report-container .ant-statistic-title {
+        font-size: 7pt !important;
+        margin-bottom: 1px !important;
+    }
+    
+    .audit-report-compact .ant-statistic-content,
+    .audit-report-detailed .ant-statistic-content,
+    .report-container .ant-statistic-content {
+        font-size: 12pt !important;
+    }
+    
+    /* Hide option descriptions when printing */
+    .option-description {
+        display: none !important;
+    }
+    
+    /* Hide tabs navigation when printing */
+    .ant-tabs-nav,
+    .ant-tabs-nav-wrap,
+    .reports-header,
+    .reports-preview-container > .ant-card:first-child {
+        display: none !important;
+    }
+    
+    /* Tags compact styling */
+    .audit-report-compact .ant-tag,
+    .audit-report-detailed .ant-tag,
+    .report-container .ant-tag {
+        font-size: 7pt !important;
+        padding: 0 4px !important;
+        line-height: 1.4 !important;
+        margin: 1px !important;
+    }
+    
+    /* Row and column print layout */
+    .audit-report-compact .ant-row,
+    .audit-report-detailed .ant-row,
+    .report-container .ant-row {
+        margin-bottom: 4px !important;
+    }
+    
+    /* Findings section compact */
+    .audit-report-compact .findings-section,
+    .audit-report-detailed .non-compliance-section,
+    .report-container .findings-section {
+        page-break-inside: avoid !important;
+    }
+    
+    /* Compliance statement compact */
+    .audit-report-detailed .compliance-statement,
+    .report-container .compliance-statement {
+        font-size: 8pt !important;
+        padding: 6px !important;
+    }
+    
+    .audit-report-detailed .compliance-statement p,
+    .report-container .compliance-statement p {
+        margin-bottom: 3px !important;
+    }
+    
+    /* Certification section */
+    .audit-report-detailed .certification-section,
+    .report-container .certification-section {
+        page-break-inside: avoid !important;
+    }
+    
+    /* Space and divider optimization */
+    .audit-report-compact .ant-divider,
+    .audit-report-detailed .ant-divider,
+    .report-container .ant-divider {
+        margin: 6px 0 !important;
+    }
+    
+    .audit-report-compact .ant-space,
+    .audit-report-detailed .ant-space,
+    .report-container .ant-space {
+        gap: 4px !important;
+    }
+}
+
 /* Audit History specific styles */
 @media print {
     .print-header {
