@@ -49,6 +49,7 @@ const MenuBar: React.FC = () => {
   }
   if (hasPermission('maintenance.view') || isAdmin) {
     viewMenuItems.push({ key: 'maintenance', label: 'Maintenance' })
+    viewMenuItems.push({ key: 'maintenance-records', label: 'Maintenance Records' })
   }
   if (hasPermission('audits.view') || hasPermission('audits.access') || isAdmin) {
     viewMenuItems.push({ key: 'audits', label: 'Audits' })

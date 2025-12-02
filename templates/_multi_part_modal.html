@@ -54,6 +54,18 @@
               </select>
             </div>
           </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="multi_po_number" class="form-label">PO Number <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="multi_po_number" name="po_number" maxlength="32" required>
+              <div class="form-text">Max 32 characters.</div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="multi_work_order_number" class="form-label">Work Order Number <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="multi_work_order_number" name="work_order_number" maxlength="128" required>
+              <div class="form-text">Max 128 characters.</div>
+            </div>
+          </div>
           <div class="mb-3">
             <label for="multi_description" class="form-label">Description <span class="text-danger">*</span></label>
             <textarea class="form-control" id="multi_description" name="description" rows="2" required></textarea>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Modal, Checkbox, Button, message, Space, List, Typography, Input, Select, DatePicker, Divider, Alert } from 'antd'
+import { Modal, Checkbox, Button, message, Space, List, Typography, Input, Select, DatePicker, Divider, Alert, Spin } from 'antd'
 import { CheckOutlined, WarningOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import apiClient from '../../utils/api'
 import dayjs from 'dayjs'
@@ -7,6 +7,8 @@ import dayjs from 'dayjs'
 const { Text, Title } = Typography
 const { TextArea } = Input
 const { Option } = Select
+const HISTORY_PAGE_SIZE = 5
+const MAX_HISTORY_LIMIT = 50
 
 interface Part {
   id: number
@@ -18,6 +20,23 @@ interface Part {
   maintenance_unit: string
   status: 'overdue' | 'due-soon' | 'up-to-date'
   days_info: number | null
+}
+
+interface MaintenanceHistoryEntry {
+  id: number
+  date: string | null
+  performed_by: string
+  maintenance_type: string
+  description: string
+  notes: string
+  status: string
+}
+
+interface HistoryState {
+  entries: MaintenanceHistoryEntry[]
+  total: number
+  limit: number
+  partName: string
 }
 
 interface MaintenanceCompletionModalProps {
@@ -43,6 +62,12 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
   const [maintenanceDate, setMaintenanceDate] = useState(dayjs())
   const [description, setDescription] = useState('')
   const [notes, setNotes] = useState('')
+  const [poNumber, setPoNumber] = useState('')
+  const [workOrderNumber, setWorkOrderNumber] = useState('')
+  const [historyCache, setHistoryCache] = useState<Record<number, HistoryState>>({})
+  const [activePartId, setActivePartId] = useState<number | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
 
   useEffect(() => {
     if (open && machineId) {
@@ -65,6 +90,9 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
         .filter((p: Part) => p.status === 'overdue' || p.status === 'due-soon')
         .map((p: Part) => p.id)
       setSelectedParts(needsMaintenanceIds)
+      setHistoryCache({})
+      setActivePartId(null)
+      setHistoryError('')
     } catch (error: any) {
       console.error('Failed to load parts:', error)
       message.error('Failed to load parts for machine')
@@ -92,6 +120,24 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
       return
     }
 
+    const trimmedPo = poNumber.trim()
+    const trimmedWorkOrder = workOrderNumber.trim()
+
+    if (!trimmedPo || !trimmedWorkOrder) {
+      message.error('PO Number and Work Order Number are required.')
+      return
+    }
+
+    if (trimmedPo.length > 32) {
+      message.error('PO Number must be 32 characters or fewer.')
+      return
+    }
+
+    if (trimmedWorkOrder.length > 128) {
+      message.error('Work Order Number must be 128 characters or fewer.')
+      return
+    }
+
     try {
       setSubmitting(true)
 
@@ -102,6 +148,8 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
         type: maintenanceType,
         description: description || `Maintenance completed for ${selectedParts.length} part(s)`,
         notes: notes,
+        po_number: trimmedPo,
+        work_order_number: trimmedWorkOrder,
       })
 
       message.success(`Successfully completed maintenance for ${selectedParts.length} part(s)`)
@@ -122,6 +170,11 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
     setMaintenanceDate(dayjs())
     setDescription('')
     setNotes('')
+    setPoNumber('')
+    setWorkOrderNumber('')
+    setHistoryCache({})
+    setActivePartId(null)
+    setHistoryError('')
     onClose()
   }
 
@@ -141,9 +194,56 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
     return <Text type="success">Up to date</Text>
   }
 
+  const handleViewHistory = (part: Part) => {
+    setActivePartId(part.id)
+    setHistoryError('')
+    if (historyCache[part.id]) {
+      return
+    }
+    fetchPartHistory(part, HISTORY_PAGE_SIZE)
+  }
+
+  const fetchPartHistory = async (part: Part, limit: number) => {
+    try {
+      setHistoryLoading(true)
+      const response = await apiClient.get(`/api/v1/maintenance/part/${part.id}`, {
+        params: { history_limit: limit }
+      })
+      const detail = response.data.data
+      setHistoryCache((prev) => ({
+        ...prev,
+        [part.id]: {
+          entries: detail.history || [],
+          total: detail.history_total || 0,
+          limit,
+          partName: detail.part_name || part.name,
+        }
+      }))
+    } catch (error: any) {
+      console.error('Failed to load maintenance history:', error)
+      setHistoryError('Failed to load maintenance history. Please try again.')
+      message.error('Failed to load maintenance history')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleLoadMoreHistory = () => {
+    if (!activePartId) return
+    const part = parts.find((p) => p.id === activePartId)
+    if (!part) return
+    const cacheEntry = historyCache[activePartId]
+    const currentLimit = cacheEntry?.limit || HISTORY_PAGE_SIZE
+    const nextLimit = Math.min(currentLimit + HISTORY_PAGE_SIZE, MAX_HISTORY_LIMIT)
+    if (nextLimit === currentLimit) return
+    if (cacheEntry && cacheEntry.total <= cacheEntry.entries.length) return
+    fetchPartHistory(part, nextLimit)
+  }
+
   const overdueParts = parts.filter((p) => p.status === 'overdue')
   const dueSoonParts = parts.filter((p) => p.status === 'due-soon')
   const upToDateParts = parts.filter((p) => p.status === 'up-to-date')
+  const activeHistory = activePartId ? historyCache[activePartId] : null
 
   return (
     <Modal
@@ -225,6 +325,26 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
                     style={{ marginTop: 4 }}
                   />
                 </div>
+                <div>
+                  <Text strong>PO Number:</Text>
+                  <Input
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    placeholder="Enter the related PO"
+                    maxLength={32}
+                    style={{ marginTop: 4 }}
+                  />
+                </div>
+                <div>
+                  <Text strong>Work Order Number:</Text>
+                  <Input
+                    value={workOrderNumber}
+                    onChange={(e) => setWorkOrderNumber(e.target.value)}
+                    placeholder="Enter the work order reference"
+                    maxLength={128}
+                    style={{ marginTop: 4 }}
+                  />
+                </div>
               </Space>
             </div>
 
@@ -266,6 +386,19 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
                             </Text>
                             <br />
                             {getStatusText(part)}
+                            <div>
+                              <Button
+                                type="link"
+                                size="small"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleViewHistory(part)
+                                }}
+                              >
+                                View history
+                              </Button>
+                            </div>
                           </div>
                         </Space>
                       </Checkbox>
@@ -303,6 +436,19 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
                             </Text>
                             <br />
                             {getStatusText(part)}
+                            <div>
+                              <Button
+                                type="link"
+                                size="small"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleViewHistory(part)
+                                }}
+                              >
+                                View history
+                              </Button>
+                            </div>
                           </div>
                         </Space>
                       </Checkbox>
@@ -338,6 +484,19 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
                               Last: {part.last_maintenance || 'Never'} | Next:{' '}
                               {part.next_maintenance || 'Not set'}
                             </Text>
+                            <div>
+                              <Button
+                                type="link"
+                                size="small"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleViewHistory(part)
+                                }}
+                              >
+                                View history
+                              </Button>
+                            </div>
                           </div>
                         </Space>
                       </Checkbox>
@@ -355,6 +514,67 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
               <Text strong>
                 {selectedParts.length} part(s) selected for completion
               </Text>
+            )}
+
+            <Divider />
+            <div>
+              <Title level={5}>Recent Maintenance History</Title>
+              {activePartId && activeHistory && (
+                <Text type="secondary">Showing latest entries for {activeHistory.partName}</Text>
+              )}
+            </div>
+            {historyError && <Alert type="error" message={historyError} showIcon />}
+            {historyLoading ? (
+              <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                <Spin size="small" />
+              </div>
+            ) : activePartId && activeHistory ? (
+              activeHistory.entries.length > 0 ? (
+                <>
+                  <List
+                    size="small"
+                    bordered
+                    dataSource={activeHistory.entries}
+                    renderItem={(entry) => (
+                      <List.Item>
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <Space wrap>
+                            <Text strong>
+                              {entry.date ? dayjs(entry.date).format('MMMM D, YYYY') : 'Date not recorded'}
+                            </Text>
+                            {entry.maintenance_type && (
+                              <Text type="secondary">{entry.maintenance_type}</Text>
+                            )}
+                          </Space>
+                          {entry.performed_by && (
+                            <Text type="secondary">Performed by {entry.performed_by}</Text>
+                          )}
+                          {entry.description && <Text>{entry.description}</Text>}
+                          {entry.notes && (
+                            <Text type="secondary" style={{ whiteSpace: 'pre-wrap' }}>{entry.notes}</Text>
+                          )}
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                  <div style={{ textAlign: 'center', marginTop: 8 }}>
+                    <Text type="secondary">
+                      Showing {activeHistory.entries.length} of {activeHistory.total} entries
+                    </Text>
+                  </div>
+                  {activeHistory.total > activeHistory.entries.length && (
+                    <div style={{ textAlign: 'center', marginTop: 8 }}>
+                      <Button size="small" onClick={handleLoadMoreHistory}>
+                        Load more history
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Text type="secondary">No maintenance history recorded for this part yet.</Text>
+              )
+            ) : (
+              <Text type="secondary">Select "View history" on a part above to see recent maintenance entries.</Text>
             )}
           </>
         )}

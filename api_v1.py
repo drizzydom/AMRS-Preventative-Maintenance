@@ -18,6 +18,7 @@ from remember_session_manager import (
 )
 from werkzeug.security import check_password_hash
 import logging
+import math
 from datetime import datetime, timedelta
 
 # Create API blueprint
@@ -141,9 +142,40 @@ def _has_site_access(site_id):
         return True
     return site_id in allowed
 
-def api_response(data=None, message=None, error=None, status=200):
+
+def _device_hint(device_id: str | None) -> str:
+    if not device_id:
+        return 'unknown'
+    tail = device_id[-6:]
+    return tail if len(device_id) <= 6 else f'...{tail}'
+
+
+def _login_feedback_step(key: str, label: str, status: str, detail: str):
+    return {
+        'key': key,
+        'label': label,
+        'status': status,
+        'detail': detail,
+    }
+
+
+def _login_feedback_payload(attempt_id: str, final_status: str, steps, **context):
+    payload = {
+        'attempt_id': attempt_id,
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'final_status': final_status,
+        'steps': steps,
+    }
+    context = {k: v for k, v in context.items() if v is not None}
+    if context:
+        payload['context'] = context
+    return payload
+
+def api_response(data=None, message=None, error=None, status=200, meta=None):
     """Standard API response format"""
-    response = {}
+    response = {
+        'status': 'error' if error else 'success'
+    }
     if data is not None:
         response['data'] = data
     if message:
@@ -151,6 +183,8 @@ def api_response(data=None, message=None, error=None, status=200):
     if error:
         response['error'] = error
         status = status if status >= 400 else 400
+    if meta is not None:
+        response['meta'] = meta
     
     return jsonify(response), status
 
@@ -168,57 +202,102 @@ def api_login_required(f):
 @api_v1.route('/auth/login', methods=['POST'])
 def api_login():
     """Login endpoint"""
-    try:
-        data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-        remember_me = data.get('remember_me', False)
-        
-        if not username or not password:
-            return api_response(
-                error='Username and password are required',
-                status=400
+    attempt_id = str(uuid.uuid4())
+    data = request.get_json(silent=True) or {}
+    username = data.get('username')
+    password = data.get('password')
+    raw_remember = data.get('remember_me', False)
+    provided_device_id = sanitize_device_id(data.get('device_id'))
+    device_hint = _device_hint(provided_device_id)
+    request_ip = _request_ip()
+    user_agent = request.headers.get('User-Agent', '')
+
+    if isinstance(raw_remember, str):
+        remember_me = raw_remember.strip().lower() in {'1', 'true', 'yes', 'on'}
+    else:
+        remember_me = bool(raw_remember)
+
+    def feedback_meta(final_status: str, steps, extra_context=None):
+        context = {
+            'device_hint': device_hint,
+            'remember_requested': remember_me,
+            'ip_fragment': (request_ip or '')[:24],
+        }
+        if extra_context:
+            context.update({k: v for k, v in extra_context.items() if v is not None})
+        return {
+            'login_feedback': _login_feedback_payload(
+                attempt_id,
+                final_status,
+                steps,
+                **context,
             )
-        
+        }
+
+    def error_response(message_text: str, final_status: str, steps, status_code: int):
+        return api_response(
+            error=message_text,
+            message=message_text,
+            status=status_code,
+            meta=feedback_meta(final_status, steps),
+        )
+
+    if not username or not password:
+        steps = [
+            _login_feedback_step('credentials', 'Validate credentials', 'error', 'Username and password are required.'),
+            _login_feedback_step('session', 'Secure session', 'skipped', 'Awaiting valid credentials.'),
+            _login_feedback_step('workspace', 'Prepare workspace', 'skipped', 'Login required before syncing.'),
+        ]
+        return error_response('Username and password are required', 'validation_failed', steps, 400)
+
+    try:
         # Find user using hashed username (for encrypted username support in offline mode)
         # Explicitly join the role relationship to ensure it's loaded
         from models import Role
         user = User.query.options(db.joinedload(User.role)).filter_by(username_hash=hash_value(username)).first()
-        
+
         if not user:
             logger.warning(f'Login attempt for non-existent user: {username}')
-            return api_response(
-                error='Invalid username or password',
-                status=401
-            )
-        
+            steps = [
+                _login_feedback_step('credentials', 'Verify credentials', 'error', 'Username or password was incorrect.'),
+                _login_feedback_step('session', 'Secure session', 'skipped', 'Session not created due to invalid credentials.'),
+                _login_feedback_step('workspace', 'Prepare workspace', 'skipped', 'Requires a successful login.'),
+            ]
+            return error_response('Invalid username or password', 'invalid_credentials', steps, 401)
+
         # Check password
         if not check_password_hash(user.password_hash, password):
             logger.warning(f'Failed login attempt for user: {username}')
-            return api_response(
-                error='Invalid username or password',
-                status=401
-            )
-        
+            steps = [
+                _login_feedback_step('credentials', 'Verify credentials', 'error', 'Username or password was incorrect.'),
+                _login_feedback_step('session', 'Secure session', 'skipped', 'Session not created due to invalid credentials.'),
+                _login_feedback_step('workspace', 'Prepare workspace', 'skipped', 'Requires a successful login.'),
+            ]
+            return error_response('Invalid username or password', 'invalid_credentials', steps, 401)
+
         # Check if account is active (check 'active' column if it exists, otherwise use is_active property)
         is_user_active = getattr(user, 'active', True) if hasattr(user, 'active') else getattr(user, 'is_active', True)
         if not is_user_active:
             logger.warning(f'Login attempt for inactive account: {username}')
-            return api_response(
-                error='Account locked - contact administrator',
-                status=403
-            )
-        
+            steps = [
+                _login_feedback_step('credentials', 'Verify credentials', 'success', 'Password accepted.'),
+                _login_feedback_step('session', 'Secure session', 'error', 'Account locked. Contact an administrator.'),
+                _login_feedback_step('workspace', 'Prepare workspace', 'skipped', 'Unlock account to continue.'),
+            ]
+            return error_response('Account locked - contact administrator', 'account_locked', steps, 403)
+
         # Login user (custom remember handled below)
         login_user(user, remember=False)
         logger.info(f'User logged in successfully: {username}')
-        
+
         # Return user data - handle role safely
         role_name = 'user'
         permissions = []
-        
+
         try:
-            logger.info(f'Accessing role for user {username}: role_id={user.role_id}, role type={type(user.role)}, role value={repr(user.role)}')
+            logger.info(
+                f'Accessing role for user {username}: role_id={user.role_id}, role type={type(user.role)}, role value={repr(user.role)}'
+            )
             if user.role:
                 # Check if role is an object with name attribute
                 if hasattr(user.role, 'name'):
@@ -232,7 +311,7 @@ def api_login():
                     logger.warning(f'Role is a string: {user.role}')
         except Exception as role_error:
             logger.error(f'Error accessing role for user {username}: {role_error}', exc_info=True)
-        
+
         user_data = {
             'id': user.id,
             'username': user.username,
@@ -241,32 +320,49 @@ def api_login():
             'permissions': permissions,
             'is_admin': bool(getattr(user, 'is_admin', False) or role_name.lower() == 'admin'),
         }
-        
-        device_id = _resolve_device_id(data.get('device_id'))
+
+        device_id = _resolve_device_id(provided_device_id)
+        success_steps = [
+            _login_feedback_step('credentials', 'Verify credentials', 'success', 'Credentials accepted.'),
+            _login_feedback_step('session', 'Secure session', 'success', f'Session established for {user.username}.'),
+        ]
+        extra_context = {}
+
         if remember_me:
             session_record, raw_token = create_or_update_session(
                 user,
                 device_id,
-                user_agent=request.headers.get('User-Agent', ''),
-                ip_address=_request_ip(),
+                user_agent=user_agent,
+                ip_address=request_ip,
                 fingerprint=_request_fingerprint(device_id),
             )
             queue_cookie_refresh(session_record.id, raw_token, device_id)
+            remember_status = 'success'
+            remember_detail = f'Device {device_hint} trusted for faster login.'
+            extra_context['remember_session_id'] = session_record.id
         else:
             revoke_user_sessions(user.id, device_id=device_id)
             queue_cookie_clear()
+            remember_status = 'skipped'
+            remember_detail = 'Not requested for this login.'
+
+        success_steps.append(_login_feedback_step('trust_device', 'Trust this device', remember_status, remember_detail))
+        success_steps.append(_login_feedback_step('workspace', 'Prepare workspace', 'pending', 'Launching background sync.'))
 
         return api_response(
             data={'user': user_data},
-            message='Login successful'
+            message='Login successful',
+            meta=feedback_meta('session_ready', success_steps, extra_context or None),
         )
-        
+
     except Exception as e:
         logger.error(f'Login error: {str(e)}')
-        return api_response(
-            error='Server connection failed',
-            status=500
-        )
+        steps = [
+            _login_feedback_step('credentials', 'Verify credentials', 'pending', 'Waiting for server to respond.'),
+            _login_feedback_step('session', 'Secure session', 'error', 'Server error prevented login.'),
+            _login_feedback_step('workspace', 'Prepare workspace', 'skipped', 'Retry once login succeeds.'),
+        ]
+        return error_response('Server connection failed', 'server_error', steps, 500)
 
 @api_v1.route('/auth/logout', methods=['POST'])
 @api_login_required
@@ -611,7 +707,7 @@ def api_get_maintenance():
 @api_v1.route('/maintenance/part/<int:part_id>', methods=['GET'])
 @api_login_required
 def api_get_part_maintenance_detail(part_id):
-    """Get detailed information for a part including its last maintenance record"""
+    """Get detailed information for a part plus recent maintenance history"""
     try:
         if not _has_any_permission('maintenance.view', 'maintenance.record', 'maintenance.complete'):
             return api_response(error='Insufficient permissions', status=403)
@@ -627,10 +723,18 @@ def api_get_part_maintenance_detail(part_id):
         if not _has_site_access(part.machine.site_id if part.machine else None):
             return api_response(error='Access denied', status=403)
         
-        # Get the last maintenance record for this part
-        last_record = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(
-            MaintenanceRecord.date.desc()
-        ).first()
+        history_limit = request.args.get('history_limit', 10)
+        try:
+            history_limit = max(1, min(100, int(history_limit)))
+        except (TypeError, ValueError):
+            history_limit = 10
+
+        history_query = MaintenanceRecord.query.options(
+            joinedload(MaintenanceRecord.user)
+        ).filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc())
+
+        history_records = history_query.limit(history_limit).all()
+        last_record = history_records[0] if history_records else None
         
         # Build basic part info
         machine_name = part.machine.name if part.machine else 'Unknown'
@@ -679,6 +783,18 @@ def api_get_part_maintenance_detail(part_id):
                 status = 'due_soon'
                 days_info = (part.next_maintenance - today).days
         
+        history_payload = []
+        for record in history_records:
+            history_payload.append({
+                'id': record.id,
+                'date': record.date.isoformat() if record.date else None,
+                'performed_by': record.performed_by or (record.user.username if record.user else ''),
+                'maintenance_type': record.maintenance_type or 'Routine',
+                'description': record.description or '',
+                'notes': record.notes or record.comments or '',
+                'status': record.status or 'completed',
+            })
+
         part_data = {
             'id': part.id,
             'part_name': part.name,
@@ -701,6 +817,9 @@ def api_get_part_maintenance_detail(part_id):
             'lastCompletedBy': completed_by,
             'lastMaintenanceType': maintenance_type,
             'comments': comments,
+            'history': history_payload,
+            'history_limit': history_limit,
+            'history_total': history_query.count(),
         }
         
         return api_response(data=part_data)
@@ -783,21 +902,33 @@ def api_get_maintenance_record(record_id):
 @api_v1.route('/maintenance/history', methods=['GET'])
 @api_login_required
 def api_get_maintenance_history():
-    """Get list of all completed maintenance records
+    """Get list of completed maintenance records with pagination and filters
     
     Query parameters:
-    - site_id: Filter by site ID
-    - search: Search in machine name, part name, or notes
+    - site_id: Filter by site ID (or "all" for every site)
+    - machine_id: Filter by machine ID
+    - part_id: Filter by part ID
+    - search: Search in machine name, part name, notes, description, performed_by
+    - page: 1-based page number (default 1)
+    - page_size: Records per page (default 25, max 100)
     """
     try:
         if not _has_any_permission('maintenance.view', 'maintenance.record', 'maintenance.complete'):
             return api_response(error='Insufficient permissions', status=403)
         from models import MaintenanceRecord, Machine, Part
         from sqlalchemy.orm import joinedload
+        from sqlalchemy import or_, func
         
-        # Get query parameters
+        # Query parameters & pagination guards
         site_id_filter = request.args.get('site_id', None)
-        search_query = request.args.get('search', '').strip()
+        search_query = (request.args.get('search', '') or '').strip()
+        machine_id_filter = request.args.get('machine_id', type=int)
+        part_id_filter = request.args.get('part_id', type=int)
+        page = request.args.get('page', 1, type=int) or 1
+        page_size = request.args.get('page_size', 25, type=int) or 25
+        page = max(page, 1)
+        page_size = max(1, min(page_size, 100))
+        search_pattern = f"%{search_query.lower()}%" if search_query else None
         
         # Build query with eager loading to avoid N+1 queries
         query = MaintenanceRecord.query.options(
@@ -806,6 +937,13 @@ def api_get_maintenance_history():
             joinedload(MaintenanceRecord.user)
         )
         joined_machine = False
+        joined_part = False
+        
+        # Apply explicit filters
+        if machine_id_filter:
+            query = query.filter(MaintenanceRecord.machine_id == machine_id_filter)
+        if part_id_filter:
+            query = query.filter(MaintenanceRecord.part_id == part_id_filter)
         
         # Apply site filter if provided
         if site_id_filter and site_id_filter != 'all':
@@ -821,19 +959,36 @@ def api_get_maintenance_history():
         allowed_site_ids = _allowed_site_ids()
         if allowed_site_ids is not None:
             if not allowed_site_ids:
-                return api_response(data=[])
+                return api_response(data={'records': [], 'pagination': {'page': page, 'page_size': page_size, 'total_records': 0, 'total_pages': 0}})
             if not joined_machine:
                 query = query.join(MaintenanceRecord.machine)
                 joined_machine = True
             query = query.filter(Machine.site_id.in_(allowed_site_ids))
         
-        # Get all records
-        records = query.order_by(MaintenanceRecord.date.desc()).all()
+        # Search filter
+        if search_pattern:
+            if not joined_machine:
+                query = query.outerjoin(MaintenanceRecord.machine)
+                joined_machine = True
+            if not joined_part:
+                query = query.outerjoin(MaintenanceRecord.part)
+                joined_part = True
+            query = query.filter(or_(
+                func.lower(func.coalesce(Machine.name, '')).like(search_pattern),
+                func.lower(func.coalesce(Part.name, '')).like(search_pattern),
+                func.lower(func.coalesce(MaintenanceRecord.notes, '')).like(search_pattern),
+                func.lower(func.coalesce(MaintenanceRecord.description, '')).like(search_pattern),
+                func.lower(func.coalesce(MaintenanceRecord.comments, '')).like(search_pattern),
+                func.lower(func.coalesce(MaintenanceRecord.performed_by, '')).like(search_pattern),
+            ))
+
+        total_records = query.count()
+        paginated_query = query.order_by(MaintenanceRecord.date.desc())
+        records = paginated_query.offset((page - 1) * page_size).limit(page_size).all()
         
         # Build response data
         records_data = []
         for record in records:
-            # Get related entities
             machine_name = record.machine.name if record.machine else 'Unknown'
             machine_id = record.machine.id if record.machine else None
             part_name = record.part.name if hasattr(record, 'part') and record.part else 'Unknown'
@@ -841,24 +996,11 @@ def api_get_maintenance_history():
             site_name = record.machine.site.name if record.machine and record.machine.site else ''
             site_id = record.machine.site.id if record.machine and record.machine.site else None
             
-            # Get completed_by - prefer performed_by, fallback to user relationship
             completed_by = record.performed_by or ''
             if not completed_by and record.user:
                 completed_by = record.user.username
             
-            # Apply search filter if provided
-            if search_query:
-                search_lower = search_query.lower()
-                if not any([
-                    search_lower in machine_name.lower(),
-                    search_lower in part_name.lower(),
-                    search_lower in (record.notes or '').lower(),
-                    search_lower in (record.description or '').lower(),
-                    search_lower in completed_by.lower()
-                ]):
-                    continue
-            
-            record_dict = {
+            records_data.append({
                 'id': record.id,
                 'machine': machine_name,
                 'machineName': machine_name,
@@ -874,12 +1016,27 @@ def api_get_maintenance_history():
                 'notes': record.notes or record.description or record.comments or '',
                 'maintenanceType': record.maintenance_type or 'Routine',
                 'status': record.status or 'completed',
-            }
-            
-            records_data.append(record_dict)
+            })
         
-        logger.info(f'Returning {len(records_data)} maintenance history records (site_filter={site_id_filter}, search={search_query})')
-        return api_response(data=records_data)
+        total_pages = math.ceil(total_records / page_size) if total_records else 0
+        payload = {
+            'records': records_data,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_records': total_records,
+                'total_pages': total_pages,
+            }
+        }
+        logger.info(
+            'Returning %s maintenance history records (page=%s, page_size=%s, site_filter=%s, search=%s)',
+            len(records_data),
+            page,
+            page_size,
+            site_id_filter,
+            search_query,
+        )
+        return api_response(data=payload)
         
     except Exception as e:
         logger.error(f'Get maintenance history error: {str(e)}', exc_info=True)
@@ -955,9 +1112,22 @@ def api_complete_multiple_maintenance():
         maintenance_type = data.get('type', 'Routine')
         description = data.get('description', '')
         notes = data.get('notes', '')
+        po_number = (data.get('po_number') or '').strip()
+        work_order_number = (data.get('work_order_number') or '').strip()
         
         if not part_ids or not machine_id:
             return api_response(error='Machine ID and at least one part required', status=400)
+        if not po_number or not work_order_number:
+            return api_response(error='PO Number and Work Order Number are required.', status=400)
+        if len(po_number) > 32:
+            return api_response(error='PO Number must be 32 characters or fewer.', status=400)
+        if len(work_order_number) > 128:
+            return api_response(error='Work Order Number must be 128 characters or fewer.', status=400)
+
+        try:
+            completion_date = datetime.strptime(maintenance_date, '%Y-%m-%d').date()
+        except ValueError:
+            return api_response(error='Invalid date format. Use YYYY-MM-DD.', status=400)
         
         # Verify machine exists and user has access
         machine = Machine.query.get_or_404(machine_id)
@@ -979,26 +1149,16 @@ def api_complete_multiple_maintenance():
                 user_id=current_user.id,
                 maintenance_type=maintenance_type,
                 description=description or f"Maintenance completed for {part.name}",
-                date=datetime.strptime(maintenance_date, '%Y-%m-%d').date(),
+                date=completion_date,
                 performed_by=current_user.username if hasattr(current_user, 'username') else 'Unknown',
                 status='completed',
-                notes=notes
+                notes=notes,
+                po_number=po_number,
+                work_order_number=work_order_number
             )
             db.session.add(maintenance_record)
             
-            # Update part's last_maintenance and calculate next_maintenance
-            part.last_maintenance = datetime.strptime(maintenance_date, '%Y-%m-%d').date()
-            
-            if part.maintenance_frequency and part.maintenance_unit:
-                if part.maintenance_unit == 'days':
-                    part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_frequency)
-                elif part.maintenance_unit == 'weeks':
-                    part.next_maintenance = part.last_maintenance + timedelta(weeks=part.maintenance_frequency)
-                elif part.maintenance_unit == 'months':
-                    part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_frequency * 30)
-                elif part.maintenance_unit == 'years':
-                    part.next_maintenance = part.last_maintenance + timedelta(days=part.maintenance_frequency * 365)
-            
+            part.update_next_maintenance(completion_date)
             maintenance_records.append(maintenance_record)
             completed_count += 1
         
@@ -1016,7 +1176,9 @@ def api_complete_multiple_maintenance():
                 'date': record.date.isoformat() if record.date else None,
                 'performed_by': record.performed_by,
                 'status': record.status,
-                'notes': record.notes
+                'notes': record.notes,
+                'po_number': record.po_number,
+                'work_order_number': record.work_order_number
             }, immediate_sync=True)
         
         # Sync part updates

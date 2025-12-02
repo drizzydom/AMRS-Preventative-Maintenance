@@ -94,6 +94,16 @@
                                 <option value="Other">Other</option>
                             </select>
                         </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="po_number" class="form-label">PO Number <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="po_number" name="po_number" maxlength="32" value="{{ request.form.get('po_number', '') }}" required>
+                            <div class="form-text">Max 32 characters.</div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="work_order_number" class="form-label">Work Order Number <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="work_order_number" name="work_order_number" maxlength="128" value="{{ request.form.get('work_order_number', '') }}" required>
+                            <div class="form-text">Max 128 characters.</div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
@@ -195,6 +205,14 @@
                 <div class="modal-body">
                     <input type="hidden" name="part_id" id="maintenance-part-id">
                     
+                    <div class="mb-3">
+                        <label for="maintenance-po-number" class="form-label">PO Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="maintenance-po-number" name="po_number" maxlength="32" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="maintenance-work-order" class="form-label">Work Order Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="maintenance-work-order" name="work_order_number" maxlength="128" required>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Part</label>
                         <input type="text" class="form-control" id="maintenance-part-name" readonly>

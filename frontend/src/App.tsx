@@ -18,6 +18,7 @@ const Login = lazy(() => import('./pages/Login'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Machines = lazy(() => import('./pages/Machines'))
 const Maintenance = lazy(() => import('./pages/Maintenance'))
+const MaintenanceRecords = lazy(() => import('./pages/MaintenanceRecords'))
 const Audits = lazy(() => import('./pages/Audits'))
 const Sites = lazy(() => import('./pages/Sites'))
 const Users = lazy(() => import('./pages/admin/Users'))
@@ -135,6 +136,14 @@ function AppLayout() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/machines" element={<Machines />} />
               <Route path="/maintenance" element={<Maintenance />} />
+              <Route
+                path="/maintenance-records"
+                element={(
+                  <PermissionGate requiredPermissions={['maintenance.view']}>
+                    <MaintenanceRecords />
+                  </PermissionGate>
+                )}
+              />
               <Route path="/audits" element={<Audits />} />
               <Route path="/sites" element={<Sites />} />
               <Route
