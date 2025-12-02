@@ -62,7 +62,7 @@ def test_maintenance_history_api_supports_pagination_and_filters(app, client):
                 machine_id=part_a.machine_id,
                 user_id=user.id,
                 date=datetime.utcnow() - timedelta(days=i),
-                maintenance_type='Routine',
+                maintenance_type='Scheduled',
                 description=f'Filter maintenance {i}',
                 performed_by='Tech Alpha',
                 status='completed',

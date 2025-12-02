@@ -598,6 +598,8 @@ class Machine(db.Model):
     machine_number = db.Column(db.String(50))
     serial_number = db.Column(db.String(50))
     site_id = db.Column(db.Integer, db.ForeignKey('sites.id'), nullable=False)
+    cycle_count = db.Column(db.Integer, default=0)  # Current cycle/run count for cycle-based maintenance
+    last_cycle_update = db.Column(db.DateTime, nullable=True)  # When cycle count was last updated
     decommissioned = db.Column(db.Boolean, default=False, nullable=False)  # Track if machine is decommissioned
     decommissioned_date = db.Column(db.DateTime, nullable=True)  # When it was decommissioned
     decommissioned_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Who decommissioned it
@@ -615,6 +617,18 @@ class Machine(db.Model):
     def is_active(self):
         """Return True if machine is not decommissioned"""
         return not self.decommissioned
+    
+    def update_cycle_count(self, new_count):
+        """Update the machine's cycle count"""
+        self.cycle_count = new_count
+        self.last_cycle_update = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+    
+    def increment_cycles(self, count=1):
+        """Increment the machine's cycle count by a specified amount"""
+        self.cycle_count = (self.cycle_count or 0) + count
+        self.last_cycle_update = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
     
     def decommission(self, user, reason=None):
         """Mark machine as decommissioned"""
@@ -663,20 +677,32 @@ class Part(db.Model):
     description = db.Column(db.Text)
     machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=False)
     maintenance_frequency = db.Column(db.Integer, default=30)  # Numeric value for frequency
-    maintenance_unit = db.Column(db.String(10), default='day')  # Units: day, week, month, year
+    maintenance_unit = db.Column(db.String(10), default='day')  # Units: day, week, month, year, cycle
     maintenance_days = db.Column(db.Integer, default=30)  # Calculated days for maintenance period
     last_maintenance = db.Column(db.DateTime, default=datetime.utcnow)
     next_maintenance = db.Column(db.DateTime, default=lambda: datetime.utcnow())
+    # Cycle-based maintenance fields
+    maintenance_cycle_frequency = db.Column(db.Integer, nullable=True)  # Number of cycles between maintenance
+    last_maintenance_cycle = db.Column(db.Integer, default=0)  # Machine cycle count at last maintenance
+    next_maintenance_cycle = db.Column(db.Integer, nullable=True)  # Target cycle count for next maintenance
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Define the one-to-many relationship with MaintenanceRecord
     maintenance_records = db.relationship('MaintenanceRecord', backref='part', lazy=True, cascade="all, delete-orphan")
     
+    @property
+    def is_cycle_based(self):
+        """Check if this part uses cycle-based maintenance"""
+        return self.maintenance_unit == 'cycle' or (self.maintenance_cycle_frequency is not None and self.maintenance_cycle_frequency > 0)
+    
     def get_frequency_display(self):
         unit = self.maintenance_unit or 'day'
         freq = self.maintenance_frequency or 1
-        if unit == 'day':
+        if unit == 'cycle':
+            cycle_freq = self.maintenance_cycle_frequency or freq
+            return f"Every {cycle_freq} cycle{'s' if cycle_freq != 1 else ''}"
+        elif unit == 'day':
             return f"Every {freq} day{'s' if freq != 1 else ''}"
         elif unit == 'week':
             return f"Every {freq} week{'s' if freq != 1 else ''}"
@@ -685,6 +711,24 @@ class Part(db.Model):
         elif unit == 'year':
             return f"Every {freq} year{'s' if freq != 1 else ''}"
         return f"Every {freq} {unit}(s)"
+    
+    def get_cycle_status(self):
+        """Get the cycle-based maintenance status for this part"""
+        if not self.is_cycle_based or not self.machine:
+            return None
+        
+        current_cycles = self.machine.cycle_count or 0
+        last_maint_cycle = self.last_maintenance_cycle or 0
+        cycle_freq = self.maintenance_cycle_frequency or self.maintenance_frequency or 1
+        next_maint_cycle = self.next_maintenance_cycle or (last_maint_cycle + cycle_freq)
+        
+        cycles_remaining = next_maint_cycle - current_cycles
+        
+        if cycles_remaining <= 0:
+            return 'overdue'
+        elif cycles_remaining <= (cycle_freq * 0.1):  # Within 10% of due
+            return 'due_soon'
+        return 'ok'
 
     def _normalize_completion_datetime(self, completed_at=None):
         """Normalize completion input into a datetime object."""
@@ -698,6 +742,10 @@ class Part(db.Model):
 
     def maintenance_interval_days(self):
         """Return the number of days between maintenance events."""
+        # For cycle-based maintenance, return 0 (not applicable)
+        if self.is_cycle_based:
+            return 0
+        
         unit_map = {
             'day': 1,
             'days': 1,
@@ -720,12 +768,31 @@ class Part(db.Model):
 
         return 30
 
-    def update_next_maintenance(self, completed_at=None):
-        """Update last/next maintenance fields using normalized scheduling rules."""
+    def update_next_maintenance(self, completed_at=None, current_cycle_count=None):
+        """Update last/next maintenance fields using normalized scheduling rules.
+        
+        Args:
+            completed_at: When maintenance was completed (datetime or date)
+            current_cycle_count: Current machine cycle count (for cycle-based maintenance)
+        """
         completion_dt = self._normalize_completion_datetime(completed_at)
-        interval_days = self.maintenance_interval_days()
-
         self.last_maintenance = completion_dt
+        
+        # Handle cycle-based maintenance
+        if self.is_cycle_based:
+            cycle_freq = self.maintenance_cycle_frequency or self.maintenance_frequency or 1
+            if current_cycle_count is not None:
+                self.last_maintenance_cycle = current_cycle_count
+                self.next_maintenance_cycle = current_cycle_count + cycle_freq
+            elif self.machine:
+                self.last_maintenance_cycle = self.machine.cycle_count or 0
+                self.next_maintenance_cycle = self.last_maintenance_cycle + cycle_freq
+            # Also set a far-future next_maintenance date so time-based queries don't show overdue
+            self.next_maintenance = completion_dt + timedelta(days=36500)  # ~100 years
+            return self.next_maintenance_cycle
+        
+        # Handle time-based maintenance
+        interval_days = self.maintenance_interval_days()
         self.next_maintenance = completion_dt + timedelta(days=interval_days)
         self.maintenance_days = interval_days
         return self.next_maintenance

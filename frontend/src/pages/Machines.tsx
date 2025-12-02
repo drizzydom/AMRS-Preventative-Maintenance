@@ -30,6 +30,7 @@ interface Machine {
   status: 'active' | 'inactive' | 'maintenance'
   lastMaintenance: string | null
   nextMaintenance: string | null
+  cycle_count: number
 }
 
 const Machines: React.FC = () => {
@@ -66,6 +67,7 @@ const Machines: React.FC = () => {
         status: machine.status || 'active',
         lastMaintenance: machine.lastMaintenance,
         nextMaintenance: machine.nextMaintenance,
+        cycle_count: machine.cycle_count || 0,
       }))
       setMachines(machinesData)
     } catch (error: any) {
@@ -79,6 +81,26 @@ const Machines: React.FC = () => {
   useEffect(() => {
     fetchSites()
     fetchMachines()
+  }, [])
+
+  // Listen for keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboardNew = () => {
+      handleCreateMachine()
+    }
+    const handleKeyboardRefresh = () => {
+      fetchMachines()
+      fetchSites()
+      message.info('Refreshing machines...')
+    }
+
+    window.addEventListener('keyboard-new', handleKeyboardNew)
+    window.addEventListener('keyboard-refresh', handleKeyboardRefresh)
+
+    return () => {
+      window.removeEventListener('keyboard-new', handleKeyboardNew)
+      window.removeEventListener('keyboard-refresh', handleKeyboardRefresh)
+    }
   }, [])
 
   const handleCreateMachine = () => {
@@ -212,6 +234,18 @@ const Machines: React.FC = () => {
         const dateB = b.nextMaintenance ? new Date(b.nextMaintenance).getTime() : 0
         return dateA - dateB
       },
+    },
+    {
+      title: 'Cycles',
+      dataIndex: 'cycle_count',
+      key: 'cycle_count',
+      width: 100,
+      sorter: (a, b) => a.cycle_count - b.cycle_count,
+      render: (count: number) => (
+        <span style={{ fontFamily: 'monospace' }}>
+          {count.toLocaleString()}
+        </span>
+      ),
     },
     {
       title: 'Actions',

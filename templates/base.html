@@ -578,7 +578,7 @@
                 <input type="text" 
                        class="form-control" 
                        id="global-search-input" 
-                       placeholder="Search machines, parts, sites... (Ctrl+K)"
+                       placeholder="Search machines, services, sites... (Ctrl+K)"
                        aria-label="Global search">
                 <span class="search-icon">
                     <i class="fas fa-search"></i>
@@ -658,16 +658,16 @@
                         </li>
                         {% endif %}
 
-                        {# Parts Management - requires parts.view permission #}
+                        {# Services Management - requires parts.view permission #}
                         {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'parts.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
                         <li class="sidebar-nav-item">
                             <a href="{{ url_for('manage_parts') }}" 
                                class="sidebar-link {% if request.endpoint == 'manage_parts' %}active{% endif %}"
                                data-bs-toggle="tooltip" 
                                data-bs-placement="right" 
-                               title="Manage machine parts and components">
+                               title="Manage maintenance services and components">
                                 <i class="sidebar-icon fas fa-cogs"></i>
-                                <span class="sidebar-link-text">Parts</span>
+                                <span class="sidebar-link-text">Services</span>
                             </a>
                         </li>
                         {% endif %}
@@ -849,7 +849,7 @@
             </a>
             <a href="{{ url_for('manage_parts') }}" class="mobile-bottom-nav-item {% if request.endpoint == 'manage_parts' %}active{% endif %}">
                 <i class="fas fa-cogs"></i>
-                <span>Parts</span>
+                <span>Services</span>
             </a>
         </div>
     </nav>

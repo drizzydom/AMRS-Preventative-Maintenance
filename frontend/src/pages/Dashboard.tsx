@@ -1,17 +1,24 @@
-import React, { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Table, Button, Space, Typography, Spin, message } from 'antd'
+import React, { useEffect, useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Card, Row, Col, Statistic, Table, Button, Space, Typography, Spin, message, Collapse, Badge, Switch, Tag } from 'antd'
 import {
   ToolOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   WarningOutlined,
   ReloadOutlined,
+  EnvironmentOutlined,
+  DownOutlined,
+  RightOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons'
 import apiClient from '../utils/api'
 import { notifyOverdueItems } from '../utils/notifications'
+import EmergencyMaintenanceModal from '../components/modals/EmergencyMaintenanceModal'
 import '../styles/dashboard.css'
 
-const { Title } = Typography
+const { Title, Text } = Typography
+const { Panel } = Collapse
 
 interface DashboardStats {
   total_machines: number
@@ -42,13 +49,90 @@ interface DueSoonItem {
   next_maintenance: string
 }
 
+// Grouped data structures
+interface GroupedBySite {
+  site_name: string
+  site_id: number
+  machines: GroupedByMachine[]
+  overdue_count: number
+  due_soon_count: number
+}
+
+interface GroupedByMachine {
+  machine_name: string
+  machine_id: number
+  tasks: (OverdueItem | DueSoonItem)[]
+  overdue_count: number
+  due_soon_count: number
+}
+
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([])
   const [dueSoonItems, setDueSoonItems] = useState<DueSoonItem[]>([])
   const [sites, setSites] = useState<{id:number; name:string}[]>([])
   const [selectedSite, setSelectedSite] = useState<number | 'all'>('all')
   const [loading, setLoading] = useState(true)
+  const [groupByMachine, setGroupByMachine] = useState(true)
+  const [showDecommissioned, setShowDecommissioned] = useState(false)
+  const [emergencyModalOpen, setEmergencyModalOpen] = useState(false)
+  
+  // Group items by site and machine
+  const groupedData = useMemo(() => {
+    const allItems = [
+      ...overdueItems.map(item => ({ ...item, type: 'overdue' as const })),
+      ...dueSoonItems.map(item => ({ ...item, type: 'due_soon' as const }))
+    ]
+    
+    // Filter by selected site
+    const filtered = selectedSite === 'all' 
+      ? allItems 
+      : allItems.filter(item => item.site_id === selectedSite)
+    
+    // Group by site
+    const siteGroups: Record<number, GroupedBySite> = {}
+    
+    filtered.forEach(item => {
+      const siteId = item.site_id || 0
+      const siteName = item.site_name || 'Unknown Site'
+      
+      if (!siteGroups[siteId]) {
+        siteGroups[siteId] = {
+          site_name: siteName,
+          site_id: siteId,
+          machines: [],
+          overdue_count: 0,
+          due_soon_count: 0
+        }
+      }
+      
+      if (item.type === 'overdue') siteGroups[siteId].overdue_count++
+      else siteGroups[siteId].due_soon_count++
+      
+      // Find or create machine group
+      const machineId = item.machine_id || 0
+      let machineGroup = siteGroups[siteId].machines.find(m => m.machine_id === machineId)
+      
+      if (!machineGroup) {
+        machineGroup = {
+          machine_name: item.machine_name || 'Unknown Machine',
+          machine_id: machineId,
+          tasks: [],
+          overdue_count: 0,
+          due_soon_count: 0
+        }
+        siteGroups[siteId].machines.push(machineGroup)
+      }
+      
+      machineGroup.tasks.push(item)
+      if (item.type === 'overdue') machineGroup.overdue_count++
+      else machineGroup.due_soon_count++
+    })
+    
+    // Sort by site name
+    return Object.values(siteGroups).sort((a, b) => a.site_name.localeCompare(b.site_name))
+  }, [overdueItems, dueSoonItems, selectedSite])
 
   const fetchDashboardData = async () => {
     try {
@@ -145,7 +229,7 @@ const Dashboard: React.FC = () => {
   ] : []
 
   const overdueColumns = [
-    { title: 'Part', dataIndex: 'part_name', key: 'part_name' },
+    { title: 'Service', dataIndex: 'part_name', key: 'part_name' },
     { title: 'Machine', dataIndex: 'machine_name', key: 'machine_name' },
     { title: 'Site', dataIndex: 'site_name', key: 'site_name' },
     { title: 'Days Overdue', dataIndex: 'days_overdue', key: 'days_overdue', render: (d: number) => <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{d} days</span> },
@@ -153,7 +237,7 @@ const Dashboard: React.FC = () => {
   ]
 
   const dueSoonColumns = [
-    { title: 'Part', dataIndex: 'part_name', key: 'part_name' },
+    { title: 'Service', dataIndex: 'part_name', key: 'part_name' },
     { title: 'Machine', dataIndex: 'machine_name', key: 'machine_name' },
     { title: 'Site', dataIndex: 'site_name', key: 'site_name' },
     { title: 'Due In', dataIndex: 'days_until', key: 'days_until', render: (d: number) => <span style={{ color: '#faad14' }}>{d} days</span> },
@@ -172,30 +256,91 @@ const Dashboard: React.FC = () => {
     )
   }
 
+  // Task columns for the grouped tables
+  const taskColumns = [
+    { 
+      title: 'Service', 
+      dataIndex: 'part_name', 
+      key: 'part_name',
+      render: (text: string, record: any) => (
+        <span>
+          {text}
+          {record.type === 'overdue' ? (
+            <Tag color="red" style={{ marginLeft: 8 }}>Overdue</Tag>
+          ) : (
+            <Tag color="orange" style={{ marginLeft: 8 }}>Due Soon</Tag>
+          )}
+        </span>
+      )
+    },
+    { 
+      title: 'Due', 
+      key: 'due',
+      render: (_: any, record: any) => {
+        if (record.days_overdue !== undefined) {
+          return <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{record.days_overdue}d overdue</span>
+        }
+        return <span style={{ color: '#faad14' }}>{record.days_until}d left</span>
+      }
+    },
+    { title: 'Next Maintenance', dataIndex: 'next_maintenance', key: 'next_maintenance' },
+  ]
+
   return (
     <div className="dashboard-container">
-      <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <Title level={2} style={{ margin: 0 }}>Dashboard</Title>
           <div>
-            <label style={{ marginRight: 8, color: '#666' }}>Filter by Site:</label>
-            <select value={selectedSite === 'all' ? 'all' : String(selectedSite)} onChange={(e) => setSelectedSite(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
+            <label style={{ marginRight: 8, color: '#666' }}>Site:</label>
+            <select 
+              value={selectedSite === 'all' ? 'all' : String(selectedSite)} 
+              onChange={(e) => setSelectedSite(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #d9d9d9' }}
+            >
               <option value="all">All Sites</option>
               {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Switch 
+              checked={groupByMachine} 
+              onChange={setGroupByMachine}
+              size="small"
+            />
+            <Text type="secondary">Group by Site/Machine</Text>
+          </div>
         </div>
         <Space>
-          <Button type="primary" onClick={() => window.location.assign('/maintenance')}>Record Maintenance</Button>
+          <Button 
+            danger 
+            icon={<ThunderboltOutlined />} 
+            onClick={() => setEmergencyModalOpen(true)}
+          >
+            Emergency Maintenance
+          </Button>
+          <Button type="primary" onClick={() => navigate('/maintenance')}>Record Maintenance</Button>
           <Button onClick={() => { /* TODO: Export report */ }}>Export Report</Button>
           <Button icon={<ReloadOutlined />} onClick={fetchDashboardData}>Refresh</Button>
         </Space>
       </div>
 
+      {/* Emergency Maintenance Modal */}
+      <EmergencyMaintenanceModal
+        open={emergencyModalOpen}
+        onClose={() => setEmergencyModalOpen(false)}
+        onSuccess={() => fetchDashboardData()}
+      />
+
+      {/* Stats Row */}
       <Row gutter={[16, 16]} className="stats-row">
         {statsData.map((stat, index) => (
           <Col xs={24} sm={12} md={6} key={index}>
-            <Card>
+            <Card hoverable onClick={() => {
+              if (stat.title === 'Overdue') navigate('/maintenance')
+              else if (stat.title === 'Due Soon') navigate('/maintenance')
+              else if (stat.title === 'Total Machines') navigate('/machines')
+            }}>
               <Statistic
                 title={stat.title}
                 value={stat.value}
@@ -207,23 +352,92 @@ const Dashboard: React.FC = () => {
         ))}
       </Row>
 
-      <Card title={`Overdue Maintenance (${filteredOverdue.length})`} className="mb-4">
-        <Table
-          columns={overdueColumns}
-          dataSource={filteredOverdue}
-          rowKey={(record: OverdueItem) => record.id}
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
+      {/* Grouped View */}
+      {groupByMachine ? (
+        <Card title="Maintenance Overview by Site" style={{ marginTop: 16 }}>
+          {groupedData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+              <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />
+              <div style={{ marginTop: 16 }}>All maintenance is up to date!</div>
+            </div>
+          ) : (
+            <Collapse 
+              defaultActiveKey={groupedData.length <= 3 ? groupedData.map(s => s.site_id.toString()) : []}
+              expandIcon={({ isActive }) => isActive ? <DownOutlined /> : <RightOutlined />}
+            >
+              {groupedData.map(site => (
+                <Panel 
+                  key={site.site_id.toString()} 
+                  header={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <EnvironmentOutlined style={{ color: '#1890ff' }} />
+                      <strong>{site.site_name}</strong>
+                      {site.overdue_count > 0 && (
+                        <Badge count={site.overdue_count} style={{ backgroundColor: '#ff4d4f' }} />
+                      )}
+                      {site.due_soon_count > 0 && (
+                        <Badge count={site.due_soon_count} style={{ backgroundColor: '#faad14' }} />
+                      )}
+                      <Text type="secondary">({site.machines.length} machines)</Text>
+                    </div>
+                  }
+                >
+                  <Collapse 
+                    ghost
+                    expandIcon={({ isActive }) => isActive ? <DownOutlined /> : <RightOutlined />}
+                  >
+                    {site.machines.map(machine => (
+                      <Panel
+                        key={machine.machine_id.toString()}
+                        header={
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <ToolOutlined />
+                            <span>{machine.machine_name}</span>
+                            {machine.overdue_count > 0 && (
+                              <Tag color="red">{machine.overdue_count} overdue</Tag>
+                            )}
+                            {machine.due_soon_count > 0 && (
+                              <Tag color="orange">{machine.due_soon_count} due soon</Tag>
+                            )}
+                          </div>
+                        }
+                      >
+                        <Table
+                          columns={taskColumns}
+                          dataSource={machine.tasks}
+                          rowKey="id"
+                          pagination={false}
+                          size="small"
+                        />
+                      </Panel>
+                    ))}
+                  </Collapse>
+                </Panel>
+              ))}
+            </Collapse>
+          )}
+        </Card>
+      ) : (
+        <>
+          <Card title={`Overdue Maintenance (${filteredOverdue.length})`} className="mb-4" style={{ marginTop: 16 }}>
+            <Table
+              columns={overdueColumns}
+              dataSource={filteredOverdue}
+              rowKey={(record: OverdueItem) => record.id}
+              pagination={{ pageSize: 10 }}
+            />
+          </Card>
 
-      <Card title={`Due Soon (${filteredDueSoon.length})`} className="mb-4">
-        <Table
-          columns={dueSoonColumns}
-          dataSource={filteredDueSoon}
-          rowKey={(record: DueSoonItem) => record.id}
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
+          <Card title={`Due Soon (${filteredDueSoon.length})`} className="mb-4">
+            <Table
+              columns={dueSoonColumns}
+              dataSource={filteredDueSoon}
+              rowKey={(record: DueSoonItem) => record.id}
+              pagination={{ pageSize: 10 }}
+            />
+          </Card>
+        </>
+      )}
     </div>
   )
 }

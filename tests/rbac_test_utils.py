@@ -18,7 +18,9 @@ def ensure_encryption_key():
 
 
 def create_user(username, email, password, role, *, is_admin=False, sites=None):
-    user = User(is_admin=is_admin, role=role)
+    user = User()
+    user.is_admin = is_admin
+    user.role = role
     user.username = username
     user.email = email
     user.set_password(password)
@@ -123,3 +125,5 @@ def teardown_app(app):
     with app.app_context():
         db.session.remove()
         db.drop_all()
+        # Clear the SQLAlchemy engine dispose to release connections
+        db.engine.dispose()

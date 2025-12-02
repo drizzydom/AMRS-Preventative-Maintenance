@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 
-{% block title %}Edit Part - {{ part.name }}{% endblock %}
+{% block title %}Edit Service - {{ part.name }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <div class="row">
         <div class="col">
-            <h1>Edit Part</h1>
+            <h1>Edit Service</h1>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
                     <li class="breadcrumb-item"><a href="{{ url_for('manage_machines') }}">Machines</a></li>
-                    <li class="breadcrumb-item"><a href="{{ url_for('manage_parts', machine_id=part.machine_id) }}">Parts</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('manage_parts', machine_id=part.machine_id) }}">Services</a></li>
                     <li class="breadcrumb-item active" aria-current="page">Edit {{ part.name }}</li>
                 </ol>
             </nav>
@@ -21,11 +21,11 @@
     <div class="row">
         <div class="col-md-8">
             <div class="card">
-                <div class="card-header">Edit Part Information</div>
+                <div class="card-header">Edit Service Information</div>
                 <div class="card-body">
                     <form method="post" action="{{ url_for('edit_part', part_id=part.id) }}">
                         <div class="mb-3">
-                            <label for="name" class="form-label">Part Name *</label>
+                            <label for="name" class="form-label">Service Name *</label>
                             <input type="text" class="form-control" id="name" name="name" value="{{ part.name }}" required>
                         </div>
                         <div class="mb-3">

@@ -5722,7 +5722,7 @@ def maintenance_multi():
         # Validate required fields
         if not part_ids or not machine_id or not maintenance_type or not description or not date_str:
             app.logger.warning("Validation failed - missing required fields")
-            flash('All fields and at least one part must be selected!', 'danger')
+            flash('All fields and at least one service must be selected!', 'danger')
             return redirect(url_for('maintenance_page'))
         if not po_number or not work_order_number:
             flash('PO Number and Work Order Number are required for maintenance completion.', 'danger')
@@ -5747,7 +5747,7 @@ def maintenance_multi():
             try:
                 validated_part_ids.append(int(part_id))
             except (TypeError, ValueError):
-                flash('Invalid part selection.', 'danger')
+                flash('Invalid service selection.', 'danger')
                 return redirect(url_for('maintenance_page'))
 
         part_ids = validated_part_ids
@@ -5844,12 +5844,12 @@ def maintenance_multi():
                 'po_number': rec.po_number,
                 'work_order_number': rec.work_order_number
             })
-        flash(f'Maintenance recorded for {len(created_records)} part(s).', 'success')
+        flash(f'Maintenance recorded for {len(created_records)} service(s).', 'success')
         return redirect(url_for('maintenance_page'))
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error in maintenance_multi: {e}")
-        flash('An error occurred while recording multi-part maintenance.', 'danger')
+        flash('An error occurred while recording multi-service maintenance.', 'danger')
         return redirect(url_for('maintenance_page'))
     selected_machine = machine_id if machine_id else ''
     if machine_id:
@@ -6552,7 +6552,7 @@ def delete_machine(machine_id):
         if maintenance_records:
             flash(f'Cannot delete machine: It has {len(maintenance_records)} maintenance records. Delete those first.', 'danger')
         elif parts:
-            flash(f'Cannot delete machine: It has {len(parts)} associated parts. Delete or reassign those first.', 'danger')
+            flash(f'Cannot delete machine: It has {len(parts)} associated services. Delete or reassign those first.', 'danger')
         else:
             db.session.delete(machine)
             db.session.commit()
@@ -6581,12 +6581,12 @@ def delete_part(part_id):
         db.session.commit()
         # Log to sync queue
         add_to_sync_queue_enhanced('parts', part_id, 'delete', {'id': part_id})
-        flash(f'Part "{part.name}" deleted successfully.', 'success')
+        flash(f'Service "{part.name}" deleted successfully.', 'success')
         
         return redirect(url_for('manage_parts'))
     except Exception as e:
         app.logger.error(f"Error deleting part: {e}")
-        flash('An error occurred while deleting the part.', 'danger')
+        flash('An error occurred while deleting the service.', 'danger')
         return redirect(url_for('manage_parts'))
 
 @app.route('/sites/delete/<int:site_id>', methods=['POST'])
@@ -6780,18 +6780,18 @@ def maintenance_page():
             try:
                 # Check if values are not empty before converting
                 if not machine_id or not part_id:
-                    flash('Machine and part selection are required.', 'danger')
+                    flash('Machine and service selection are required.', 'danger')
                     return redirect(url_for('maintenance_page'))
                 
                 machine_id = int(machine_id)
                 part_id = int(part_id)
                 user_id = int(user_id)
             except (TypeError, ValueError):
-                flash('Invalid machine, part, or user selection.', 'danger')
+                flash('Invalid machine, service, or user selection.', 'danger')
                 return redirect(url_for('maintenance_page'))
 
             if not machine_id or not part_id or not user_id or not maintenance_type or not description or not date_str:
-                flash('Machine, part, user, maintenance type, description, and date are required!', 'danger')
+                flash('Machine, service, user, maintenance type, description, and date are required!', 'danger')
                 return redirect(url_for('maintenance_page'))
             if not po_number or not work_order_number:
                 flash('PO Number and Work Order Number are required for maintenance completion.', 'danger')
@@ -6919,7 +6919,7 @@ def update_maintenance_alt():
         
         if not part_id:
             app.logger.warning("Missing part ID in form submission")
-            flash('Missing part ID', 'error')
+            flash('Missing service ID', 'error')
             return redirect(url_for('maintenance_page'))
         if not po_number or not work_order_number:
             flash('PO Number and Work Order Number are required for maintenance completion.', 'error')
@@ -8698,6 +8698,17 @@ def edit_machine(machine_id):
             site_id = int(request.form['site_id'])
             machine.site_id = site_id
             
+            # Handle cycle_count if provided
+            cycle_count_str = request.form.get('cycle_count', '').strip()
+            if cycle_count_str:
+                try:
+                    new_cycle_count = int(cycle_count_str.replace(',', ''))
+                    if hasattr(machine, 'cycle_count'):
+                        machine.cycle_count = new_cycle_count
+                        machine.last_cycle_update = datetime.utcnow()
+                except (ValueError, TypeError):
+                    pass  # Ignore invalid cycle count values
+            
             # Handle decommissioned status if user has permission
             if (current_user.is_admin or 
                 (hasattr(current_user, 'role') and current_user.role and 
@@ -8735,6 +8746,7 @@ def edit_machine(machine_id):
                 'machine_number': machine.machine_number,
                 'serial_number': machine.serial_number,
                 'site_id': machine.site_id,
+                'cycle_count': getattr(machine, 'cycle_count', 0),
                 'decommissioned': getattr(machine, 'decommissioned', False),
                 'decommissioned_reason': getattr(machine, 'decommissioned_reason', ''),
             })
@@ -8822,7 +8834,7 @@ def manage_parts():
                     return redirect(url_for('manage_parts'))
                     
                 if not user_can_see_all_sites(current_user) and int(machine.site_id) not in [site.id for site in current_user.sites]:
-                    flash('You do not have permission to add parts to this machine.', 'danger')
+                    flash('You do not have permission to add services to this machine.', 'danger')
                     return redirect(url_for('manage_parts'))
                 
                 # Get maintenance frequency and unit from form
@@ -8841,12 +8853,12 @@ def manage_parts():
                 # Add part to database
                 db.session.add(new_part)
                 db.session.commit()
-                flash(f'Part "{name}" has been added successfully.', 'success')
+                flash(f'Service "{name}" has been added successfully.', 'success')
                 return redirect('/parts')  # Using direct URL to avoid potential errors
             except Exception as e:
                 db.session.rollback()
                 app.logger.error(f"Error adding part: {e}")
-                flash(f'Error adding part: {str(e)}', 'danger')
+                flash(f'Error adding service: {str(e)}', 'danger')
         
         return render_template('admin/parts.html', 
                             parts=parts,
@@ -8857,7 +8869,7 @@ def manage_parts():
                             now=datetime.now())
     except Exception as e:
         app.logger.error(f"Error in manage_parts route: {e}")
-        flash('An error occurred while loading the parts page.', 'danger')
+        flash('An error occurred while loading the services page.', 'danger')
         return redirect('/dashboard')
 
 
@@ -8958,7 +8970,7 @@ def edit_part(part_id):
             'maintenance_frequency': part.maintenance_frequency,
             'maintenance_unit': part.maintenance_unit
         })
-        flash('Part updated successfully.', 'success')
+        flash('Service updated successfully.', 'success')
         return redirect(url_for('manage_parts'))
     
     # Return template for GET request
@@ -9061,7 +9073,7 @@ def maintenance_records_page():
         # Verify user can access this part
         part = Part.query.get(part_id)
         if not part or (not user_can_see_all_sites(current_user) and part.machine.site_id not in site_ids):
-            flash('You do not have access to this part.', 'danger')
+            flash('You do not have access to this service.', 'danger')
             return redirect(url_for('maintenance_records_page'))
             
         # Filter records by selected part

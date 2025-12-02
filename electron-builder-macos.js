@@ -4,6 +4,13 @@ module.exports = {
   directories: {
     output: "dist"
   },
+  publish: [
+    {
+      provider: "generic",
+      url: "https://f005.backblazeb2.com/file/amrs-pm-updates/",
+      channel: "latest"
+    }
+  ],
   mac: {
     target: [
       {

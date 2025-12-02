@@ -158,7 +158,7 @@ const MaintenanceDetailModal: React.FC<MaintenanceDetailModalProps> = ({
             </Descriptions.Item>
 
             <Descriptions.Item 
-              label={<><ToolOutlined /> Part/Component</>}
+              label={<><ToolOutlined /> Service/Component</>}
             >
               <Text>{detail.part_name}</Text>
             </Descriptions.Item>

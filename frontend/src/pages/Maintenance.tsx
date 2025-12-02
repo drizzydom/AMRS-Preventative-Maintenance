@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Card, Table, Button, Input, Space, Select, Typography, message, Tag, Switch } from 'antd'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Card, Table, Button, Input, Space, Select, Typography, message, Tag, Switch, Collapse, Badge } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,
@@ -8,6 +8,8 @@ import {
   ToolOutlined,
   WarningOutlined,
   ClockCircleOutlined,
+  AppstoreOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons'
 import MaintenanceCompletionModal from '../components/modals/MaintenanceCompletionModal'
 import MaintenanceDetailModal from '../components/modals/MaintenanceDetailModal'
@@ -16,6 +18,7 @@ import '../styles/maintenance.css'
 
 const { Title } = Typography
 const { Search } = Input
+const { Panel } = Collapse
 
 interface MaintenanceTask {
   key: string
@@ -25,10 +28,12 @@ interface MaintenanceTask {
   machine_name: string
   machine_id: number
   machine_serial?: string
+  machine_cycle_count?: number
   task: string
   dueDate: string
   next_maintenance: string
-  status: 'overdue' | 'due_soon' | 'completed'
+  status: 'overdue' | 'due_soon' | 'completed' | 'ok' | 'pending'
+  is_cycle_based?: boolean
   site: string
   site_name: string
   site_id: number
@@ -36,6 +41,12 @@ interface MaintenanceTask {
   frequency: string | null
   days_overdue?: number
   days_until?: number
+  // Cycle-based fields
+  cycle_frequency?: number
+  next_cycle?: number
+  last_cycle?: number
+  cycles_remaining?: number
+  cycles_overdue?: number
 }
 
 interface Machine {
@@ -57,11 +68,24 @@ interface Part {
   description: string
 }
 
+// Grouped data structure for machine view
+interface GroupedByMachine {
+  machine_id: number
+  machine_name: string
+  machine_serial?: string
+  site_id: number
+  site_name: string
+  tasks: MaintenanceTask[]
+  overdue_count: number
+  due_soon_count: number
+}
+
 const Maintenance: React.FC = () => {
   const [selectedSite, setSelectedSite] = useState<string>('all')
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
   const [searchText, setSearchText] = useState<string>('')
   const [showInactive, setShowInactive] = useState<boolean>(false)
+  const [groupByMachine, setGroupByMachine] = useState<boolean>(false)
   const [completionModalVisible, setCompletionModalVisible] = useState(false)
   const [detailModalVisible, setDetailModalVisible] = useState(false)
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null)
@@ -72,6 +96,51 @@ const Maintenance: React.FC = () => {
   const [machineParts, setMachineParts] = useState<Part[]>([])
   const [sites, setSites] = useState<Site[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Group filtered tasks by machine for the grouped view
+  const groupedByMachine = useMemo((): GroupedByMachine[] => {
+    const groups: Record<number, GroupedByMachine> = {}
+    
+    filteredTasks.forEach(task => {
+      if (!groups[task.machine_id]) {
+        groups[task.machine_id] = {
+          machine_id: task.machine_id,
+          machine_name: task.machine_name,
+          machine_serial: task.machine_serial,
+          site_id: task.site_id,
+          site_name: task.site_name,
+          tasks: [],
+          overdue_count: 0,
+          due_soon_count: 0,
+        }
+      }
+      groups[task.machine_id].tasks.push(task)
+      if (task.status === 'overdue') groups[task.machine_id].overdue_count++
+      if (task.status === 'due_soon') groups[task.machine_id].due_soon_count++
+    })
+
+    // Sort by site name, then machine name
+    return Object.values(groups).sort((a, b) => {
+      const siteCompare = a.site_name.localeCompare(b.site_name)
+      if (siteCompare !== 0) return siteCompare
+      return a.machine_name.localeCompare(b.machine_name)
+    })
+  }, [filteredTasks])
+
+  // Group machines by site for the accordion headers
+  const groupedBySite = useMemo(() => {
+    const siteGroups: Record<string, GroupedByMachine[]> = {}
+    
+    groupedByMachine.forEach(machine => {
+      const siteName = machine.site_name || 'No Site'
+      if (!siteGroups[siteName]) {
+        siteGroups[siteName] = []
+      }
+      siteGroups[siteName].push(machine)
+    })
+
+    return Object.entries(siteGroups).sort(([a], [b]) => a.localeCompare(b))
+  }, [groupedByMachine])
 
   const fetchMaintenanceTasks = async () => {
     try {
@@ -89,7 +158,7 @@ const Maintenance: React.FC = () => {
       const tasksData = response.data.data.map((task: any) => ({
         key: task.id.toString(),
         id: task.id,
-        part_name: task.part_name || 'Unknown Part',
+        part_name: task.part_name || 'Unknown Service',
         machine: task.machine || task.machine_name || 'Unknown Machine',
         machine_name: task.machine_name || task.machine || 'Unknown Machine',
         machine_id: task.machine_id || 0,
@@ -104,6 +173,12 @@ const Maintenance: React.FC = () => {
         frequency: task.frequency || null,
         days_overdue: task.days_overdue,
         days_until: task.days_until,
+        // Cycle-based maintenance fields
+        is_cycle_based: task.is_cycle_based || false,
+        cycle_frequency: task.cycle_frequency || null,
+        last_cycle: task.last_cycle || null,
+        next_cycle: task.next_cycle || null,
+        cycles_remaining: task.cycles_remaining || null,
       }))
       
       console.log(`Loaded ${tasksData.length} maintenance tasks`)
@@ -152,7 +227,7 @@ const Maintenance: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Failed to load machine parts:', error)
-      message.error('Failed to load machine parts')
+      message.error('Failed to load machine services')
     }
   }
 
@@ -160,6 +235,28 @@ const Maintenance: React.FC = () => {
     fetchMaintenanceTasks()
     fetchMachines()
     fetchSites()
+  }, [])
+
+  // Listen for keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboardRefresh = () => {
+      fetchMaintenanceTasks()
+      fetchMachines()
+      fetchSites()
+      message.info('Refreshing maintenance tasks...')
+    }
+    const handleKeyboardEscape = () => {
+      setCompletionModalVisible(false)
+      setDetailModalVisible(false)
+    }
+
+    window.addEventListener('keyboard-refresh', handleKeyboardRefresh)
+    window.addEventListener('keyboard-escape', handleKeyboardEscape)
+
+    return () => {
+      window.removeEventListener('keyboard-refresh', handleKeyboardRefresh)
+      window.removeEventListener('keyboard-escape', handleKeyboardEscape)
+    }
   }, [])
 
   useEffect(() => {
@@ -226,24 +323,36 @@ const Maintenance: React.FC = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: 120,
       sorter: (a, b) => {
-        const statusOrder = { overdue: 0, due_soon: 1, completed: 2 }
-        return statusOrder[a.status] - statusOrder[b.status]
+        const statusOrder: Record<string, number> = { overdue: 0, due_soon: 1, ok: 2, pending: 2, completed: 3 }
+        return (statusOrder[a.status] || 2) - (statusOrder[b.status] || 2)
       },
       render: (status: string, record: MaintenanceTask) => {
         if (status === 'overdue') {
+          // Show cycles or days depending on maintenance type
+          const detail = record.is_cycle_based 
+            ? (record.cycles_overdue ? `(${record.cycles_overdue} cycles)` : '')
+            : (record.days_overdue ? `(${record.days_overdue}d)` : '')
           return (
             <Tag color="red" icon={<WarningOutlined />}>
-              Overdue {record.days_overdue ? `(${record.days_overdue}d)` : ''}
+              Overdue {detail}
             </Tag>
           )
         } else if (status === 'due_soon') {
+          const detail = record.is_cycle_based
+            ? (record.cycles_remaining ? `(${record.cycles_remaining} cycles)` : '')
+            : (record.days_until ? `(${record.days_until}d)` : '')
           return (
             <Tag color="orange" icon={<ClockCircleOutlined />}>
-              Due Soon {record.days_until ? `(${record.days_until}d)` : ''}
+              Due Soon {detail}
             </Tag>
           )
+        } else if (status === 'ok' || status === 'pending') {
+          const detail = record.is_cycle_based
+            ? (record.cycles_remaining ? `${record.cycles_remaining} cycles left` : '')
+            : (record.days_until ? `${record.days_until} days left` : '')
+          return <Tag color="green">{detail || 'OK'}</Tag>
         } else {
           return <Tag color="green">Completed</Tag>
         }
@@ -260,11 +369,16 @@ const Maintenance: React.FC = () => {
           {record.machine_serial && (
             <div style={{ fontSize: '12px', color: '#666' }}>S/N: {record.machine_serial}</div>
           )}
+          {record.is_cycle_based && record.machine_cycle_count !== undefined && (
+            <div style={{ fontSize: '11px', color: '#1890ff' }}>
+              Cycles: {record.machine_cycle_count.toLocaleString()}
+            </div>
+          )}
         </div>
       ),
     },
     {
-      title: 'Part / Task',
+      title: 'Service / Task',
       dataIndex: 'part_name',
       key: 'part_name',
       sorter: (a, b) => a.part_name.localeCompare(b.part_name),
@@ -283,7 +397,14 @@ const Maintenance: React.FC = () => {
             displayName = record.task
           }
         }
-        return <div>{displayName}</div>
+        return (
+          <div>
+            {displayName}
+            {record.is_cycle_based && (
+              <Tag color="purple" style={{ marginLeft: 8, fontSize: '10px' }}>Cycle-Based</Tag>
+            )}
+          </div>
+        )
       },
     },
     {
@@ -324,8 +445,22 @@ const Maintenance: React.FC = () => {
       title: 'Frequency',
       dataIndex: 'frequency',
       key: 'frequency',
-      width: 120,
-      render: (freq: string | null) => freq || '-',
+      width: 140,
+      render: (freq: string | null, record: MaintenanceTask) => {
+        if (record.is_cycle_based && record.cycle_frequency) {
+          return (
+            <div>
+              <div style={{ fontWeight: 500 }}>Every {record.cycle_frequency.toLocaleString()} cycles</div>
+              {record.next_cycle && (
+                <div style={{ fontSize: '11px', color: '#666' }}>
+                  Next: {record.next_cycle.toLocaleString()}
+                </div>
+              )}
+            </div>
+          )
+        }
+        return freq || '-'
+      },
     },
   ]
 
@@ -354,18 +489,18 @@ const Maintenance: React.FC = () => {
           <ToolOutlined /> Maintenance Tasks
         </Title>
         <p style={{ color: '#666', marginTop: 8 }}>
-          Track and complete scheduled maintenance for machines and parts
+          Track and complete scheduled maintenance for machines and services
         </p>
       </div>
 
       {/* Quick Access Multi-Part Maintenance - Moved to top */}
       <Card 
-        title="Quick Access: Complete Multi-Part Maintenance" 
+        title="Quick Access: Complete Multi-Service Maintenance" 
         className="maintenance-completion-card"
         style={{ marginBottom: 20 }}
       >
         <p style={{ marginBottom: 16, color: '#666' }}>
-          Select a site and machine to quickly complete maintenance on multiple parts at once. 
+          Select a site and machine to quickly complete maintenance on multiple services at once. 
           This is useful for routine maintenance that affects several components.
         </p>
         <Space wrap>
@@ -404,7 +539,7 @@ const Maintenance: React.FC = () => {
           <div className="maintenance-controls">
             <Space wrap>
               <Search
-                placeholder="Search machines, serial numbers, parts..."
+                placeholder="Search machines, serial numbers, services..."
                 allowClear
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -430,6 +565,15 @@ const Maintenance: React.FC = () => {
                 <Switch 
                   checked={showInactive}
                   onChange={setShowInactive}
+                  checkedChildren="Yes"
+                  unCheckedChildren="No"
+                />
+              </Space>
+              <Space>
+                <span style={{ fontSize: '14px', color: '#666' }}>Group by Machine:</span>
+                <Switch 
+                  checked={groupByMachine}
+                  onChange={setGroupByMachine}
                   checkedChildren="Yes"
                   unCheckedChildren="No"
                 />
@@ -474,38 +618,119 @@ const Maintenance: React.FC = () => {
             </Space>
           </div>
 
-          <Table
-            columns={columns}
-            dataSource={filteredTasks}
-            loading={loading}
-            onRow={(record) => ({
-              onClick: () => {
-                setSelectedRecordId(record.id)
-                setDetailModalVisible(true)
-              },
-              style: { cursor: 'pointer' }
-            })}
-            locale={{
-              emptyText: (
-                <div style={{ padding: '40px 0' }}>
+          {groupByMachine ? (
+            /* Grouped by Machine View */
+            <div className="grouped-maintenance-view">
+              {groupedBySite.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center' }}>
                   <ToolOutlined style={{ fontSize: 48, color: '#bfbfbf', marginBottom: 16 }} />
                   <h3 style={{ color: '#8c8c8c' }}>No Maintenance Tasks Found</h3>
-                  <p style={{ color: '#bfbfbf', marginBottom: 16 }}>
+                  <p style={{ color: '#bfbfbf' }}>
                     {!showInactive 
                       ? 'Try enabling "Show Inactive" to see older maintenance tasks.'
                       : 'No maintenance tasks match your current filters.'}
                   </p>
                 </div>
-              ),
-            }}
-            pagination={{
-              pageSize: 25,
-              showSizeChanger: true,
-              pageSizeOptions: ['25', '50', '100', '200'],
-              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} tasks`,
-            }}
-            scroll={{ x: 1400 }}
-          />
+              ) : (
+                groupedBySite.map(([siteName, siteMachines]) => (
+                  <div key={siteName} style={{ marginBottom: 24 }}>
+                    <Typography.Title level={4} style={{ 
+                      background: '#1890ff', 
+                      color: 'white', 
+                      padding: '8px 16px', 
+                      borderRadius: '4px 4px 0 0',
+                      margin: 0 
+                    }}>
+                      {siteName}
+                      <Badge 
+                        count={siteMachines.reduce((sum: number, m: GroupedByMachine) => sum + m.tasks.length, 0)} 
+                        style={{ backgroundColor: '#52c41a', marginLeft: 12 }} 
+                        overflowCount={999}
+                      />
+                    </Typography.Title>
+                    <Collapse 
+                      defaultActiveKey={siteMachines.slice(0, 3).map((m: GroupedByMachine) => m.machine_id.toString())}
+                      style={{ borderRadius: '0 0 4px 4px' }}
+                    >
+                      {siteMachines.map((machine: GroupedByMachine) => (
+                        <Collapse.Panel
+                          key={machine.machine_id.toString()}
+                          header={
+                            <Space size="middle">
+                              <span style={{ fontWeight: 600 }}>{machine.machine_name}</span>
+                              {machine.machine_serial && (
+                                <Tag color="blue">S/N: {machine.machine_serial}</Tag>
+                              )}
+                              <Badge count={machine.tasks.length} style={{ backgroundColor: '#1890ff' }} />
+                              {machine.overdue_count > 0 && (
+                                <Tag color="red" icon={<WarningOutlined />}>
+                                  {machine.overdue_count} Overdue
+                                </Tag>
+                              )}
+                              {machine.due_soon_count > 0 && (
+                                <Tag color="orange" icon={<ClockCircleOutlined />}>
+                                  {machine.due_soon_count} Due Soon
+                                </Tag>
+                              )}
+                            </Space>
+                          }
+                        >
+                          <Table
+                            columns={columns}
+                            dataSource={machine.tasks}
+                            pagination={false}
+                            size="small"
+                            onRow={(record) => ({
+                              onClick: () => {
+                                setSelectedRecordId(record.id)
+                                setDetailModalVisible(true)
+                              },
+                              style: { cursor: 'pointer' }
+                            })}
+                            scroll={{ x: 1200 }}
+                          />
+                        </Collapse.Panel>
+                      ))}
+                    </Collapse>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            /* Standard Table View */
+            <Table
+              columns={columns}
+              dataSource={filteredTasks}
+              loading={loading}
+              onRow={(record) => ({
+                onClick: () => {
+                  setSelectedRecordId(record.id)
+                  setDetailModalVisible(true)
+                },
+                style: { cursor: 'pointer' }
+              })}
+              locale={{
+                emptyText: (
+                  <div style={{ padding: '40px 0' }}>
+                    <ToolOutlined style={{ fontSize: 48, color: '#bfbfbf', marginBottom: 16 }} />
+                    <h3 style={{ color: '#8c8c8c' }}>No Maintenance Tasks Found</h3>
+                    <p style={{ color: '#bfbfbf', marginBottom: 16 }}>
+                      {!showInactive 
+                        ? 'Try enabling "Show Inactive" to see older maintenance tasks.'
+                        : 'No maintenance tasks match your current filters.'}
+                    </p>
+                  </div>
+                ),
+              }}
+              pagination={{
+                pageSize: 25,
+                showSizeChanger: true,
+                pageSizeOptions: ['25', '50', '100', '200'],
+                showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} tasks`,
+              }}
+              scroll={{ x: 1400 }}
+            />
+          )}
         </Space>
       </Card>
 
