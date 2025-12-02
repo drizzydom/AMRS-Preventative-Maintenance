@@ -13,6 +13,7 @@ import {
   MenuUnfoldOutlined,
   SafetyOutlined,
   LogoutOutlined,
+  ProfileOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { useAuthorization } from '../hooks/useAuthorization'
@@ -62,6 +63,12 @@ const Sidebar: React.FC = () => {
       icon: <SettingOutlined />,
       label: 'Maintenance',
       visible: hasPermission('maintenance.view') || hasPermission('maintenance.record') || isAdmin,
+    },
+    {
+      key: '/maintenance-records',
+      icon: <ProfileOutlined />,
+      label: 'Maintenance Records',
+      visible: hasPermission('maintenance.view') || isAdmin,
     },
     {
       key: '/audits',

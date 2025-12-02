@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Modal, Spin, Descriptions, Typography, Tag, Alert, Divider, Space } from 'antd'
+import { Modal, Spin, Descriptions, Typography, Tag, Alert, Divider, Space, List, Button } from 'antd'
 import { 
   ClockCircleOutlined, 
   ToolOutlined, 
@@ -12,6 +12,19 @@ import apiClient from '../../utils/api'
 import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
+
+const HISTORY_PAGE_SIZE = 10
+const MAX_HISTORY_LIMIT = 100
+
+interface MaintenanceHistoryEntry {
+  id: number
+  date: string | null
+  performed_by: string
+  maintenance_type: string
+  description: string
+  notes: string
+  status: string
+}
 
 interface MaintenanceDetail {
   id: number
@@ -35,6 +48,9 @@ interface MaintenanceDetail {
   lastCompletedBy: string
   lastMaintenanceType: string
   comments: string
+  history: MaintenanceHistoryEntry[]
+  history_limit: number
+  history_total: number
 }
 
 interface MaintenanceDetailModalProps {
@@ -51,30 +67,51 @@ const MaintenanceDetailModal: React.FC<MaintenanceDetailModalProps> = ({
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState<MaintenanceDetail | null>(null)
   const [error, setError] = useState<string>('')
+  const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE)
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     if (open && recordId) {
-      fetchDetail()
+      setHistoryLimit(HISTORY_PAGE_SIZE)
+      fetchDetail(HISTORY_PAGE_SIZE)
     } else {
       setDetail(null)
       setError('')
     }
   }, [open, recordId])
 
-  const fetchDetail = async () => {
+  const fetchDetail = async (limit = historyLimit, options?: { suppressGlobalLoading?: boolean }) => {
     if (!recordId) return
 
     try {
-      setLoading(true)
+      if (options?.suppressGlobalLoading) {
+        setHistoryLoading(true)
+      } else {
+        setLoading(true)
+      }
       setError('')
-      const response = await apiClient.get(`/api/v1/maintenance/part/${recordId}`)
+      const response = await apiClient.get(`/api/v1/maintenance/part/${recordId}`, {
+        params: { history_limit: limit }
+      })
       setDetail(response.data.data)
+      setHistoryLimit(limit)
     } catch (error: any) {
       console.error('Failed to load maintenance detail:', error)
       setError('Failed to load maintenance details. Please try again.')
     } finally {
-      setLoading(false)
+      if (options?.suppressGlobalLoading) {
+        setHistoryLoading(false)
+      } else {
+        setLoading(false)
+      }
     }
+  }
+
+  const handleLoadMoreHistory = () => {
+    if (!detail) return
+    const nextLimit = Math.min(historyLimit + HISTORY_PAGE_SIZE, MAX_HISTORY_LIMIT)
+    if (nextLimit === historyLimit) return
+    fetchDetail(nextLimit, { suppressGlobalLoading: true })
   }
 
   const getStatusColor = (status: string) => {
@@ -191,6 +228,59 @@ const MaintenanceDetailModal: React.FC<MaintenanceDetailModalProps> = ({
                 )}
               </Descriptions>
             </>
+          )}
+
+          <Divider orientation="left">Maintenance History</Divider>
+          {detail.history && detail.history.length > 0 ? (
+            <>
+              <List
+                size="small"
+                bordered
+                dataSource={detail.history}
+                renderItem={(entry) => (
+                  <List.Item>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Space wrap>
+                        <Text strong>
+                          {entry.date ? dayjs(entry.date).format('MMMM D, YYYY') : 'Date not recorded'}
+                        </Text>
+                        {entry.status && (
+                          <Tag color={getStatusColor(entry.status)}>
+                            {entry.status.replace('_', ' ').toUpperCase()}
+                          </Tag>
+                        )}
+                        {entry.maintenance_type && (
+                          <Tag color="blue">{entry.maintenance_type}</Tag>
+                        )}
+                      </Space>
+                      {entry.performed_by && (
+                        <Text type="secondary">Performed by {entry.performed_by}</Text>
+                      )}
+                      {entry.description && (
+                        <Text>{entry.description}</Text>
+                      )}
+                      {entry.notes && (
+                        <Text type="secondary" style={{ whiteSpace: 'pre-wrap' }}>{entry.notes}</Text>
+                      )}
+                    </Space>
+                  </List.Item>
+                )}
+              />
+              <div style={{ textAlign: 'center', marginTop: 12 }}>
+                <Text type="secondary">
+                  Showing {detail.history.length} of {detail.history_total} entries
+                </Text>
+              </div>
+              {detail.history_total > detail.history.length && (
+                <div style={{ textAlign: 'center', marginTop: 8 }}>
+                  <Button onClick={handleLoadMoreHistory} loading={historyLoading}>
+                    Load more history
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <Text type="secondary">No historical maintenance records available.</Text>
           )}
 
           {(detail.description || detail.comments || detail.notes) && (

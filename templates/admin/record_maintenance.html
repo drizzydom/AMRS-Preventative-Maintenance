@@ -37,9 +37,21 @@
                 <label for="invoice_number" class="form-label">Invoice Number</label>
                 <input type="text" class="form-control" id="invoice_number" name="invoice_number">
             </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="admin_po_number" class="form-label">PO Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="admin_po_number" name="po_number" maxlength="32" required>
+                    <div class="form-text">Max 32 characters.</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="admin_work_order_number" class="form-label">Work Order Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="admin_work_order_number" name="work_order_number" maxlength="128" required>
+                    <div class="form-text">Max 128 characters.</div>
+                </div>
+            </div>
             <div class="mb-3">
                 <label for="notes" class="form-label">Notes</label>
-                <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Enter any notes about the maintenance performed"></textarea>
+                <textarea class="form-control" id="notes" name="comments" rows="3" placeholder="Enter any notes about the maintenance performed"></textarea>
             </div>
             
             <div class="alert alert-info">

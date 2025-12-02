@@ -13,11 +13,35 @@ interface User {
   is_admin?: boolean
 }
 
+export interface LoginFeedbackStep {
+  key: string
+  label: string
+  status: 'success' | 'pending' | 'error' | 'skipped'
+  detail?: string
+}
+
+export interface LoginFeedback {
+  attemptId: string
+  finalStatus: string
+  steps: LoginFeedbackStep[]
+  timestamp?: string
+  context?: Record<string, any>
+}
+
+export interface LoginResult {
+  feedback?: LoginFeedback
+}
+
+export interface LoginError extends Error {
+  code?: string
+  feedback?: LoginFeedback
+}
+
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<LoginResult>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
   hasPermission: (permission: string) => boolean
@@ -38,6 +62,29 @@ export const useAuth = () => {
 
 interface AuthProviderProps {
   children: ReactNode
+}
+
+const normalizeLoginFeedback = (rawFeedback: any): LoginFeedback | undefined => {
+  if (!rawFeedback) {
+    return undefined
+  }
+
+  const steps: LoginFeedbackStep[] = Array.isArray(rawFeedback.steps)
+    ? rawFeedback.steps.map((step: any) => ({
+        key: step?.key || step?.label || 'step',
+        label: step?.label || step?.key || 'Step',
+        status: (step?.status || 'pending') as LoginFeedbackStep['status'],
+        detail: step?.detail || '',
+      }))
+    : []
+
+  return {
+    attemptId: rawFeedback.attempt_id || rawFeedback.attemptId || 'attempt',
+    finalStatus: rawFeedback.final_status || rawFeedback.finalStatus || 'unknown',
+    steps,
+    timestamp: rawFeedback.timestamp,
+    context: rawFeedback.context,
+  }
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
@@ -85,7 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth()
   }, [])
 
-  const login = async (username: string, password: string, rememberMe = false) => {
+  const login = async (username: string, password: string, rememberMe = false): Promise<LoginResult> => {
     try {
       setIsLoading(true)
       const response = await apiClient.post('/api/v1/auth/login', {
@@ -94,15 +141,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         remember_me: rememberMe,
         device_id: getOrCreateDeviceId(),
       })
-      
+
+      const feedback = normalizeLoginFeedback(response?.data?.meta?.login_feedback)
       // API response structure: { data: { user: {...} }, message: '...' }
-      setUser(mapUserResponse(response.data.data.user))
+      if (response?.data?.data?.user) {
+        setUser(mapUserResponse(response.data.data.user))
+      }
       message.success('Login successful!')
-      navigate('/dashboard')
+      return { feedback }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Invalid username or password'
+      const feedback = normalizeLoginFeedback(error.response?.data?.meta?.login_feedback)
+      const enrichedError = new Error(errorMessage) as LoginError
+      enrichedError.code = error.response?.data?.error
+      enrichedError.feedback = feedback
       message.error(errorMessage)
-      throw error
+      throw enrichedError
     } finally {
       setIsLoading(false)
     }
