@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Form, Switch, Select, Slider, Typography, Button, Space, message, Divider } from 'antd'
-import { SaveOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Card, Form, Switch, Select, Slider, Typography, Button, Space, message, Divider, Radio } from 'antd'
+import { SaveOutlined, ReloadOutlined, BulbOutlined, BulbFilled } from '@ant-design/icons'
+import { useTheme } from '../contexts/ThemeContext'
 import '../styles/settings.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -15,6 +16,7 @@ interface AccessibilitySettings {
 }
 
 const Settings: React.FC = () => {
+  const { themeMode, isDark, setThemeMode } = useTheme()
   const [settings, setSettings] = useState<AccessibilitySettings>({
     highContrast: false,
     colorBlindMode: false,
@@ -117,6 +119,35 @@ const Settings: React.FC = () => {
 
       <Card className="settings-card">
         <Form layout="vertical">
+          <Title level={4}>
+            {isDark ? <BulbFilled style={{ marginRight: 8 }} /> : <BulbOutlined style={{ marginRight: 8 }} />}
+            Theme
+          </Title>
+
+          <Form.Item label="Color Theme">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Radio.Group 
+                value={themeMode} 
+                onChange={(e) => setThemeMode(e.target.value)}
+                optionType="button"
+                buttonStyle="solid"
+                size="large"
+              >
+                <Radio.Button value="light">☀️ Light</Radio.Button>
+                <Radio.Button value="dark">🌙 Dark</Radio.Button>
+                <Radio.Button value="system">💻 System</Radio.Button>
+              </Radio.Group>
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                {themeMode === 'system' 
+                  ? `Currently using ${isDark ? 'dark' : 'light'} mode based on your system preference`
+                  : `Using ${themeMode} mode`
+                }
+              </Text>
+            </Space>
+          </Form.Item>
+
+          <Divider />
+
           <Title level={4}>Visual Settings</Title>
 
           <Form.Item label="High Contrast Mode">
@@ -234,6 +265,23 @@ const Settings: React.FC = () => {
             </Space>
           </Form.Item>
         </Form>
+      </Card>
+
+      <Card className="settings-info-card" style={{ marginTop: 16 }}>
+        <Title level={5}>Onboarding Tour</Title>
+        <Paragraph>
+          New to AMRS Maintenance Tracker? Take the guided tour to learn about all the features.
+        </Paragraph>
+        <Button 
+          onClick={() => {
+            localStorage.removeItem('amrs_onboarding_complete')
+            message.success('Onboarding tour will show on next page reload')
+            // Optionally reload to show immediately
+            setTimeout(() => window.location.reload(), 1000)
+          }}
+        >
+          Restart Onboarding Tour
+        </Button>
       </Card>
 
       <Card className="settings-info-card" style={{ marginTop: 16 }}>

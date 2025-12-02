@@ -21,6 +21,44 @@
 
 .stats-row .ant-card {
   height: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stats-row .ant-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Status card color indicators */
+.stats-row .ant-card:nth-child(1) .ant-card-body {
+  border-left: 4px solid #1890ff;
+}
+
+.stats-row .ant-card:nth-child(2) .ant-card-body {
+  border-left: 4px solid #ff4d4f;
+  background: linear-gradient(135deg, #fff1f0 0%, #ffffff 100%);
+}
+
+.stats-row .ant-card:nth-child(3) .ant-card-body {
+  border-left: 4px solid #faad14;
+  background: linear-gradient(135deg, #fffbe6 0%, #ffffff 100%);
+}
+
+.stats-row .ant-card:nth-child(4) .ant-card-body {
+  border-left: 4px solid #52c41a;
+  background: linear-gradient(135deg, #f6ffed 0%, #ffffff 100%);
+}
+
+/* Pulse animation for overdue items */
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 77, 79, 0); }
+}
+
+.stats-row .ant-card:nth-child(2):has(.ant-statistic-content-value:not(:empty)) {
+  animation: pulse-danger 2s infinite;
 }
 
 .recent-tasks-card {
@@ -39,14 +77,76 @@
   font-size: 14px;
   color: rgba(0, 0, 0, 0.65);
   margin-bottom: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .ant-statistic-content {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
 }
 
 .ant-statistic-content-prefix {
   margin-right: 8px;
-  font-size: 20px;
+  font-size: 24px;
 }
+
+/* Status badge styling */
+.status-badge-overdue {
+  background-color: #ff4d4f;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge-due-soon {
+  background-color: #faad14;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge-completed {
+  background-color: #52c41a;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Table row status highlighting */
+.ant-table-row.row-overdue {
+  background-color: #fff1f0 !important;
+}
+
+.ant-table-row.row-due-soon {
+  background-color: #fffbe6 !important;
+}
+
+/* Collapse panel status indicators */
+.ant-collapse-header .ant-badge-count {
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Emergency button styling */
+.ant-btn-dangerous {
+  animation: pulse-danger 2s infinite;
+}
+
+.ant-btn-dangerous:hover {
+  animation: none;
+  transform: scale(1.02);
+}
+
+/* Card hover effects for clickable stats */
+.stats-row .ant-card[style*="cursor: pointer"]:hover {
+  cursor: pointer;
+}
+

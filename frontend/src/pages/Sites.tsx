@@ -73,6 +73,25 @@ const Sites: React.FC = () => {
     fetchSites()
   }, [])
 
+  // Listen for keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboardNew = () => {
+      handleAddSite()
+    }
+    const handleKeyboardRefresh = () => {
+      fetchSites()
+      message.info('Refreshing sites...')
+    }
+
+    window.addEventListener('keyboard-new', handleKeyboardNew)
+    window.addEventListener('keyboard-refresh', handleKeyboardRefresh)
+
+    return () => {
+      window.removeEventListener('keyboard-new', handleKeyboardNew)
+      window.removeEventListener('keyboard-refresh', handleKeyboardRefresh)
+    }
+  }, [])
+
   const handleAddSite = () => {
     setSelectedSite(null)
     setModalOpen(true)

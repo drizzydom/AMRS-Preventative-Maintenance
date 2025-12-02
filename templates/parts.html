@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Parts - Maintenance Tracker{% endblock %}
+{% block title %}Services - Maintenance Tracker{% endblock %}
 
 {% block breadcrumb_items %}
-<li class="breadcrumb-item active" aria-current="page">Parts</li>
+<li class="breadcrumb-item active" aria-current="page">Services</li>
 {% endblock %}
 
 {% block header_title %}{{ title }}{% endblock %}
@@ -12,7 +12,7 @@
 <span class="help-icon" 
       data-bs-toggle="tooltip" 
       data-bs-placement="right" 
-      title="Manage individual parts and components. Track maintenance schedules for each part.">
+      title="Manage individual services and components. Track maintenance schedules for each service.">
     ?
 </span>
 {% endblock %}
@@ -20,7 +20,7 @@
 {% block header_actions %}
 {% if can_create %}
 <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPartModal">
-    <i class="fas fa-plus"></i> Add Part
+    <i class="fas fa-plus"></i> Add Service
 </a>
 {% endif %}
 {% endblock %}
@@ -31,10 +31,10 @@
         <!-- Bare minimum card with no extra containers -->
         <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="card-title mb-0">Parts</h5>
+        <h5 class="card-title mb-0">Services</h5>
         {% if machine_id %}
         <a href="{{ url_for('manage_parts') }}" class="btn btn-sm btn-secondary">
-            <i class="fas fa-list"></i> View All Parts
+            <i class="fas fa-list"></i> View All Services
         </a>
         {% endif %}
     </div>
@@ -122,23 +122,23 @@
             <div class="empty-state-icon">
                 <i class="fas fa-cogs"></i>
             </div>
-            <h3 class="empty-state-title">No Parts Found</h3>
+            <h3 class="empty-state-title">No Services Found</h3>
             <p class="empty-state-text">
                 {% if machine_id %}
-                This machine doesn't have any parts tracked yet.
+                This machine doesn't have any services tracked yet.
                 {% else %}
-                You haven't added any parts to track yet.
+                You haven't added any services to track yet.
                 {% endif %}
                 {% if can_create %}
-                Add parts to start tracking their maintenance schedules.
+                Add services to start tracking their maintenance schedules.
                 {% else %}
-                Contact your administrator to add parts.
+                Contact your administrator to add services.
                 {% endif %}
             </p>
             {% if can_create %}
             <button class="btn btn-primary empty-state-action" data-bs-toggle="modal" data-bs-target="#addPartModal">
                 <i class="fas fa-plus"></i>
-                Add Your First Part
+                Add Your First Service
             </button>
             {% endif %}
         </div>
@@ -152,12 +152,12 @@
         <div class="modal-content">
             <form method="post" action="{{ url_for('manage_parts') }}">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addPartModalLabel">Add New Part</h5>
+                    <h5 class="modal-title" id="addPartModalLabel">Add New Service</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="name" class="form-label">Part Name <span class="text-danger">*</span></label>
+                        <label for="name" class="form-label">Service Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="name" name="name" required>
                     </div>
                     
@@ -200,7 +200,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Part</button>
+                    <button type="submit" class="btn btn-primary">Add Service</button>
                 </div>
             </form>
         </div>
@@ -216,13 +216,13 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete the part "<span id="deletePartName"></span>"?</p>
-                <p class="text-danger">This will also delete all maintenance logs associated with this part!</p>
+                <p>Are you sure you want to delete the service "<span id="deletePartName"></span>"?</p>
+                <p class="text-danger">This will also delete all maintenance logs associated with this service!</p>
             </div>
             <div class="modal-footer">
                 <form id="deletePartForm" method="post" action="">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">Delete Part</button>
+                    <button type="submit" class="btn btn-danger">Delete Service</button>
                 </form>
             </div>
         </div>

@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { Card, Tabs, Typography, Space, Button, DatePicker, Select, Row, Col, Divider } from 'antd'
 import { DownloadOutlined, PrinterOutlined, EyeOutlined } from '@ant-design/icons'
 import AuditReportOptionA from '../../components/reports/AuditReportOptionA'
-import AuditReportOptionB from '../../components/reports/AuditReportOptionB'
 import AuditReportOptionC from '../../components/reports/AuditReportOptionC'
 import '../../styles/reports.css'
 
@@ -11,6 +10,10 @@ const { TabPane } = Tabs
 
 const AuditReportsPreview: React.FC = () => {
   const [selectedSite, setSelectedSite] = useState('Main Plant')
+
+  const handlePrint = () => {
+    window.print()
+  }
 
   // Sample audit data for preview
   const sampleAuditData = [
@@ -195,7 +198,7 @@ const AuditReportsPreview: React.FC = () => {
             <Button icon={<DownloadOutlined />}>
               Export to PDF
             </Button>
-            <Button icon={<PrinterOutlined />}>
+            <Button icon={<PrinterOutlined />} onClick={handlePrint}>
               Print
             </Button>
           </Space>
@@ -211,7 +214,7 @@ const AuditReportsPreview: React.FC = () => {
             tab={
               <span>
                 <EyeOutlined />
-                Option A: Detailed Checklist
+                Compact
               </span>
             } 
             key="1"
@@ -219,13 +222,13 @@ const AuditReportsPreview: React.FC = () => {
             <div className="option-description">
               <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
                 <Space direction="vertical">
-                  <Text strong>Option A: Detailed Checklist Format</Text>
+                  <Text strong>Compact Checklist Format</Text>
                   <Paragraph style={{ marginBottom: 0 }}>
                     <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
                       <li>Comprehensive checklist with all inspection points</li>
-                      <li>Table format for easy scanning</li>
+                      <li>Space-efficient table format for easy scanning</li>
                       <li>Overall compliance score with progress circle</li>
-                      <li>Dedicated findings and recommendations section</li>
+                      <li>Findings and recommendations section</li>
                       <li>Signature blocks for auditor and supervisor</li>
                       <li><strong>Best for:</strong> Compliance audits, detailed inspections, regulatory requirements</li>
                     </ul>
@@ -233,7 +236,7 @@ const AuditReportsPreview: React.FC = () => {
                 </Space>
               </Card>
             </div>
-            <div className="report-preview-wrapper">
+            <div className="report-preview-wrapper audit-report-compact">
               <AuditReportOptionA
                 auditName="Safety Compliance Audit"
                 auditDate="2025-11-01"
@@ -248,7 +251,7 @@ const AuditReportsPreview: React.FC = () => {
             tab={
               <span>
                 <EyeOutlined />
-                Option B: Executive Summary
+                Detailed
               </span>
             } 
             key="2"
@@ -256,48 +259,11 @@ const AuditReportsPreview: React.FC = () => {
             <div className="option-description">
               <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
                 <Space direction="vertical">
-                  <Text strong>Option B: Executive Summary Format</Text>
-                  <Paragraph style={{ marginBottom: 0 }}>
-                    <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
-                      <li>High-level overview focusing on key metrics</li>
-                      <li>Visual KPI dashboard with large compliance score</li>
-                      <li>Category performance breakdown with progress bars</li>
-                      <li>Critical findings highlighted prominently</li>
-                      <li>Recommendations and conclusion sections</li>
-                      <li><strong>Best for:</strong> Management reviews, stakeholder presentations, board meetings</li>
-                    </ul>
-                  </Paragraph>
-                </Space>
-              </Card>
-            </div>
-            <div className="report-preview-wrapper">
-              <AuditReportOptionB
-                auditName="Safety Compliance Audit"
-                auditDate="2025-11-01"
-                site={selectedSite}
-                auditor="John Doe"
-                data={sampleAuditData}
-              />
-            </div>
-          </TabPane>
-
-          <TabPane 
-            tab={
-              <span>
-                <EyeOutlined />
-                Option C: Compliance Report
-              </span>
-            } 
-            key="3"
-          >
-            <div className="option-description">
-              <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
-                <Space direction="vertical">
-                  <Text strong>Option C: Compliance-Focused Format</Text>
+                  <Text strong>Detailed Compliance Format</Text>
                   <Paragraph style={{ marginBottom: 0 }}>
                     <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
                       <li>Organized by categories with regulatory focus</li>
-                      <li>Collapsible category sections for easy navigation</li>
+                      <li>Collapsible category sections for navigation</li>
                       <li>Non-compliance items with required actions</li>
                       <li>Formal compliance statement</li>
                       <li>Certification section with document ID</li>
@@ -307,7 +273,7 @@ const AuditReportsPreview: React.FC = () => {
                 </Space>
               </Card>
             </div>
-            <div className="report-preview-wrapper">
+            <div className="report-preview-wrapper audit-report-detailed">
               <AuditReportOptionC
                 auditName="Safety Compliance Audit"
                 auditDate="2025-11-01"
@@ -322,41 +288,29 @@ const AuditReportsPreview: React.FC = () => {
 
       {/* Decision Helper */}
       <Card style={{ marginTop: 16 }}>
-        <Title level={4}>Which Audit Report Option Should I Choose?</Title>
+        <Title level={4}>Which Audit Report Format Should I Choose?</Title>
         <Row gutter={16}>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={12}>
             <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Option A if:</Text>
+              <Text strong>Choose Compact if:</Text>
               <ul style={{ paddingLeft: 20 }}>
-                <li>You need complete audit documentation</li>
+                <li>You need complete audit documentation in minimal space</li>
                 <li>You're conducting compliance audits</li>
                 <li>You need detailed checklist format</li>
                 <li>You require signature certification</li>
-                <li>You're doing regulatory inspections</li>
+                <li>You're printing single-page summaries</li>
               </ul>
             </Card>
           </Col>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={12}>
             <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Option B if:</Text>
-              <ul style={{ paddingLeft: 20 }}>
-                <li>You're presenting to executives</li>
-                <li>You need visual impact</li>
-                <li>You want focus on key metrics</li>
-                <li>Your audience prefers dashboards</li>
-                <li>You're doing internal reviews</li>
-              </ul>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Option C if:</Text>
+              <Text strong>Choose Detailed if:</Text>
               <ul style={{ paddingLeft: 20 }}>
                 <li>You need ISO/regulatory format</li>
                 <li>You're seeking certification</li>
                 <li>You need formal compliance docs</li>
-                <li>You want category organization</li>
-                <li>You're doing safety inspections</li>
+                <li>You want category-by-category organization</li>
+                <li>You're doing comprehensive safety inspections</li>
               </ul>
             </Card>
           </Col>
@@ -371,7 +325,7 @@ const AuditReportsPreview: React.FC = () => {
             <Card size="small">
               <Text strong>Safety Audits</Text>
               <Paragraph>
-                <strong>Recommended:</strong> Option C (Compliance Format)
+                <strong>Recommended:</strong> Detailed Format
                 <br />
                 Safety audits require formal documentation with compliance statements and certification.
               </Paragraph>
@@ -379,21 +333,21 @@ const AuditReportsPreview: React.FC = () => {
           </Col>
           <Col xs={24} md={12}>
             <Card size="small">
-              <Text strong>Quality Audits</Text>
+              <Text strong>Quality & Internal Audits</Text>
               <Paragraph>
-                <strong>Recommended:</strong> Option A (Detailed Checklist)
+                <strong>Recommended:</strong> Compact Format
                 <br />
-                Quality audits benefit from comprehensive checklists with findings documentation.
+                Quality audits benefit from comprehensive checklists with quick-scan tables.
               </Paragraph>
             </Card>
           </Col>
           <Col xs={24} md={12}>
             <Card size="small">
-              <Text strong>Internal Management Reviews</Text>
+              <Text strong>Routine Inspections</Text>
               <Paragraph>
-                <strong>Recommended:</strong> Option B (Executive Summary)
+                <strong>Recommended:</strong> Compact Format
                 <br />
-                Management reviews focus on key metrics and visual performance indicators.
+                Routine inspections benefit from quick-reference table layout for daily use.
               </Paragraph>
             </Card>
           </Col>
@@ -401,7 +355,7 @@ const AuditReportsPreview: React.FC = () => {
             <Card size="small">
               <Text strong>Regulatory Compliance</Text>
               <Paragraph>
-                <strong>Recommended:</strong> Option C (Compliance Format)
+                <strong>Recommended:</strong> Detailed Format
                 <br />
                 Regulatory audits require formal compliance statements and structured documentation.
               </Paragraph>

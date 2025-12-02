@@ -1,14 +1,20 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { Layout, Spin } from 'antd'
 import TitleBar from './components/TitleBar'
 import MenuBar from './components/MenuBar'
 import Sidebar from './components/Sidebar'
+import OnboardingTour from './components/onboarding/OnboardingTour'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import PermissionGate from './components/auth/PermissionGate'
 import { initializeSocket, disconnectSocket } from './utils/socket'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { 
+  requestNotificationPermission, 
+  startNotificationScheduler, 
+  stopNotificationScheduler 
+} from './services/notificationService'
 import './styles/App.css'
 
 const { Content } = Layout
@@ -78,9 +84,41 @@ function App() {
 // Separate component for app layout to use hooks (useNavigate for IPC handlers)
 function AppLayout() {
   const navigate = useNavigate()
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   // Initialize keyboard shortcuts
   useKeyboardShortcuts()
+
+  // Check for first-time user
+  useEffect(() => {
+    const onboardingComplete = localStorage.getItem('amrs_onboarding_complete')
+    if (!onboardingComplete) {
+      // Small delay to let the app render first
+      const timer = setTimeout(() => {
+        setShowOnboarding(true)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [])
+
+  // Initialize desktop notifications
+  useEffect(() => {
+    const initNotifications = async () => {
+      const hasPermission = await requestNotificationPermission()
+      if (hasPermission) {
+        console.log('[App] Notification permission granted, starting scheduler')
+        startNotificationScheduler(30) // Check every 30 minutes
+      } else {
+        console.log('[App] Notification permission not granted')
+      }
+    }
+
+    initNotifications()
+
+    return () => {
+      stopNotificationScheduler()
+    }
+  }, [])
 
   // Handle Electron IPC messages for native menu actions
   useEffect(() => {
@@ -184,6 +222,15 @@ function AppLayout() {
           </Content>
         </Layout>
       </Layout>
+
+      {/* Onboarding Tour for first-time users */}
+      <OnboardingTour
+        open={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onComplete={() => {
+          console.log('[App] Onboarding tour completed')
+        }}
+      />
     </Layout>
   )
 }

@@ -105,7 +105,7 @@ const MaintenanceRecords: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load parts', error)
-      message.error('Unable to load parts for machine')
+      message.error('Unable to load services for machine')
     }
   }, [])
 
@@ -245,7 +245,7 @@ const MaintenanceRecords: React.FC = () => {
       ),
     },
     {
-      title: 'Part',
+      title: 'Service',
       dataIndex: 'part',
       key: 'part',
       render: (value: string) => value || 'Unknown',
@@ -255,7 +255,7 @@ const MaintenanceRecords: React.FC = () => {
       dataIndex: 'maintenanceType',
       key: 'maintenanceType',
       width: 140,
-      render: (value: string) => <Tag color="purple">{value || 'Routine'}</Tag>,
+      render: (value: string) => <Tag color="purple">{value || 'Scheduled'}</Tag>,
     },
     {
       title: 'Completed By',
@@ -320,13 +320,13 @@ const MaintenanceRecords: React.FC = () => {
               label: machine.serial
                 ? `${machine.name} - S/N: ${machine.serial}`
                 : `${machine.name} (${machine.site_name || 'No Site'})`
-            })}
+            }))}
           />
 
           <Select
             style={{ minWidth: 200 }}
             value={selectedPart ?? undefined}
-            placeholder="Part"
+            placeholder="Service"
             onChange={handlePartChange}
             allowClear
             options={parts.map((part) => ({ value: part.id, label: part.name }))}
@@ -334,7 +334,7 @@ const MaintenanceRecords: React.FC = () => {
           />
 
           <Search
-            placeholder="Search machine, part, notes..."
+            placeholder="Search machine, service, notes..."
             value={searchInput}
             onChange={handleSearchChange}
             onSearch={handleSearch}
