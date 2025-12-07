@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Maintenance Tracker{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Reports</li>
+{% endblock %}
+
+{% block header_title %}Reports{% endblock %}
+
+{% block help_icon %}
+<span class="help-icon" 
+      data-bs-toggle="tooltip" 
+      data-bs-placement="right" 
+      title="Generate maintenance and audit reports for analysis and compliance documentation.">
+    ?
+</span>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Report Type Selection -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <ul class="nav nav-tabs" id="reportTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="maintenance-tab" data-bs-toggle="tab" data-bs-target="#maintenance-reports" type="button" role="tab">
+                        <i class="fas fa-tools me-2"></i>Maintenance Reports
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="audit-tab" data-bs-toggle="tab" data-bs-target="#audit-reports" type="button" role="tab">
+                        <i class="fas fa-clipboard-check me-2"></i>Audit Reports
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-reports" type="button" role="tab">
+                        <i class="fas fa-chart-bar me-2"></i>Summary Reports
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="tab-content" id="reportTabsContent">
+        <!-- Maintenance Reports Tab -->
+        <div class="tab-pane fade show active" id="maintenance-reports" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>Generate Maintenance Report</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" action="{{ url_for('generate_maintenance_report') }}" target="_blank">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="maint_site_id" class="form-label">Site</label>
+                                <select class="form-select" id="maint_site_id" name="site_id">
+                                    <option value="">All Sites</option>
+                                    {% for site in sites %}
+                                    <option value="{{ site.id }}">{{ site.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="maint_machine_id" class="form-label">Machine</label>
+                                <select class="form-select" id="maint_machine_id" name="machine_id">
+                                    <option value="">All Machines</option>
+                                    {% for machine in machines %}
+                                    <option value="{{ machine.id }}" data-site="{{ machine.site_id }}">{{ machine.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="maint_date_from" class="form-label">From Date</label>
+                                <input type="date" class="form-control" id="maint_date_from" name="date_from" value="{{ default_from_date }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="maint_date_to" class="form-label">To Date</label>
+                                <input type="date" class="form-control" id="maint_date_to" name="date_to" value="{{ default_to_date }}">
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-4">
+                                <label for="maint_report_format" class="form-label">Report Format</label>
+                                <select class="form-select" id="maint_report_format" name="format">
+                                    <option value="html">HTML (View in Browser)</option>
+                                    <option value="pdf">PDF (Print-Ready)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="maint_group_by" class="form-label">Group By</label>
+                                <select class="form-select" id="maint_group_by" name="group_by">
+                                    <option value="date">Date</option>
+                                    <option value="machine">Machine</option>
+                                    <option value="site">Site</option>
+                                    <option value="service">Service/Part</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Include</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="include_notes" name="include_notes" value="1" checked>
+                                    <label class="form-check-label" for="include_notes">Notes & Comments</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="include_po" name="include_po" value="1" checked>
+                                    <label class="form-check-label" for="include_po">PO/Work Order Numbers</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-file-pdf me-2"></i>Generate Report
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Reports -->
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-calendar-week fa-3x text-primary mb-3"></i>
+                            <h5>This Week's Maintenance</h5>
+                            <p class="text-muted">All maintenance performed in the current week</p>
+                            <a href="{{ url_for('generate_maintenance_report', period='week') }}" target="_blank" class="btn btn-outline-primary">
+                                Generate Report
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-calendar-alt fa-3x text-success mb-3"></i>
+                            <h5>This Month's Maintenance</h5>
+                            <p class="text-muted">All maintenance performed in the current month</p>
+                            <a href="{{ url_for('generate_maintenance_report', period='month') }}" target="_blank" class="btn btn-outline-success">
+                                Generate Report
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                            <h5>Overdue Maintenance</h5>
+                            <p class="text-muted">All services currently overdue for maintenance</p>
+                            <a href="{{ url_for('generate_maintenance_report', status='overdue') }}" target="_blank" class="btn btn-outline-danger">
+                                Generate Report
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audit Reports Tab -->
+        <div class="tab-pane fade" id="audit-reports" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Generate Audit Report</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" action="{{ url_for('generate_audit_report') }}" target="_blank">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="audit_site_id" class="form-label">Site</label>
+                                <select class="form-select" id="audit_site_id" name="site_id">
+                                    <option value="">All Sites</option>
+                                    {% for site in sites %}
+                                    <option value="{{ site.id }}">{{ site.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="audit_task_id" class="form-label">Audit Task</label>
+                                <select class="form-select" id="audit_task_id" name="audit_task_id">
+                                    <option value="">All Audit Tasks</option>
+                                    {% for task in audit_tasks %}
+                                    <option value="{{ task.id }}">{{ task.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="audit_date_from" class="form-label">From Date</label>
+                                <input type="date" class="form-control" id="audit_date_from" name="date_from" value="{{ default_from_date }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="audit_date_to" class="form-label">To Date</label>
+                                <input type="date" class="form-control" id="audit_date_to" name="date_to" value="{{ default_to_date }}">
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-4">
+                                <label for="audit_report_format" class="form-label">Report Format</label>
+                                <select class="form-select" id="audit_report_format" name="format">
+                                    <option value="html">HTML (View in Browser)</option>
+                                    <option value="pdf">PDF (Print-Ready)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="audit_status" class="form-label">Completion Status</label>
+                                <select class="form-select" id="audit_status" name="status">
+                                    <option value="">All</option>
+                                    <option value="completed">Completed Only</option>
+                                    <option value="incomplete">Incomplete Only</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-file-pdf me-2"></i>Generate Report
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Reports Tab -->
+        <div class="tab-pane fade" id="summary-reports" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Summary & Analytics Reports</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-chart-line me-2 text-primary"></i>Maintenance Compliance Report</h5>
+                                    <p class="text-muted">Shows on-time vs overdue maintenance percentages per machine/site</p>
+                                    <a href="{{ url_for('generate_summary_report', type='compliance') }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                        Generate
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-history me-2 text-success"></i>Maintenance History Summary</h5>
+                                    <p class="text-muted">Total maintenance activities by type, machine, and time period</p>
+                                    <a href="{{ url_for('generate_summary_report', type='history') }}" target="_blank" class="btn btn-outline-success btn-sm">
+                                        Generate
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-clipboard-check me-2 text-warning"></i>Audit Completion Summary</h5>
+                                    <p class="text-muted">Overview of audit task completion rates by site and task</p>
+                                    <a href="{{ url_for('generate_summary_report', type='audit_completion') }}" target="_blank" class="btn btn-outline-warning btn-sm">
+                                        Generate
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-cogs me-2 text-info"></i>Equipment Status Report</h5>
+                                    <p class="text-muted">Current status of all machines and their maintenance needs</p>
+                                    <a href="{{ url_for('generate_summary_report', type='equipment') }}" target="_blank" class="btn btn-outline-info btn-sm">
+                                        Generate
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter machines by site
+    const siteSelects = document.querySelectorAll('select[id$="_site_id"]');
+    siteSelects.forEach(siteSelect => {
+        siteSelect.addEventListener('change', function() {
+            const siteId = this.value;
+            const machineSelectId = this.id.replace('_site_id', '_machine_id');
+            const machineSelect = document.getElementById(machineSelectId);
+            
+            if (machineSelect) {
+                Array.from(machineSelect.options).forEach(option => {
+                    if (option.value === '') {
+                        option.style.display = '';
+                    } else {
+                        const optionSiteId = option.getAttribute('data-site');
+                        option.style.display = (!siteId || optionSiteId === siteId) ? '' : 'none';
+                    }
+                });
+                machineSelect.value = '';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

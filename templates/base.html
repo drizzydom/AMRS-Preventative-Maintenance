@@ -749,6 +749,20 @@
                             </a>
                         </li>
                         {% endif %}
+                        
+                        {# Reports - requires maintenance.view permission #}
+                        {% if current_user.is_admin or (hasattr(current_user, 'role') and current_user.role and 'maintenance.view' in (current_user.role.permissions if current_user.role and current_user.role.permissions else '')) %}
+                        <li class="sidebar-nav-item">
+                            <a href="{{ url_for('reports_page') }}" 
+                               class="sidebar-link {% if request.endpoint == 'reports_page' %}active{% endif %}"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="right" 
+                               title="Generate maintenance reports">
+                                <i class="sidebar-icon fas fa-file-alt"></i>
+                                <span class="sidebar-link-text">Reports</span>
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                     
                     <!-- User information and logout at bottom of sidebar -->

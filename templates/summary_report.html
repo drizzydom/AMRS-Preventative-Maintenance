@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}{{ report_title }}{% endblock %}
+{% block header_title %}{{ report_title }}{% endblock %}
+
+{% block content %}
+<style>
+@media print {
+    .no-print, .sidebar, .navbar, .breadcrumb, .sidebar-overlay { display: none !important; }
+    body { padding: 0; margin: 0; }
+    .container-fluid { max-width: 100%; padding: 20px; }
+    .card { border: 1px solid #ddd; break-inside: avoid; }
+}
+.progress-bar-sm {
+    height: 10px;
+}
+</style>
+
+<div class="container-fluid">
+    <!-- Report Header -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                <i class="fas fa-chart-bar me-2"></i>{{ report_title }}
+            </h4>
+            <div class="no-print">
+                <button onclick="window.print()" class="btn btn-light btn-sm">
+                    <i class="fas fa-print me-1"></i> Print
+                </button>
+                <a href="{{ url_for('reports_page') }}" class="btn btn-outline-light btn-sm ms-2">
+                    <i class="fas fa-arrow-left me-1"></i> Back
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <p class="mb-0"><strong>Generated:</strong> {{ report_date }}</p>
+        </div>
+    </div>
+
+    {% if report_type == 'compliance' %}
+    <!-- Maintenance Compliance Report -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Compliance by Site</h5>
+        </div>
+        <div class="card-body">
+            {% if compliance_data %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Site</th>
+                            <th>Total Services</th>
+                            <th>On Time</th>
+                            <th>Overdue</th>
+                            <th>Compliance Rate</th>
+                            <th width="200">Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for data in compliance_data %}
+                        <tr>
+                            <td>{{ data.site }}</td>
+                            <td>{{ data.total_services }}</td>
+                            <td><span class="badge bg-success">{{ data.on_time }}</span></td>
+                            <td><span class="badge bg-danger">{{ data.overdue }}</span></td>
+                            <td><strong>{{ data.compliance_rate }}%</strong></td>
+                            <td>
+                                <div class="progress progress-bar-sm">
+                                    <div class="progress-bar {% if data.compliance_rate >= 80 %}bg-success{% elif data.compliance_rate >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                         role="progressbar" 
+                                         style="width: {{ data.compliance_rate }}%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No compliance data available.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% elif report_type == 'history' %}
+    <!-- Maintenance History Summary -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body text-center">
+                    <h2 class="display-4">{{ records_30_days }}</h2>
+                    <p class="mb-0">Records (Last 30 Days)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body text-center">
+                    <h2 class="display-4">{{ records_90_days }}</h2>
+                    <p class="mb-0">Records (Last 90 Days)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body text-center">
+                    <h2 class="display-4">{{ records_total }}</h2>
+                    <p class="mb-0">Total Records</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if type_counts %}
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-tags me-2"></i>By Maintenance Type (Last 30 Days)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Maintenance Type</th>
+                            <th>Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for type_name, count in type_counts %}
+                        <tr>
+                            <td>{{ type_name or 'Unspecified' }}</td>
+                            <td><span class="badge bg-primary">{{ count }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% elif report_type == 'audit_completion' %}
+    <!-- Audit Completion Summary -->
+    <div class="card">
+        <div class="card-header bg-warning">
+            <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Audit Task Completion Rates</h5>
+        </div>
+        <div class="card-body">
+            {% if audit_data %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Site</th>
+                            <th>Audit Task</th>
+                            <th>Total</th>
+                            <th>Completed</th>
+                            <th>Completion Rate</th>
+                            <th width="200">Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for data in audit_data %}
+                        <tr>
+                            <td>{{ data.site }}</td>
+                            <td>{{ data.task }}</td>
+                            <td>{{ data.total }}</td>
+                            <td><span class="badge bg-success">{{ data.completed }}</span></td>
+                            <td><strong>{{ data.completion_rate }}%</strong></td>
+                            <td>
+                                <div class="progress progress-bar-sm">
+                                    <div class="progress-bar {% if data.completion_rate >= 80 %}bg-success{% elif data.completion_rate >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                         role="progressbar" 
+                                         style="width: {{ data.completion_rate }}%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No audit data available.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% elif report_type == 'equipment' %}
+    <!-- Equipment Status Report -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>Equipment Status by Machine</h5>
+        </div>
+        <div class="card-body">
+            {% if equipment_data %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Site</th>
+                            <th>Machine</th>
+                            <th>Machine #</th>
+                            <th>Total Services</th>
+                            <th><span class="badge bg-success">OK</span></th>
+                            <th><span class="badge bg-warning text-dark">Due Soon</span></th>
+                            <th><span class="badge bg-danger">Overdue</span></th>
+                            <th><span class="badge bg-secondary">No History</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for data in equipment_data %}
+                        <tr>
+                            <td>{{ data.site }}</td>
+                            <td>{{ data.machine }}</td>
+                            <td>{{ data.machine_number or '-' }}</td>
+                            <td>{{ data.total_services }}</td>
+                            <td><span class="badge bg-success">{{ data.ok }}</span></td>
+                            <td><span class="badge bg-warning text-dark">{{ data.due_soon }}</span></td>
+                            <td>
+                                {% if data.overdue > 0 %}
+                                <span class="badge bg-danger">{{ data.overdue }}</span>
+                                {% else %}
+                                <span class="badge bg-light text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-secondary">{{ data.no_maintenance }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Legend -->
+            <div class="mt-3 p-3 bg-light rounded">
+                <strong>Legend:</strong>
+                <span class="ms-3"><span class="badge bg-success">OK</span> = Maintenance up to date</span>
+                <span class="ms-3"><span class="badge bg-warning text-dark">Due Soon</span> = Due within 30 days</span>
+                <span class="ms-3"><span class="badge bg-danger">Overdue</span> = Past due date</span>
+                <span class="ms-3"><span class="badge bg-secondary">No History</span> = No valid maintenance records</span>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No equipment data available.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

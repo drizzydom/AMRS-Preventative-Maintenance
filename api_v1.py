@@ -450,27 +450,44 @@ def api_get_dashboard():
         total_machines = machine_query.scalar()
         logger.debug(f'Total machines (not decommissioned): {total_machines}')
         
-        # Query parts for maintenance statistics (parts have next_maintenance dates)
-        overdue_query = db.session.query(func.count(Part.id)).filter(
-            and_(Part.next_maintenance < today, Part.next_maintenance.isnot(None))
-        )
-        due_soon_query = db.session.query(func.count(Part.id)).filter(
-            and_(
-                Part.next_maintenance >= today,
-                Part.next_maintenance <= due_soon_date,
-                Part.next_maintenance.isnot(None)
-            )
-        )
-
-        if site_scope is not None:
-            overdue_query = overdue_query.join(Machine, Part.machine_id == Machine.id).filter(Machine.site_id.in_(site_scope))
-            due_soon_query = due_soon_query.join(Machine, Part.machine_id == Machine.id).filter(Machine.site_id.in_(site_scope))
-
-        overdue_parts = overdue_query.scalar()
-        logger.debug(f'Overdue parts: {overdue_parts}')
+        # Calculate maintenance statistics based on ACTUAL maintenance records
+        # Not the stored next_maintenance field which may have placeholder dates
+        MIN_VALID_DATE = datetime(2010, 1, 1)
         
-        due_soon_parts = due_soon_query.scalar()
-        logger.debug(f'Due soon parts: {due_soon_parts}')
+        overdue_count = 0
+        due_soon_count = 0
+        
+        # Build part query based on site scope
+        part_query = Part.query
+        if site_scope is not None:
+            part_query = part_query.join(Machine, Part.machine_id == Machine.id).filter(Machine.site_id.in_(site_scope))
+        
+        all_parts = part_query.all()
+        
+        for part in all_parts:
+            # Find the latest valid maintenance record (after MIN_VALID_DATE)
+            valid_records = [r for r in part.maintenance_records 
+                           if r.date and r.date >= MIN_VALID_DATE]
+            
+            if valid_records:
+                # Has valid maintenance history
+                latest_record = max(valid_records, key=lambda r: r.date)
+                
+                # Calculate next maintenance from latest record
+                interval_days = part.maintenance_interval_days() if hasattr(part, 'maintenance_interval_days') else 30
+                if isinstance(latest_record.date, datetime):
+                    next_due = latest_record.date + timedelta(days=interval_days)
+                else:
+                    next_due = datetime.combine(latest_record.date, datetime.min.time()) + timedelta(days=interval_days)
+                
+                if next_due < today:
+                    overdue_count += 1
+                elif next_due <= due_soon_date:
+                    due_soon_count += 1
+            # Parts without valid maintenance history are NOT counted as overdue
+        
+        logger.debug(f'Overdue parts (calculated): {overdue_count}')
+        logger.debug(f'Due soon parts (calculated): {due_soon_count}')
         
         # Count completed maintenance records this month
         completed_query = db.session.query(func.count(MaintenanceRecord.id)).filter(
@@ -487,8 +504,8 @@ def api_get_dashboard():
         
         stats = {
             'total_machines': total_machines or 0,
-            'overdue': int(overdue_parts or 0),
-            'due_soon': int(due_soon_parts or 0),
+            'overdue': overdue_count,
+            'due_soon': due_soon_count,
             'completed': int(completed_this_month or 0),
         }
         
@@ -619,7 +636,7 @@ def api_get_maintenance():
         if not (_has_permission('maintenance.view') or _has_permission('maintenance.record') or _is_admin_user()):
             return api_response(error='Insufficient permissions', status=403)
 
-        from models import Part, Machine, Site
+        from models import Part, Machine, Site, MaintenanceRecord
         from sqlalchemy.orm import joinedload
         from sqlalchemy import and_
         
@@ -627,15 +644,19 @@ def api_get_maintenance():
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         due_soon_date = today + timedelta(days=7)
         
+        # Minimum valid date - anything before this is considered a placeholder/invalid
+        MIN_VALID_DATE = datetime(2010, 1, 1)
+        
         # Get query parameters
         status_filter = request.args.get('status', None)
         site_id_filter = request.args.get('site_id', None)
         
-        # Get all parts that have upcoming or overdue maintenance
+        # Get all parts - we'll calculate status from maintenance records
         # Optimize with eager loading to avoid N+1 queries
         query = Part.query.options(
-            joinedload(Part.machine).joinedload(Machine.site)
-        ).filter(Part.next_maintenance.isnot(None))
+            joinedload(Part.machine).joinedload(Machine.site),
+            joinedload(Part.maintenance_records)
+        )
         joined_machine = False
         
         # Apply site filter if provided
@@ -677,9 +698,6 @@ def api_get_maintenance():
         
         tasks_data = []
         for part in parts:
-            if not part.next_maintenance:
-                continue
-            
             # Filter out import artifacts - check both part name and description
             part_name_lower = part.name.lower() if part.name else ''
             part_desc_lower = part.description.lower() if part.description else ''
@@ -692,6 +710,24 @@ def api_get_maintenance():
             
             if is_artifact:
                 continue  # Skip this part as it's an import artifact
+            
+            # Find the latest valid maintenance record (after MIN_VALID_DATE)
+            valid_records = [r for r in part.maintenance_records 
+                           if r.date and r.date >= MIN_VALID_DATE]
+            
+            if not valid_records:
+                # No valid maintenance history - skip (not counted as overdue)
+                # These parts need initial maintenance but aren't "overdue"
+                continue
+            
+            latest_record = max(valid_records, key=lambda r: r.date)
+            
+            # Calculate next maintenance from latest record
+            interval_days = part.maintenance_interval_days() if hasattr(part, 'maintenance_interval_days') else 30
+            if isinstance(latest_record.date, datetime):
+                calculated_next_maintenance = latest_record.date + timedelta(days=interval_days)
+            else:
+                calculated_next_maintenance = datetime.combine(latest_record.date, datetime.min.time()) + timedelta(days=interval_days)
                 
             # Determine status based on maintenance type (cycle-based or time-based)
             status = 'pending'
@@ -703,10 +739,10 @@ def api_get_maintenance():
                 if cycle_status:
                     status = cycle_status
             else:
-                # Time-based status calculation
-                if part.next_maintenance < today:
+                # Time-based status calculation using calculated next maintenance
+                if calculated_next_maintenance < today:
                     status = 'overdue'
-                elif part.next_maintenance <= due_soon_date:
+                elif calculated_next_maintenance <= due_soon_date:
                     status = 'due_soon'
             
             # Apply status filter if provided
@@ -721,8 +757,8 @@ def api_get_maintenance():
             site_name = part.machine.site.name if part.machine and part.machine.site else ''
             site_id = part.machine.site.id if part.machine and part.machine.site else None
             
-            # Calculate days overdue or days until due (for time-based)
-            days_diff = (part.next_maintenance - today).days
+            # Calculate days overdue or days until due (using calculated next maintenance)
+            days_diff = (calculated_next_maintenance - today).days
             
             # Build task name, avoiding duplication of machine name
             task_name = part.name
@@ -738,6 +774,10 @@ def api_get_maintenance():
             elif part.maintenance_frequency:
                 frequency_display = f"{part.maintenance_frequency} {part.maintenance_unit}"
             
+            # Use calculated values for display
+            last_maint_display = latest_record.date.strftime('%Y-%m-%d') if latest_record.date else None
+            next_maint_display = calculated_next_maintenance.strftime('%Y-%m-%d')
+            
             task_dict = {
                 'id': part.id,
                 'part_name': part.name,
@@ -747,8 +787,8 @@ def api_get_maintenance():
                 'machine_serial': machine_serial,
                 'machine_cycle_count': machine_cycle_count,
                 'task': task_name,
-                'dueDate': part.next_maintenance.strftime('%Y-%m-%d'),
-                'next_maintenance': part.next_maintenance.strftime('%Y-%m-%d'),
+                'dueDate': next_maint_display,
+                'next_maintenance': next_maint_display,
                 'status': status,
                 'is_cycle_based': is_cycle_based,
                 'assignedTo': '',  # Can be added from maintenance records if needed
@@ -756,7 +796,7 @@ def api_get_maintenance():
                 'site_name': site_name,
                 'site_id': site_id,
                 'priority': 'high' if status == 'overdue' else 'medium' if status == 'due_soon' else 'low',
-                'lastMaintenance': part.last_maintenance.strftime('%Y-%m-%d') if part.last_maintenance else None,
+                'lastMaintenance': last_maint_display,
                 'frequency': frequency_display,
             }
             
