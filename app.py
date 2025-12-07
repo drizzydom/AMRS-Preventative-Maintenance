@@ -4671,11 +4671,14 @@ def dashboard():
                                       site_part_totals={},
                                       all_overdue=[],
                                       all_due_soon=[],
+                                      all_needs_initial=[],
                                       all_overdue_total=0,
                                       all_due_soon_total=0,
+                                      all_needs_initial_total=0,
                                       overdue_count=0, 
                                       due_soon_count=0, 
-                                      ok_count=0, 
+                                      ok_count=0,
+                                      needs_initial_count=0,
                                       total_parts=0,
                                       no_sites=True,  # Flag to show special message in template
                                       now=datetime.now(),
@@ -4741,74 +4744,115 @@ def dashboard():
         
         # Process parts for maintenance status
         now = datetime.now()
+        # Minimum valid date - anything before this is considered a placeholder/invalid
+        MIN_VALID_DATE = datetime(2010, 1, 1)
+        
         overdue_count = 0
         due_soon_count = 0
         ok_count = 0
+        needs_initial_count = 0  # Parts that have never had valid maintenance
         all_overdue = []
         all_due_soon = []
+        all_needs_initial = []
         site_part_highlights = {}
         site_part_totals = {}
         
-        # Helper: get most recent valid maintenance record after 2010
+        # Helper: get most recent valid maintenance record after MIN_VALID_DATE
         def get_latest_maintenance(part):
             if hasattr(part, 'maintenance_records'):
-                valid = [r for r in part.maintenance_records if r.date and r.date >= datetime(2010, 1, 1)]
+                valid = [r for r in part.maintenance_records if r.date and r.date >= MIN_VALID_DATE]
                 if valid:
                     return max(valid, key=lambda r: r.date)
             return None
+        
+        # Helper: calculate next maintenance date from latest record
+        def calculate_next_maintenance(part, latest_record):
+            """Calculate when maintenance is next due based on the latest valid record"""
+            if not latest_record or not latest_record.date:
+                return None
+            
+            # Get maintenance interval in days
+            interval_days = part.maintenance_interval_days() if hasattr(part, 'maintenance_interval_days') else 30
+            
+            # Calculate next due date from the latest maintenance
+            if isinstance(latest_record.date, datetime):
+                return latest_record.date + timedelta(days=interval_days)
+            else:
+                return datetime.combine(latest_record.date, datetime.min.time()) + timedelta(days=interval_days)
         
         # Process each site for the template
         for site in all_sites:
             site_overdue = []
             site_due_soon = []
+            site_needs_initial = []
             
             for machine in site.machines:
                 if show_decommissioned or not machine.decommissioned:
                     for part in machine.parts:
                         latest_record = get_latest_maintenance(part)
-                        if latest_record and part.next_maintenance:
-                            days_until = (part.next_maintenance - now).days
-                            part_info = {
-                                'part': part,
-                                'machine': machine,
-                                'site': site,
-                                'days_until': days_until,
-                                'has_maintenance': True
-                            }
-                            if days_until < 0:
-                                site_overdue.append(part_info)
-                                all_overdue.append(part_info)
-                                overdue_count += 1
-                            elif days_until <= 30:
-                                site_due_soon.append(part_info)
-                                all_due_soon.append(part_info)
-                                due_soon_count += 1
+                        
+                        if latest_record:
+                            # Has valid maintenance history - calculate next due date dynamically
+                            calculated_next = calculate_next_maintenance(part, latest_record)
+                            
+                            if calculated_next:
+                                days_until = (calculated_next - now).days
+                                part_info = {
+                                    'part': part,
+                                    'machine': machine,
+                                    'site': site,
+                                    'days_until': days_until,
+                                    'has_maintenance': True,
+                                    'last_maintenance_date': latest_record.date,
+                                    'next_maintenance_date': calculated_next
+                                }
+                                if days_until < 0:
+                                    site_overdue.append(part_info)
+                                    all_overdue.append(part_info)
+                                    overdue_count += 1
+                                elif days_until <= 30:
+                                    site_due_soon.append(part_info)
+                                    all_due_soon.append(part_info)
+                                    due_soon_count += 1
+                                else:
+                                    ok_count += 1
                             else:
-                                ok_count += 1
+                                ok_count += 1  # Has maintenance but couldn't calculate next
                         else:
-                            # No valid maintenance after 2010
+                            # No valid maintenance after MIN_VALID_DATE - needs initial maintenance
+                            # DO NOT count as overdue - these are just parts without completed maintenance
                             part_info = {
                                 'part': part,
                                 'machine': machine,
                                 'site': site,
                                 'days_until': None,
-                                'has_maintenance': False
+                                'has_maintenance': False,
+                                'needs_initial': True
                             }
-                            # These are not counted as overdue/due soon/ok
+                            site_needs_initial.append(part_info)
+                            all_needs_initial.append(part_info)
+                            needs_initial_count += 1
             
             # Store site-specific data, include all parts
             site_part_highlights[site.id] = {
                 'overdue': site_overdue[:5],  # Limit to top 5 for highlights
-                'due_soon': site_due_soon[:5]
+                'due_soon': site_due_soon[:5],
+                'needs_initial': site_needs_initial[:5]
             }
             site_part_totals[site.id] = {
                 'overdue': len(site_overdue),
-                'due_soon': len(site_due_soon)
+                'due_soon': len(site_due_soon),
+                'needs_initial': len(site_needs_initial)
             }
+        
+        # Sort overdue by most overdue first (most negative days_until)
+        all_overdue.sort(key=lambda x: x['days_until'])
+        all_due_soon.sort(key=lambda x: x['days_until'])
         
         total_parts = len(parts)
         all_overdue_total = len(all_overdue)
         all_due_soon_total = len(all_due_soon)
+        all_needs_initial_total = len(all_needs_initial)
         
         app_version = os.environ.get("APP_VERSION", "")
         return render_template('dashboard.html',
@@ -4819,11 +4863,14 @@ def dashboard():
                       site_part_totals=site_part_totals,
                       all_overdue=all_overdue[:10],  # Limit to top 10 for performance
                       all_due_soon=all_due_soon[:10],
+                      all_needs_initial=all_needs_initial[:10],
                       all_overdue_total=all_overdue_total,
                       all_due_soon_total=all_due_soon_total,
+                      all_needs_initial_total=all_needs_initial_total,
                       overdue_count=overdue_count, 
                       due_soon_count=due_soon_count, 
-                      ok_count=ok_count, 
+                      ok_count=ok_count,
+                      needs_initial_count=needs_initial_count,
                       total_parts=total_parts, 
                       now=now,
                       show_decommissioned=show_decommissioned,
@@ -4845,11 +4892,14 @@ def dashboard():
                   site_part_totals={},
                   all_overdue=[],
                   all_due_soon=[],
+                  all_needs_initial=[],
                   all_overdue_total=0,
                   all_due_soon_total=0,
+                  all_needs_initial_total=0,
                   overdue_count=0, 
                   due_soon_count=0, 
-                  ok_count=0, 
+                  ok_count=0,
+                  needs_initial_count=0,
                   total_parts=0,
                   error=True,  # Flag to show error message in template
                   now=datetime.now(),
@@ -4861,11 +4911,11 @@ def dashboard():
 @app.route('/api/search', methods=['GET'])
 @login_required
 def api_search():
-    """Search across machines, parts, and sites."""
+    """Search across machines, parts, sites, and maintenance records (by PO/work order)."""
     query = request.args.get('q', '').strip()
     
     if len(query) < 2:
-        return jsonify({'machines': [], 'parts': [], 'sites': []})
+        return jsonify({'machines': [], 'parts': [], 'sites': [], 'maintenance_records': []})
     
     try:
         # Search machines
@@ -4878,7 +4928,7 @@ def api_search():
             )
         ).limit(5).all()
         
-        # Search parts
+        # Search parts/services
         parts = Part.query.filter(
             db.or_(
                 Part.name.ilike(f'%{query}%'),
@@ -4890,6 +4940,17 @@ def api_search():
         sites = Site.query.filter(
             Site.name.ilike(f'%{query}%')
         ).limit(5).all()
+        
+        # Search maintenance records by PO number, work order number, or description
+        maintenance_records = MaintenanceRecord.query.filter(
+            db.or_(
+                MaintenanceRecord.po_number.ilike(f'%{query}%'),
+                MaintenanceRecord.work_order_number.ilike(f'%{query}%'),
+                MaintenanceRecord.description.ilike(f'%{query}%'),
+                MaintenanceRecord.notes.ilike(f'%{query}%'),
+                MaintenanceRecord.comments.ilike(f'%{query}%')
+            )
+        ).order_by(MaintenanceRecord.date.desc()).limit(5).all()
         
         return jsonify({
             'machines': [
@@ -4911,6 +4972,16 @@ def api_search():
                     'id': s.id,
                     'name': s.name
                 } for s in sites
+            ],
+            'maintenance_records': [
+                {
+                    'id': r.id,
+                    'po_number': r.po_number,
+                    'work_order_number': r.work_order_number,
+                    'date': r.date.strftime('%Y-%m-%d') if r.date else None,
+                    'part_name': r.part.name if r.part else None,
+                    'machine_name': r.machine.name if r.machine else (r.part.machine.name if r.part and r.part.machine else None)
+                } for r in maintenance_records
             ]
         })
     except Exception as e:
@@ -6741,6 +6812,13 @@ def delete_user(user_id):
 @app.route('/maintenance', methods=['GET', 'POST'])
 @login_required
 def maintenance_page():
+    # For GET requests, serve React app if available
+    if request.method == 'GET':
+        frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+        if os.path.exists(frontend_path):
+            return send_file(frontend_path, mimetype='text/html')
+    
+    # Fall through to Flask template handling for POST or if React build doesn't exist
     try:
         def has_maintenance_record_permission(user):
             if getattr(user, 'is_admin', False):
@@ -9037,6 +9115,11 @@ def maintenance_records_page():
     site_id = request.args.get('site_id', type=int)
     machine_id = request.args.get('machine_id', type=int)
     part_id = request.args.get('part_id', type=int)
+    
+    # New search and filter parameters
+    search_query = request.args.get('q', '').strip()
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
 
     # Get site IDs the user has access to
     site_ids = [site.id for site in sites]
@@ -9069,6 +9152,38 @@ def maintenance_records_page():
     # Get machine IDs
     machine_ids = [m.id for m in machines]
     
+    # Build the base query for records
+    records_query = MaintenanceRecord.query
+    
+    # Apply text search filter (PO number, work order, description, notes)
+    if search_query:
+        records_query = records_query.filter(
+            db.or_(
+                MaintenanceRecord.po_number.ilike(f'%{search_query}%'),
+                MaintenanceRecord.work_order_number.ilike(f'%{search_query}%'),
+                MaintenanceRecord.description.ilike(f'%{search_query}%'),
+                MaintenanceRecord.notes.ilike(f'%{search_query}%'),
+                MaintenanceRecord.comments.ilike(f'%{search_query}%')
+            )
+        )
+    
+    # Apply date range filters
+    if date_from:
+        try:
+            from_date = datetime.strptime(date_from, '%Y-%m-%d')
+            records_query = records_query.filter(MaintenanceRecord.date >= from_date)
+        except ValueError:
+            pass
+    
+    if date_to:
+        try:
+            to_date = datetime.strptime(date_to, '%Y-%m-%d')
+            # Include the entire day
+            to_date = to_date.replace(hour=23, minute=59, second=59)
+            records_query = records_query.filter(MaintenanceRecord.date <= to_date)
+        except ValueError:
+            pass
+    
     if part_id:
         # Verify user can access this part
         part = Part.query.get(part_id)
@@ -9077,25 +9192,25 @@ def maintenance_records_page():
             return redirect(url_for('maintenance_records_page'))
             
         # Filter records by selected part
-        records = MaintenanceRecord.query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
+        records = records_query.filter_by(part_id=part_id).order_by(MaintenanceRecord.date.desc()).all()
     elif machine_id:
         # If a machine is selected but no part, show records for all parts of that machine
         parts_for_machine = Part.query.filter_by(machine_id=machine_id).all()
         part_ids_for_machine = [part.id for part in parts_for_machine]
-        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_machine)).order_by(MaintenanceRecord.date.desc()).all()
+        records = records_query.filter(MaintenanceRecord.part_id.in_(part_ids_for_machine)).order_by(MaintenanceRecord.date.desc()).all()
     elif site_id:
         # If a site is selected but no machine/part, show records for all parts of all machines at that site
         machines_for_site = Machine.query.filter_by(site_id=site_id).all()
         machine_ids_for_site = [machine.id for machine in machines_for_site]
         parts_for_site = Part.query.filter(Part.machine_id.in_(machine_ids_for_site)).all()
         part_ids_for_site = [part.id for part in parts_for_site]
-        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids_for_site)).order_by(MaintenanceRecord.date.desc()).all()
+        records = records_query.filter(MaintenanceRecord.part_id.in_(part_ids_for_site)).order_by(MaintenanceRecord.date.desc()).all()
     else:
         # No filters selected - show all records for parts the user has access to
         if machine_ids:
             parts = Part.query.filter(Part.machine_id.in_(machine_ids)).all()
             part_ids = [part.id for part in parts]
-        records = MaintenanceRecord.query.filter(MaintenanceRecord.part_id.in_(part_ids)).order_by(MaintenanceRecord.date.desc()).all() if part_ids else []
+        records = records_query.filter(MaintenanceRecord.part_id.in_(part_ids)).order_by(MaintenanceRecord.date.desc()).all() if part_ids else []
 
     return render_template(
         'maintenance_records.html',
@@ -9257,6 +9372,442 @@ def maintenance_records_bulk_print():
         app.logger.error(f"Error in maintenance_records_bulk_print: {e}")
         flash('An error occurred while generating the bulk report.', 'danger')
         return redirect(url_for('maintenance_records_page'))
+
+# --- Reports Page ---
+@app.route('/reports')
+@login_required
+def reports_page():
+    """Display the reports generation page - serve React app if available"""
+    # Serve React app if available
+    frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+    if os.path.exists(frontend_path):
+        return send_file(frontend_path, mimetype='text/html')
+    
+    # Fallback to Flask template
+    try:
+        # Get sites user can access
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+        
+        # Get machines for the sites
+        site_ids = [s.id for s in sites]
+        machines = Machine.query.filter(Machine.site_id.in_(site_ids)).order_by(Machine.name).all()
+        
+        # Get audit tasks
+        audit_tasks = AuditTask.query.filter(AuditTask.site_id.in_(site_ids)).order_by(AuditTask.name).all()
+        
+        # Default date range (last 30 days)
+        from datetime import timedelta
+        default_to_date = datetime.now().strftime('%Y-%m-%d')
+        default_from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        
+        return render_template('reports.html',
+                             sites=sites,
+                             machines=machines,
+                             audit_tasks=audit_tasks,
+                             default_from_date=default_from_date,
+                             default_to_date=default_to_date)
+    except Exception as e:
+        app.logger.error(f"Error in reports_page: {e}")
+        flash('An error occurred while loading the reports page.', 'danger')
+        return redirect(url_for('dashboard'))
+
+@app.route('/reports/maintenance')
+@login_required
+def generate_maintenance_report():
+    """Generate a maintenance report based on filters"""
+    try:
+        from datetime import timedelta
+        
+        # Get filter parameters
+        site_id = request.args.get('site_id', type=int)
+        machine_id = request.args.get('machine_id', type=int)
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        period = request.args.get('period', '')  # week, month
+        status = request.args.get('status', '')  # overdue
+        group_by = request.args.get('group_by', 'date')
+        include_notes = request.args.get('include_notes', '1') == '1'
+        include_po = request.args.get('include_po', '1') == '1'
+        report_format = request.args.get('format', 'html')
+        
+        # Get sites user can access
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+        
+        site_ids = [s.id for s in sites]
+        
+        # Quick report period handling
+        now = datetime.now()
+        if period == 'week':
+            date_from = (now - timedelta(days=now.weekday())).strftime('%Y-%m-%d')
+            date_to = now.strftime('%Y-%m-%d')
+        elif period == 'month':
+            date_from = now.replace(day=1).strftime('%Y-%m-%d')
+            date_to = now.strftime('%Y-%m-%d')
+        
+        # Build query
+        records_query = MaintenanceRecord.query
+        
+        # Get all machines for user's accessible sites first (needed for overdue report)
+        all_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+        all_machine_ids = [m.id for m in all_machines]
+        
+        # Site filter
+        if site_id:
+            machines_for_site = Machine.query.filter_by(site_id=site_id).all()
+            machine_ids_for_site = [m.id for m in machines_for_site]
+            parts_for_site = Part.query.filter(Part.machine_id.in_(machine_ids_for_site)).all()
+            part_ids_for_site = [p.id for p in parts_for_site]
+            records_query = records_query.filter(MaintenanceRecord.part_id.in_(part_ids_for_site))
+            # Use site-filtered machines for overdue report
+            all_machine_ids = machine_ids_for_site
+        else:
+            # Restrict to user's accessible sites
+            all_parts = Part.query.filter(Part.machine_id.in_(all_machine_ids)).all()
+            all_part_ids = [p.id for p in all_parts]
+            records_query = records_query.filter(MaintenanceRecord.part_id.in_(all_part_ids))
+        
+        # Machine filter
+        if machine_id:
+            parts_for_machine = Part.query.filter_by(machine_id=machine_id).all()
+            part_ids_for_machine = [p.id for p in parts_for_machine]
+            records_query = records_query.filter(MaintenanceRecord.part_id.in_(part_ids_for_machine))
+        
+        # Date range filters
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, '%Y-%m-%d')
+                records_query = records_query.filter(MaintenanceRecord.date >= from_date)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+                records_query = records_query.filter(MaintenanceRecord.date <= to_date)
+            except ValueError:
+                pass
+        
+        # Get records
+        records = records_query.order_by(MaintenanceRecord.date.desc()).all()
+        
+        # For overdue status report, get overdue parts instead
+        overdue_parts = []
+        if status == 'overdue':
+            MIN_VALID_DATE = datetime(2010, 1, 1)
+            all_parts = Part.query.filter(Part.machine_id.in_(all_machine_ids if not machine_id else [machine_id])).all()
+            for part in all_parts:
+                valid_records = [r for r in part.maintenance_records if r.date and r.date >= MIN_VALID_DATE]
+                if valid_records:
+                    latest = max(valid_records, key=lambda r: r.date)
+                    interval_days = part.maintenance_interval_days()
+                    next_due = latest.date + timedelta(days=interval_days)
+                    if next_due < now:
+                        days_overdue = (now - next_due).days
+                        overdue_parts.append({
+                            'part': part,
+                            'last_maintenance': latest.date,
+                            'next_due': next_due,
+                            'days_overdue': days_overdue
+                        })
+            overdue_parts.sort(key=lambda x: x['days_overdue'], reverse=True)
+        
+        # Group records if needed
+        grouped_records = {}
+        if group_by == 'machine':
+            for record in records:
+                machine_name = record.machine.name if record.machine else (record.part.machine.name if record.part and record.part.machine else 'Unknown')
+                if machine_name not in grouped_records:
+                    grouped_records[machine_name] = []
+                grouped_records[machine_name].append(record)
+        elif group_by == 'site':
+            for record in records:
+                site_name = record.machine.site.name if record.machine and record.machine.site else (record.part.machine.site.name if record.part and record.part.machine and record.part.machine.site else 'Unknown')
+                if site_name not in grouped_records:
+                    grouped_records[site_name] = []
+                grouped_records[site_name].append(record)
+        elif group_by == 'service':
+            for record in records:
+                part_name = record.part.name if record.part else 'Unknown'
+                if part_name not in grouped_records:
+                    grouped_records[part_name] = []
+                grouped_records[part_name].append(record)
+        else:  # group by date
+            for record in records:
+                date_key = record.date.strftime('%Y-%m-%d') if record.date else 'Unknown'
+                if date_key not in grouped_records:
+                    grouped_records[date_key] = []
+                grouped_records[date_key].append(record)
+        
+        return render_template('maintenance_report.html',
+                             records=records,
+                             grouped_records=grouped_records,
+                             overdue_parts=overdue_parts,
+                             group_by=group_by,
+                             include_notes=include_notes,
+                             include_po=include_po,
+                             date_from=date_from,
+                             date_to=date_to,
+                             status=status,
+                             total_records=len(records),
+                             report_date=datetime.now().strftime('%Y-%m-%d %H:%M'))
+    except Exception as e:
+        app.logger.error(f"Error generating maintenance report: {e}")
+        flash('An error occurred while generating the report.', 'danger')
+        return redirect(url_for('reports_page'))
+
+@app.route('/reports/audit')
+@login_required
+def generate_audit_report():
+    """Generate an audit report based on filters"""
+    try:
+        # Get filter parameters
+        site_id = request.args.get('site_id', type=int)
+        audit_task_id = request.args.get('audit_task_id', type=int)
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        status = request.args.get('status', '')
+        
+        # Get sites user can access
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+        
+        site_ids = [s.id for s in sites]
+        
+        # Build query
+        completions_query = AuditTaskCompletion.query.join(AuditTask)
+        
+        # Site filter
+        if site_id:
+            completions_query = completions_query.filter(AuditTask.site_id == site_id)
+        else:
+            completions_query = completions_query.filter(AuditTask.site_id.in_(site_ids))
+        
+        # Task filter
+        if audit_task_id:
+            completions_query = completions_query.filter(AuditTaskCompletion.audit_task_id == audit_task_id)
+        
+        # Status filter
+        if status == 'completed':
+            completions_query = completions_query.filter(AuditTaskCompletion.completed == True)
+        elif status == 'incomplete':
+            completions_query = completions_query.filter(AuditTaskCompletion.completed == False)
+        
+        # Date range filters
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, '%Y-%m-%d')
+                completions_query = completions_query.filter(AuditTaskCompletion.completed_at >= from_date)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+                completions_query = completions_query.filter(AuditTaskCompletion.completed_at <= to_date)
+            except ValueError:
+                pass
+        
+        completions = completions_query.order_by(AuditTaskCompletion.completed_at.desc()).all()
+        
+        return render_template('audit_report.html',
+                             completions=completions,
+                             date_from=date_from,
+                             date_to=date_to,
+                             status=status,
+                             total_completions=len(completions),
+                             report_date=datetime.now().strftime('%Y-%m-%d %H:%M'))
+    except Exception as e:
+        app.logger.error(f"Error generating audit report: {e}")
+        flash('An error occurred while generating the report.', 'danger')
+        return redirect(url_for('reports_page'))
+
+@app.route('/reports/summary')
+@login_required
+def generate_summary_report():
+    """Generate a summary/analytics report"""
+    try:
+        report_type = request.args.get('type', 'compliance')
+        
+        # Get sites user can access
+        if user_can_see_all_sites(current_user):
+            sites = Site.query.all()
+        else:
+            sites = current_user.sites
+        
+        site_ids = [s.id for s in sites]
+        
+        if report_type == 'compliance':
+            # Maintenance compliance report
+            from datetime import timedelta
+            MIN_VALID_DATE = datetime(2010, 1, 1)
+            now = datetime.now()
+            
+            compliance_data = []
+            for site in sites:
+                site_machines = Machine.query.filter_by(site_id=site.id).all()
+                total_parts = 0
+                on_time = 0
+                overdue = 0
+                
+                for machine in site_machines:
+                    for part in machine.parts:
+                        valid_records = [r for r in part.maintenance_records if r.date and r.date >= MIN_VALID_DATE]
+                        if valid_records:
+                            total_parts += 1
+                            latest = max(valid_records, key=lambda r: r.date)
+                            interval_days = part.maintenance_interval_days()
+                            next_due = latest.date + timedelta(days=interval_days)
+                            if next_due >= now:
+                                on_time += 1
+                            else:
+                                overdue += 1
+                
+                compliance_rate = (on_time / total_parts * 100) if total_parts > 0 else 0
+                compliance_data.append({
+                    'site': site.name,
+                    'total_services': total_parts,
+                    'on_time': on_time,
+                    'overdue': overdue,
+                    'compliance_rate': round(compliance_rate, 1)
+                })
+            
+            return render_template('summary_report.html',
+                                 report_type='compliance',
+                                 report_title='Maintenance Compliance Report',
+                                 compliance_data=compliance_data,
+                                 report_date=datetime.now().strftime('%Y-%m-%d %H:%M'))
+        
+        elif report_type == 'history':
+            # Maintenance history summary
+            from datetime import timedelta
+            now = datetime.now()
+            last_30_days = now - timedelta(days=30)
+            last_90_days = now - timedelta(days=90)
+            
+            # Get machines for user's sites
+            all_machines = Machine.query.filter(Machine.site_id.in_(site_ids)).all()
+            all_machine_ids = [m.id for m in all_machines]
+            all_parts = Part.query.filter(Part.machine_id.in_(all_machine_ids)).all()
+            all_part_ids = [p.id for p in all_parts]
+            
+            # Count records by period
+            records_30_days = MaintenanceRecord.query.filter(
+                MaintenanceRecord.part_id.in_(all_part_ids),
+                MaintenanceRecord.date >= last_30_days
+            ).count()
+            
+            records_90_days = MaintenanceRecord.query.filter(
+                MaintenanceRecord.part_id.in_(all_part_ids),
+                MaintenanceRecord.date >= last_90_days
+            ).count()
+            
+            records_total = MaintenanceRecord.query.filter(
+                MaintenanceRecord.part_id.in_(all_part_ids)
+            ).count()
+            
+            # Count by maintenance type
+            type_counts = db.session.query(
+                MaintenanceRecord.maintenance_type,
+                db.func.count(MaintenanceRecord.id)
+            ).filter(
+                MaintenanceRecord.part_id.in_(all_part_ids),
+                MaintenanceRecord.date >= last_30_days
+            ).group_by(MaintenanceRecord.maintenance_type).all()
+            
+            return render_template('summary_report.html',
+                                 report_type='history',
+                                 report_title='Maintenance History Summary',
+                                 records_30_days=records_30_days,
+                                 records_90_days=records_90_days,
+                                 records_total=records_total,
+                                 type_counts=type_counts,
+                                 report_date=datetime.now().strftime('%Y-%m-%d %H:%M'))
+        
+        elif report_type == 'audit_completion':
+            # Audit completion summary
+            audit_data = []
+            for site in sites:
+                site_tasks = AuditTask.query.filter_by(site_id=site.id).all()
+                for task in site_tasks:
+                    total = AuditTaskCompletion.query.filter_by(audit_task_id=task.id).count()
+                    completed = AuditTaskCompletion.query.filter_by(audit_task_id=task.id, completed=True).count()
+                    completion_rate = (completed / total * 100) if total > 0 else 0
+                    audit_data.append({
+                        'site': site.name,
+                        'task': task.name,
+                        'total': total,
+                        'completed': completed,
+                        'completion_rate': round(completion_rate, 1)
+                    })
+            
+            return render_template('summary_report.html',
+                                 report_type='audit_completion',
+                                 report_title='Audit Completion Summary',
+                                 audit_data=audit_data,
+                                 report_date=datetime.now().strftime('%Y-%m-%d %H:%M'))
+        
+        elif report_type == 'equipment':
+            # Equipment status report
+            equipment_data = []
+            from datetime import timedelta
+            MIN_VALID_DATE = datetime(2010, 1, 1)
+            now = datetime.now()
+            
+            for site in sites:
+                site_machines = Machine.query.filter_by(site_id=site.id, decommissioned=False).all()
+                for machine in site_machines:
+                    parts_status = {'ok': 0, 'due_soon': 0, 'overdue': 0, 'no_maintenance': 0}
+                    
+                    for part in machine.parts:
+                        valid_records = [r for r in part.maintenance_records if r.date and r.date >= MIN_VALID_DATE]
+                        if valid_records:
+                            latest = max(valid_records, key=lambda r: r.date)
+                            interval_days = part.maintenance_interval_days()
+                            next_due = latest.date + timedelta(days=interval_days)
+                            days_until = (next_due - now).days
+                            
+                            if days_until < 0:
+                                parts_status['overdue'] += 1
+                            elif days_until <= 30:
+                                parts_status['due_soon'] += 1
+                            else:
+                                parts_status['ok'] += 1
+                        else:
+                            parts_status['no_maintenance'] += 1
+                    
+                    equipment_data.append({
+                        'site': site.name,
+                        'machine': machine.name,
+                        'machine_number': machine.machine_number or machine.serial_number or '',
+                        'total_services': len(machine.parts),
+                        'ok': parts_status['ok'],
+                        'due_soon': parts_status['due_soon'],
+                        'overdue': parts_status['overdue'],
+                        'no_maintenance': parts_status['no_maintenance']
+                    })
+            
+            return render_template('summary_report.html',
+                                 report_type='equipment',
+                                 report_title='Equipment Status Report',
+                                 equipment_data=equipment_data,
+                                 report_date=datetime.now().strftime('%Y-%m-%d %H:%M'))
+        
+        else:
+            flash('Unknown report type.', 'warning')
+            return redirect(url_for('reports_page'))
+            
+    except Exception as e:
+        app.logger.error(f"Error generating summary report: {e}")
+        flash('An error occurred while generating the report.', 'danger')
+        return redirect(url_for('reports_page'))
 
 @app.route('/emergency-maintenance-request', methods=['POST'])
 @login_required
@@ -9459,31 +10010,53 @@ def get_database_stats():
         except Exception:
             stats['audit_tasks'] = 0
             
-        # Calculate maintenance status (simplified version)
+        # Calculate maintenance status (fixed to only count parts with valid maintenance history)
         try:
             from datetime import datetime, timedelta
             now = datetime.now()
+            MIN_VALID_DATE = datetime(2010, 1, 1)
             overdue_count = 0
             due_soon_count = 0
             ok_count = 0
+            needs_initial_count = 0
             
-            parts_with_maintenance = Part.query.filter(Part.next_maintenance.isnot(None)).all()
-            for part in parts_with_maintenance:
-                if part.next_maintenance:
-                    if part.next_maintenance < now:
+            # Get all parts with their maintenance records
+            all_parts = Part.query.all()
+            for part in all_parts:
+                # Find the latest valid maintenance record (after MIN_VALID_DATE)
+                valid_records = [r for r in part.maintenance_records 
+                                if r.date and r.date >= MIN_VALID_DATE]
+                
+                if valid_records:
+                    # Has valid maintenance history
+                    latest_record = max(valid_records, key=lambda r: r.date)
+                    
+                    # Calculate next maintenance from latest record
+                    interval_days = part.maintenance_interval_days() if hasattr(part, 'maintenance_interval_days') else 30
+                    if isinstance(latest_record.date, datetime):
+                        next_due = latest_record.date + timedelta(days=interval_days)
+                    else:
+                        next_due = datetime.combine(latest_record.date, datetime.min.time()) + timedelta(days=interval_days)
+                    
+                    if next_due < now:
                         overdue_count += 1
-                    elif part.next_maintenance < now + timedelta(days=7):
+                    elif next_due < now + timedelta(days=7):
                         due_soon_count += 1
                     else:
                         ok_count += 1
+                else:
+                    # No valid maintenance history - needs initial maintenance
+                    needs_initial_count += 1
                         
             stats['maintenance_overdue'] = overdue_count
             stats['maintenance_due_soon'] = due_soon_count
             stats['maintenance_ok'] = ok_count
+            stats['maintenance_needs_initial'] = needs_initial_count
         except Exception:
             stats['maintenance_overdue'] = 0
             stats['maintenance_due_soon'] = 0
             stats['maintenance_ok'] = 0
+            stats['maintenance_needs_initial'] = 0
             
         return stats
         
@@ -9502,7 +10075,8 @@ def get_database_stats():
             'audit_tasks': 0,
             'maintenance_overdue': 0,
             'maintenance_due_soon': 0,
-            'maintenance_ok': 0
+            'maintenance_ok': 0,
+            'maintenance_needs_initial': 0
         }
 
 # --- BULK IMPORT ROUTE ---
@@ -11104,6 +11678,30 @@ def initialize_bootstrap_only():
                 except Exception as e:
                     print(f"[BOOTSTRAP] Database check error: {e}")
             
+            # Check schema version and refresh if needed
+            print("\n[SCHEMA] Checking database schema version...")
+            try:
+                from schema_version import ensure_schema_current, get_schema_info
+                schema_result = ensure_schema_current()
+                
+                if schema_result.get("status") == "refreshed":
+                    print("[SCHEMA] Database schema was refreshed to latest version")
+                elif schema_result.get("status") == "current":
+                    info = get_schema_info()
+                    print(f"[SCHEMA] Schema is current (v{info['local_version']})")
+                elif schema_result.get("status") == "refresh_failed":
+                    print("[SCHEMA] WARNING: Schema refresh failed - some features may not work")
+                    print(f"[SCHEMA] Missing columns: {schema_result.get('check_result', {}).get('missing_columns', [])}")
+            except Exception as e:
+                print(f"[SCHEMA] Schema check error: {e}")
+                # Run auto-migration as fallback
+                try:
+                    print("[SCHEMA] Running auto-migration as fallback...")
+                    run_auto_migration()
+                    print("[SCHEMA] Auto-migration completed")
+                except Exception as migrate_e:
+                    print(f"[SCHEMA] Auto-migration also failed: {migrate_e}")
+            
             print("="*60)
             
         except Exception as e:
@@ -11151,4 +11749,8 @@ if __name__ == "__main__":
     
     # Allow Werkzeug development server for Electron desktop app usage
     # This is safe for our use case since the app is running locally for offline functionality
-    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
+    # Some Flask versions do not accept `allow_unsafe_werkzeug`; call without it for compatibility.
+    try:
+        socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
+    except TypeError:
+        socketio.run(app, host=host, port=port, debug=debug)

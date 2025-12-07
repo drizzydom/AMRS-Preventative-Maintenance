@@ -167,7 +167,7 @@ def run_auto_migration():
         
         # Critical migration: Ensure decommissioned fields exist first
         critical_fields = [
-            ('machines', 'decommissioned', 'BOOLEAN DEFAULT FALSE NOT NULL'),
+            ('machines', 'decommissioned', 'BOOLEAN DEFAULT FALSE'),
             ('machines', 'decommissioned_date', 'TIMESTAMP NULL'),
             ('machines', 'decommissioned_by', 'INTEGER NULL'),
             ('machines', 'decommissioned_reason', 'TEXT NULL')
@@ -180,6 +180,17 @@ def run_auto_migration():
             except Exception as e:
                 logger.error(f"[AUTO_MIGRATE] CRITICAL ERROR: Failed to add {table}.{column}: {e}")
                 raise  # Re-raise to prevent app startup with missing critical columns
+        
+        # CRITICAL: Cycle-based maintenance columns for machines table
+        logger.info("[AUTO_MIGRATE] Adding cycle-based maintenance columns to machines...")
+        add_column_if_not_exists(engine, 'machines', 'cycle_count', 'INTEGER DEFAULT 0')
+        add_column_if_not_exists(engine, 'machines', 'last_cycle_update', 'DATETIME NULL')
+        
+        # CRITICAL: Cycle-based maintenance columns for parts table
+        logger.info("[AUTO_MIGRATE] Adding cycle-based maintenance columns to parts...")
+        add_column_if_not_exists(engine, 'parts', 'maintenance_cycle_frequency', 'INTEGER NULL')
+        add_column_if_not_exists(engine, 'parts', 'last_maintenance_cycle', 'INTEGER DEFAULT 0')
+        add_column_if_not_exists(engine, 'parts', 'next_maintenance_cycle', 'INTEGER NULL')
         
         # Ensure audit_tasks columns
         add_column_if_not_exists(engine, 'audit_tasks', 'interval', "VARCHAR(20) DEFAULT 'daily'")
@@ -195,6 +206,20 @@ def run_auto_migration():
         add_column_if_not_exists(engine, 'users', 'remember_token', 'VARCHAR(100)')
         add_column_if_not_exists(engine, 'users', 'remember_token_expiration', 'TIMESTAMP')
         add_column_if_not_exists(engine, 'users', 'remember_enabled', 'BOOLEAN DEFAULT FALSE')
+        
+        # CRITICAL: Ensure maintenance_records table has all required columns
+        logger.info("[AUTO_MIGRATE] Adding maintenance_records columns...")
+        add_column_if_not_exists(engine, 'maintenance_records', 'machine_id', 'INTEGER NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'maintenance_type', 'VARCHAR(50) NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'description', 'TEXT NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'performed_by', 'VARCHAR(100) NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'status', 'VARCHAR(50) NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'notes', 'TEXT NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'po_number', 'VARCHAR(32) NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'work_order_number', 'VARCHAR(128) NULL')
+        add_column_if_not_exists(engine, 'maintenance_records', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        add_column_if_not_exists(engine, 'maintenance_records', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        add_column_if_not_exists(engine, 'maintenance_records', 'client_id', 'VARCHAR(36) NULL')
         
         # Add your new database migrations here
         create_maintenance_files_table(engine)

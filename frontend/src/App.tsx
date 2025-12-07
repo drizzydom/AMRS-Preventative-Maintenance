@@ -8,6 +8,7 @@ import OnboardingTour from './components/onboarding/OnboardingTour'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import PermissionGate from './components/auth/PermissionGate'
+import ErrorBoundary from './components/ErrorBoundary'
 import { initializeSocket, disconnectSocket } from './utils/socket'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { 
@@ -32,6 +33,8 @@ const Settings = lazy(() => import('./pages/Settings'))
 const AdminPanel = lazy(() => import('./pages/AdminPanel'))
 const ReportsPreview = lazy(() => import('./pages/reports/ReportsPreview'))
 const AuditReportsPreview = lazy(() => import('./pages/reports/AuditReportsPreview'))
+const MaintenanceReportView = lazy(() => import('./pages/reports/MaintenanceReportView'))
+const AuditReportView = lazy(() => import('./pages/reports/AuditReportView'))
 
 // Loading component for lazy loaded pages
 const PageLoader = () => (
@@ -205,7 +208,19 @@ function AppLayout() {
                 path="/reports"
                 element={(
                   <PermissionGate requiredPermissions={['reports.view']}>
-                    <ReportsPreview />
+                    <ErrorBoundary>
+                      <ReportsPreview />
+                    </ErrorBoundary>
+                  </PermissionGate>
+                )}
+              />
+              <Route
+                path="/reports/maintenance/view"
+                element={(
+                  <PermissionGate requiredPermissions={['reports.view']}>
+                    <ErrorBoundary>
+                      <MaintenanceReportView />
+                    </ErrorBoundary>
                   </PermissionGate>
                 )}
               />
@@ -213,7 +228,19 @@ function AppLayout() {
                 path="/reports/audits"
                 element={(
                   <PermissionGate requiredPermissions={['reports.view', 'audits.view']}>
-                    <AuditReportsPreview />
+                    <ErrorBoundary>
+                      <AuditReportsPreview />
+                    </ErrorBoundary>
+                  </PermissionGate>
+                )}
+              />
+              <Route
+                path="/reports/audits/view"
+                element={(
+                  <PermissionGate requiredPermissions={['reports.view', 'audits.view']}>
+                    <ErrorBoundary>
+                      <AuditReportView />
+                    </ErrorBoundary>
                   </PermissionGate>
                 )}
               />
