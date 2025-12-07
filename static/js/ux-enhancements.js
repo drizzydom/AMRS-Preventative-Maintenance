@@ -76,19 +76,32 @@ function performSearch(query) {
 }
 
 function displaySearchResults(results) {
-    if (!results || (results.machines.length === 0 && results.parts.length === 0 && results.sites.length === 0)) {
+    if (!results || (results.machines.length === 0 && results.parts.length === 0 && results.sites.length === 0 && (!results.maintenance_records || results.maintenance_records.length === 0))) {
         showSearchResults('<div class="search-result-item">No results found</div>');
         return;
     }
     
     let html = '';
     
+    // Maintenance Records (show first as they're often searched by PO/WO)
+    if (results.maintenance_records && results.maintenance_records.length > 0) {
+        results.maintenance_records.forEach(record => {
+            html += `
+                <a href="/maintenance-records/${record.id}" class="search-result-item" style="display: block; text-decoration: none; color: inherit;">
+                    <span class="search-result-type maintenance" style="background: #198754; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; margin-right: 8px;">Maintenance</span>
+                    <strong>${record.po_number || record.work_order_number || 'Record #' + record.id}</strong>
+                    <br><small class="text-muted">${record.date || ''} - ${record.part_name || ''} ${record.machine_name ? 'on ' + record.machine_name : ''}</small>
+                </a>
+            `;
+        });
+    }
+    
     // Machines
     if (results.machines && results.machines.length > 0) {
         results.machines.forEach(machine => {
             html += `
                 <a href="/machines/${machine.id}" class="search-result-item" style="display: block; text-decoration: none; color: inherit;">
-                    <span class="search-result-type machine">Machine</span>
+                    <span class="search-result-type machine" style="background: #0d6efd; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; margin-right: 8px;">Machine</span>
                     <strong>${machine.name}</strong>
                     ${machine.site ? `<br><small class="text-muted">at ${machine.site}</small>` : ''}
                 </a>
@@ -96,12 +109,12 @@ function displaySearchResults(results) {
         });
     }
     
-    // Parts
+    // Parts/Services
     if (results.parts && results.parts.length > 0) {
         results.parts.forEach(part => {
             html += `
                 <a href="/parts/${part.id}" class="search-result-item" style="display: block; text-decoration: none; color: inherit;">
-                    <span class="search-result-type part">Part</span>
+                    <span class="search-result-type part" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; margin-right: 8px;">Service</span>
                     <strong>${part.name}</strong>
                     ${part.machine ? `<br><small class="text-muted">on ${part.machine}</small>` : ''}
                 </a>
@@ -114,7 +127,7 @@ function displaySearchResults(results) {
         results.sites.forEach(site => {
             html += `
                 <a href="/sites/${site.id}" class="search-result-item" style="display: block; text-decoration: none; color: inherit;">
-                    <span class="search-result-type site">Site</span>
+                    <span class="search-result-type site" style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; margin-right: 8px;">Site</span>
                     <strong>${site.name}</strong>
                 </a>
             `;

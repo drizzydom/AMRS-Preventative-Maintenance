@@ -7,6 +7,40 @@ const os = require('os');
 const { autoUpdater } = require('electron-updater');
 const { ipcMain } = require('electron');
 
+// --- Global Error Handling for EPIPE and other pipe errors ---
+// These occur when trying to write to a closed pipe (e.g., Flask process terminated)
+// We suppress these to prevent annoying popup dialogs
+process.on('uncaughtException', (error) => {
+    // Suppress EPIPE errors - they're harmless and occur during normal shutdown
+    if (error.code === 'EPIPE' || error.message?.includes('EPIPE')) {
+        console.log('[Electron] Suppressed EPIPE error (normal during shutdown)');
+        return;
+    }
+    // Suppress ECONNRESET errors - connection was reset, usually harmless
+    if (error.code === 'ECONNRESET' || error.message?.includes('ECONNRESET')) {
+        console.log('[Electron] Suppressed ECONNRESET error');
+        return;
+    }
+    // Suppress write after end errors
+    if (error.message?.includes('write after end') || error.message?.includes('This socket has been ended')) {
+        console.log('[Electron] Suppressed write-after-end error');
+        return;
+    }
+    // Log other uncaught exceptions but don't show dialog for common ones
+    console.error('[Electron] Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    // Suppress common harmless rejections
+    const reasonStr = String(reason);
+    if (reasonStr.includes('EPIPE') || reasonStr.includes('ECONNRESET') || 
+        reasonStr.includes('write after end') || reasonStr.includes('socket has been ended')) {
+        console.log('[Electron] Suppressed unhandled rejection (harmless)');
+        return;
+    }
+    console.error('[Electron] Unhandled rejection:', reason);
+});
+
 // --- Electron Updater Integration ---
 // Flag to track if we've already checked for updates
 let hasCheckedForUpdates = false;
@@ -549,6 +583,17 @@ async function checkPythonDependencies(pythonPath) {
             let output = '';
             let errorOutput = '';
             
+            // Add error handlers for stdio to prevent EPIPE errors
+            if (checkProcess.stdin) {
+                checkProcess.stdin.on('error', () => {}); // Silently ignore
+            }
+            if (checkProcess.stdout) {
+                checkProcess.stdout.on('error', () => {});
+            }
+            if (checkProcess.stderr) {
+                checkProcess.stderr.on('error', () => {});
+            }
+            
             checkProcess.stdout.on('data', (data) => {
                 output += data.toString();
             });
@@ -676,6 +721,11 @@ async function installPythonDependencies(pythonPath) {
                 stdio: ['pipe', 'pipe', 'pipe']
             });
             
+            // Add error handlers for stdio to prevent EPIPE errors
+            if (installProcess.stdin) installProcess.stdin.on('error', () => {});
+            if (installProcess.stdout) installProcess.stdout.on('error', () => {});
+            if (installProcess.stderr) installProcess.stderr.on('error', () => {});
+            
             let pipErrorOutput = '';
             installProcess.stderr.on('data', (data) => {
                 pipErrorOutput += data.toString();
@@ -688,6 +738,11 @@ async function installPythonDependencies(pythonPath) {
                     const mainInstall = spawn(pythonPath, ['-m', 'pip', 'install', '-r', requirementsPath], {
                         stdio: ['pipe', 'pipe', 'pipe']
                     });
+                    
+                    // Add error handlers for stdio to prevent EPIPE errors
+                    if (mainInstall.stdin) mainInstall.stdin.on('error', () => {});
+                    if (mainInstall.stdout) mainInstall.stdout.on('error', () => {});
+                    if (mainInstall.stderr) mainInstall.stderr.on('error', () => {});
                     
                     let installProgress = 40;
                     mainInstall.stdout.on('data', (data) => {
@@ -1051,6 +1106,33 @@ async function startFlaskServer() {
         });
         
         writeLog(`[Electron] Flask process spawned with PID: ${flaskProcess.pid}`);
+        
+        // Add error handlers for stdio streams to prevent EPIPE errors
+        if (flaskProcess.stdin) {
+            flaskProcess.stdin.on('error', (err) => {
+                if (err.code === 'EPIPE' || err.code === 'ECONNRESET') {
+                    // Silently ignore - process has ended
+                    return;
+                }
+                writeLog(`[Flask stdin error] ${err.message}`);
+            });
+        }
+        if (flaskProcess.stdout) {
+            flaskProcess.stdout.on('error', (err) => {
+                if (err.code === 'EPIPE' || err.code === 'ECONNRESET') {
+                    return;
+                }
+                writeLog(`[Flask stdout error] ${err.message}`);
+            });
+        }
+        if (flaskProcess.stderr) {
+            flaskProcess.stderr.on('error', (err) => {
+                if (err.code === 'EPIPE' || err.code === 'ECONNRESET') {
+                    return;
+                }
+                writeLog(`[Flask stderr error] ${err.message}`);
+            });
+        }
         
         // Enhanced Flask log monitoring with progress tracking
         let lastProgressUpdate = Date.now();

@@ -1,267 +1,235 @@
-import React, { useState } from 'react'
-import { Card, Tabs, Typography, Space, Button, DatePicker, Select, Row, Col, Divider } from 'antd'
-import { DownloadOutlined, PrinterOutlined, EyeOutlined } from '@ant-design/icons'
-import MaintenanceReportOptionA from '../../components/reports/MaintenanceReportOptionA'
-import MaintenanceReportOptionC from '../../components/reports/MaintenanceReportOptionC'
-import '../../styles/reports.css'
+import React, { useState, useEffect } from 'react'
+import { Card, Typography, List, Spin, message, Select, DatePicker, Space, Checkbox, Button } from 'antd'
+import dayjs from 'dayjs'
+import api from '../../utils/api'
 
-const { Title, Text, Paragraph } = Typography
+const { Title, Paragraph } = Typography
 const { RangePicker } = DatePicker
-const { TabPane } = Tabs
 
+interface Site {
+  id: number
+  name: string
+}
+
+interface Machine {
+  id: number
+  name: string
+  site_id?: number
+}
+
+/**
+ * Incremental ReportsPreview: diagnostic -> add machines -> add date controls -> add options -> generate
+ */
 const ReportsPreview: React.FC = () => {
-  const [dateRange, setDateRange] = useState<[string, string]>(['2025-10-01', '2025-10-31'])
-  const [selectedSite, setSelectedSite] = useState('All Sites')
+  const [sites, setSites] = useState<Site[]>([])
+  const [loading, setLoading] = useState(true)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
 
-  const handlePrint = () => {
-    window.print()
+  // Step: machines
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [machinesLoading, setMachinesLoading] = useState(false)
+  const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null)
+  const [selectedMachineId, setSelectedMachineId] = useState<number | null>(null)
+
+  // Step: date range
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>([
+    dayjs().subtract(30, 'day'),
+    dayjs(),
+  ])
+
+  // Step: grouping & options
+  const [groupBy, setGroupBy] = useState<string>('date')
+  const [includeNotes, setIncludeNotes] = useState<boolean>(true)
+  const [includePO, setIncludePO] = useState<boolean>(true)
+  // Report display type: compact (A) or expanded (C)
+  const [reportType, setReportType] = useState<string>('compact')
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true)
+        const res = await api.get('/api/v1/sites')
+        const data = res?.data?.data || res?.data || []
+        // API uses {status:'success', data: [...]}
+        const sitesData = Array.isArray(data) ? data : (data.sites || [])
+        setSites(sitesData)
+        setErrorDetail(null)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[ReportsPreview] Failed to load sites:', err)
+        try {
+          const axiosErr = err as any
+          const status = axiosErr?.response?.status
+          const respData = axiosErr?.response?.data
+          setErrorDetail(`Status: ${status || 'unknown'} - ${JSON.stringify(respData)}`)
+        } catch (e) {
+          setErrorDetail(String(err))
+        }
+        message.error('Failed to load report options; see details below')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    load()
+  }, [])
+
+  useEffect(() => {
+    // When a site is selected, fetch machines for that site
+    const loadMachines = async (siteId: number) => {
+      try {
+        setMachinesLoading(true)
+        const res = await api.get('/api/v1/machines', { params: { site_id: siteId } })
+        const data = res?.data?.data || res?.data || []
+        const machinesData = Array.isArray(data) ? data : (data.machines || [])
+        setMachines(machinesData)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[ReportsPreview] Failed to load machines:', err)
+        message.error('Failed to load machines for selected site')
+        setMachines([])
+      } finally {
+        setMachinesLoading(false)
+      }
+    }
+
+    if (selectedSiteId) {
+      loadMachines(selectedSiteId)
+    } else {
+      setMachines([])
+      setSelectedMachineId(null)
+    }
+  }, [selectedSiteId])
+
+  const generateMaintenanceReport = () => {
+    const params = new URLSearchParams()
+    if (dateRange && dateRange[0]) params.append('date_from', dateRange[0].format('YYYY-MM-DD'))
+    if (dateRange && dateRange[1]) params.append('date_to', dateRange[1].format('YYYY-MM-DD'))
+    if (selectedSiteId) params.append('site_id', String(selectedSiteId))
+    if (selectedMachineId) params.append('machine_id', String(selectedMachineId))
+    params.append('group_by', groupBy || 'date')
+    params.append('include_notes', includeNotes ? '1' : '0')
+    params.append('include_po', includePO ? '1' : '0')
+    params.append('report_type', reportType || 'compact')
+    // Open the client-side maintenance report view (React) so printing uses the new UI
+    window.open(`/reports/maintenance/view?${params.toString()}`, '_blank')
   }
 
-  // Sample maintenance data for preview
-  const sampleData = [
-    {
-      id: 1,
-      date: '2025-10-28',
-      machine: 'CNC Machine A',
-      task: 'Oil Change',
-      technician: 'John Doe',
-      duration: '2.5 hrs',
-      status: 'completed' as const,
-      notes: 'Routine maintenance completed successfully',
-    },
-    {
-      id: 2,
-      date: '2025-10-27',
-      machine: 'Lathe Machine B',
-      task: 'Filter Replacement',
-      technician: 'Jane Smith',
-      duration: '1.5 hrs',
-      status: 'completed' as const,
-      notes: 'Replaced air and oil filters',
-    },
-    {
-      id: 3,
-      date: '2025-10-26',
-      machine: 'Press Machine C',
-      task: 'Safety Inspection',
-      technician: 'Bob Johnson',
-      duration: '3.0 hrs',
-      status: 'completed' as const,
-      notes: 'All safety systems operational',
-    },
-    {
-      id: 4,
-      date: '2025-10-25',
-      machine: 'CNC Machine A',
-      task: 'Belt Replacement',
-      technician: 'John Doe',
-      duration: '2.0 hrs',
-      status: 'overdue' as const,
-      notes: 'Waiting for replacement parts',
-    },
-    {
-      id: 5,
-      date: '2025-10-24',
-      machine: 'Drill Press D',
-      task: 'Lubrication',
-      technician: 'Mike Wilson',
-      duration: '0.5 hrs',
-      status: 'completed' as const,
-      notes: 'Standard lubrication performed',
-    },
-    {
-      id: 6,
-      date: '2025-10-23',
-      machine: 'Milling Machine E',
-      task: 'Calibration',
-      technician: 'Sarah Davis',
-      duration: '4.0 hrs',
-      status: 'completed' as const,
-      notes: 'Precision calibration completed',
-    },
-    {
-      id: 7,
-      date: '2025-10-22',
-      machine: 'Grinder F',
-      task: 'Wheel Replacement',
-      technician: 'Tom Anderson',
-      duration: '1.0 hrs',
-      status: 'pending' as const,
-      notes: 'Scheduled for next week',
-    },
-    {
-      id: 8,
-      date: '2025-10-21',
-      machine: 'Lathe Machine B',
-      task: 'Chuck Inspection',
-      technician: 'Jane Smith',
-      duration: '1.5 hrs',
-      status: 'completed' as const,
-      notes: 'Chuck mechanism working properly',
-    },
-  ]
+  const generateAuditReport = () => {
+    const params = new URLSearchParams()
+    if (selectedSiteId) params.append('site_id', String(selectedSiteId))
+    if (selectedMachineId) params.append('machine_id', String(selectedMachineId))
+    params.append('report_type', reportType || 'compact')
+    window.open(`/reports/audits/view?${params.toString()}`, '_blank')
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
 
   return (
-    <div className="reports-preview-container">
-      <Card className="reports-header">
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <div style={{ padding: 24 }}>
+      <Card style={{ marginBottom: 16 }}>
+        <Title level={2}>Reports</Title>
+        <Paragraph type="secondary">Generate maintenance, audit, and summary reports. This view is being incrementally enabled.</Paragraph>
+      </Card>
+
+      <Card style={{ marginBottom: 16 }}>
+        <Title level={4}>Filters</Title>
+        {errorDetail && <div style={{ color: 'red', whiteSpace: 'pre-wrap', marginBottom: 12 }}>{errorDetail}</div>}
+
+        <Space direction="vertical" style={{ width: '100%' }} size="large">
           <div>
-            <Title level={2}>Report Design Options</Title>
-            <Paragraph type="secondary">
-              Review and select the best report design for your maintenance records.
-              Each option offers a different visual approach to presenting your data.
-            </Paragraph>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Site</div>
+            <Select
+              placeholder="Select a site (or leave blank for all)"
+              value={selectedSiteId ?? undefined}
+              onChange={(val) => setSelectedSiteId(val ?? null)}
+              style={{ minWidth: 260 }}
+              allowClear
+            >
+              {sites.map((s) => (
+                <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>
+              ))}
+            </Select>
           </div>
 
-          {/* Filters */}
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Text strong>Date Range</Text>
-                <RangePicker 
-                  style={{ width: '100%' }}
-                  format="YYYY-MM-DD"
-                />
-              </Space>
-            </Col>
-            <Col xs={24} md={12}>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Text strong>Site</Text>
-                <Select
-                  value={selectedSite}
-                  onChange={setSelectedSite}
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: 'All Sites', label: 'All Sites' },
-                    { value: 'Main Plant', label: 'Main Plant' },
-                    { value: 'Warehouse', label: 'Warehouse' },
-                    { value: 'Assembly Line', label: 'Assembly Line' },
-                  ]}
-                />
-              </Space>
-            </Col>
-          </Row>
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Machine</div>
+            <Select
+              placeholder={selectedSiteId ? 'Select a machine' : 'Select a site first'}
+              value={selectedMachineId ?? undefined}
+              onChange={(val) => setSelectedMachineId(val ?? null)}
+              loading={machinesLoading}
+              style={{ minWidth: 260 }}
+              allowClear
+              disabled={!selectedSiteId}
+            >
+              {machines.map((m) => (
+                <Select.Option key={m.id} value={m.id}>{m.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
 
-          <Space>
-            <Button type="primary" icon={<EyeOutlined />}>
-              Preview Report
-            </Button>
-            <Button icon={<DownloadOutlined />}>
-              Export to PDF
-            </Button>
-            <Button icon={<PrinterOutlined />} onClick={handlePrint}>
-              Print
-            </Button>
-          </Space>
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Date Range</div>
+            <RangePicker
+              value={dateRange as any}
+              onChange={(vals) => setDateRange(vals as any)}
+              format="YYYY-MM-DD"
+            />
+          </div>
+
+          <div>
+            <Space>
+              <div style={{ fontWeight: 600 }}>Group By</div>
+              <Select value={groupBy} onChange={setGroupBy} style={{ minWidth: 160 }}>
+                <Select.Option value="date">Date</Select.Option>
+                <Select.Option value="machine">Machine</Select.Option>
+                <Select.Option value="site">Site</Select.Option>
+                <Select.Option value="service">Service/Part</Select.Option>
+              </Select>
+            </Space>
+          </div>
+
+          <div>
+            <Space>
+              <Checkbox checked={includeNotes} onChange={(e) => setIncludeNotes(e.target.checked)}>Include Notes</Checkbox>
+              <Checkbox checked={includePO} onChange={(e) => setIncludePO(e.target.checked)}>Include PO / Work Order</Checkbox>
+            </Space>
+          </div>
+
+          <div>
+            <Space>
+              <Button type="primary" onClick={generateMaintenanceReport}>Generate Maintenance Report</Button>
+              <Button onClick={generateAuditReport}>Generate Audit Report</Button>
+            </Space>
+          </div>
         </Space>
       </Card>
 
-      <Divider />
-
-      {/* Report Options Tabs */}
-      <Card>
-        <Tabs defaultActiveKey="1" type="card" size="large">
-          <TabPane 
-            tab={
-              <span>
-                <EyeOutlined />
-                Compact
-              </span>
-            } 
-            key="1"
-          >
-            <div className="option-description">
-              <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
-                <Space direction="vertical">
-                  <Text strong>Compact Report Layout</Text>
-                  <Paragraph style={{ marginBottom: 0 }}>
-                    <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
-                      <li>Clean, professional table with clear hierarchy</li>
-                      <li>Space-efficient design fits more data on a page</li>
-                      <li>Easy to scan and read</li>
-                      <li>Excellent for printing and PDF export</li>
-                      <li><strong>Best for:</strong> Monthly reports, management reviews, formal documentation</li>
-                    </ul>
-                  </Paragraph>
-                </Space>
-              </Card>
-            </div>
-            <div className="report-preview-wrapper">
-              <MaintenanceReportOptionA
-                startDate={dateRange[0]}
-                endDate={dateRange[1]}
-                site={selectedSite}
-                data={sampleData}
-              />
-            </div>
-          </TabPane>
-
-          <TabPane 
-            tab={
-              <span>
-                <EyeOutlined />
-                Detailed
-              </span>
-            } 
-            key="2"
-          >
-            <div className="option-description">
-              <Card size="small" style={{ marginBottom: 16, background: '#f0f2f5' }}>
-                <Space direction="vertical">
-                  <Text strong>Detailed Timeline Layout</Text>
-                  <Paragraph style={{ marginBottom: 0 }}>
-                    <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
-                      <li>Chronological view showing maintenance history</li>
-                      <li>Timeline visualization of activities</li>
-                      <li>Grouped by date for easy tracking</li>
-                      <li>Shows progression over time with notes</li>
-                      <li><strong>Best for:</strong> Historical tracking, compliance audits, regulatory reports</li>
-                    </ul>
-                  </Paragraph>
-                </Space>
-              </Card>
-            </div>
-            <div className="report-preview-wrapper">
-              <MaintenanceReportOptionC
-                startDate={dateRange[0]}
-                endDate={dateRange[1]}
-                site={selectedSite}
-                data={sampleData}
-              />
-            </div>
-          </TabPane>
-        </Tabs>
+      <Card style={{ marginTop: 12, marginBottom: 16 }}>
+        <Title level={5}>Report Layout</Title>
+        <div style={{ marginTop: 8 }}>
+          <Select value={reportType} onChange={(v) => setReportType(v)} style={{ minWidth: 220 }}>
+            <Select.Option value="compact">A — Compact (densely packed)</Select.Option>
+            <Select.Option value="expanded">C — Expanded (detailed)</Select.Option>
+          </Select>
+        </div>
       </Card>
 
-      {/* Decision Helper */}
-      <Card style={{ marginTop: 16 }}>
-        <Title level={4}>Which Format Should I Choose?</Title>
-        <Row gutter={16}>
-          <Col xs={24} md={12}>
-            <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Compact if:</Text>
-              <ul style={{ paddingLeft: 20 }}>
-                <li>You need formal documentation</li>
-                <li>You're printing physical copies</li>
-                <li>You want maximum data density</li>
-                <li>Your audience prefers traditional reports</li>
-                <li>You need to fit more records on a single page</li>
-              </ul>
-            </Card>
-          </Col>
-          <Col xs={24} md={12}>
-            <Card size="small" style={{ height: '100%' }}>
-              <Text strong>Choose Detailed if:</Text>
-              <ul style={{ paddingLeft: 20 }}>
-                <li>You need historical tracking with full context</li>
-                <li>You're doing compliance audits</li>
-                <li>You want chronological timeline view</li>
-                <li>You need to see notes and progression</li>
-                <li>Your audience needs comprehensive details</li>
-              </ul>
-            </Card>
-          </Col>
-        </Row>
+      <Card>
+        <Title level={4}>Available Sites</Title>
+        <List
+          dataSource={sites}
+          renderItem={(site: Site) => (
+            <List.Item key={site.id}>{site.name || `Site ${site.id}`}</List.Item>
+          )}
+        />
       </Card>
     </div>
   )

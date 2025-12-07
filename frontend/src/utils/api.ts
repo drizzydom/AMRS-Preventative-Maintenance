@@ -50,10 +50,10 @@ apiClient.interceptors.request.use(
       if (maybeHeaders && typeof maybeHeaders.set === 'function') {
         maybeHeaders.set('X-Device-Id', deviceId)
       } else {
-        config.headers = {
-          ...(config.headers || {}),
-          'X-Device-Id': deviceId,
-        }
+        // Use AxiosHeaders for proper type compatibility
+        const headers = new AxiosHeaders(config.headers as Record<string, string>)
+        headers.set('X-Device-Id', deviceId)
+        config.headers = headers
       }
     }
     return config

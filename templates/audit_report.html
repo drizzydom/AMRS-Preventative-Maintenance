@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Report{% endblock %}
+{% block header_title %}Audit Report{% endblock %}
+
+{% block content %}
+<style>
+@media print {
+    .no-print, .sidebar, .navbar, .breadcrumb, .sidebar-overlay { display: none !important; }
+    body { padding: 0; margin: 0; }
+    .container-fluid { max-width: 100%; padding: 20px; }
+    .card { border: 1px solid #ddd; break-inside: avoid; }
+}
+</style>
+
+<div class="container-fluid">
+    <!-- Report Header -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                <i class="fas fa-clipboard-check me-2"></i>Audit Report
+            </h4>
+            <div class="no-print">
+                <button onclick="window.print()" class="btn btn-light btn-sm">
+                    <i class="fas fa-print me-1"></i> Print
+                </button>
+                <a href="{{ url_for('reports_page') }}" class="btn btn-outline-light btn-sm ms-2">
+                    <i class="fas fa-arrow-left me-1"></i> Back
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Generated:</strong> {{ report_date }}</p>
+                    {% if date_from %}<p class="mb-1"><strong>From:</strong> {{ date_from }}</p>{% endif %}
+                    {% if date_to %}<p class="mb-1"><strong>To:</strong> {{ date_to }}</p>{% endif %}
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="mb-1"><strong>Total Records:</strong> {{ total_completions }}</p>
+                    {% if status %}<p class="mb-1"><strong>Status Filter:</strong> {{ status|capitalize }}</p>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if completions %}
+    <!-- Audit Completions Table -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Audit Task Completions</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Audit Task</th>
+                            <th>Site</th>
+                            <th>Completed By</th>
+                            <th>Status</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for completion in completions %}
+                        <tr>
+                            <td>{{ completion.completed_at.strftime('%Y-%m-%d %H:%M') if completion.completed_at else '-' }}</td>
+                            <td>{{ completion.audit_task.name if completion.audit_task else '-' }}</td>
+                            <td>{{ completion.audit_task.site.name if completion.audit_task and completion.audit_task.site else '-' }}</td>
+                            <td>{{ completion.user.display_name if completion.user else (completion.completed_by or '-') }}</td>
+                            <td>
+                                {% if completion.completed %}
+                                <span class="badge bg-success"><i class="fas fa-check me-1"></i>Completed</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Incomplete</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ (completion.notes or '-')[:100] }}{{ '...' if (completion.notes or '')|length > 100 else '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>No audit completion records found for the selected criteria.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
