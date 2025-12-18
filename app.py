@@ -8321,9 +8321,15 @@ def sync_data():
             # --- Machine Audit Task Associations ---
             for mat in data.get('machine_audit_task', []):
                 # No datetime fields to sanitize for this association table
-                # Use direct insert/replace for association table
+                # Use PostgreSQL compatible UPSERT (ON CONFLICT DO NOTHING)
+                # SQLite supports INSERT OR IGNORE, but PostgreSQL needs ON CONFLICT
+                if 'sqlite' in str(db.engine.url):
+                    query = "INSERT OR IGNORE INTO machine_audit_task (machine_id, audit_task_id) VALUES (:machine_id, :audit_task_id)"
+                else:
+                    query = "INSERT INTO machine_audit_task (machine_id, audit_task_id) VALUES (:machine_id, :audit_task_id) ON CONFLICT (machine_id, audit_task_id) DO NOTHING"
+                
                 db.session.execute(
-                    text("INSERT OR REPLACE INTO machine_audit_task (machine_id, audit_task_id) VALUES (:machine_id, :audit_task_id)"),
+                    text(query),
                     {'machine_id': mat['machine_id'], 'audit_task_id': mat['audit_task_id']}
                 )
             
