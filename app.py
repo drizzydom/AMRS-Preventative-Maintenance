@@ -3680,8 +3680,11 @@ def load_user(user_id):
         from flask import has_app_context
         if not has_app_context() or not user_id:
             return None
-        # Explicitly join the role relationship to ensure it's always loaded
-        user = db.session.query(User).options(db.joinedload(User.role)).filter_by(id=int(user_id)).first()
+        # Explicitly join the role and sites relationships to ensure they're always loaded
+        user = db.session.query(User).options(
+            db.joinedload(User.role),
+            db.joinedload(User.sites)
+        ).filter_by(id=int(user_id)).first()
         return user
     except Exception as e:
         app.logger.debug(f"Error loading user {user_id}: {e}")
@@ -8155,6 +8158,7 @@ def sync_data():
         try:
             # Import datetime at function scope for availability throughout POST section
             from datetime import datetime
+            from sqlalchemy import text
             
             data = request.get_json(force=True)
             # --- Users ---

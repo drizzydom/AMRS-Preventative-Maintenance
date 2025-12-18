@@ -87,8 +87,11 @@ def _has_permission(permission: str) -> bool:
 
 def _user_site_ids():
     try:
-        return [site.id for site in getattr(current_user, 'sites', []) if getattr(site, 'id', None) is not None]
-    except Exception:
+        sites = getattr(current_user, 'sites', [])
+        ids = [site.id for site in sites if getattr(site, 'id', None) is not None]
+        return ids
+    except Exception as e:
+        logger.error(f"Error getting user sites: {e}")
         return []
 
 
