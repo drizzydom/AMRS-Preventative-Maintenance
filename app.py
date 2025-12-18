@@ -9414,6 +9414,32 @@ def reports_page():
         flash('An error occurred while loading the reports page.', 'danger')
         return redirect(url_for('dashboard'))
 
+
+@app.route('/reports/maintenance/view')
+@app.route('/reports/audits/view')
+@app.route('/reports/maintenance/view/')
+@app.route('/reports/audits/view/')
+@login_required
+def reports_spa_views():
+    """Serve the built React app for printable report views."""
+    frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+    if os.path.exists(frontend_path):
+        return send_file(frontend_path, mimetype='text/html')
+    # Fallback: if build is missing, send them to legacy reports page
+    return redirect(url_for('reports_page'))
+
+
+@app.route('/reports/<path:subpath>')
+@login_required
+def reports_catch_all(subpath):
+    """Catch SPA report routes (view) to avoid blank windows when opened directly."""
+    if subpath in {'maintenance/view', 'audits/view'}:
+        frontend_path = os.path.join(os.path.dirname(__file__), 'frontend', 'dist', 'index.html')
+        if os.path.exists(frontend_path):
+            return send_file(frontend_path, mimetype='text/html')
+        return redirect(url_for('reports_page'))
+    return redirect(url_for('reports_page'))
+
 @app.route('/reports/maintenance')
 @login_required
 def generate_maintenance_report():

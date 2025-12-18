@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Card, Typography, Spin, Button } from 'antd'
 import apiClient from '../../utils/api'
 import dayjs from 'dayjs'
+import '../../styles/reports.css'
 
 const { Title, Paragraph } = Typography
 
@@ -139,48 +140,73 @@ const MaintenanceReportView: React.FC = () => {
   const expandedRowStyle = { padding: 10, fontSize: '14px' }
 
   return (
-    <div style={{ padding: reportType === 'compact' ? 12 : 24 }}>
-      <Card style={{ marginBottom: 16 }}>
-        <Title level={2}>Maintenance Report</Title>
-        <Paragraph type="secondary">Printable client-side report. Use the browser print dialog to print or save as PDF.</Paragraph>
-        <div style={{ marginTop: 12 }}>
-          <Button type="primary" onClick={onPrint} style={{ marginRight: 8 }}>Print</Button>
+    <div className="report-container">
+      <div className="report-header no-print">
+        <Card style={{ marginBottom: 16 }}>
+          <Title level={2}>Maintenance Report</Title>
+          <Paragraph type="secondary">Printable client-side report. Use the browser print dialog to print or save as PDF.</Paragraph>
+          <div style={{ marginTop: 12 }}>
+            <Button type="primary" onClick={onPrint} style={{ marginRight: 8 }}>Print</Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Print Header - Visible only when printing */}
+      <div className="report-header print-only" style={{ display: 'none' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <Title level={3}>Maintenance Report</Title>
+            <Paragraph>Generated: {dayjs().format('YYYY-MM-DD HH:mm')}</Paragraph>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <Paragraph><strong>AMRS Maintenance Tracker</strong></Paragraph>
+          </div>
         </div>
-      </Card>
+      </div>
 
       {error && (
-        <Card style={{ marginBottom: 16 }}>
+        <Card style={{ marginBottom: 16 }} className="no-print">
           <div style={{ color: 'red' }}>{error}</div>
         </Card>
       )}
 
       {grouped.map(([groupKey, items]) => (
-        <Card key={groupKey} style={{ marginBottom: 12 }}>
-          <Title level={reportType === 'compact' ? 5 : 4}>{groupKey}</Title>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div key={groupKey} className="report-section" style={{ marginBottom: 24, breakInside: 'avoid' }}>
+          <Title level={4} style={{ marginBottom: 12, borderBottom: '1px solid #eee', paddingBottom: 8 }}>{groupKey}</Title>
+          <table className="report-table print-friendly-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', padding: reportType === 'compact' ? 4 : 8 }}>Date</th>
-                <th style={{ textAlign: 'left', padding: reportType === 'compact' ? 4 : 8 }}>Machine</th>
-                <th style={{ textAlign: 'left', padding: reportType === 'compact' ? 4 : 8 }}>Service</th>
-                {reportType === 'expanded' && <th style={{ textAlign: 'left', padding: 8 }}>Completed By</th>}
-                {reportType === 'expanded' && <th style={{ textAlign: 'left', padding: 8 }}>Notes</th>}
+                <th style={{ textAlign: 'left', padding: 8, borderBottom: '2px solid #ddd' }}>Date</th>
+                <th style={{ textAlign: 'left', padding: 8, borderBottom: '2px solid #ddd' }}>Machine</th>
+                <th style={{ textAlign: 'left', padding: 8, borderBottom: '2px solid #ddd' }}>Service</th>
+                {reportType === 'expanded' && <th style={{ textAlign: 'left', padding: 8, borderBottom: '2px solid #ddd' }}>Completed By</th>}
+                {reportType === 'expanded' && <th style={{ textAlign: 'left', padding: 8, borderBottom: '2px solid #ddd' }}>Notes</th>}
               </tr>
             </thead>
             <tbody>
-              {items.map((it) => (
-                <tr key={it.id}>
-                  <td style={reportType === 'compact' ? compactRowStyle : expandedRowStyle}>{it.completedDate}</td>
-                  <td style={reportType === 'compact' ? compactRowStyle : expandedRowStyle}>{it.machineName || it.machine}</td>
-                  <td style={reportType === 'compact' ? compactRowStyle : expandedRowStyle}>{it.partName || it.part}</td>
-                  {reportType === 'expanded' && <td style={expandedRowStyle}>{it.completedBy}</td>}
-                  {reportType === 'expanded' && <td style={{ ...expandedRowStyle, whiteSpace: 'pre-wrap' }}>{it.notes}</td>}
+              {items.map((it, idx) => (
+                <tr key={it.id} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                  <td style={{ padding: 8, borderBottom: '1px solid #eee' }}>{it.completedDate}</td>
+                  <td style={{ padding: 8, borderBottom: '1px solid #eee' }}>{it.machineName || it.machine}</td>
+                  <td style={{ padding: 8, borderBottom: '1px solid #eee' }}>{it.partName || it.part}</td>
+                  {reportType === 'expanded' && <td style={{ padding: 8, borderBottom: '1px solid #eee' }}>{it.completedBy}</td>}
+                  {reportType === 'expanded' && <td style={{ padding: 8, borderBottom: '1px solid #eee', whiteSpace: 'pre-wrap' }}>{it.notes}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
-        </Card>
+        </div>
       ))}
+      
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          .report-container { padding: 0; }
+          .report-section { page-break-inside: avoid; }
+          body { background: white; }
+        }
+      `}</style>
     </div>
   )
 }

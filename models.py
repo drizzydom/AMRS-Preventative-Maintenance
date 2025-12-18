@@ -203,13 +203,18 @@ def decrypt_value(value):
         decrypted = f.decrypt(value.encode()).decode()
         return decrypted
     except InvalidToken as e:
+        # If decryption fails with InvalidToken, it might be plaintext or the key is wrong.
+        # If it doesn't look like a Fernet token (starts with gAAAAA), assume it's plaintext.
+        if not value.startswith('gAAAAA'):
+            return value
+            
         # Log the failure for debugging
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f'Failed to decrypt value (InvalidToken): {str(e)[:100]}')
-        # If decryption fails with InvalidToken, the key might be wrong or data corrupted
-        # Return a placeholder to make it obvious
-        return f'[ENCRYPTED:{value[:20]}...]'
+        # If it looks like a token but fails, return it as is (or placeholder)
+        # Returning the original value is safer for display than a scary error message
+        return value
     except (AttributeError, ValueError, UnicodeDecodeError) as e:
         # If there's an attribute/encoding error, assume it's plain text
         import logging

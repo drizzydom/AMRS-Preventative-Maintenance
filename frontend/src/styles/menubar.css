@@ -2,12 +2,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 32px;
+  height: var(--chrome-bar-height, 36px);
   background: var(--menu-bar-bg, #ffffff);
   border-bottom: 1px solid var(--border-color, #e8e8e8);
   padding: 0 12px;
   user-select: none;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition: none;
 }
 
 .menu-bar-left {
@@ -24,8 +24,9 @@
 .menu-bar a {
   display: flex;
   align-items: center;
-  height: 100%;
-  padding: 0 8px;
+  height: var(--chrome-bar-height, 36px);
+  line-height: var(--chrome-bar-height, 36px);
+  padding: 0 10px;
   color: var(--text-primary, #333333);
   font-size: 13px;
   text-decoration: none;

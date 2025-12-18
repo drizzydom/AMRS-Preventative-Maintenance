@@ -162,6 +162,7 @@ const Maintenance: React.FC = () => {
         machine: task.machine || task.machine_name || 'Unknown Machine',
         machine_name: task.machine_name || task.machine || 'Unknown Machine',
         machine_id: task.machine_id || 0,
+        machine_serial: task.machine_serial,
         task: task.task || task.part_name || 'Unknown Task',
         dueDate: task.dueDate || task.next_maintenance || '',
         next_maintenance: task.next_maintenance || task.dueDate || '',

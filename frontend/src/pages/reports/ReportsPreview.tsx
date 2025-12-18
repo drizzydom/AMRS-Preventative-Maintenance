@@ -112,15 +112,19 @@ const ReportsPreview: React.FC = () => {
     params.append('include_po', includePO ? '1' : '0')
     params.append('report_type', reportType || 'compact')
     // Open the client-side maintenance report view (React) so printing uses the new UI
-    window.open(`/reports/maintenance/view?${params.toString()}`, '_blank')
+    const origin = window.location.origin
+    window.open(`${origin}/reports/maintenance/view?${params.toString()}`, '_blank')
   }
 
   const generateAuditReport = () => {
     const params = new URLSearchParams()
     if (selectedSiteId) params.append('site_id', String(selectedSiteId))
     if (selectedMachineId) params.append('machine_id', String(selectedMachineId))
+    if (dateRange && dateRange[0]) params.append('date_from', dateRange[0].format('YYYY-MM-DD'))
+    if (dateRange && dateRange[1]) params.append('date_to', dateRange[1].format('YYYY-MM-DD'))
     params.append('report_type', reportType || 'compact')
-    window.open(`/reports/audits/view?${params.toString()}`, '_blank')
+    const origin = window.location.origin
+    window.open(`${origin}/reports/audits/view?${params.toString()}`, '_blank')
   }
 
   if (loading) {
