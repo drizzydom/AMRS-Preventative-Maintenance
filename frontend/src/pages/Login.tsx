@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Form, Input, Button, Checkbox, Card, Space, Typography, Alert, Steps, Tag } from 'antd'
+import { Form, Input, Button, Checkbox, Card, Space, Typography, Alert, Steps, Tag, Spin } from 'antd'
 import { UserOutlined, LockOutlined, LoadingOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, LoginFeedback, LoginError } from '../contexts/AuthContext'
@@ -92,7 +92,9 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string>('')
   const [success, setSuccess] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<LoginFeedback | null>(null)
+  const [bannerKey, setBannerKey] = useState<number>(0) // force re-animate
   const redirectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -106,14 +108,17 @@ const Login: React.FC = () => {
   const onFinish = async (values: LoginFormValues) => {
     setError('')
     setSuccess(false)
-    const optimisticFeedback = createSubmissionFeedback(values.remember)
-    setFeedback(optimisticFeedback)
+    setIsSubmitting(true)
+    setBannerKey((k) => k + 1)
+    // const optimisticFeedback = createSubmissionFeedback(values.remember)
+    // setFeedback(optimisticFeedback)
     
     try {
       const result = await login(values.username, values.password, values.remember)
       setSuccess(true)
       setSyncing(true)
-      setFeedback(result?.feedback || optimisticFeedback)
+      setBannerKey((k) => k + 1)
+      // setFeedback(result?.feedback || optimisticFeedback)
 
       if (redirectTimeout.current) {
         clearTimeout(redirectTimeout.current)
@@ -122,14 +127,15 @@ const Login: React.FC = () => {
       redirectTimeout.current = setTimeout(() => {
         setSyncing(false)
         navigate('/dashboard', { replace: true })
-      }, 1600)
+      }, 2000)
     } catch (err: any) {
+      setIsSubmitting(false)
       const loginError = err as LoginError
       const errorMessage = loginError.message || 'Login failed. Please try again.'
       setError(errorMessage)
       setSuccess(false)
       setSyncing(false)
-      setFeedback(loginError.feedback || createErrorFeedback(errorMessage))
+      // setFeedback(loginError.feedback || createErrorFeedback(errorMessage))
     }
   }
 
@@ -138,7 +144,7 @@ const Login: React.FC = () => {
       <Card className="login-card">
         <div className="login-header">
           <Title level={2}>AMRS Maintenance Tracker</Title>
-          <Text type="secondary">Sign in to continue</Text>
+          <Text type="secondary">{success ? 'Signing you in...' : 'Sign in to continue'}</Text>
         </div>
 
         {error && (
@@ -152,108 +158,83 @@ const Login: React.FC = () => {
           />
         )}
 
-        {success && (
-          <Alert
-            message="Login Successful"
-            description="Redirecting to dashboard..."
-            type="success"
-            icon={<CheckCircleOutlined />}
-            style={{ marginBottom: 16 }}
-          />
+        {(success || syncing) && (
+          <div key={bannerKey} className="login-status-banner" style={{ textAlign: 'center', padding: '20px 0' }}>
+             <Space direction="vertical" size="large">
+                <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />
+                <Title level={3}>Login Successful</Title>
+                <Space>
+                  <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
+                  <Text>Loading dashboard...</Text>
+                </Space>
+             </Space>
+          </div>
         )}
 
-        {feedback && (
-          <Card size="small" className="login-feedback-card" style={{ marginBottom: 16 }}>
-            <Space direction="vertical" style={{ width: '100%' }} size="small">
-              <Space wrap>
-                <Text type="secondary">Attempt</Text>
-                <Tag>{feedback.attemptId}</Tag>
-                <Tag color={finalStatusColor(feedback.finalStatus)}>{formatStatusLabel(feedback.finalStatus)}</Tag>
-                {feedback.context?.device_hint && (
-                  <Tag color="geekblue">Device {feedback.context.device_hint}</Tag>
-                )}
-                {feedback.timestamp && (
-                  <Tag color="purple">Updated {formatTimestamp(feedback.timestamp)}</Tag>
-                )}
-              </Space>
-              <Steps
-                direction="vertical"
-                size="small"
-                responsive={false}
-                items={(feedback.steps || []).map((step) => ({
-                  title: step.label,
-                  status: mapStepStatus(step.status),
-                  description: step.detail,
-                }))}
-              />
-            </Space>
-          </Card>
+        {isSubmitting && !success && !error && (
+           <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Spin size="large" tip="Verifying credentials..." />
+           </div>
         )}
 
-        {syncing && (
-          <Alert
-            message="Syncing data..."
-            description={`Preparing your dashboard${feedback?.context?.device_hint ? ` for device ${feedback.context.device_hint}` : ''}.`}
-            type="info"
-            icon={<LoadingOutlined />}
-            style={{ marginBottom: 16 }}
-          />
-        )}
-
-        <Form
-          name="login"
-          initialValues={{ remember: false }}
-          onFinish={onFinish}
-          autoComplete="off"
-          size="large"
-        >
-          <Form.Item
-            name="username"
-            rules={[{ required: true, message: 'Please input your username!' }]}
-          >
-            <Input 
-              prefix={<UserOutlined />} 
-              placeholder="Username" 
-              disabled={isLoading || success}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="password"
-            rules={[{ required: true, message: 'Please input your password!' }]}
-          >
-            <Input.Password
-              prefix={<LockOutlined />}
-              placeholder="Password"
-              disabled={isLoading || success}
-            />
-          </Form.Item>
-
-          <Form.Item>
-            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-              <Form.Item name="remember" valuePropName="checked" noStyle>
-                <Checkbox disabled={isLoading || success}>Remember me</Checkbox>
-              </Form.Item>
-              <Link href="/forgot-password">Forgot password?</Link>
-            </Space>
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={isLoading || syncing}
-              disabled={success}
-              block
+        {!success && !isSubmitting && (
+          <>
+            <Form
+              name="login"
+              initialValues={{ remember: false }}
+              onFinish={onFinish}
+              autoComplete="off"
+              size="large"
             >
-              {success ? 'Redirecting...' : 'Sign In'}
-            </Button>
-          </Form.Item>
-        </Form>
+              <Form.Item
+                name="username"
+                rules={[{ required: true, message: 'Please input your username!' }]}
+              >
+                <Input 
+                  prefix={<UserOutlined />} 
+                  placeholder="Username" 
+                  disabled={isLoading || success}
+                />
+              </Form.Item>
 
-        <div className="login-footer">
-          <Text type="secondary">Version 1.4.6</Text>
-        </div>
+              <Form.Item
+                name="password"
+                rules={[{ required: true, message: 'Please input your password!' }]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder="Password"
+                  disabled={isLoading || success}
+                />
+              </Form.Item>
+
+              <Form.Item>
+                <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                  <Form.Item name="remember" valuePropName="checked" noStyle>
+                    <Checkbox disabled={isLoading || success}>Remember me</Checkbox>
+                  </Form.Item>
+                  <Link href="/forgot-password">Forgot password?</Link>
+                </Space>
+              </Form.Item>
+
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={isLoading || syncing}
+                  disabled={success}
+                  block
+                >
+                  {success ? 'Redirecting...' : 'Sign In'}
+                </Button>
+              </Form.Item>
+            </Form>
+
+            <div className="login-footer">
+              <Text type="secondary">Version 1.4.6</Text>
+            </div>
+          </>
+        )}
       </Card>
     </div>
   )

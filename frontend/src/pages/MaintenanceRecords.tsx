@@ -13,6 +13,7 @@ interface MaintenanceRecordRow {
   id: number
   machine: string
   machine_id: number | null
+  machine_serial?: string
   part: string
   part_id: number | null
   site: string
@@ -236,6 +237,9 @@ const MaintenanceRecords: React.FC = () => {
       render: (_value: string, record) => (
         <div>
           <strong>{record.machine || 'Unknown'}</strong>
+          {record.machine_serial && (
+            <div style={{ fontSize: '12px', color: '#666' }}>S/N: {record.machine_serial}</div>
+          )}
           {record.site && (
             <div>
               <Tag color="blue" style={{ marginTop: 4 }}>{record.site}</Tag>

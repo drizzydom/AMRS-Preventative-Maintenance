@@ -25,7 +25,7 @@ const TitleBar: React.FC = () => {
     <div className="title-bar">
       <div className="title-bar-drag-region">
         <div className="title-bar-icon">
-          <img src="/favicon.ico" alt="AMRS" width="16" height="16" />
+          <img src="/static/img/logo.png" alt="AMRS" width="16" height="16" />
         </div>
         <div className="title-bar-title">AMRS Maintenance Tracker</div>
       </div>
