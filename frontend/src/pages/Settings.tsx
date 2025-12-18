@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Form, Switch, Select, Slider, Typography, Button, Space, message, Divider, Radio } from 'antd'
+import { Card, Form, Switch, Select, Slider, Typography, Button, Space, message, Divider, Radio, Input } from 'antd'
 import { SaveOutlined, ReloadOutlined, BulbOutlined, BulbFilled } from '@ant-design/icons'
 import { useTheme } from '../contexts/ThemeContext'
+import apiClient from '../utils/api'
 import '../styles/settings.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -27,6 +28,8 @@ const Settings: React.FC = () => {
   })
 
   const [hasChanges, setHasChanges] = useState(false)
+  const [passwordForm] = Form.useForm()
+  const [changingPassword, setChangingPassword] = useState(false)
 
   useEffect(() => {
     // Load settings from localStorage
@@ -106,6 +109,22 @@ const Settings: React.FC = () => {
     localStorage.removeItem('accessibilitySettings')
     message.success('Settings reset to defaults')
     setHasChanges(false)
+  }
+
+  const handleChangePassword = async (values: any) => {
+    try {
+      setChangingPassword(true)
+      await apiClient.post('/api/v1/auth/change-password', {
+        current_password: values.currentPassword,
+        new_password: values.newPassword
+      })
+      message.success('Password changed successfully')
+      passwordForm.resetFields()
+    } catch (error: any) {
+      message.error(error.response?.data?.error || 'Failed to change password')
+    } finally {
+      setChangingPassword(false)
+    }
   }
 
   return (
@@ -296,6 +315,53 @@ const Settings: React.FC = () => {
           <li><kbd>Esc</kbd> - Close modals and dropdowns</li>
           <li><kbd>Arrow keys</kbd> - Navigate within menus and lists</li>
         </ul>
+      </Card>
+
+      <Card title="Account Security" style={{ marginTop: 16 }}>
+        <Form
+          form={passwordForm}
+          layout="vertical"
+          onFinish={handleChangePassword}
+        >
+          <Form.Item
+            name="currentPassword"
+            label="Current Password"
+            rules={[{ required: true, message: 'Please enter your current password' }]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Form.Item
+            name="newPassword"
+            label="New Password"
+            rules={[
+              { required: true, message: 'Please enter a new password' },
+              { min: 8, message: 'Password must be at least 8 characters' }
+            ]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="Confirm New Password"
+            dependencies={['newPassword']}
+            rules={[
+              { required: true, message: 'Please confirm your new password' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('newPassword') === value) {
+                    return Promise.resolve()
+                  }
+                  return Promise.reject(new Error('The two passwords that you entered do not match!'))
+                },
+              }),
+            ]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={changingPassword}>
+            Change Password
+          </Button>
+        </Form>
       </Card>
     </div>
   )

@@ -135,16 +135,6 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Emergency button styling */
-.ant-btn-dangerous {
-  animation: pulse-danger 2s infinite;
-}
-
-.ant-btn-dangerous:hover {
-  animation: none;
-  transform: scale(1.02);
-}
-
 /* Card hover effects for clickable stats */
 .stats-row .ant-card[style*="cursor: pointer"]:hover {
   cursor: pointer;

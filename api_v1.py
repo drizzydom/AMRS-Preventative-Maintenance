@@ -6,7 +6,7 @@ import uuid
 from flask import Blueprint, jsonify, request, session
 from flask_login import login_user, logout_user, current_user, login_required
 from functools import wraps, lru_cache
-from models import User, db, hash_value
+from models import User, db, hash_value, maybe_decrypt
 from remember_session_manager import (
     create_or_update_session,
     queue_cookie_refresh,
@@ -314,8 +314,8 @@ def api_login():
 
         user_data = {
             'id': user.id,
-            'username': user.username,
-            'email': user.email,
+            'username': maybe_decrypt(user._username),
+            'email': maybe_decrypt(user._email),
             'role': role_name,
             'permissions': permissions,
             'is_admin': bool(getattr(user, 'is_admin', False) or role_name.lower() == 'admin'),
@@ -324,7 +324,7 @@ def api_login():
         device_id = _resolve_device_id(provided_device_id)
         success_steps = [
             _login_feedback_step('credentials', 'Verify credentials', 'success', 'Credentials accepted.'),
-            _login_feedback_step('session', 'Secure session', 'success', f'Session established for {user.username}.'),
+            _login_feedback_step('session', 'Secure session', 'success', f'Session established for {maybe_decrypt(user._username)}.'),
         ]
         extra_context = {}
 
@@ -369,7 +369,7 @@ def api_login():
 def api_logout():
     """Logout endpoint"""
     try:
-        username = current_user.username
+        username = maybe_decrypt(current_user._username)
         device_id = sanitize_device_id(request.cookies.get(REMEMBER_DEVICE_COOKIE))
         revoke_user_sessions(current_user.id, device_id=device_id)
         queue_cookie_clear()
@@ -391,13 +391,51 @@ def api_current_user():
         
         user_data = {
             'id': current_user.id,
-            'username': current_user.username,
-            'email': current_user.email,
+            'username': maybe_decrypt(current_user._username),
+            'email': maybe_decrypt(current_user._email),
             'role': role_name,
             'permissions': permissions,
             'is_admin': _is_admin_user(),
         }
         return api_response(data=user_data)
+    except Exception as e:
+        logger.error(f'Get current user error: {str(e)}')
+        return api_response(error='Failed to load user profile', status=500)
+
+@api_v1.route('/auth/change-password', methods=['POST'])
+@api_login_required
+def api_change_password():
+    """Change current user's password"""
+    try:
+        data = request.get_json()
+        if not data:
+            return api_response(error='No data provided', status=400)
+            
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        
+        if not current_password or not new_password:
+            return api_response(error='Current and new password are required', status=400)
+            
+        # Verify current password
+        if not current_user.check_password(current_password):
+            return api_response(error='Current password is incorrect', status=401)
+            
+        # Validate new password length
+        if len(new_password) < 8:
+            return api_response(error='New password must be at least 8 characters long', status=400)
+            
+        # Update password
+        current_user.set_password(new_password)
+        db.session.commit()
+        
+        logger.info(f'Password changed for user: {maybe_decrypt(current_user._username)}')
+        return api_response(message='Password updated successfully')
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Change password error: {str(e)}')
+        return api_response(error='Failed to update password', status=500)
     except Exception as e:
         logger.error(f'Get current user error: {str(e)}')
         return api_response(error='Failed to get user information', status=500)
@@ -534,8 +572,16 @@ def api_get_machines():
         from models import Machine
         from sqlalchemy.orm import joinedload
         
+        site_id_filter = request.args.get('site_id', type=int)
+
         # Optimize with eager loading to avoid N+1 queries
         query = Machine.query.options(joinedload(Machine.site)).filter_by(decommissioned=False)
+
+        # Explicit site filter if provided
+        if site_id_filter:
+            if not _has_site_access(site_id_filter):
+                return api_response(error='Access denied to this site', status=403)
+            query = query.filter(Machine.site_id == site_id_filter)
 
         if not _can_view_all_sites():
             site_ids = _user_site_ids()
@@ -1104,6 +1150,8 @@ def api_get_maintenance_history():
                 func.lower(func.coalesce(MaintenanceRecord.description, '')).like(search_pattern),
                 func.lower(func.coalesce(MaintenanceRecord.comments, '')).like(search_pattern),
                 func.lower(func.coalesce(MaintenanceRecord.performed_by, '')).like(search_pattern),
+                func.lower(func.coalesce(MaintenanceRecord.po_number, '')).like(search_pattern),
+                func.lower(func.coalesce(MaintenanceRecord.work_order_number, '')).like(search_pattern),
             ))
 
         total_records = query.count()
@@ -1115,20 +1163,26 @@ def api_get_maintenance_history():
         for record in records:
             machine_name = record.machine.name if record.machine else 'Unknown'
             machine_id = record.machine.id if record.machine else None
+            machine_serial = record.machine.serial_number if record.machine and hasattr(record.machine, 'serial_number') else ''
             part_name = record.part.name if hasattr(record, 'part') and record.part else 'Unknown'
             part_id = record.part.id if hasattr(record, 'part') and record.part else None
             site_name = record.machine.site.name if record.machine and record.machine.site else ''
             site_id = record.machine.site.id if record.machine and record.machine.site else None
             
             completed_by = record.performed_by or ''
+            # Try to decrypt if it looks encrypted
+            completed_by = maybe_decrypt(completed_by)
+            
             if not completed_by and record.user:
-                completed_by = record.user.username
+                # Use maybe_decrypt on the user's raw username field
+                completed_by = maybe_decrypt(record.user._username)
             
             records_data.append({
                 'id': record.id,
                 'machine': machine_name,
                 'machineName': machine_name,
                 'machine_id': machine_id,
+                'machine_serial': machine_serial,
                 'part': part_name,
                 'partName': part_name,
                 'part_id': part_id,
@@ -1452,16 +1506,99 @@ def api_get_audit_machines(audit_id):
         
         # Use Eastern timezone for consistent date boundaries with audit completions
         today = get_eastern_date()
+        
+        # Get date range from query params
+        date_from_str = request.args.get('date_from')
+        date_to_str = request.args.get('date_to')
+        grouped_by_date = request.args.get('grouped_by_date', '0') == '1'
+        
+        start_date = today
+        end_date = today
+        
+        if date_from_str:
+            try:
+                start_date = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        
+        if date_to_str:
+            try:
+                end_date = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        
+        if grouped_by_date:
+            # Fetch all completions in range
+            completions = AuditTaskCompletion.query.filter(
+                AuditTaskCompletion.audit_task_id == audit_id,
+                AuditTaskCompletion.date >= start_date,
+                AuditTaskCompletion.date <= end_date,
+                AuditTaskCompletion.completed == True
+            ).all()
+            
+            # Map by (date, machine_id)
+            completion_map = {}
+            user_ids = set()
+            for c in completions:
+                completion_map[(c.date, c.machine_id)] = c
+                if c.completed_by:
+                    user_ids.add(c.completed_by)
+            
+            # Fetch users
+            users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
+            
+            daily_results = []
+            current_date = start_date
+            while current_date <= end_date:
+                day_machines = []
+                for machine in audit_task.machines:
+                    completion = completion_map.get((current_date, machine.id))
+                    
+                    completed_by_name = None
+                    if completion and completion.completed_by:
+                        user = users.get(completion.completed_by)
+                        if user:
+                            completed_by_name = maybe_decrypt(user._username)
+                            
+                    day_machines.append({
+                        'id': machine.id,
+                        'name': machine.name,
+                        'model': machine.model if hasattr(machine, 'model') else '',
+                        'serial_number': machine.serial_number if hasattr(machine, 'serial_number') else '',
+                        'completed': completion.completed if completion else False,
+                        'completed_at': completion.completed_at.isoformat() if completion and completion.completed_at else None,
+                        'completed_by': completed_by_name,
+                        'completed_by_id': completion.completed_by if completion else None,
+                    })
+                
+                daily_results.append({
+                    'date': current_date.strftime('%Y-%m-%d'),
+                    'machines': day_machines
+                })
+                current_date += timedelta(days=1)
+                
+            return api_response(data=daily_results)
+        
         machines_data = []
         
         for machine in audit_task.machines:
-            # Check if completed today
-            completion = AuditTaskCompletion.query.filter_by(
-                audit_task_id=audit_id,
-                machine_id=machine.id,
-                date=today
-            ).first()
+            # Check if completed in range (get latest completion)
+            completion = AuditTaskCompletion.query.filter(
+                AuditTaskCompletion.audit_task_id == audit_id,
+                AuditTaskCompletion.machine_id == machine.id,
+                AuditTaskCompletion.date >= start_date,
+                AuditTaskCompletion.date <= end_date,
+                AuditTaskCompletion.completed == True
+            ).order_by(AuditTaskCompletion.date.desc()).first()
             
+            # Resolve completed_by user name
+            completed_by_name = None
+            if completion and completion.completed_by:
+                user = User.query.get(completion.completed_by)
+                if user:
+                    # Use maybe_decrypt on the user's raw username field
+                    completed_by_name = maybe_decrypt(user._username)
+
             machines_data.append({
                 'id': machine.id,
                 'name': machine.name,
@@ -1469,7 +1606,8 @@ def api_get_audit_machines(audit_id):
                 'serial_number': machine.serial_number if hasattr(machine, 'serial_number') else '',
                 'completed': completion.completed if completion else False,
                 'completed_at': completion.completed_at.isoformat() if completion and completion.completed_at else None,
-                'completed_by': completion.completed_by if completion else None,
+                'completed_by': completed_by_name,
+                'completed_by_id': completion.completed_by if completion else None,
             })
         
         return api_response(data=machines_data)
@@ -1615,22 +1753,20 @@ def api_get_users():
             
             # Explicitly call the property getters to decrypt values
             try:
-                username = user.username  # This calls the @property getter which decrypts
-                logger.info(f'User {user.id}: Successfully decrypted username: {username}')
+                # Use maybe_decrypt on the raw fields directly to be safe
+                username = maybe_decrypt(user._username)
+                # If maybe_decrypt returns the same encrypted-looking string, try to force it
+                if username and username.startswith('gAAAAA'):
+                    # This shouldn't happen with the updated maybe_decrypt, but just in case
+                    pass
             except Exception as e:
                 logger.error(f'Failed to decrypt username for user {user.id}: {str(e)}', exc_info=True)
-                # If it looks like encrypted data (long string), note that
-                if user._username and len(user._username) > 50:
-                    logger.error(f'User {user.id}: Value appears to be encrypted (length={len(user._username)})')
                 username = f'user_{user.id}'  # Fallback
             
             try:
-                email = user.email  # This calls the @property getter which decrypts
-                logger.info(f'User {user.id}: Successfully decrypted email: {email}')
+                email = maybe_decrypt(user._email)
             except Exception as e:
                 logger.error(f'Failed to decrypt email for user {user.id}: {str(e)}', exc_info=True)
-                if user._email and len(user._email) > 50:
-                    logger.error(f'User {user.id}: Email value appears to be encrypted (length={len(user._email)})')
                 email = f'user_{user.id}@example.com'  # Fallback
             
             users_data.append({

@@ -32,6 +32,7 @@ interface OverdueItem {
   part_name: string
   machine_name: string
   machine_id?: number
+  machine_serial?: string
   site_name: string
   site_id?: number
   days_overdue: number
@@ -43,6 +44,7 @@ interface DueSoonItem {
   part_name: string
   machine_name: string
   machine_id?: number
+  machine_serial?: string
   site_name: string
   site_id?: number
   days_until: number
@@ -230,7 +232,21 @@ const Dashboard: React.FC = () => {
 
   const overdueColumns = [
     { title: 'Service', dataIndex: 'part_name', key: 'part_name' },
-    { title: 'Machine', dataIndex: 'machine_name', key: 'machine_name' },
+    { 
+      title: 'Machine', 
+      dataIndex: 'machine_name', 
+      key: 'machine_name',
+      render: (text: string, record: any) => (
+        <span>
+          {text}
+          {record.machine_serial && (
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: '0.9em' }}>
+              (S/N: {record.machine_serial})
+            </Text>
+          )}
+        </span>
+      )
+    },
     { title: 'Site', dataIndex: 'site_name', key: 'site_name' },
     { title: 'Days Overdue', dataIndex: 'days_overdue', key: 'days_overdue', render: (d: number) => <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{d} days</span> },
     { title: 'Next Maintenance', dataIndex: 'next_maintenance', key: 'next_maintenance' },
@@ -238,7 +254,21 @@ const Dashboard: React.FC = () => {
 
   const dueSoonColumns = [
     { title: 'Service', dataIndex: 'part_name', key: 'part_name' },
-    { title: 'Machine', dataIndex: 'machine_name', key: 'machine_name' },
+    { 
+      title: 'Machine', 
+      dataIndex: 'machine_name', 
+      key: 'machine_name',
+      render: (text: string, record: any) => (
+        <span>
+          {text}
+          {record.machine_serial && (
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: '0.9em' }}>
+              (S/N: {record.machine_serial})
+            </Text>
+          )}
+        </span>
+      )
+    },
     { title: 'Site', dataIndex: 'site_name', key: 'site_name' },
     { title: 'Due In', dataIndex: 'days_until', key: 'days_until', render: (d: number) => <span style={{ color: '#faad14' }}>{d} days</span> },
     { title: 'Next Maintenance', dataIndex: 'next_maintenance', key: 'next_maintenance' },
@@ -392,7 +422,14 @@ const Dashboard: React.FC = () => {
                         header={
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <ToolOutlined />
-                            <span>{machine.machine_name}</span>
+                            <span>
+                              {machine.machine_name}
+                              {machine.tasks[0]?.machine_serial && (
+                                <Text type="secondary" style={{ marginLeft: 8, fontSize: '0.9em' }}>
+                                  (S/N: {machine.tasks[0].machine_serial})
+                                </Text>
+                              )}
+                            </span>
                             {machine.overdue_count > 0 && (
                               <Tag color="red">{machine.overdue_count} overdue</Tag>
                             )}

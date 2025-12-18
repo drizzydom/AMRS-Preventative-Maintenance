@@ -68,6 +68,24 @@ function App() {
         <Routes>
           {/* Public route - Login page without sidebar/menubar */}
           <Route path="/login" element={<Login />} />
+
+          {/* Standalone Report Views (No Layout) */}
+          <Route
+            path="/reports/maintenance/view"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <MaintenanceReportView />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/reports/audits/view"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <AuditReportView />
+              </Suspense>
+            }
+          />
           
           {/* Protected routes with app layout */}
           <Route
@@ -173,79 +191,61 @@ function AppLayout() {
         <Sidebar />
         <Layout className="content-layout">
           <Content className="app-content">
-            <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/machines" element={<Machines />} />
-              <Route path="/maintenance" element={<Maintenance />} />
-              <Route
-                path="/maintenance-records"
-                element={(
-                  <PermissionGate requiredPermissions={['maintenance.view']}>
-                    <MaintenanceRecords />
-                  </PermissionGate>
-                )}
-              />
-              <Route path="/audits" element={<Audits />} />
-              <Route path="/sites" element={<Sites />} />
-              <Route
-                path="/users"
-                element={(
-                  <PermissionGate requireAdmin>
-                    <Users />
-                  </PermissionGate>
-                )}
-              />
-              <Route
-                path="/admin"
-                element={(
-                  <PermissionGate requireAdmin>
-                    <AdminPanel />
-                  </PermissionGate>
-                )}
-              />
-              <Route path="/settings" element={<Settings />} />
-              <Route
-                path="/reports"
-                element={(
-                  <PermissionGate requiredPermissions={['reports.view']}>
-                    <ErrorBoundary>
-                      <ReportsPreview />
-                    </ErrorBoundary>
-                  </PermissionGate>
-                )}
-              />
-              <Route
-                path="/reports/maintenance/view"
-                element={(
-                  <PermissionGate requiredPermissions={['reports.view']}>
-                    <ErrorBoundary>
-                      <MaintenanceReportView />
-                    </ErrorBoundary>
-                  </PermissionGate>
-                )}
-              />
-              <Route
-                path="/reports/audits"
-                element={(
-                  <PermissionGate requiredPermissions={['reports.view', 'audits.view']}>
-                    <ErrorBoundary>
-                      <AuditReportsPreview />
-                    </ErrorBoundary>
-                  </PermissionGate>
-                )}
-              />
-              <Route
-                path="/reports/audits/view"
-                element={(
-                  <PermissionGate requiredPermissions={['reports.view', 'audits.view']}>
-                    <ErrorBoundary>
-                      <AuditReportView />
-                    </ErrorBoundary>
-                  </PermissionGate>
-                )}
-              />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/machines" element={<Machines />} />
+                <Route path="/maintenance" element={<Maintenance />} />
+                <Route
+                  path="/maintenance-records"
+                  element={(
+                    <PermissionGate requiredPermissions={['maintenance.view']}>
+                      <MaintenanceRecords />
+                    </PermissionGate>
+                  )}
+                />
+                <Route path="/audits" element={<Audits />} />
+                <Route path="/sites" element={<Sites />} />
+                <Route
+                  path="/users"
+                  element={(
+                    <PermissionGate requireAdmin>
+                      <Users />
+                    </PermissionGate>
+                  )}
+                />
+                <Route
+                  path="/admin"
+                  element={(
+                    <PermissionGate requireAdmin>
+                      <AdminPanel />
+                    </PermissionGate>
+                  )}
+                />
+                <Route path="/settings" element={<Settings />} />
+                <Route
+                  path="/reports"
+                  element={(
+                    <PermissionGate requiredPermissions={['reports.view']}>
+                      <ErrorBoundary>
+                        <ReportsPreview />
+                      </ErrorBoundary>
+                    </PermissionGate>
+                  )}
+                />
+                <Route
+                  path="/reports/audits"
+                  element={(
+                    <PermissionGate requiredPermissions={['reports.view', 'audits.view']}>
+                      <ErrorBoundary>
+                        <AuditReportsPreview />
+                      </ErrorBoundary>
+                    </PermissionGate>
+                  )}
+                />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </Suspense>
           </Content>
         </Layout>
       </Layout>

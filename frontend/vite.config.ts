@@ -5,7 +5,7 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './', // Use relative paths for Electron
+  base: '/', // Use absolute paths for Flask serving
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
