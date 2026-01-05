@@ -34,12 +34,18 @@ module.exports = {
     "**/*.yml",
     "**/*.yaml", 
     "**/*.py",
-    "requirements.txt"
+    ".env.bootstrap",
+    "requirements.txt",
+    "frontend/dist/**/*",
+    "templates/**/*",
+    "static/**/*",
+    "assets/**/*"
   ],
   files: [
     "main.js",
-    "preload.js",
+    "main-preload.js",
     "splash-preload.js",
+    "app/**/*",
     "app.py",
     "package.json",
     "app-package.json",
@@ -59,10 +65,13 @@ module.exports = {
     "auto_migrate.py",
     "excel_importer.py",
     "schema_validator.py",
+    "schema_version.py",
+    "remember_session_manager.py",
     "cache_config.py",
     "db_config.py",
     "db_utils.py",
     "api_endpoints.py",
+    "api_v1.py",
     "api_utils.py",
     "sync_utils.py",
     "datetime_utils.py",
@@ -72,6 +81,7 @@ module.exports = {
     "notification_scheduler.py",
     "sqlite_schema_migration.py",
     "import_excel.py",
+    "frontend/dist/**/*",
     "templates/**/*",
     "static/**/*",
     "assets/**/*",
@@ -91,42 +101,14 @@ module.exports = {
     "!**/{appveyor.yml,.travis.yml,circle.yml}",
     "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
   ],
-  asarUnpack: [
-    "app.py",
-    "config.py", 
-    "models.py",
-    "sqlalchemy_datetime_patch.py",
-    "timezone_utils.py",
-    "sync_utils_enhanced.py",
-    "security_event_batcher.py",
-    "security_event_logger.py",
-    "load_bootstrap_env.py",
-    "embedded_bootstrap_credentials.py",
-    ".env.bootstrap",
-    "auto_migrate.py",
-    "excel_importer.py",
-    "schema_validator.py",
-    "cache_config.py",
-    "db_config.py",
-    "db_utils.py",
-    "api_endpoints.py",
-    "api_utils.py",
-    "sync_utils.py",
-    "datetime_utils.py",
-    "migrate_app_settings.py",
-    "migrate_security_events_enhanced.py",
-    "add_sync_queue_table.py",
-    "notification_scheduler.py",
-    "sqlite_schema_migration.py",
-    "import_excel.py",
-    "requirements.txt",
-    "templates/**/*",
-    "static/**/*"
-  ],
   extraResources: [
     {
       from: "windows-python/python",
       to: "python"
+    },
+    {
+      from: "frontend/dist",
+      to: "frontend/dist"
     }
   ]
 };

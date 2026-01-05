@@ -27,6 +27,8 @@
     border: 1px solid #dee2e6 !important;
     border-radius: 0.25rem !important;
     margin-bottom: 1rem !important;
+    display: block !important; /* Ensure block display for scrolling */
+    -webkit-overflow-scrolling: touch !important;
 }
 
 /* Allow table to expand beyond container width for horizontal scroll */
@@ -34,6 +36,7 @@
     width: max-content !important;
     min-width: 100% !important;
     margin-bottom: 0 !important;
+    table-layout: auto !important;
 }
 
 /* ========================================
@@ -55,6 +58,42 @@
     padding: 0.75rem !important;
     border: 1px solid #dee2e6 !important;
     box-sizing: border-box !important;
+    min-width: 120px !important; /* Prevent text from squishing into a vertical line */
+    white-space: normal !important; /* Allow wrapping */
+}
+
+/* Exception for checkbox/small columns */
+.table tbody td.checkbox-cell,
+.table tbody td:first-child {
+    min-width: auto !important;
+}
+
+/* Specific fix for Maintenance Records table */
+.maintenance-records-page .table tbody td {
+    min-width: 140px !important; /* Increase minimum width for maintenance records */
+}
+
+.maintenance-records-page .table tbody td:nth-child(1) { /* Checkbox */
+    min-width: 40px !important;
+    width: 40px !important;
+}
+
+.maintenance-records-page .table tbody td:nth-child(2) { /* Date */
+    min-width: 110px !important;
+}
+
+.maintenance-records-page .table tbody td:nth-child(5) { /* Machine */
+    min-width: 180px !important;
+    white-space: normal !important;
+}
+
+.maintenance-records-page .table tbody td:nth-child(6) { /* Service/Part */
+    min-width: 180px !important;
+    white-space: normal !important;
+}
+
+.maintenance-records-page .table tbody td:nth-child(8) { /* Description */
+    min-width: 250px !important; /* Give description plenty of room */
 }
 
 /* Prevent content from changing cell height */

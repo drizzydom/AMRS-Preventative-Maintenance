@@ -1,8 +1,8 @@
 {
-  "latest": "1.4.6",
+  "latest": "2.0.0",
   "available": [
-    "1.4.6"
+    "2.0.0"
   ],
   "notes": "This file controls what version the update server advertises as the latest available. Update this when you deploy new versions.",
-  "lastUpdated": "2025-11-02T20:14:04.096Z"
+  "lastUpdated": "2025-12-22T13:14:54.602Z"
 }
