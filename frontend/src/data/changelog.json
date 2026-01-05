@@ -1,0 +1,53 @@
+[
+  {
+    "version": "2.0.0",
+    "date": "2025-12-19",
+    "title": "Major Update 2.0.0",
+    "sections": [
+      {
+        "title": "🚀 New Features",
+        "items": [
+          "**Enhanced Sync System**: Complete overhaul of the offline-to-online synchronization engine for better reliability and conflict resolution.",
+          "**Maintenance History**: You can now view historical maintenance records directly from the machine details.",
+          "**Remember Me**: Added 'Remember Me' functionality to keep you logged in securely across sessions.",
+          "**Onboarding Tour**: New interactive tour to help new users get started with the application.",
+          "**What's New**: This popup! Stay informed about the latest changes and improvements."
+        ]
+      },
+      {
+        "title": "✨ Improvements",
+        "items": [
+          "**Data Integrity**: Added P.O. Number and Work Order Number fields to maintenance completion forms.",
+          "**User Permissions**: Fixed critical issues with site assignment and visibility. Users now correctly see only their assigned sites.",
+          "**Security**: Implemented stricter Role-Based Access Control (RBAC) across the entire application.",
+          "**Performance**: Optimized database queries for faster page loads and smoother transitions."
+        ]
+      },
+      {
+        "title": "🐛 Bug Fixes",
+        "items": [
+          "Fixed an issue where the application would crash during sync if the internet connection was unstable.",
+          "Resolved a schema mismatch that prevented some maintenance tasks from syncing to the cloud.",
+          "Fixed the 'Logout' button not always clearing the session correctly."
+        ]
+      },
+      {
+        "title": "⚠️ Known Issues",
+        "items": [
+          "**Loading Bar**: The application launching loading bar may bounce back and forth. This is visual only and does not affect loading.",
+          "**Login Flow**: You may see a success message flash briefly before the dashboard loads. We are working on smoothing this out.",
+          "**Emergency Maintenance**: Currently requires PO and Work Order numbers, which may not be available at the time of request.",
+          "**Report Preview**: The preview window only shows the first page of results. However, **printing works correctly** and will include all pages.",
+          "**Accessibility**: Dark mode and High Contrast mode are currently experimental and may not apply to all screens.",
+          "**Window Scaling**: Extreme window resizing may cause some elements to become inaccessible. We recommend using the default window size for now."
+        ]
+      },
+      {
+        "title": "📞 Support & Feedback",
+        "items": [
+          "If you experience any issues or want to provide feedback, please email us at **techsupport@accuratemachinerepair.com**."
+        ]
+      }
+    ]
+  }
+]

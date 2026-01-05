@@ -1,4 +1,8 @@
 const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
+
+// Disable GPU acceleration immediately to prevent crashes
+app.disableHardwareAcceleration();
+
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -28,6 +32,10 @@ process.on('uncaughtException', (error) => {
     }
     // Log other uncaught exceptions but don't show dialog for common ones
     console.error('[Electron] Uncaught exception:', error);
+    if (typeof writeLog === 'function') {
+        writeLog(`[Electron] Uncaught exception: ${error.message}`);
+        writeLog(`[Electron] Stack: ${error.stack}`);
+    }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -39,6 +47,9 @@ process.on('unhandledRejection', (reason, promise) => {
         return;
     }
     console.error('[Electron] Unhandled rejection:', reason);
+    if (typeof writeLog === 'function') {
+        writeLog(`[Electron] Unhandled rejection: ${reasonStr}`);
+    }
 });
 
 // --- Electron Updater Integration ---
@@ -576,6 +587,19 @@ async function checkPythonDependencies(pythonPath) {
     updateSplashStatus('Checking Python dependencies...', 20);
     return new Promise((resolve) => {
         try {
+            // Set a timeout for the dependency check
+            const timeout = setTimeout(() => {
+                writeLog('[Electron] Dependency check timed out after 10 seconds');
+                if (checkProcess) {
+                    try {
+                        checkProcess.kill();
+                    } catch (e) {
+                        writeLog(`[Electron] Failed to kill timed out process: ${e.message}`);
+                    }
+                }
+                resolve(false);
+            }, 10000);
+
             const checkProcess = spawn(pythonPath, ['-c', 'import flask; import sqlalchemy; print("Dependencies OK")'], {
                 stdio: ['pipe', 'pipe', 'pipe']
             });
@@ -603,6 +627,7 @@ async function checkPythonDependencies(pythonPath) {
             });
             
             checkProcess.on('close', (code) => {
+                clearTimeout(timeout);
                 const success = code === 0 && output.includes('Dependencies OK');
                 writeLog(`[Electron] Dependencies check: ${success ? 'PASSED' : 'FAILED'} (code: ${code})`);
                 
@@ -620,6 +645,7 @@ async function checkPythonDependencies(pythonPath) {
             });
             
             checkProcess.on('error', (error) => {
+                clearTimeout(timeout);
                 writeLog(`[Electron] Dependencies check error: ${error.message}`);
                 if (process.platform === 'win32') {
                     writeLog(`[Electron] Windows error detected - this may indicate missing Visual C++ Runtime`);
@@ -1025,7 +1051,7 @@ async function startFlaskServer() {
         FLASK_RUN_PORT: FLASK_PORT.toString(),
         PORT: FLASK_PORT.toString(),
         SECRET_KEY: require('crypto').randomBytes(32).toString('hex'),
-        PYTHONPATH: __dirname,
+        PYTHONPATH: path.dirname(appScript),
         PYTHONUNBUFFERED: '1',  // Ensure immediate output
         APP_VERSION: app.getVersion()  // Pass version from package.json to Flask
     };
@@ -1329,8 +1355,11 @@ function createWindow() {
             preload: path.join(__dirname, 'main-preload.js')
         },
         titleBarStyle: 'default', // Use default title bar style
-        autoHideMenuBar: false
+        autoHideMenuBar: true
     });
+    
+    // Remove the menu bar completely to prevent double bars
+    mainWindow.removeMenu();
     
     // Load the React frontend from Flask server (same origin for cookies to work)
     // This ensures session cookies work properly since frontend and backend are on same origin

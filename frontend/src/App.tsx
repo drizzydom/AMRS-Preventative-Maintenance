@@ -5,6 +5,7 @@ import TitleBar from './components/TitleBar'
 import MenuBar from './components/MenuBar'
 import Sidebar from './components/Sidebar'
 import OnboardingTour from './components/onboarding/OnboardingTour'
+import WhatsNewModal from './components/modals/WhatsNewModal'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import PermissionGate from './components/auth/PermissionGate'
@@ -16,6 +17,7 @@ import {
   startNotificationScheduler, 
   stopNotificationScheduler 
 } from './services/notificationService'
+import packageJson from '../package.json'
 import './styles/App.css'
 
 const { Content } = Layout
@@ -106,21 +108,37 @@ function App() {
 function AppLayout() {
   const navigate = useNavigate()
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showWhatsNew, setShowWhatsNew] = useState(false)
+  const currentVersion = packageJson.version
 
   // Initialize keyboard shortcuts
   useKeyboardShortcuts()
 
-  // Check for first-time user
+  // Check for first-time user and version updates
   useEffect(() => {
     const onboardingComplete = localStorage.getItem('amrs_onboarding_complete')
+    const lastSeenVersion = localStorage.getItem('amrs_last_seen_version')
+
     if (!onboardingComplete) {
       // Small delay to let the app render first
       const timer = setTimeout(() => {
         setShowOnboarding(true)
       }, 500)
       return () => clearTimeout(timer)
+    } else if (lastSeenVersion !== currentVersion) {
+      // If onboarding is done but version changed, show What's New
+      // Small delay to ensure UI is ready
+      const timer = setTimeout(() => {
+        setShowWhatsNew(true)
+      }, 1000)
+      return () => clearTimeout(timer)
     }
-  }, [])
+  }, [currentVersion])
+
+  const handleWhatsNewClose = () => {
+    setShowWhatsNew(false)
+    localStorage.setItem('amrs_last_seen_version', currentVersion)
+  }
 
   // Initialize desktop notifications
   useEffect(() => {
@@ -256,7 +274,16 @@ function AppLayout() {
         onClose={() => setShowOnboarding(false)}
         onComplete={() => {
           console.log('[App] Onboarding tour completed')
+          // After onboarding, mark version as seen so we don't show What's New immediately
+          localStorage.setItem('amrs_last_seen_version', currentVersion)
         }}
+      />
+
+      {/* What's New Modal for updates */}
+      <WhatsNewModal
+        visible={showWhatsNew}
+        onClose={handleWhatsNewClose}
+        currentVersion={currentVersion}
       />
     </Layout>
   )
