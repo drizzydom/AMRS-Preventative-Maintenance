@@ -1,5 +1,39 @@
 [
   {
+    "version": "2.1.0",
+    "date": "2026-01-07",
+    "title": "Efficiency & Management Update 2.1.0",
+    "sections": [
+      {
+        "title": "🚀 New Features",
+        "items": [
+          "**One-Click Maintenance**: Added a 'Record' button directly to the Dashboard overdue/due-soon lists for immediate action.",
+          "**Machine List Maintenance**: The wrench icon in the Machines list is now functional, allowing quick access to maintenance recording for any machine.",
+          "**Service Management**: You can now Add, Edit, and Delete individual maintenance services (tasks) for each machine directly from the application.",
+          "**Emergency Menu**: Added 'Emergency Maintenance' option to the File > New menu for faster access during critical breakdown events."
+        ]
+      },
+      {
+        "title": "✨ Improvements",
+        "items": [
+          "**Smart Defaults**: Maintenance recording forms now start with no services selected by default to prevent accidental data entry.",
+          "**Machine Stats**: Machines now dynamically calculate their 'Last' and 'Next' maintenance dates based on their service history.",
+          "**Role Management**: Enhanced support for user role assignments and permissions handling in the Admin Panel.",
+          "**Clean Up**: Removed legacy 'Cycle Status' logic to focus on calendar-based preventive maintenance."
+        ]
+      },
+      {
+        "title": "🐛 Bug Fixes",
+        "items": [
+          "Fixed an issue with Dashboard 'Due Soon' logic displaying incorrect items.",
+          "Corrected maintenance date display formats across the application.",
+          "Aligned backend permissions for Audit Task completion with frontend roles.",
+          "Resolved the 'Logout' bug where sessions were essentially sticky."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.0",
     "date": "2025-12-19",
     "title": "Major Update 2.0.0",

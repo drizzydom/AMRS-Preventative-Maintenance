@@ -10,8 +10,11 @@ import {
   DeleteOutlined,
   ToolOutlined,
   ExclamationCircleOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons'
 import MachineModal from '../components/modals/MachineModal'
+import MaintenanceCompletionModal from '../components/modals/MaintenanceCompletionModal'
+import ManageServicesModal from '../components/modals/ManageServicesModal'
 import apiClient from '../utils/api'
 import '../styles/machines.css'
 
@@ -24,6 +27,7 @@ interface Machine {
   id: number
   name: string
   serial: string
+  machine_number: string
   model: string
   site: string
   site_id?: number
@@ -39,6 +43,10 @@ const Machines: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [modalVisible, setModalVisible] = useState(false)
   const [selectedMachine, setSelectedMachine] = useState<Machine | undefined>(undefined)
+  const [maintenanceModalVisible, setMaintenanceModalVisible] = useState(false)
+  const [maintenanceMachine, setMaintenanceMachine] = useState<Machine | null>(null)
+  const [servicesModalVisible, setServicesModalVisible] = useState(false)
+  const [servicesMachine, setServicesMachine] = useState<Machine | null>(null)
   const [machines, setMachines] = useState<Machine[]>([])
   const [loading, setLoading] = useState(true)
   const [sites, setSites] = useState<any[]>([])
@@ -61,6 +69,7 @@ const Machines: React.FC = () => {
         id: machine.id,
         name: machine.name,
         serial: machine.serial || '',
+        machine_number: machine.machine_number || '',
         model: machine.model || '',
         site: machine.site || '',
         site_id: machine.site_id,
@@ -180,7 +189,12 @@ const Machines: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       sorter: (a, b) => a.name.localeCompare(b.name),
-      render: (text) => <strong>{text}</strong>,
+      render: (text, record) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <strong>{text}</strong>
+          {record.machine_number && <Typography.Text type="secondary" style={{ fontSize: '11px' }}>#{record.machine_number}</Typography.Text>}
+        </div>
+      ),
     },
     {
       title: 'Serial Number',
@@ -264,7 +278,21 @@ const Machines: React.FC = () => {
             type="text"
             icon={<ToolOutlined />}
             size="small"
-            title="Maintenance"
+            title="Record Maintenance"
+            onClick={() => {
+              setMaintenanceMachine(record)
+              setMaintenanceModalVisible(true)
+            }}
+          />
+          <Button
+            type="text"
+            icon={<UnorderedListOutlined />}
+            size="small"
+            title="Manage Services"
+            onClick={() => {
+              setServicesMachine(record)
+              setServicesModalVisible(true)
+            }}
           />
           <Button
             type="text"
@@ -394,6 +422,24 @@ const Machines: React.FC = () => {
         sites={sites}
         onCancel={() => setModalVisible(false)}
         onSubmit={handleSubmitMachine}
+      />
+
+      <MaintenanceCompletionModal
+        open={maintenanceModalVisible}
+        onClose={() => setMaintenanceModalVisible(false)}
+        machineId={maintenanceMachine?.id || null}
+        machineName={maintenanceMachine?.name || ''}
+        onComplete={() => {
+          setMaintenanceModalVisible(false)
+          fetchMachines()
+        }}
+      />
+
+      <ManageServicesModal
+        open={servicesModalVisible}
+        onClose={() => setServicesModalVisible(false)}
+        machineId={servicesMachine?.id || null}
+        machineName={servicesMachine?.name || ''}
       />
     </div>
   )

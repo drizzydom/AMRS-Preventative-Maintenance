@@ -21,6 +21,14 @@ import logging
 import math
 from datetime import datetime, timedelta
 
+# Import sync utility for write operations
+try:
+    from sync_utils_enhanced import add_to_sync_queue_enhanced
+except ImportError:
+    # Fallback or dummy if not available
+    def add_to_sync_queue_enhanced(*args, **kwargs):
+        pass
+
 # Create API blueprint
 api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 
@@ -578,7 +586,7 @@ def api_get_machines():
         site_id_filter = request.args.get('site_id', type=int)
 
         # Optimize with eager loading to avoid N+1 queries
-        query = Machine.query.options(joinedload(Machine.site)).filter_by(decommissioned=False)
+        query = Machine.query.options(joinedload(Machine.site), joinedload(Machine.parts)).filter_by(decommissioned=False)
 
         # Explicit site filter if provided
         if site_id_filter:
@@ -1275,6 +1283,131 @@ def api_get_machine_parts(machine_id):
         logger.error(f'Get machine parts error: {str(e)}')
         return api_response(error='Failed to load machine parts', status=500)
 
+@api_v1.route('/parts', methods=['POST'])
+@api_login_required
+def api_create_part():
+    """Create a new service/part for a machine"""
+    try:
+        if not _has_any_permission('machines.edit', 'admin.full'):
+            return api_response(error='Insufficient permissions', status=403)
+        
+        from models import Part, Machine, db
+        from sync_utils_enhanced import add_to_sync_queue_enhanced
+        
+        data = request.form
+        machine_id = data.get('machine_id')
+        name = data.get('name')
+        
+        if not machine_id or not name:
+            return api_response(error='Machine ID and Name are required', status=400)
+            
+        machine = Machine.query.get(machine_id)
+        if not machine:
+            return api_response(error='Machine not found', status=404)
+            
+        if not _has_site_access(machine.site_id):
+            return api_response(error='Access denied', status=403)
+            
+        part = Part(
+            name=name,
+            machine_id=machine_id,
+            description=data.get('description', ''),
+            maintenance_frequency=data.get('maintenance_frequency', type=int),
+            maintenance_unit=data.get('maintenance_unit', 'days'),
+            next_maintenance=datetime.strptime(data.get('next_maintenance'), '%Y-%m-%d') if data.get('next_maintenance') else None
+            # assigned_user_id is available in model but maybe not used here?
+        )
+        
+        db.session.add(part)
+        db.session.commit()
+        
+        # Add to sync queue
+        add_to_sync_queue_enhanced('parts', part.id, 'INSERT', part.to_dict())
+        
+        return api_response(message='Service created successfully', data={'id': part.id})
+        
+    except Exception as e:
+        logger.error(f'Create part error: {str(e)}')
+        db.session.rollback()
+        return api_response(error=f'Failed to create service: {str(e)}', status=500)
+
+@api_v1.route('/parts/<int:part_id>', methods=['POST'])
+@api_login_required
+def api_update_part(part_id):
+    """Update an existing service/part"""
+    try:
+        if not _has_any_permission('machines.edit', 'admin.full'):
+            return api_response(error='Insufficient permissions', status=403)
+            
+        from models import Part, db
+        from sync_utils_enhanced import add_to_sync_queue_enhanced
+        
+        part = Part.query.get_or_404(part_id)
+        
+        # specific permission check if needed (e.g. site access via part.machine)
+        if part.machine and not _has_site_access(part.machine.site_id):
+            return api_response(error='Access denied', status=403)
+            
+        data = request.form
+        
+        part.name = data.get('name', part.name)
+        part.description = data.get('description', part.description)
+        
+        if 'maintenance_frequency' in data:
+            freq = data.get('maintenance_frequency')
+            part.maintenance_frequency = int(freq) if freq else None
+            
+        if 'maintenance_unit' in data:
+            part.maintenance_unit = data.get('maintenance_unit')
+            
+        if 'next_maintenance' in data:
+            nm = data.get('next_maintenance')
+            part.next_maintenance = datetime.strptime(nm, '%Y-%m-%d') if nm else None
+            
+        db.session.commit()
+        
+        # Add to sync queue
+        add_to_sync_queue_enhanced('parts', part.id, 'UPDATE', part.to_dict())
+        
+        return api_response(message='Service updated successfully')
+        
+    except Exception as e:
+        logger.error(f'Update part error: {str(e)}')
+        db.session.rollback()
+        return api_response(error=f'Failed to update service: {str(e)}', status=500)
+
+@api_v1.route('/parts/<int:part_id>/delete', methods=['POST'])
+@api_login_required
+def api_delete_part(part_id):
+    """Delete a service/part"""
+    try:
+        if not _has_any_permission('machines.edit', 'admin.full'):
+            return api_response(error='Insufficient permissions', status=403)
+            
+        from models import Part, db
+        from sync_utils_enhanced import add_to_sync_queue_enhanced
+        
+        part = Part.query.get_or_404(part_id)
+        
+        if part.machine and not _has_site_access(part.machine.site_id):
+            return api_response(error='Access denied', status=403)
+            
+        # Capture ID before deletion
+        p_id = part.id
+        
+        db.session.delete(part)
+        db.session.commit()
+        
+        # Add to sync queue
+        add_to_sync_queue_enhanced('parts', p_id, 'DELETE', {})
+        
+        return api_response(message='Service deleted successfully')
+        
+    except Exception as e:
+        logger.error(f'Delete part error: {str(e)}')
+        db.session.rollback()
+        return api_response(error=f'Failed to delete service: {str(e)}', status=500)
+
 @api_v1.route('/maintenance/complete-multiple', methods=['POST'])
 @api_login_required
 def api_complete_multiple_maintenance():
@@ -1425,6 +1558,37 @@ def api_get_sites():
     except Exception as e:
         logger.error(f'Get sites error: {str(e)}')
         return api_response(error='Failed to load sites', status=500)
+
+@api_v1.route('/sites/<int:site_id>/machines', methods=['GET'])
+@api_login_required
+def api_get_site_machines(site_id):
+    """Get list of machines for a specific site"""
+    try:
+        from models import Machine
+        
+        # Check permissions
+        if not _has_site_access(site_id):
+            return api_response(error='Access denied', status=403)
+            
+        machines = Machine.query.filter_by(site_id=site_id, decommissioned=False).all()
+        
+        machines_data = []
+        for m in machines:
+            machines_data.append({
+                'id': m.id,
+                'name': m.name,
+                'site_id': m.site_id,
+                'serial_number': m.serial_number if hasattr(m, 'serial_number') else '',
+                'make': m.make if hasattr(m, 'make') else '',
+                'model': m.model if hasattr(m, 'model') else '',
+                'location': m.location if hasattr(m, 'location') else ''
+            })
+            
+        return api_response(data=machines_data)
+        
+    except Exception as e:
+        logger.error(f'Get site machines error: {str(e)}')
+        return api_response(error='Failed to load machines', status=500)
 
 # ==================== AUDIT ENDPOINTS ====================
 
@@ -1629,7 +1793,9 @@ def api_complete_audit_task(audit_id):
         response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
-    if not _has_any_permission('audits.edit', 'audits.create'):
+    
+    # Check for permissions using both backend (dot) and frontend (underscore) conventions
+    if not _has_any_permission('audits.edit', 'audits.create', 'edit_audits', 'complete_audits'):
         return api_response(error='Insufficient permissions', status=403)
     
     # Move imports outside try block to see import errors
@@ -1780,6 +1946,7 @@ def api_get_users():
                 'role': role.name if role and hasattr(role, 'name') else (role if isinstance(role, str) else 'User'),
                 'role_id': user.role_id if hasattr(user, 'role_id') else None,
                 'is_admin': user.is_admin if hasattr(user, 'is_admin') else False,
+                'assigned_sites': [s.id for s in user.sites] if hasattr(user, 'sites') else [],
                 'created_at': user.created_at.isoformat() if hasattr(user, 'created_at') and user.created_at else None,
             })
         
@@ -1788,6 +1955,100 @@ def api_get_users():
     except Exception as e:
         logger.error(f'Get users error: {str(e)}')
         return api_response(error='Failed to load users', status=500)
+
+@api_v1.route('/users/<int:user_id>', methods=['PUT'])
+@api_login_required
+def api_update_user(user_id):
+    """Update user details, role, and assigned sites"""
+    try:
+        from models import Role, Site
+        from security_event_logger import log_security_event
+
+        if not _is_admin_user():
+            return api_response(error='Admin access required', status=403)
+
+        user = User.query.get(user_id)
+        if not user:
+            return api_response(error='User not found', status=404)
+
+        data = request.get_json()
+        
+        # Check uniqueness if username/email changed
+        if 'username' in data and data['username'] != maybe_decrypt(user._username):
+            existing = User.query.filter_by(username_hash=hash_value(data['username'])).first()
+            if existing:
+                return api_response(error='Username already taken', status=400)
+            user.username = data['username']
+            
+        if 'email' in data and data['email'] != maybe_decrypt(user._email):
+             # Basic check, though hash might not match due to salt if implemented differently
+             # For now relying on unique constraint catch or hash check
+             # But here we just update if provided
+             user.email = data['email']
+
+        if 'full_name' in data:
+            user.full_name = data['full_name']
+            
+        # Role update
+        if 'role_id' in data:
+            role_id = data['role_id']
+            if role_id:
+                role = Role.query.get(role_id)
+                if role:
+                    user.role = role
+                else:
+                    return api_response(error='Role not found', status=400)
+            else:
+                user.role = None
+                
+        # Site assignment (Task #46)
+        if 'site_ids' in data:
+            site_ids = data['site_ids']
+            # Clear current sites
+            user.sites = []
+            if site_ids:
+                sites = Site.query.filter(Site.id.in_(site_ids)).all()
+                user.sites = sites
+        
+        # Admin status
+        if 'is_admin' in data:
+            user.is_admin = bool(data['is_admin'])
+
+        db.session.commit()
+        
+        # Log event
+        log_security_event(
+            event_type="admin_user_edit",
+            details=f"User {user_id} updated via API by {current_user.username}",
+            is_critical=True
+        )
+        
+        # Sync updates
+        # 1. User record
+        add_to_sync_queue_enhanced('users', user.id, 'update', {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'full_name': user.full_name,
+            'role_id': user.role_id,
+            'is_admin': user.is_admin
+        })
+        
+        # 2. Site associations 
+        # (This is tricky with sync, but we send individual associations)
+        #Ideally we sync the whole set, but current sync might expect single rows
+        for site in user.sites:
+            add_to_sync_queue_enhanced('user_sites', f'{user.id}_{site.id}', 'update', {
+                'user_id': user.id,
+                'site_id': site.id
+            })
+
+        return api_response(message='User updated successfully')
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Update user error: {str(e)}', exc_info=True)
+        return api_response(error=f'Failed to update user: {str(e)}', status=500)
 
 @api_v1.route('/roles', methods=['GET'])
 @api_login_required

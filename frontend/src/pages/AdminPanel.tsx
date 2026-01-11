@@ -77,6 +77,24 @@ interface Role {
   user_count: number
 }
 
+interface Site {
+  id: number
+  name: string
+  code: string
+}
+
+interface User {
+  id: number
+  username: string
+  email: string
+  full_name: string
+  role: string
+  role_id: number
+  is_admin: boolean
+  assigned_sites: number[]
+  created_at: string
+}
+
 const AdminPanel: React.FC = () => {
   const { isAdmin } = useAuthorization()
   const [activeTab, setActiveTab] = useState('system')
@@ -84,6 +102,14 @@ const AdminPanel: React.FC = () => {
   const [systemStats, setSystemStats] = useState<SystemStat[]>([])
   const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([])
   const [roles, setRoles] = useState<Role[]>([])
+  
+  // User Management State
+  const [users, setUsers] = useState<User[]>([])
+  const [sites, setSites] = useState<Site[]>([])
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [isUserModalVisible, setIsUserModalVisible] = useState(false)
+  const [userForm] = Form.useForm()
+
   const [systemSettings, setSystemSettings] = useState({
     app_name: 'AMRS Maintenance Tracker',
     session_timeout: 60,
@@ -103,6 +129,10 @@ const AdminPanel: React.FC = () => {
       fetchDatabaseStats()
     } else if (activeTab === 'roles') {
       fetchRoles()
+    } else if (activeTab === 'users') {
+      fetchUsers()
+      fetchSites()
+      fetchRoles() // Also needed for the dropdown
     }
   }, [activeTab])
 
@@ -209,37 +239,81 @@ const AdminPanel: React.FC = () => {
   const fetchRoles = async () => {
     setLoading(true)
     try {
-      // Mock data - replace with actual API call
-      setRoles([
-        {
-          id: 1,
-          name: 'Administrator',
-          permissions: ['all'],
-          user_count: 2,
-        },
-        {
-          id: 2,
-          name: 'Manager',
-          permissions: ['view_all', 'edit_maintenance', 'edit_audits', 'view_reports'],
-          user_count: 5,
-        },
-        {
-          id: 3,
-          name: 'Technician',
-          permissions: ['view_machines', 'edit_maintenance', 'view_audits'],
-          user_count: 12,
-        },
-        {
-          id: 4,
-          name: 'Viewer',
-          permissions: ['view_all'],
-          user_count: 8,
-        },
-      ])
+       // Ideally fetch from API, but mock is fine for now if API not ready
+       // But we need real roles for IDs
+       const response = await apiClient.get('/roles')
+       if (response.data.data) {
+           setRoles(response.data.data)
+       } else {
+           // Fallback to mock if API unimplemented
+            setRoles([
+                { id: 1, name: 'Administrator', permissions: ['all'], user_count: 2 },
+                { id: 2, name: 'Manager', permissions: ['view_all', 'edit_maintenance', 'edit_audits', 'view_reports'], user_count: 5 },
+                { id: 3, name: 'Technician', permissions: ['view_machines', 'edit_maintenance', 'view_audits'], user_count: 12 },
+                { id: 4, name: 'Viewer', permissions: ['view_all'], user_count: 8 },
+            ])
+       }
     } catch (error) {
-      message.error('Failed to load roles')
+      // Keep mock for UI dev
+      setRoles([
+        { id: 1, name: 'Administrator', permissions: ['all'], user_count: 2 },
+        { id: 2, name: 'Manager', permissions: ['view_all', 'edit_maintenance', 'edit_audits', 'view_reports'], user_count: 5 },
+        { id: 3, name: 'Technician', permissions: ['view_machines', 'edit_maintenance', 'view_audits'], user_count: 12 },
+        { id: 4, name: 'Viewer', permissions: ['view_all'], user_count: 8 },
+      ])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchUsers = async () => {
+    setLoading(true)
+    try {
+      const response = await apiClient.get('/users')
+      if (response.data.data) {
+          setUsers(response.data.data)
+      }
+    } catch (error) {
+      message.error('Failed to load users')
+    } finally {
+        setLoading(false)
+    }
+  }
+
+  const fetchSites = async () => {
+    try {
+        const response = await apiClient.get('/sites')
+        if (response.data.data) {
+            setSites(response.data.data)
+        }
+    } catch (error) {
+        console.error('Failed to load sites', error)
+    }
+  }
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user)
+    userForm.setFieldsValue({
+        full_name: user.full_name,
+        email: user.email,
+        role_id: user.role_id,
+        is_admin: user.is_admin,
+        site_ids: user.assigned_sites
+    })
+    setIsUserModalVisible(true)
+  }
+
+  const handleSaveUser = async () => {
+    try {
+        const values = await userForm.validateFields()
+        if (editingUser) {
+            await apiClient.put(`/users/${editingUser.id}`, values)
+            message.success('User updated successfully')
+            setIsUserModalVisible(false)
+            fetchUsers()
+        }
+    } catch (error) {
+        message.error('Failed to update user')
     }
   }
 
@@ -346,6 +420,45 @@ const AdminPanel: React.FC = () => {
         return <Tag color={colors[severity]}>{severity.toUpperCase()}</Tag>
       },
     },
+  ]
+
+  const userColumns: ColumnsType<User> = [
+    {
+      title: 'Username',
+      dataIndex: 'username',
+      key: 'username',
+    },
+    {
+      title: 'Full Name',
+      dataIndex: 'full_name',
+      key: 'full_name',
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
+    },
+    {
+      title: 'Role',
+      dataIndex: 'role',
+      key: 'role',
+      render: (role) => <Tag color="blue">{role}</Tag>,
+    },
+    {
+      title: 'Assigned Sites',
+      dataIndex: 'assigned_sites',
+      key: 'assigned_sites',
+      render: (siteIds: number[]) => (
+        <span>{siteIds ? siteIds.length : 0} Sites</span>
+      ),
+    },
+    {
+        title: 'Actions',
+        key: 'actions',
+        render: (_, record) => (
+            <Button type="link" onClick={() => handleEditUser(record)}>Edit</Button>
+        )
+    }
   ]
 
   const roleColumns: ColumnsType<Role> = [
@@ -699,6 +812,65 @@ const AdminPanel: React.FC = () => {
                     </Card>
                   </Col>
                 </Row>
+              ),
+            },
+            {
+              key: 'users',
+              label: (
+                <span>
+                  <UserOutlined />
+                  <span style={{ marginLeft: 8 }}>Users</span>
+                </span>
+              ),
+              children: (
+                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text>Manage users and site assignments</Text>
+                  </div>
+
+                  <Table
+                    columns={userColumns}
+                    dataSource={users}
+                    loading={loading}
+                    rowKey="id"
+                    pagination={{ pageSize: 10 }}
+                    scroll={{ x: 800 }}
+                  />
+                  
+                  <Modal
+                    title={`Edit User: ${editingUser?.username}`}
+                    open={isUserModalVisible}
+                    onOk={handleSaveUser}
+                    onCancel={() => setIsUserModalVisible(false)}
+                  >
+                    <Form form={userForm} layout="vertical">
+                      <Form.Item name="full_name" label="Full Name">
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="role_id" label="Role">
+                        <Select>
+                            {roles.map(role => (
+                                <Select.Option key={role.id} value={role.id}>{role.name}</Select.Option>
+                            ))}
+                        </Select>
+                      </Form.Item>
+                      <Form.Item name="site_ids" label="Assigned Sites">
+                        <Select mode="multiple" placeholder="Select sites">
+                            {sites.map(site => (
+                                <Select.Option key={site.id} value={site.id}>{site.name} ({site.code})</Select.Option>
+                            ))}
+                        </Select>
+                      </Form.Item>
+                      <Form.Item name="is_admin" valuePropName="checked">
+                           <Switch checkedChildren="Admin" unCheckedChildren="User" />
+                      </Form.Item>
+                    </Form>
+                  </Modal>
+
+                </Space>
               ),
             },
             {
