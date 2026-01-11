@@ -45,6 +45,7 @@ interface MaintenanceCompletionModalProps {
   machineId: number | null
   machineName: string
   onComplete: () => void
+  initialPartId?: number
 }
 
 const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
@@ -53,6 +54,7 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
   machineId,
   machineName,
   onComplete,
+  initialPartId,
 }) => {
   const [parts, setParts] = useState<Part[]>([])
   const [selectedParts, setSelectedParts] = useState<number[]>([])
@@ -86,10 +88,18 @@ const MaintenanceCompletionModal: React.FC<MaintenanceCompletionModalProps> = ({
       setParts(partsData)
 
       // Pre-select overdue and due-soon parts
-      const needsMaintenanceIds = partsData
-        .filter((p: Part) => p.status === 'overdue' || p.status === 'due-soon')
-        .map((p: Part) => p.id)
-      setSelectedParts(needsMaintenanceIds)
+      // Task #42: Default to NONE selected, instead of auto-selecting
+      // const needsMaintenanceIds = partsData
+      //   .filter((p: Part) => p.status === 'overdue' || p.status === 'due-soon')
+      //   .map((p: Part) => p.id)
+      
+      // Task #31: If initialPartId is provided, select it
+      if (initialPartId && partsData.some((p: Part) => p.id === initialPartId)) {
+        setSelectedParts([initialPartId])
+      } else {
+        setSelectedParts([])
+      }
+
       setHistoryCache({})
       setActivePartId(null)
       setHistoryError('')

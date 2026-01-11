@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import ConnectionStatus from './ConnectionStatus'
 import { useAuthorization } from '../hooks/useAuthorization'
+import EmergencyMaintenanceModal from './modals/EmergencyMaintenanceModal'
 import '../styles/menubar.css'
 
 const MenuBar: React.FC = () => {
@@ -15,6 +16,7 @@ const MenuBar: React.FC = () => {
   const { isAdmin, hasPermission } = useAuthorization()
   const { isDark, toggleTheme } = useTheme()
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
+  const [emergencyModalOpen, setEmergencyModalOpen] = useState(false)
 
   const canViewReports = hasPermission('reports.view') || isAdmin
   const canImportData = isAdmin
@@ -26,6 +28,7 @@ const MenuBar: React.FC = () => {
     children: [
       { key: 'new-machine', label: 'Machine', onClick: () => navigate('/machines') },
       { key: 'new-task', label: 'Maintenance Task', onClick: () => navigate('/maintenance') },
+      { key: 'new-emergency', label: 'Emergency Maintenance', onClick: () => setEmergencyModalOpen(true) },
       { key: 'new-audit', label: 'Audit', onClick: () => navigate('/audits') },
     ],
   })
@@ -148,6 +151,12 @@ const MenuBar: React.FC = () => {
         </Tooltip>
         <ConnectionStatus />
       </div>
+
+      <EmergencyMaintenanceModal
+        open={emergencyModalOpen}
+        onClose={() => setEmergencyModalOpen(false)}
+        onSuccess={() => window.dispatchEvent(new Event('socket-sync'))}
+      />
     </div>
   )
 }
