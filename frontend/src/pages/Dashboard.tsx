@@ -15,6 +15,7 @@ import {
 import apiClient from '../utils/api'
 import { notifyOverdueItems } from '../utils/notifications'
 import EmergencyMaintenanceModal from '../components/modals/EmergencyMaintenanceModal'
+import MaintenanceCompletionModal from '../components/modals/MaintenanceCompletionModal'
 import '../styles/dashboard.css'
 
 const { Title, Text } = Typography
@@ -63,6 +64,8 @@ interface GroupedBySite {
 interface GroupedByMachine {
   machine_name: string
   machine_id: number
+  machine_serial?: string
+  machine_number?: string
   tasks: (OverdueItem | DueSoonItem)[]
   overdue_count: number
   due_soon_count: number
@@ -73,32 +76,32 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([])
   const [dueSoonItems, setDueSoonItems] = useState<DueSoonItem[]>([])
+  const [allMachines, setAllMachines] = useState<any[]>([])
   const [sites, setSites] = useState<{id:number; name:string}[]>([])
   const [selectedSite, setSelectedSite] = useState<number | 'all'>('all')
   const [loading, setLoading] = useState(true)
   const [groupByMachine, setGroupByMachine] = useState(true)
   const [showDecommissioned, setShowDecommissioned] = useState(false)
   const [emergencyModalOpen, setEmergencyModalOpen] = useState(false)
+  const [recordMaintenanceModalOpen, setRecordMaintenanceModalOpen] = useState(false)
+  const [selectedTaskForModal, setSelectedTaskForModal] = useState<{machineId: number, machineName: string, partId: number} | null>(null)
   
   // Group items by site and machine
   const groupedData = useMemo(() => {
-    const allItems = [
-      ...overdueItems.map(item => ({ ...item, type: 'overdue' as const })),
-      ...dueSoonItems.map(item => ({ ...item, type: 'due_soon' as const }))
-    ]
-    
-    // Filter by selected site
-    const filtered = selectedSite === 'all' 
-      ? allItems 
-      : allItems.filter(item => item.site_id === selectedSite)
-    
+    // Start with all machines (filtered by site)
+    let filteredMachines = allMachines
+    if (selectedSite !== 'all') {
+      filteredMachines = allMachines.filter(m => m.site_id === selectedSite)
+    }
+
     // Group by site
     const siteGroups: Record<number, GroupedBySite> = {}
     
-    filtered.forEach(item => {
-      const siteId = item.site_id || 0
-      const siteName = item.site_name || 'Unknown Site'
-      
+    // Initialize groups from machines
+    filteredMachines.forEach(machine => {
+      const siteId = machine.site_id || 0
+      const siteName = machine.site_name || machine.site || 'Unknown Site'
+
       if (!siteGroups[siteId]) {
         siteGroups[siteId] = {
           site_name: siteName,
@@ -109,58 +112,90 @@ const Dashboard: React.FC = () => {
         }
       }
       
-      if (item.type === 'overdue') siteGroups[siteId].overdue_count++
-      else siteGroups[siteId].due_soon_count++
-      
-      // Find or create machine group
-      const machineId = item.machine_id || 0
-      let machineGroup = siteGroups[siteId].machines.find(m => m.machine_id === machineId)
-      
-      if (!machineGroup) {
-        machineGroup = {
-          machine_name: item.machine_name || 'Unknown Machine',
-          machine_id: machineId,
-          tasks: [],
+      const mGroup = {
+          machine_name: machine.name,
+          machine_id: machine.id,
+          machine_serial: machine.serial, 
+          machine_number: machine.machine_number,
+          tasks: [] as (OverdueItem | DueSoonItem)[],
           overdue_count: 0,
-          due_soon_count: 0
-        }
-        siteGroups[siteId].machines.push(machineGroup)
+          due_soon_count: 0,
+          status: machine.status || 'active'
       }
-      
-      machineGroup.tasks.push(item)
-      if (item.type === 'overdue') machineGroup.overdue_count++
-      else machineGroup.due_soon_count++
+      siteGroups[siteId].machines.push(mGroup)
+    })
+
+    // Map tasks to machines
+    const allTasks = [
+      ...overdueItems.map(item => ({ ...item, type: 'overdue' as const })),
+      ...dueSoonItems.map(item => ({ ...item, type: 'due_soon' as const }))
+    ]
+
+    allTasks.forEach(task => {
+        const siteId = task.site_id || 0
+        if (siteGroups[siteId]) {
+            const getMachineId = (t: any) => t.machine_id;
+            
+            let machineGroup = siteGroups[siteId].machines.find(m => m.machine_id === getMachineId(task))
+            
+            // If machine not found (maybe filter issue or data inconsistency), we might skip or create ad-hoc
+            // But since we iterate allMachines, it should be there.
+            if (machineGroup) {
+                machineGroup.tasks.push(task)
+                if (task.type === 'overdue') {
+                    machineGroup.overdue_count++
+                    siteGroups[siteId].overdue_count++
+                } else {
+                    machineGroup.due_soon_count++
+                    siteGroups[siteId].due_soon_count++
+                }
+            }
+        }
+    })
+
+    // Sort machines by status severity then name
+    Object.values(siteGroups).forEach(group => {
+        group.machines.sort((a, b) => {
+            // Priority: Has Overdue > Has Due Soon > Alphabetical
+            if (a.overdue_count > 0 && b.overdue_count === 0) return -1
+            if (b.overdue_count > 0 && a.overdue_count === 0) return 1
+            if (a.due_soon_count > 0 && b.due_soon_count === 0) return -1
+            if (b.due_soon_count > 0 && a.due_soon_count === 0) return 1
+            return a.machine_name.localeCompare(b.machine_name)
+        })
     })
     
-    // Sort by site name
-    return Object.values(siteGroups).sort((a, b) => a.site_name.localeCompare(b.site_name))
-  }, [overdueItems, dueSoonItems, selectedSite])
+    // Sort sites by Overdue Count desc, then name
+    return Object.values(siteGroups).sort((a, b) => {
+        if (a.overdue_count !== b.overdue_count) return b.overdue_count - a.overdue_count
+        return a.site_name.localeCompare(b.site_name)
+    })
+  }, [allMachines, overdueItems, dueSoonItems, selectedSite])
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
       console.log('[Dashboard] Fetching dashboard data...')
 
+      // Fetch all machines
+      const machinesResp = await apiClient.get('/api/v1/machines')
+      setAllMachines(machinesResp.data.data || [])
+
       // Fetch stats
       console.log('[Dashboard] Fetching stats from /api/v1/dashboard')
       const statsResp = await apiClient.get('/api/v1/dashboard')
-      console.log('[Dashboard] Stats response:', statsResp.data)
       setStats(statsResp.data.data)
 
       // Fetch overdue items
       console.log('[Dashboard] Fetching overdue items from /api/v1/maintenance?status=overdue')
       const overdueResp = await apiClient.get('/api/v1/maintenance?status=overdue')
-      console.log('[Dashboard] Overdue items response:', overdueResp.data)
       const overdueData = Array.isArray(overdueResp.data.data) ? overdueResp.data.data : []
-      console.log(`[Dashboard] Loaded ${overdueData.length} overdue items`)
       setOverdueItems(overdueData)
 
       // Fetch due soon items
       console.log('[Dashboard] Fetching due soon items from /api/v1/maintenance?status=due_soon')
       const dueSoonResp = await apiClient.get('/api/v1/maintenance?status=due_soon')
-      console.log('[Dashboard] Due soon items response:', dueSoonResp.data)
       const dueSoonData = Array.isArray(dueSoonResp.data.data) ? dueSoonResp.data.data : []
-      console.log(`[Dashboard] Loaded ${dueSoonData.length} due soon items`)
       setDueSoonItems(dueSoonData)
 
       console.log('[Dashboard] All data loaded successfully')
@@ -230,6 +265,33 @@ const Dashboard: React.FC = () => {
     { title: 'Completed (This Month)', value: stats.completed, icon: <CheckCircleOutlined />, color: '#52c41a' },
   ] : []
 
+  const handleRecordMaintenance = (record: any) => {
+    // If the record comes from the grouped view (machine.tasks), it might lack direct machine_name/id properties 
+    // because they are on the parent machine object. However, the flat lists (OverdueItem) have them.
+    // Let's check the record structure.
+    
+    // For grouped view, the record is just the task info. But wait, grouped tasks are (OverdueItem | DueSoonItem).
+    // Let's verify if the API returns machine_id inside the items list even for grouped usage?
+    // Dashboard.tsx: fetchDashboardData calls /api/v1/maintenance?status=overdue. 
+    // This returns a flat list of tasks which DOES include machine_id.
+    // The groupedData logic creates 'tasks' array from these items.
+    
+    // So 'record' here should be the item from the API which has machine_id, machine_name, id (part_id).
+    
+    // Fallback: If record doesn't have machine_id (shouldn't happen with current logic), we can't open the modal properly.
+    if (!record.machine_id) {
+       message.error('Machine information missing for this task')
+       return
+    }
+
+    setSelectedTaskForModal({
+      machineId: record.machine_id,
+      machineName: record.machine_name || 'Unknown Machine',
+      partId: record.id
+    })
+    setRecordMaintenanceModalOpen(true)
+  }
+
   const overdueColumns = [
     { title: 'Service', dataIndex: 'part_name', key: 'part_name' },
     { 
@@ -250,6 +312,19 @@ const Dashboard: React.FC = () => {
     { title: 'Site', dataIndex: 'site_name', key: 'site_name' },
     { title: 'Days Overdue', dataIndex: 'days_overdue', key: 'days_overdue', render: (d: number) => <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{d} days</span> },
     { title: 'Next Maintenance', dataIndex: 'next_maintenance', key: 'next_maintenance' },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_: any, record: any) => (
+        <Button 
+          type="primary" 
+          size="small" 
+          onClick={() => handleRecordMaintenance(record)}
+        >
+          Record
+        </Button>
+      )
+    }
   ]
 
   const dueSoonColumns = [
@@ -272,6 +347,18 @@ const Dashboard: React.FC = () => {
     { title: 'Site', dataIndex: 'site_name', key: 'site_name' },
     { title: 'Due In', dataIndex: 'days_until', key: 'days_until', render: (d: number) => <span style={{ color: '#faad14' }}>{d} days</span> },
     { title: 'Next Maintenance', dataIndex: 'next_maintenance', key: 'next_maintenance' },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_: any, record: any) => (
+        <Button 
+          size="small" 
+          onClick={() => handleRecordMaintenance(record)}
+        >
+          Record
+        </Button>
+      )
+    }
   ]
 
   // compute filtered lists when site filter is active
@@ -314,6 +401,19 @@ const Dashboard: React.FC = () => {
       }
     },
     { title: 'Next Maintenance', dataIndex: 'next_maintenance', key: 'next_maintenance' },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_: any, record: any) => (
+        <Button 
+          type="link" 
+          size="small" 
+          onClick={() => handleRecordMaintenance(record)}
+        >
+          Record
+        </Button>
+      )
+    }
   ]
 
   return (
@@ -360,6 +460,18 @@ const Dashboard: React.FC = () => {
         open={emergencyModalOpen}
         onClose={() => setEmergencyModalOpen(false)}
         onSuccess={() => fetchDashboardData()}
+      />
+
+      <MaintenanceCompletionModal
+        open={recordMaintenanceModalOpen}
+        onClose={() => setRecordMaintenanceModalOpen(false)}
+        machineId={selectedTaskForModal?.machineId || null}
+        machineName={selectedTaskForModal?.machineName || ''}
+        initialPartId={selectedTaskForModal?.partId}
+        onComplete={() => {
+          setRecordMaintenanceModalOpen(false)
+          fetchDashboardData()
+        }}
       />
 
       {/* Stats Row */}
@@ -424,9 +536,14 @@ const Dashboard: React.FC = () => {
                             <ToolOutlined />
                             <span>
                               {machine.machine_name}
-                              {machine.tasks[0]?.machine_serial && (
+                              {machine.machine_number && (
                                 <Text type="secondary" style={{ marginLeft: 8, fontSize: '0.9em' }}>
-                                  (S/N: {machine.tasks[0].machine_serial})
+                                  #{machine.machine_number}
+                                </Text>
+                              )}
+                              {machine.machine_serial && (
+                                <Text type="secondary" style={{ marginLeft: 8, fontSize: '0.9em' }}>
+                                  (S/N: {machine.machine_serial})
                                 </Text>
                               )}
                             </span>
@@ -435,6 +552,9 @@ const Dashboard: React.FC = () => {
                             )}
                             {machine.due_soon_count > 0 && (
                               <Tag color="orange">{machine.due_soon_count} due soon</Tag>
+                            )}
+                            {machine.overdue_count === 0 && machine.due_soon_count === 0 && (
+                               <Tag color="success">OK</Tag>
                             )}
                           </div>
                         }

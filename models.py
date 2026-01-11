@@ -656,6 +656,28 @@ class Machine(db.Model):
     def __repr__(self):
         status = "Decommissioned" if self.decommissioned else "Active"
         return f'<Machine {self.name} ({status})>'
+
+    @property
+    def last_maintenance(self):
+        """Calculated last maintenance date from all parts"""
+        if not self.parts:
+            return None
+        # valid dates only
+        dates = [p.last_maintenance for p in self.parts if p.last_maintenance]
+        if not dates:
+            return None
+        return max(dates)
+
+    @property
+    def next_maintenance(self):
+        """Calculated next maintenance date from all parts"""
+        if not self.parts:
+            return None
+        # valid dates only
+        dates = [p.next_maintenance for p in self.parts if p.next_maintenance]
+        if not dates:
+            return None
+        return min(dates)
     
     @classmethod
     def safe_filter_active(cls, query):
@@ -719,6 +741,9 @@ class Part(db.Model):
     
     def get_cycle_status(self):
         """Get the cycle-based maintenance status for this part"""
+        # Cycle status disabled per requirements
+        return None
+        
         if not self.is_cycle_based or not self.machine:
             return None
         
