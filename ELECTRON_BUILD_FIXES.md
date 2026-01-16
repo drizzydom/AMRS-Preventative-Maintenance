@@ -323,3 +323,20 @@ If issues persist after following this guide:
 - **App Version:** 1.4.6
 - **Fix Date:** November 2, 2025
 - **Issue Scope:** Desktop application builds only (not web version)
+
+### 2. **Duplicate Window Bar on Windows**
+
+**Symptom:** On Windows, the application shows two title bars: the native OS title bar and the custom React title bar.
+
+**Root Cause:** The `TitleBar` component was implemented in React, but `main.js` was still configured with `frame: true` (from Fix #1). This resulted in both the OS frame and the custom title bar being visible.
+
+**Fix Applied:**
+Reverted `BrowserWindow` configuration to `frame: false` to hide the native OS frame, relying on the custom `TitleBar` component for window controls (handled via IPC).
+
+```javascript
+// BEFORE (Duplicate bars)
+frame: true, // Use native OS window frame
+
+// AFTER (Fixed)
+frame: false, // Use custom title bar (hide native OS frame)
+```

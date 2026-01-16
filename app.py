@@ -895,12 +895,14 @@ def start_security_event_retention_job():
 def start_retention_job():
     start_security_event_retention_job()
 
-    # Sync offline security events on app startup
+    # Start the continuous sync agent for security events
     try:
-        from security_event_logger import sync_offline_security_events
-        sync_offline_security_events()
+        from security_event_logger import start_security_event_sync_agent
+        from flask import current_app
+        # Use current_app._get_current_object() to avoid context issues in thread
+        start_security_event_sync_agent(current_app._get_current_object())
     except Exception as e:
-        print(f"[OFFLINE SECURITY SYNC] Error during startup sync: {e}")
+        print(f"[OFFLINE SECURITY SYNC] Error starting sync agent: {e}")
     
     # NOTE: Bootstrap trigger moved to initialize_database_and_bootstrap() function
     # This prevents double execution and ensures proper app context
@@ -6440,9 +6442,14 @@ def edit_user(user_id):
     sites = Site.query.all()
     
     if request.method == 'POST':
+        # Convert form data to dict for proper JSON serialization and redaction
+        form_data = request.form.to_dict()
         log_security_event(
             event_type="admin_user_edit",
-            details=f"User {user_id} edited by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            details={
+                "message": f"User {user_id} edited by {getattr(current_user, 'username', 'Unknown')}",
+                "changes": form_data
+            },
             is_critical=True
         )
         try:
@@ -6554,9 +6561,16 @@ def admin_roles():
     
     # Handle form submission for creating a new role
     if request.method == 'POST':
+        form_data = request.form.to_dict()
+        if 'permissions' in request.form:
+             form_data['permissions'] = request.form.getlist('permissions')
+        
         log_security_event(
             event_type="admin_role_change",
-            details=f"Role change by {getattr(current_user, 'username', None)}. Data: {request.form}",
+            details={
+                "message": f"Role change by {getattr(current_user, 'username', 'Unknown')}",
+                "changes": form_data
+            },
             is_critical=True
         )
         try:

@@ -127,17 +127,55 @@ const EmergencyMaintenanceModal: React.FC<EmergencyMaintenanceModalProps> = ({
         work_order_number: values.work_order_number,
       }
 
-      const endpoint = isRequestMode ? '/api/v1/maintenance/request' : '/api/v1/maintenance/complete-multiple'
-      await apiClient.post(endpoint, payload)
-      
-      message.success(isRequestMode ? 'Emergency maintenance request sent' : 'Emergency maintenance logged successfully')
-      form.resetFields()
-      setSelectedSite(null)
-      setSelectedMachine(null)
-      setMachines([])
-      setServices([])
-      onSuccess()
-      onClose()
+      if (isRequestMode) {
+        // Construct mailto link for client-side sending
+        const siteName = sites.find(s => s.id === selectedSite)?.name || 'Unknown Site';
+        const machine = machines.find(m => m.id === selectedMachine);
+        const machineName = machine?.name || 'Unknown Machine';
+        // Get user info from context if available, else placeholder
+        const requesterInfo = "User"; 
+
+        const serviceNames = services
+          .filter(s => values.service_ids.includes(s.id))
+          .map(s => s.name)
+          .join(', ');
+
+        const subject = `URGENT: Emergency Maintenance Request - ${siteName} - ${machineName}`;
+        const body = `EMERGENCY MAINTENANCE REQUEST\n\n` +
+          `Site: ${siteName}\n` +
+          `Machine: ${machineName} (ID: ${values.machine_id})\n` +
+          `Date: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}\n\n` +
+          `Services/Parts Affected:\n${serviceNames || 'General/Unknown'}\n\n` +
+          `Description:\n${values.description}\n\n` +
+          `Notes:\n${values.notes || ''}\n\n` +
+          `Please schedule maintenance immediately.`;
+
+        const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        
+        // Open default mail client
+        window.location.href = mailtoLink;
+        
+        message.success('Opening default email client...');
+        // We do NOT close the modal immediately so user can copy info if needed, or we can close it. 
+        // User requested "allow user to send from an email address of their choosing".
+        // The mailto link handles that by opening their configured client.
+        
+        // Optionally still call backend to log the request without sending email?
+        // For now, we'll skip the backend call for request mode to avoid auth/config issues.
+        onSuccess();
+        onClose();
+      } else {
+        // Log mode - send to backend database
+        await apiClient.post('/api/v1/maintenance/complete-multiple', payload)
+        message.success('Emergency maintenance logged successfully')
+        form.resetFields()
+        setSelectedSite(null)
+        setSelectedMachine(null)
+        setMachines([])
+        setServices([])
+        onSuccess()
+        onClose()
+      }
     } catch (error: any) {
       console.error('Failed to submit:', error)
       const errorMsg = error.response?.data?.error || 'Failed to submit request'

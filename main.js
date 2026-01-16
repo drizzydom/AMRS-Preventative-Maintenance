@@ -1345,7 +1345,7 @@ function createWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false, // Don't show until ready
-        frame: true, // Use native OS window frame (includes close/minimize/maximize buttons)
+        frame: false, // Use custom title bar (hide native OS frame)
         icon: path.join(__dirname, 'assets', 'icon.png'), // Add your app icon
         webPreferences: {
             nodeIntegration: false,
