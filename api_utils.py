@@ -69,6 +69,15 @@ def redact_dict_for_logging(data, sensitive_keys=None):
         elif isinstance(value, str) and len(value) > 500:
             # Truncate very long strings to prevent log bloat
             redacted[key] = f'<TRUNCATED:{len(value)} chars>'
+        elif isinstance(value, dict):
+            # Recursively redact nested dictionaries
+            redacted[key] = redact_dict_for_logging(value, sensitive_keys)
+        elif isinstance(value, list):
+            # Recursively redact dictionaries in lists
+            redacted[key] = [
+                redact_dict_for_logging(item, sensitive_keys) if isinstance(item, dict) else item 
+                for item in value
+            ]
         else:
             redacted[key] = value
     

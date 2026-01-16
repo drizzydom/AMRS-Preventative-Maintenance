@@ -4,6 +4,8 @@ from flask_login import current_user
 from datetime import datetime
 import requests
 import json
+import threading
+import time
 
 # Utility to get general location from IP (using ipinfo.io, can be replaced)
 def get_location_from_ip(ip):
@@ -255,3 +257,28 @@ def sync_offline_security_events():
     except Exception as e:
         print(f"[OFFLINE SECURITY SYNC] Exception during upload: {e}")
         return False
+
+def start_security_event_sync_agent(app_instance, interval=300):
+    """
+    Start a background thread to sync offline security events periodically.
+    Runs every `interval` seconds (default: 5 minutes).
+    Ensures that admins can see all events regardless of when connectivity is restored.
+    """
+    def sync_job():
+        # Initial delay to let the app startup
+        time.sleep(10)
+        print(f"[SECURITY SYNC AGENT] Started background sync agent. Interval: {interval}s")
+        
+        while True:
+            try:
+                # Check online status before attempting full sync to avoid log noise
+                if is_online():
+                    with app_instance.app_context():
+                        sync_offline_security_events()
+            except Exception as e:
+                print(f"[SECURITY SYNC AGENT] Error in sync loop: {e}")
+            
+            time.sleep(interval)
+
+    t = threading.Thread(target=sync_job, daemon=True, name="SecurityEventSyncAgent")
+    t.start()
