@@ -1569,9 +1569,41 @@ Notes:
 Please schedule maintenance immediately.
 """
         
-        # Mock sending email (Log to console/file)
-        # in a real app: send_email('maintenance@accuratemachinerepair.com', subject, body)
-        logger.warning(f"--- MOCK EMAIL SENT ---\nTo: maintenance@accuratemachinerepair.com\nSubject: {subject}\n{body}\n-----------------------")
+        # Send email (Real implementation)
+        try:
+            from flask_mail import Message
+            from flask import current_app
+            import os
+            
+            # Get mail extension
+            mail = current_app.extensions.get('mail')
+            
+            if mail:
+                # Determine recipients - prefer env var, fallback to hardcoded
+                emergency_email_addr = os.environ.get('EMERGENCY_CONTACT_EMAIL')
+                recipients = [emergency_email_addr] if emergency_email_addr else ['maintenance@accuratemachinerepair.com']
+                
+                msg = Message(
+                    subject=subject,
+                    recipients=recipients,
+                    body=body,
+                    sender=current_app.config.get('MAIL_DEFAULT_SENDER', 'noreply@amrs.com')
+                )
+                
+                # Try to add reply-to if user has email
+                if current_user.email:
+                     msg.reply_to = current_user.email
+                
+                mail.send(msg)
+                logger.info(f"Emergency email sent to {recipients}")
+            else:
+                logger.error("Mail extension not found in current_app extensions.")
+                logger.warning(f"--- FAILED EMAIL (MOCKED) ---\nTo: maintenance@accuratemachinerepair.com\nSubject: {subject}\n{body}\n-----------------------")
+                
+        except Exception as e_mail:
+             logger.error(f"Failed to crash send email: {e_mail}")
+             # Fallback log
+             logger.warning(f"--- FAILED EMAIL (MOCKED) ---\nTo: maintenance@accuratemachinerepair.com\nSubject: {subject}\n{body}\n-----------------------")
         
         return api_response(message='Emergency maintenance request sent successfully')
         
