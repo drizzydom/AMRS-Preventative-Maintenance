@@ -37,7 +37,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ visible, onClose, current
     // New structure with sections
     if ('sections' in releaseToShow && Array.isArray((releaseToShow as any).sections)) {
       return (
-        <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
+        <div style={{ paddingRight: '8px' }}>
           {(releaseToShow as any).sections.map((section: any, index: number) => (
             <div key={index} style={{ marginBottom: '24px' }}>
               <Title level={5} style={{ marginBottom: '8px', color: '#1890ff' }}>

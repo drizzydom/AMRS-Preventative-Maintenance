@@ -3,6 +3,7 @@ import { Modal, Form, Select, Input, DatePicker, message, Typography, Alert, Spa
 import { WarningOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import apiClient from '../../utils/api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const { TextArea } = Input
 const { Text, Title } = Typography
@@ -37,6 +38,10 @@ const EmergencyMaintenanceModal: React.FC<EmergencyMaintenanceModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { hasPermission } = useAuth()
+  const canRecord = hasPermission('maintenance.complete') || hasPermission('maintenance.record')
+  const isRequestMode = !canRecord
+
   const [form] = Form.useForm()
   const [sites, setSites] = useState<Site[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
@@ -122,9 +127,10 @@ const EmergencyMaintenanceModal: React.FC<EmergencyMaintenanceModalProps> = ({
         work_order_number: values.work_order_number,
       }
 
-      await apiClient.post('/api/v1/maintenance/complete-multiple', payload)
+      const endpoint = isRequestMode ? '/api/v1/maintenance/request' : '/api/v1/maintenance/complete-multiple'
+      await apiClient.post(endpoint, payload)
       
-      message.success('Emergency maintenance logged successfully')
+      message.success(isRequestMode ? 'Emergency maintenance request sent' : 'Emergency maintenance logged successfully')
       form.resetFields()
       setSelectedSite(null)
       setSelectedMachine(null)
@@ -133,8 +139,8 @@ const EmergencyMaintenanceModal: React.FC<EmergencyMaintenanceModalProps> = ({
       onSuccess()
       onClose()
     } catch (error: any) {
-      console.error('Failed to log emergency maintenance:', error)
-      const errorMsg = error.response?.data?.error || 'Failed to log emergency maintenance'
+      console.error('Failed to submit:', error)
+      const errorMsg = error.response?.data?.error || 'Failed to submit request'
       message.error(errorMsg)
     } finally {
       setSubmitting(false)
@@ -155,13 +161,13 @@ const EmergencyMaintenanceModal: React.FC<EmergencyMaintenanceModalProps> = ({
       title={
         <Space>
           <WarningOutlined style={{ color: '#ff4d4f' }} />
-          <span>Log Emergency Maintenance</span>
+          <span>{isRequestMode ? 'Request Emergency Maintenance' : 'Log Emergency Maintenance'}</span>
         </Space>
       }
       open={open}
       onOk={handleSubmit}
       onCancel={handleCancel}
-      okText="Log Emergency Maintenance"
+      okText={isRequestMode ? "Submit Request" : "Log Emergency Maintenance"}
       okButtonProps={{ 
         loading: submitting, 
         danger: true,
@@ -170,8 +176,11 @@ const EmergencyMaintenanceModal: React.FC<EmergencyMaintenanceModalProps> = ({
       width={600}
     >
       <Alert
-        message="Emergency Maintenance"
-        description="Use this form to quickly log unscheduled or emergency maintenance. All entries will be marked as 'Emergency' type."
+        message={isRequestMode ? "Emergency Maintenance Request" : "Emergency Maintenance"}
+        description={isRequestMode 
+          ? "Submit a request for emergency maintenance. An email notification will be sent immediately to the maintenance team."
+          : "Use this form to quickly log unscheduled or emergency maintenance. All entries will be marked as 'Emergency' type."
+        }
         type="warning"
         showIcon
         style={{ marginBottom: 16 }}
@@ -285,19 +294,19 @@ const EmergencyMaintenanceModal: React.FC<EmergencyMaintenanceModalProps> = ({
           <Form.Item
             name="po_number"
             label="PO Number"
-            rules={[{ required: true, message: 'PO Number is required' }]}
+            rules={[{ required: !isRequestMode, message: 'PO Number is required' }]}
             style={{ flex: 1, marginBottom: 0 }}
           >
-            <Input placeholder="Enter PO number" maxLength={32} />
+            <Input placeholder={isRequestMode ? "Optional for request" : "Enter PO number"} maxLength={32} />
           </Form.Item>
 
           <Form.Item
             name="work_order_number"
             label="Work Order Number"
-            rules={[{ required: true, message: 'Work Order is required' }]}
+            rules={[{ required: !isRequestMode, message: 'Work Order is required' }]}
             style={{ flex: 1, marginBottom: 0 }}
           >
-            <Input placeholder="Enter work order" maxLength={128} />
+            <Input placeholder={isRequestMode ? "Optional for request" : "Enter WO number"} maxLength={128} />
           </Form.Item>
         </Space>
       </Form>
