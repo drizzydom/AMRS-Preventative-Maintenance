@@ -250,18 +250,6 @@ const Machines: React.FC = () => {
       },
     },
     {
-      title: 'Cycles',
-      dataIndex: 'cycle_count',
-      key: 'cycle_count',
-      width: 100,
-      sorter: (a, b) => a.cycle_count - b.cycle_count,
-      render: (count: number) => (
-        <span style={{ fontFamily: 'monospace' }}>
-          {count.toLocaleString()}
-        </span>
-      ),
-    },
-    {
       title: 'Actions',
       key: 'actions',
       width: 120,

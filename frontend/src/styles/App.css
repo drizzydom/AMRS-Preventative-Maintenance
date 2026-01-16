@@ -16,16 +16,19 @@
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  background: #f0f2f5;
+  background: var(--bg-secondary, #f0f2f5);
+  transition: background-color 0.3s ease;
 }
 
 /* Custom ant design overrides for desktop look */
 .ant-layout {
-  background: #ffffff;
+  background: var(--bg-primary, #ffffff);
+  transition: background-color 0.3s ease;
 }
 
 .ant-layout-sider {
-  background: #001529;
+  background: var(--sidebar-bg, #001529);
+  transition: background-color 0.3s ease;
 }
 
 .ant-menu-inline,

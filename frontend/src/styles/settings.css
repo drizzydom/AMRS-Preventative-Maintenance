@@ -47,19 +47,82 @@
   --text-color: #000000;
   --bg-color: #ffffff;
   --border-color: #000000;
+  
+  /* Override global theme vars */
+  --bg-primary: #ffffff !important;
+  --bg-secondary: #ffffff !important;
+  --bg-tertiary: #f0f0f0 !important;
+  --text-primary: #000000 !important;
+  --text-secondary: #000000 !important;
+  --text-muted: #000000 !important;
+  --sidebar-bg: #ffffff !important;
+  --menu-bar-bg: #ffffff !important;
 }
 
-:root.high-contrast body {
-  background: var(--bg-color);
-  color: var(--text-color);
+:root.high-contrast body,
+:root.high-contrast #root,
+:root.high-contrast .ant-layout,
+:root.high-contrast .ant-layout-header,
+:root.high-contrast .ant-layout-sider,
+:root.high-contrast .ant-card,
+:root.high-contrast .ant-drawer-content,
+:root.high-contrast .ant-modal-content,
+:root.high-contrast .ant-modal-header,
+:root.high-contrast .ant-modal-footer {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #000000 !important;
 }
 
-:root.high-contrast .ant-card {
-  border: 2px solid var(--border-color);
+:root.high-contrast * {
+   text-shadow: none !important;
+   box-shadow: none !important;
+}
+
+:root.high-contrast .ant-typography,
+:root.high-contrast span,
+:root.high-contrast div,
+:root.high-contrast h1,
+:root.high-contrast h2,
+:root.high-contrast h3,
+:root.high-contrast h4,
+:root.high-contrast h5,
+:root.high-contrast p,
+:root.high-contrast label,
+:root.high-contrast .ant-menu-item {
+    color: #000000 !important;
+}
+
+:root.high-contrast a {
+    color: #0000EE !important;
+    text-decoration: underline !important;
 }
 
 :root.high-contrast .ant-btn {
-  border: 2px solid var(--border-color);
+  border: 2px solid #000000 !important;
+  color: #000000 !important;
+  background: #ffffff !important;
+  font-weight: bold !important;
+}
+
+:root.high-contrast .ant-btn-primary {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+    border: 2px solid #000000 !important;
+}
+
+:root.high-contrast .ant-btn-primary:hover {
+    background-color: #333333 !important;
+}
+
+:root.high-contrast .ant-menu,
+:root.high-contrast .ant-menu-sub {
+    background: #ffffff !important;
+}
+
+:root.high-contrast .ant-menu-item-selected {
+    background-color: #eeeeee !important;
+    font-weight: bold !important;
 }
 
 /* Color blind mode - use patterns and text */

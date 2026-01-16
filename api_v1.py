@@ -1521,6 +1521,64 @@ def api_complete_multiple_maintenance():
         logger.error(f'Complete multiple maintenance error: {str(e)}')
         return api_response(error='Failed to complete maintenance', status=500)
 
+@api_v1.route('/maintenance/request', methods=['POST'])
+@api_login_required
+def api_request_maintenance():
+    """Request emergency maintenance via email"""
+    try:
+        from models import Machine, Part, Site
+        
+        data = request.get_json()
+        machine_id = data.get('machine_id')
+        service_ids = data.get('part_ids', [])
+        description = data.get('description', '')
+        # notes often contains the "details"
+        notes = data.get('notes', '')
+        
+        if not machine_id:
+            return api_response(error='Machine ID required', status=400)
+
+        machine = Machine.query.get_or_404(machine_id)
+        site = machine.site or Site.query.get(machine.site_id)
+        site_name = site.name if site else 'Unknown Site'
+        
+        services = []
+        if service_ids:
+            services = Part.query.filter(Part.id.in_(service_ids)).all()
+        service_names = [s.name for s in services]
+        
+        # Construct email body
+        subject = f"URGENT: Emergency Maintenance Request - {site_name} - {machine.name}"
+        body = f"""
+EMERGENCY MAINTENANCE REQUEST
+
+Site: {site_name}
+Machine: {machine.name} (ID: {machine_id})
+Requested By: {current_user.username} ({current_user.email})
+Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Services/Parts Affected:
+{', '.join(service_names) if service_names else 'General/Unknown'}
+
+Description:
+{description}
+
+Notes:
+{notes}
+
+Please schedule maintenance immediately.
+"""
+        
+        # Mock sending email (Log to console/file)
+        # in a real app: send_email('maintenance@accuratemachinerepair.com', subject, body)
+        logger.warning(f"--- MOCK EMAIL SENT ---\nTo: maintenance@accuratemachinerepair.com\nSubject: {subject}\n{body}\n-----------------------")
+        
+        return api_response(message='Emergency maintenance request sent successfully')
+        
+    except Exception as e:
+        logger.error(f'Request maintenance error: {str(e)}', exc_info=True)
+        return api_response(error='Failed to send maintenance request', status=500)
+
 # ==================== SITES ENDPOINTS ====================
 
 @api_v1.route('/sites', methods=['GET'])
