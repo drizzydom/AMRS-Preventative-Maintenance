@@ -136,26 +136,34 @@ def log_security_event(event_type, details=None, is_critical=False, severity=Non
     # Serialize actor_metadata to JSON string
     actor_metadata_json = json.dumps(actor_metadata) if actor_metadata else None
     
-    # Try to log online, else fallback to offline queue
-    if is_online():
-        event = SecurityEvent(
-            event_type=event_type,
-            user_id=user_id,
-            username=username,
-            ip_address=ip_address,
-            location=location,
-            details=redacted_details,
-            is_critical=is_critical,
-            severity=severity,
-            source=source,
-            correlation_id=correlation_id,
-            actor_metadata=actor_metadata_json,
-            timestamp=datetime.utcnow()
-        )
-        db.session.add(event)
-        db.session.commit()
-        print(f"[SECURITY LOG] {event_type} | User: {username or user_id} | IP: {ip_address} | Severity: {severity}")
-    else:
+    # TIMESTAMP: Capture once to ensure both records match
+    now_utc = datetime.utcnow()
+
+    # 1. ALWAYS log to the local SecurityEvent table (for local dashboard visibility)
+    # This works for both Server (Main DB) and Client (Local DB)
+    event = SecurityEvent(
+        event_type=event_type,
+        user_id=user_id,
+        username=username,
+        ip_address=ip_address,
+        location=location,
+        details=redacted_details,
+        is_critical=is_critical,
+        severity=severity,
+        source=source,
+        correlation_id=correlation_id,
+        actor_metadata=actor_metadata_json,
+        timestamp=now_utc
+    )
+    db.session.add(event)
+    
+    # 2. CLIENT MODE CHECK: If we have an upstream server configured
+    # We must queue this event for persistence and upload
+    import os
+    online_url = os.environ.get('AMRS_ONLINE_URL')
+    
+    if online_url:
+        # We are a client -> Queue for sync
         offline_event = OfflineSecurityEvent(
             event_type=event_type,
             user_id=user_id,
@@ -168,12 +176,28 @@ def log_security_event(event_type, details=None, is_critical=False, severity=Non
             source=source,
             correlation_id=correlation_id,
             actor_metadata=actor_metadata_json,
-            timestamp=datetime.utcnow(),
+            timestamp=now_utc,
             synced=False
         )
         db.session.add(offline_event)
-        db.session.commit()
-        print(f"[OFFLINE SECURITY LOG] {event_type} | User: {username or user_id} | IP: {ip_address} | Severity: {severity}")
+        
+        # Log to console
+        print(f"[SECURITY LOG] {event_type} | User: {username or user_id} | Client Mode (Queued for Sync)")
+    else:
+        # We are the server -> Direct DB write only
+        print(f"[SECURITY LOG] {event_type} | User: {username or user_id} | Server Mode (Direct Write)")
+
+    db.session.commit()
+
+    # 3. IMMEDIATE SYNC TRIGGER (Client Only)
+    # If we are a client and currently online, try to push immediately for real-time visibility
+    if online_url and is_online():
+        try:
+            # Run sync in background thread to avoid blocking the request
+            t = threading.Thread(target=sync_offline_security_events)
+            t.start()
+        except Exception:
+            pass  # Background agent will catch it later if this fails
 
 
 def is_online():
