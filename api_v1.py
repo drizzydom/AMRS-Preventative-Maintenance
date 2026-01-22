@@ -39,6 +39,12 @@ logger = logging.getLogger(__name__)
 _dashboard_cache = {'data': None, 'timestamp': None}
 CACHE_DURATION = 300  # 5 minutes in seconds
 
+def _clear_dashboard_cache():
+    """Invalidate the dashboard stats cache"""
+    global _dashboard_cache
+    _dashboard_cache = {'data': None, 'timestamp': None}
+    logger.info("Dashboard cache invalidated")
+
 
 def _get_role_name(role):
     if isinstance(role, str):
@@ -514,26 +520,42 @@ def api_get_dashboard():
         all_parts = part_query.all()
         
         for part in all_parts:
-            # Find the latest valid maintenance record (after MIN_VALID_DATE)
-            valid_records = [r for r in part.maintenance_records 
-                           if r.date and r.date >= MIN_VALID_DATE]
+            # Use strict trust in Part.next_maintenance and Part.next_maintenance_cycle fields
+            # These are properly updated by update_next_maintenance() when maintenance is completed.
+            # Re-calculating from maintenance_records is error-prone and ignores cycle-based logic.
             
-            if valid_records:
-                # Has valid maintenance history
-                latest_record = max(valid_records, key=lambda r: r.date)
-                
-                # Calculate next maintenance from latest record
-                interval_days = part.maintenance_interval_days() if hasattr(part, 'maintenance_interval_days') else 30
-                if isinstance(latest_record.date, datetime):
-                    next_due = latest_record.date + timedelta(days=interval_days)
-                else:
-                    next_due = datetime.combine(latest_record.date, datetime.min.time()) + timedelta(days=interval_days)
-                
-                if next_due < today:
-                    overdue_count += 1
-                elif next_due <= due_soon_date:
-                    due_soon_count += 1
-            # Parts without valid maintenance history are NOT counted as overdue
+            is_overdue = False
+            is_due_soon = False
+            
+            if part.is_cycle_based:
+                # Cycle-based logic relies on machine cycle count
+                if part.machine:
+                    current_cycles = part.machine.cycle_count or 0
+                    target_cycle = part.next_maintenance_cycle
+                    
+                    if target_cycle is not None:
+                        cycles_remaining = target_cycle - current_cycles
+                        cycle_freq = part.maintenance_cycle_frequency or part.maintenance_frequency or 1000
+                        
+                        if cycles_remaining <= 0:
+                            is_overdue = True
+                        elif cycles_remaining <= (cycle_freq * 0.1): # 10% threshold
+                            is_due_soon = True
+            else:
+                # Time-based logic relies on next_maintenance date
+                if part.next_maintenance:
+                    # Ensure comparison against simple datetime if needed
+                    next_due = part.next_maintenance
+                    
+                    if next_due < today:
+                        is_overdue = True
+                    elif next_due <= due_soon_date:
+                        is_due_soon = True
+            
+            if is_overdue:
+                overdue_count += 1
+            elif is_due_soon:
+                due_soon_count += 1
         
         logger.debug(f'Overdue parts (calculated): {overdue_count}')
         logger.debug(f'Due soon parts (calculated): {due_soon_count}')
@@ -1324,6 +1346,9 @@ def api_create_part():
         # Add to sync queue
         add_to_sync_queue_enhanced('parts', part.id, 'INSERT', part.to_dict())
         
+        # Invalidate dashboard cache
+        _clear_dashboard_cache()
+        
         return api_response(message='Service created successfully', data={'id': part.id})
         
     except Exception as e:
@@ -1369,6 +1394,9 @@ def api_update_part(part_id):
         # Add to sync queue
         add_to_sync_queue_enhanced('parts', part.id, 'UPDATE', part.to_dict())
         
+        # Invalidate dashboard cache
+        _clear_dashboard_cache()
+        
         return api_response(message='Service updated successfully')
         
     except Exception as e:
@@ -1400,6 +1428,9 @@ def api_delete_part(part_id):
         
         # Add to sync queue
         add_to_sync_queue_enhanced('parts', p_id, 'DELETE', {})
+        
+        # Invalidate dashboard cache
+        _clear_dashboard_cache()
         
         return api_response(message='Service deleted successfully')
         
@@ -1511,6 +1542,9 @@ def api_complete_multiple_maintenance():
                     'notes': part.notes if hasattr(part, 'notes') else None
                 }, immediate_sync=True)
         
+        # Clear dashboard cache so stats update immediately
+        _clear_dashboard_cache()
+
         return api_response(
             data={'completed_count': completed_count},
             message=f'Successfully completed maintenance for {completed_count} part(s)'
