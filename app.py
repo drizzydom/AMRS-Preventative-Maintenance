@@ -1,3 +1,4 @@
+from typing import Optional
 # === CRITICAL: Apply SQLAlchemy datetime parsing patch FIRST ===
 # This must be imported before any SQLAlchemy operations to fix Python 3.11.0 compatibility
 try:
@@ -3138,7 +3139,7 @@ def _user_agent() -> str:
     return request.headers.get('User-Agent', '')
 
 
-def _resolve_device_id(preferred: str | None = None) -> str:
+def _resolve_device_id(preferred: Optional[str] = None) -> str:
     candidates = [preferred, request.headers.get('X-Device-Id'), request.cookies.get(REMEMBER_DEVICE_COOKIE)]
     for candidate in candidates:
         device_id = sanitize_device_id(candidate)
@@ -5920,6 +5921,21 @@ def maintenance_multi():
                 'po_number': rec.po_number,
                 'work_order_number': rec.work_order_number
             })
+            
+            # Sync part update to ensure next_maintenance dates are synchronized
+            part = Part.query.get(rec.part_id)
+            if part:
+                add_to_sync_queue_enhanced('parts', part.id, 'update', {
+                    'id': part.id,
+                    'name': part.name,
+                    'description': part.description,
+                    'machine_id': part.machine_id,
+                    'maintenance_frequency': part.maintenance_frequency,
+                    'maintenance_unit': part.maintenance_unit,
+                    'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+                    'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None,
+                })
+                
         flash(f'Maintenance recorded for {len(created_records)} service(s).', 'success')
         return redirect(url_for('maintenance_page'))
     except Exception as e:
@@ -6962,6 +6978,20 @@ def maintenance_page():
                         'po_number': new_record.po_number,
                         'work_order_number': new_record.work_order_number
                     })
+                    
+                    # Sync part update to ensure next_maintenance dates are synchronized
+                    if part:
+                        add_to_sync_queue_enhanced('parts', part.id, 'update', {
+                            'id': part.id,
+                            'name': part.name,
+                            'description': part.description,
+                            'machine_id': part.machine_id,
+                            'maintenance_frequency': part.maintenance_frequency,
+                            'maintenance_unit': part.maintenance_unit,
+                            'last_maintenance': part.last_maintenance.isoformat() if part.last_maintenance else None,
+                            'next_maintenance': part.next_maintenance.isoformat() if part.next_maintenance else None,
+                        })
+                        
                     flash('Maintenance record and files added successfully!', 'success')
                     return redirect(url_for('maintenance_page'))
                 except ValueError:
@@ -8273,6 +8303,16 @@ def sync_data():
                 # Sanitize datetime fields before processing
                 p = sanitize_sync_record(p, ['last_maintenance', 'next_maintenance', 'created_at', 'updated_at'])
                 
+                # ========== HANDLE DELETE OPERATIONS ==========
+                operation = p.get('__operation__', 'upsert')
+                if operation.lower() == 'delete':
+                    part = Part.query.get(p['id'])
+                    if part:
+                        app.logger.info(f"[SYNC] Deleting part {p['id']} via sync delete operation")
+                        db.session.delete(part)
+                    continue  # Skip to next record
+                # ========== END DELETE HANDLING ==========
+                
                 part = Part.query.get(p['id'])
                 if part:
                     part.name = p['name']
@@ -8922,7 +8962,7 @@ def manage_parts():
         # Handle form submission for adding a new part
         if request.method == 'POST':
             try:
-                name = request.form['name']
+                name = request.form['name'].strip()
                 description = request.form.get('description', '')
                 part_number = request.form.get('part_number', '')  
                 machine_id = request.form['machine_id']
@@ -8938,6 +8978,18 @@ def manage_parts():
                 if not user_can_see_all_sites(current_user) and int(machine.site_id) not in [site.id for site in current_user.sites]:
                     flash('You do not have permission to add services to this machine.', 'danger')
                     return redirect(url_for('manage_parts'))
+                
+                # ========== DUPLICATE PREVENTION ==========
+                # Check if a part with the same name already exists for this machine
+                existing_part = Part.query.filter_by(
+                    name=name,
+                    machine_id=machine_id
+                ).first()
+                
+                if existing_part:
+                    flash(f'Service "{name}" already exists on this machine.', 'warning')
+                    return redirect(url_for('manage_parts'))
+                # ========== END DUPLICATE PREVENTION ==========
                 
                 # Get maintenance frequency and unit from form
                 maintenance_frequency = request.form.get('maintenance_frequency', 30)
