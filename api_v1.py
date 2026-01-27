@@ -1276,16 +1276,35 @@ def api_get_machine_parts(machine_id):
             status = 'up-to-date'
             days_info = None
             
-            if part.next_maintenance:
-                # Convert next_maintenance to date for comparison if it's a datetime
-                next_maint_date = part.next_maintenance.date() if isinstance(part.next_maintenance, datetime) else part.next_maintenance
-                
-                if next_maint_date < today:
-                    status = 'overdue'
-                    days_info = (today - next_maint_date).days
-                elif next_maint_date <= today + timedelta(days=7):
-                    status = 'due-soon'
-                    days_info = (next_maint_date - today).days
+            # --- FIXED LOGIC: Strict adherence to cycle/date fields ---
+            
+            if part.is_cycle_based:
+                # Cycle-Based Logic
+                if part.machine:
+                    current_cycles = part.machine.cycle_count or 0
+                    target_cycle = part.next_maintenance_cycle or 0
+                    
+                    cycles_remaining = target_cycle - current_cycles
+                    cycle_freq = part.maintenance_cycle_frequency or part.maintenance_frequency or 1000
+                    
+                    if cycles_remaining <= 0:
+                         status = 'overdue'
+                         days_info = abs(cycles_remaining) # Actually cycles, but reused field
+                    elif cycles_remaining <= (cycle_freq * 0.1): # 10% threshold
+                         status = 'due-soon'
+                         days_info = cycles_remaining
+            else:
+                # Time-Based Logic (Standard)
+                if part.next_maintenance:
+                    # Convert next_maintenance to date for comparison if it's a datetime
+                    next_maint_date = part.next_maintenance.date() if isinstance(part.next_maintenance, datetime) else part.next_maintenance
+                    
+                    if next_maint_date < today:
+                        status = 'overdue'
+                        days_info = (today - next_maint_date).days
+                    elif next_maint_date <= today + timedelta(days=7):
+                        status = 'due-soon'
+                        days_info = (next_maint_date - today).days
             
             parts_data.append({
                 'id': part.id,
@@ -1318,7 +1337,7 @@ def api_create_part():
         
         data = request.form
         machine_id = data.get('machine_id')
-        name = data.get('name')
+        name = data.get('name', '').strip()
         
         if not machine_id or not name:
             return api_response(error='Machine ID and Name are required', status=400)
@@ -1329,6 +1348,22 @@ def api_create_part():
             
         if not _has_site_access(machine.site_id):
             return api_response(error='Access denied', status=403)
+        
+        # ========== DUPLICATE PREVENTION ==========
+        # Check if a part with the same name already exists for this machine
+        existing_part = Part.query.filter_by(
+            name=name,
+            machine_id=machine_id
+        ).first()
+        
+        if existing_part:
+            # Return the existing part instead of creating a duplicate
+            logger.info(f'Part "{name}" already exists on machine {machine_id} (ID: {existing_part.id}), returning existing')
+            return api_response(
+                message='Service already exists for this machine',
+                data={'id': existing_part.id, 'existing': True}
+            )
+        # ========== END DUPLICATE PREVENTION ==========
             
         part = Part(
             name=name,
