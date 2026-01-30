@@ -1,5 +1,36 @@
 [
   {
+    "version": "2.2.0",
+    "date": "2026-01-27",
+    "title": "Data Integrity & Dashboard Fix 2.2.0",
+    "sections": [
+      {
+        "title": "🐛 Critical Bug Fixes",
+        "items": [
+          "**Dashboard Accuracy**: Fixed an issue where Dashboard showed maintenance items as 'Overdue' even after they had been marked 'Completed' in Maintenance Records.",
+          "**Duplicate Part Resolution**: Consolidated 732 duplicate service entries that were causing maintenance records to be tracked incorrectly.",
+          "**Maintenance Record Sync**: Moved 1,426 maintenance records to their correct service entries, ensuring accurate maintenance history."
+        ]
+      },
+      {
+        "title": "✨ Improvements",
+        "items": [
+          "**Duplicate Prevention**: The system now prevents creating duplicate services (parts) with the same name on the same machine.",
+          "**Sync Delete Support**: Added support for synchronizing service deletions across offline clients and the online server.",
+          "**Data Consistency**: Dashboard now correctly reads from the most recent maintenance records for each service."
+        ]
+      },
+      {
+        "title": "🔧 Technical Updates",
+        "items": [
+          "Enhanced sync queue to handle delete operations for proper data propagation.",
+          "Improved Part creation endpoints with duplicate detection logic.",
+          "Added consolidation tooling for database maintenance and cleanup."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.1.0",
     "date": "2026-01-07",
     "title": "Efficiency & Management Update 2.1.0",
