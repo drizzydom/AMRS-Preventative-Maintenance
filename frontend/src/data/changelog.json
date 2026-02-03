@@ -32,7 +32,8 @@
       {
         "title": "⚠️ Known Issues",
         "items": [
-          "**User Profile Updates**: Changing user data such as name and password is not currently functioning properly. This will be addressed in a future update."
+          "**User Profile Updates**: Changing user data such as name and password is not currently functioning properly. This will be addressed in a future update.",
+          "**Dashboard Machine Views**: Parts that are up-to-date with maintenance do not currently appear in the expanded machine views on the Dashboard. Only overdue and due-soon items are shown. A future update will include all parts for better visibility."
         ]
       }
     ]
