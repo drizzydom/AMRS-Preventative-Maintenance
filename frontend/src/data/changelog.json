@@ -15,6 +15,7 @@
       {
         "title": "✨ Improvements",
         "items": [
+          "**Automatic Update Checks**: The application now automatically checks for updates on launch, ensuring you always have the latest version.",
           "**Duplicate Prevention**: The system now prevents creating duplicate services (parts) with the same name on the same machine.",
           "**Sync Delete Support**: Added support for synchronizing service deletions across offline clients and the online server.",
           "**Data Consistency**: Dashboard now correctly reads from the most recent maintenance records for each service."
@@ -26,6 +27,12 @@
           "Enhanced sync queue to handle delete operations for proper data propagation.",
           "Improved Part creation endpoints with duplicate detection logic.",
           "Added consolidation tooling for database maintenance and cleanup."
+        ]
+      },
+      {
+        "title": "⚠️ Known Issues",
+        "items": [
+          "**User Profile Updates**: Changing user data such as name and password is not currently functioning properly. This will be addressed in a future update."
         ]
       }
     ]
