@@ -1605,8 +1605,12 @@ app.whenReady().then(async () => {
             closeSplashScreen();
             createWindow();
             
-            // Note: Update check is now triggered from Flask server ready event
-            writeLog('[Electron] Main window created, update check will happen automatically when Flask confirms ready');
+            // Explicitly check for updates after main window is created
+            writeLog('[Electron] Main window created, triggering update check...');
+            setTimeout(() => {
+                writeLog('[AutoUpdate] Performing startup update check...');
+                checkForUpdatesWhenReady();
+            }, 3000); // Wait 3 seconds for window to fully initialize
             
         }, 1500); // Slightly longer delay to show "Application ready!" message
     } else {
