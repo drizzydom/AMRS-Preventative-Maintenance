@@ -8025,6 +8025,67 @@ def clear_user_scoped_sync_token():
     AppSetting.set('SYNC_ACCESS_TOKEN_DEVICE_ID', '')
 
 
+# ─── Phase 4: User-Scoped Sync Data Filtering Helpers ──────────────────────────
+
+def _resolve_sync_scope_user():
+    """Resolve the authenticated user for sync-scope filtering.
+
+    Returns the User object when the request should be scoped, or ``None``
+    when full-scope data should be returned (admin / legacy / flag off).
+    """
+    if not _env_flag('ENABLE_USER_SCOPED_SYNC_DATA', False):
+        return None  # Feature disabled -> full data
+
+    user_id = getattr(g, 'sync_auth_user_id', None)
+    if not user_id:
+        # Session auth (admin) or legacy auth path that didn't capture user_id
+        if _env_flag('ALLOW_LEGACY_FULL_SYNC_DATA', True):
+            return None  # Legacy clients keep full data when flag allows
+        return None
+
+    user = User.query.get(user_id)
+    if not user:
+        return None
+
+    # Admin / full-visibility users keep full scope
+    if is_admin_user(user) or user_can_see_all_sites(user):
+        return None
+
+    return user  # Non-admin -> scoped data
+
+
+def _get_allowed_site_ids(sync_user):
+    """Derive the set of site IDs the scoped user may access.
+
+    Returns ``None`` for full scope, or a ``set`` of int IDs for restricted access.
+    """
+    if sync_user is None:
+        return None  # Full scope
+
+    allowed = set()
+    if hasattr(sync_user, 'sites') and sync_user.sites:
+        allowed = {s.id for s in sync_user.sites}
+
+    if not allowed:
+        print(f"[SYNC SCOPE] User {sync_user.id} has no assigned sites - empty scope")
+    else:
+        print(f"[SYNC SCOPE] User {sync_user.id} scoped to site IDs: {sorted(allowed)}")
+
+    return allowed
+
+
+def _get_allowed_machine_ids(allowed_site_ids):
+    """Derive machine IDs within the allowed sites.
+
+    Returns ``None`` for full scope, or a ``set`` of int IDs.
+    """
+    if allowed_site_ids is None:
+        return None  # Full scope
+
+    machines = Machine.query.filter(Machine.site_id.in_(allowed_site_ids)).all()
+    return {m.id for m in machines}
+
+
 def _validate_user_scoped_sync_token(token):
     """Validate bearer sync token and return authorized user if valid."""
     if not token or not _env_flag('ENABLE_USER_SCOPED_SYNC_TOKEN', False):
@@ -8121,6 +8182,7 @@ def check_sync_auth():
                 
                 if password_valid and (is_admin or has_sync_permission):
                     print(f"[SYNC AUTH] Basic auth successful for user: {user.username}")
+                    g.sync_auth_user_id = user.id
                     return True
             else:
                 print(f"[SYNC AUTH] No user found for username: {auth.username}")
@@ -8176,11 +8238,38 @@ def sync_data():
                 since_dt = None
                 print("[SYNC] Full sync request (no timestamp)")
             
+            # --- Phase 4: Resolve sync scope ---
+            scope_user = _resolve_sync_scope_user()
+            allowed_site_ids = _get_allowed_site_ids(scope_user)
+            allowed_machine_ids = _get_allowed_machine_ids(allowed_site_ids) if allowed_site_ids is not None else None
+            scope_user_id = scope_user.id if scope_user else None
+
+            if scope_user:
+                print(f"[SYNC SCOPE] Scoped sync for user {scope_user_id}: "
+                      f"{len(allowed_site_ids)} sites, "
+                      f"{len(allowed_machine_ids) if allowed_machine_ids is not None else 'all'} machines")
+            else:
+                print("[SYNC SCOPE] Full-scope sync (admin/legacy)")
+
+            # Pre-compute allowed user IDs for scoped user filtering
+            if allowed_site_ids is not None:
+                from models import user_site as _user_site_tbl
+                _site_user_rows = db.session.query(_user_site_tbl.c.user_id).filter(
+                    _user_site_tbl.c.site_id.in_(allowed_site_ids)
+                ).distinct().all()
+                allowed_user_ids = {row[0] for row in _site_user_rows}
+                if scope_user_id:
+                    allowed_user_ids.add(scope_user_id)
+            else:
+                allowed_user_ids = None
+
             # Collect all relevant data with optional timestamp filtering
             users = []
             user_query = User.query
             if is_incremental and since_dt:
                 user_query = user_query.filter(User.updated_at > since_dt)
+            if allowed_user_ids is not None:
+                user_query = user_query.filter(User.id.in_(allowed_user_ids))
             
             for u in user_query.all():
                 user_data = {
@@ -8231,6 +8320,8 @@ def sync_data():
             site_query = Site.query
             if is_incremental and since_dt:
                 site_query = site_query.filter(Site.updated_at > since_dt)
+            if allowed_site_ids is not None:
+                site_query = site_query.filter(Site.id.in_(allowed_site_ids))
             
             sites = [
                 {
@@ -8250,6 +8341,8 @@ def sync_data():
             machine_query = Machine.query
             if is_incremental and since_dt:
                 machine_query = machine_query.filter(Machine.updated_at > since_dt)
+            if allowed_site_ids is not None:
+                machine_query = machine_query.filter(Machine.site_id.in_(allowed_site_ids))
             
             machines = [
                 {
@@ -8273,6 +8366,8 @@ def sync_data():
             part_query = Part.query
             if is_incremental and since_dt:
                 part_query = part_query.filter(Part.updated_at > since_dt)
+            if allowed_machine_ids is not None:
+                part_query = part_query.filter(Part.machine_id.in_(allowed_machine_ids))
             
             parts = [
                 {
@@ -8295,6 +8390,8 @@ def sync_data():
             maintenance_query = MaintenanceRecord.query
             if is_incremental and since_dt:
                 maintenance_query = maintenance_query.filter(MaintenanceRecord.updated_at > since_dt)
+            if allowed_machine_ids is not None:
+                maintenance_query = maintenance_query.filter(MaintenanceRecord.machine_id.in_(allowed_machine_ids))
             
             maintenance_records = [
                 {
@@ -8319,6 +8416,8 @@ def sync_data():
             audit_task_query = AuditTask.query
             if is_incremental and since_dt:
                 audit_task_query = audit_task_query.filter(AuditTask.updated_at > since_dt)
+            if allowed_site_ids is not None:
+                audit_task_query = audit_task_query.filter(AuditTask.site_id.in_(allowed_site_ids))
             
             audit_tasks = [
                 {
@@ -8340,6 +8439,8 @@ def sync_data():
             completion_query = AuditTaskCompletion.query
             if is_incremental and since_dt:
                 completion_query = completion_query.filter(AuditTaskCompletion.updated_at > since_dt)
+            if allowed_machine_ids is not None:
+                completion_query = completion_query.filter(AuditTaskCompletion.machine_id.in_(allowed_machine_ids))
             
             audit_task_completions = [
                 {
@@ -8365,6 +8466,8 @@ def sync_data():
                 try:
                     result = db.session.execute(text('SELECT audit_task_id, machine_id FROM machine_audit_task'))
                     machine_audit_task = [{'audit_task_id': row[0], 'machine_id': row[1]} for row in result.fetchall()]
+                    if allowed_machine_ids is not None:
+                        machine_audit_task = [r for r in machine_audit_task if r['machine_id'] in allowed_machine_ids]
                 except Exception as e:
                     app.logger.error(f"Error fetching machine_audit_task associations: {e}")
                     machine_audit_task = []
@@ -8375,6 +8478,8 @@ def sync_data():
                 try:
                     result = db.session.execute(text('SELECT user_id, site_id FROM user_sites'))
                     user_sites = [{'user_id': row[0], 'site_id': row[1]} for row in result.fetchall()]
+                    if allowed_site_ids is not None:
+                        user_sites = [r for r in user_sites if r['site_id'] in allowed_site_ids]
                 except Exception as e:
                     app.logger.error(f"Error fetching user_sites associations: {e}")
                     user_sites = []
@@ -8398,6 +8503,11 @@ def sync_data():
                 'sync_type': 'incremental' if is_incremental else 'full',
                 'since_timestamp': since_timestamp if is_incremental else None,
                 'server_timestamp': datetime.now().isoformat(),
+                '_sync_scope': {
+                    'mode': 'scoped' if scope_user else 'full',
+                    'user_id': scope_user_id,
+                    'site_count': len(allowed_site_ids) if allowed_site_ids is not None else None,
+                },
                 'record_counts': {
                     'users': len(users),
                     'roles': len(roles),
@@ -8431,6 +8541,51 @@ def sync_data():
             from sqlalchemy import text
             
             data = request.get_json(force=True)
+
+            # --- Phase 4: Apply sync scope to incoming POST data ---
+            post_scope_user = _resolve_sync_scope_user()
+            post_allowed_site_ids = _get_allowed_site_ids(post_scope_user)
+            post_allowed_machine_ids = (
+                _get_allowed_machine_ids(post_allowed_site_ids)
+                if post_allowed_site_ids is not None else None
+            )
+            _scope_skipped = 0
+
+            if post_scope_user and post_allowed_site_ids is not None:
+                _post_uid = post_scope_user.id
+
+                def _in_scope_site(rec):
+                    sid = rec.get('site_id')
+                    return sid is None or sid in post_allowed_site_ids
+
+                def _in_scope_machine(rec):
+                    mid = rec.get('machine_id')
+                    return mid is None or (post_allowed_machine_ids is not None and mid in post_allowed_machine_ids)
+
+                _tables_to_filter = {
+                    'users':                   lambda r: r.get('id') == _post_uid,
+                    'sites':                   _in_scope_site,
+                    'machines':                _in_scope_site,
+                    'audit_tasks':             _in_scope_site,
+                    'parts':                   _in_scope_machine,
+                    'maintenance_records':     _in_scope_machine,
+                    'audit_task_completions':  _in_scope_machine,
+                    'machine_audit_task':      _in_scope_machine,
+                    'user_sites':              lambda r: r.get('user_id') == _post_uid,
+                }
+
+                for tbl_name, predicate in _tables_to_filter.items():
+                    original = data.get(tbl_name, [])
+                    filtered = [r for r in original if predicate(r)]
+                    dropped = len(original) - len(filtered)
+                    if dropped:
+                        _scope_skipped += dropped
+                        print(f"[SYNC SCOPE] POST: Dropped {dropped} out-of-scope '{tbl_name}' records for user {_post_uid}")
+                    data[tbl_name] = filtered
+
+                if _scope_skipped:
+                    print(f"[SYNC SCOPE] POST total: {_scope_skipped} out-of-scope records dropped")
+
             # --- Users ---
             for u in data.get('users', []):
                 # Sanitize datetime fields before processing
@@ -8645,7 +8800,14 @@ def sync_data():
                 )
             
             db.session.commit()
-            return jsonify({'status': 'success', 'message': 'Data merged successfully'}), 200
+            result_payload = {'status': 'success', 'message': 'Data merged successfully'}
+            if post_scope_user and _scope_skipped > 0:
+                result_payload['_sync_scope'] = {
+                    'mode': 'scoped',
+                    'user_id': post_scope_user.id,
+                    'records_skipped': _scope_skipped,
+                }
+            return jsonify(result_payload), 200
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Error in sync_data POST: {e}")
