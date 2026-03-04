@@ -9,7 +9,8 @@
         "items": [
           "**Dashboard Accuracy**: Fixed an issue where Dashboard showed maintenance items as 'Overdue' even after they had been marked 'Completed' in Maintenance Records.",
           "**Duplicate Part Resolution**: Consolidated 732 duplicate service entries that were causing maintenance records to be tracked incorrectly.",
-          "**Maintenance Record Sync**: Moved 1,426 maintenance records to their correct service entries, ensuring accurate maintenance history."
+          "**Maintenance Record Sync**: Moved 1,426 maintenance records to their correct service entries, ensuring accurate maintenance history.",
+          "**User Profile Sync**: Fixed issue where user profile updates (name, email, password) were not synchronizing across the system. Changes now properly propagate to all offline clients and the online server."
         ]
       },
       {
@@ -32,7 +33,6 @@
       {
         "title": "⚠️ Known Issues",
         "items": [
-          "**User Profile Updates**: Changing user data such as name and password is not currently functioning properly. This will be addressed in a future update.",
           "**Dashboard Machine Views**: Parts that are up-to-date with maintenance do not currently appear in the expanded machine views on the Dashboard. Only overdue and due-soon items are shown. A future update will include all parts for better visibility."
         ]
       }

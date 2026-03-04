@@ -363,6 +363,14 @@ def api_login():
             remember_status = 'skipped'
             remember_detail = 'Not requested for this login.'
 
+        try:
+            from app import issue_user_scoped_sync_token
+            issued_sync_token = issue_user_scoped_sync_token(user, device_id=device_id)
+            if issued_sync_token:
+                extra_context['sync_token_issued'] = True
+        except Exception as token_error:
+            logger.debug(f'Sync token issuance skipped: {token_error}')
+
         success_steps.append(_login_feedback_step('trust_device', 'Trust this device', remember_status, remember_detail))
         success_steps.append(_login_feedback_step('workspace', 'Prepare workspace', 'pending', 'Launching background sync.'))
 
@@ -390,6 +398,11 @@ def api_logout():
         device_id = sanitize_device_id(request.cookies.get(REMEMBER_DEVICE_COOKIE))
         revoke_user_sessions(current_user.id, device_id=device_id)
         queue_cookie_clear()
+        try:
+            from app import clear_user_scoped_sync_token
+            clear_user_scoped_sync_token()
+        except Exception as token_error:
+            logger.debug(f'Sync token clear skipped: {token_error}')
         logout_user()
         logger.info(f'User logged out: {username}')
         return api_response(message='Logout successful')
