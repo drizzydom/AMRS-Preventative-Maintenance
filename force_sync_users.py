@@ -6,17 +6,31 @@ import json
 from models import db, User
 from app import app
 
-# Bootstrap credentials
-BOOTSTRAP_URL = "https://amrs-preventative-maintenance.onrender.com/api/bootstrap-secrets"
-BOOTSTRAP_TOKEN = "REDACTED_BOOTSTRAP_TOKEN"
+# Sync credentials (environment-driven)
+AMRS_ONLINE_URL = os.environ.get("AMRS_ONLINE_URL", "").rstrip("/")
+SYNC_URL = os.environ.get("SYNC_URL") or (
+    f"{AMRS_ONLINE_URL}/api/sync/data" if AMRS_ONLINE_URL else None
+)
+SYNC_USERNAME = os.environ.get("SYNC_USERNAME") or os.environ.get("AMRS_ADMIN_USERNAME")
+SYNC_PASSWORD = os.environ.get("SYNC_PASSWORD") or os.environ.get("AMRS_ADMIN_PASSWORD")
 
-# Sync credentials
-SYNC_URL = "https://amrs-preventative-maintenance.onrender.com/api/sync/data"
-SYNC_USERNAME = "synchronization"
-SYNC_PASSWORD = "synchronization"
+
+def validate_required_env():
+    """Ensure required sync values are available before making requests."""
+    required = {
+        "SYNC_URL": SYNC_URL,
+        "SYNC_USERNAME": SYNC_USERNAME,
+        "SYNC_PASSWORD": SYNC_PASSWORD,
+    }
+    missing = [key for key, value in required.items() if not value]
+    if missing:
+        raise RuntimeError(
+            "Missing required environment variables: " + ", ".join(missing)
+        )
 
 def fetch_and_update_users():
     """Fetch users from the server and update the local database."""
+    validate_required_env()
     print(f"Fetching user data from {SYNC_URL}...")
     
     try:

@@ -1581,17 +1581,51 @@ def bootstrap_secrets_from_remote():
             else:
                 missing_keys.append(key)
         
+        def build_bootstrap_request_headers():
+            """Build bootstrap request headers with staged token fallback support."""
+            allow_legacy_bootstrap = _env_flag('ALLOW_LEGACY_BOOTSTRAP_TOKEN', True)
+            enable_device_bootstrap = _env_flag('ENABLE_DEVICE_BOOTSTRAP_TOKEN', False)
+
+            legacy_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
+            device_token = os.environ.get("DEVICE_BOOTSTRAP_TOKEN")
+
+            selected_token = None
+            if enable_device_bootstrap and device_token:
+                selected_token = device_token
+            elif allow_legacy_bootstrap and legacy_token:
+                selected_token = legacy_token
+            elif device_token:
+                selected_token = device_token
+            elif legacy_token:
+                selected_token = legacy_token
+
+            if not selected_token:
+                return None
+
+            headers = {
+                "Authorization": f"Bearer {selected_token}",
+            }
+
+            bootstrap_device_id = (
+                os.environ.get("BOOTSTRAP_DEVICE_ID")
+                or os.environ.get("DEVICE_ID")
+            )
+            if bootstrap_device_id:
+                headers["X-Device-ID"] = bootstrap_device_id
+
+            return headers
+
         # Always attempt bootstrap if we have credentials, even if some secrets exist
         bootstrap_url = os.environ.get("BOOTSTRAP_URL")
-        bootstrap_token = os.environ.get("BOOTSTRAP_SECRET_TOKEN")
+        bootstrap_headers = build_bootstrap_request_headers()
         
         bootstrap_attempted = False
-        if bootstrap_url and bootstrap_token:
+        if bootstrap_url and bootstrap_headers:
             try:
                 print(f"[BOOTSTRAP] Downloading configuration from: {bootstrap_url}")
                 resp = requests.post(
                     bootstrap_url,
-                    headers={"Authorization": f"Bearer {bootstrap_token}"},
+                    headers=bootstrap_headers,
                     timeout=15
                 )
                 
@@ -2673,6 +2707,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import secrets
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from sqlalchemy import inspect
 import smtplib
 from jinja2 import Environment, FileSystemLoader
@@ -2770,14 +2805,47 @@ from auto_migrate import run_auto_migration
 # --- Security Event Logger import ---
 from security_event_logger import log_security_event
 
+
+def _env_flag(name, default=False):
+    """Parse a boolean feature flag from environment variables."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _validate_bootstrap_auth(auth_header):
+    """Validate bootstrap auth using staged feature flags for gradual rollout."""
+    allow_legacy_bootstrap = _env_flag('ALLOW_LEGACY_BOOTSTRAP_TOKEN', True)
+    enable_device_bootstrap = _env_flag('ENABLE_DEVICE_BOOTSTRAP_TOKEN', False)
+    require_device_id = _env_flag('BOOTSTRAP_REQUIRE_DEVICE_ID', False)
+
+    legacy_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
+    device_token = os.environ.get('DEVICE_BOOTSTRAP_TOKEN')
+    device_id = (request.headers.get('X-Device-ID') or '').strip()
+
+    if enable_device_bootstrap:
+        if require_device_id and not device_id:
+            return False, None
+        if device_token and auth_header == f"Bearer {device_token}":
+            return True, 'device'
+        if not allow_legacy_bootstrap:
+            return False, None
+
+    if allow_legacy_bootstrap and legacy_token and auth_header == f"Bearer {legacy_token}":
+        return True, 'legacy'
+
+    return False, None
+
 @app.route('/api/bootstrap-secrets', methods=['POST'])
 def bootstrap_secrets():
     """Return essential sync secrets for desktop bootstrap, protected by a bootstrap token."""
-    expected_token = os.environ.get('BOOTSTRAP_SECRET_TOKEN')
     auth_header = request.headers.get('Authorization', '')
     remote_addr = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    is_authorized, auth_method = _validate_bootstrap_auth(auth_header)
+    include_admin_sync_creds = _env_flag('BOOTSTRAP_INCLUDE_ADMIN_SYNC_CREDS', True)
     
-    if not expected_token or auth_header != f"Bearer {expected_token}":
+    if not is_authorized:
         log_security_event(
             event_type="bootstrap_secrets_denied",
             details=f"Denied bootstrap secrets from {remote_addr}: invalid or missing token",
@@ -2788,21 +2856,25 @@ def bootstrap_secrets():
         
     log_security_event(
         event_type="bootstrap_secrets_success", 
-        details=f"Bootstrap secrets successfully retrieved from {remote_addr}",
+        details=f"Bootstrap secrets successfully retrieved from {remote_addr} using {auth_method or 'unknown'} auth",
         severity=1,
         source='web'
     )
     
     # Only return the secrets needed for offline sync/bootstrap
-    return jsonify({
+    response_payload = {
         "USER_FIELD_ENCRYPTION_KEY": os.environ.get("USER_FIELD_ENCRYPTION_KEY"),
         "RENDER_EXTERNAL_URL": os.environ.get("RENDER_EXTERNAL_URL"),
         "SYNC_URL": os.environ.get("SYNC_URL"),
         "SYNC_USERNAME": os.environ.get("SYNC_USERNAME"),
         "AMRS_ONLINE_URL": os.environ.get("AMRS_ONLINE_URL"),
-        "AMRS_ADMIN_USERNAME": os.environ.get("AMRS_ADMIN_USERNAME"),
-        "AMRS_ADMIN_PASSWORD": os.environ.get("AMRS_ADMIN_PASSWORD"),
-    })
+    }
+
+    if include_admin_sync_creds:
+        response_payload["AMRS_ADMIN_USERNAME"] = os.environ.get("AMRS_ADMIN_USERNAME")
+        response_payload["AMRS_ADMIN_PASSWORD"] = os.environ.get("AMRS_ADMIN_PASSWORD")
+
+    return jsonify(response_payload)
 
 
 # Initialize SocketIO after app is created
@@ -7227,6 +7299,14 @@ def user_profile():
                 try:
                     db.session.add(user)
                     db.session.commit()
+                    # Add to sync queue so changes propagate to all clients
+                    add_to_sync_queue_enhanced('users', user.id, 'update', {
+                        'id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                        'full_name': user.full_name,
+                        'role_id': user.role_id
+                    })
                     flash('Profile updated successfully!', 'success')
                 except Exception as e:
                     db.session.rollback()
@@ -7283,6 +7363,14 @@ def user_profile():
                     # Update the email
                     user.email = email
                     db.session.commit()
+                    # Add to sync queue so changes propagate to all clients
+                    add_to_sync_queue_enhanced('users', user.id, 'update', {
+                        'id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                        'full_name': user.full_name,
+                        'role_id': user.role_id
+                    })
                     flash('Email updated successfully', 'success')
                     
                 # Handle password update in the same request if provided
@@ -7381,6 +7469,11 @@ def change_password():
         # Update password
         current_user.password_hash = generate_password_hash(new_password)
         db.session.commit()
+        # Add to sync queue so password changes propagate to all clients
+        add_to_sync_queue_enhanced('users', current_user.id, 'update', {
+            'id': current_user.id,
+            'password_hash': current_user.password_hash
+        })
         flash('Password updated successfully!', 'success')
         
     except Exception as e:
@@ -7538,6 +7631,10 @@ def login():
                 revoke_user_sessions(user.id, device_id=device_id)
                 queue_cookie_clear()
 
+            issued_sync_token = issue_user_scoped_sync_token(user, device_id=device_id)
+            if issued_sync_token:
+                app.logger.info(f"[SYNC AUTH] Issued scoped sync token for user_id={user.id}")
+
             app.logger.debug(f"Login successful: user_id={user.id}, username={user.username}")
             next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard'))
@@ -7570,6 +7667,7 @@ def logout():
     except Exception as e:
         app.logger.error(f"Error revoking remember sessions during logout: {e}")
     queue_cookie_clear()
+    clear_user_scoped_sync_token()
     
     # Log the logout event (user info is automatically extracted from current_user)
     log_security_event(
@@ -7869,12 +7967,128 @@ def check_api_auth():
     print(f"[API AUTH] Authentication failed")
     return False
 
+
+def _sync_token_ttl_seconds():
+    """Resolve sync token TTL from environment with a safe default."""
+    try:
+        return int(os.environ.get('SYNC_ACCESS_TOKEN_TTL_SECONDS', 43200))
+    except (TypeError, ValueError):
+        return 43200
+
+
+def _sync_token_serializer():
+    """Create serializer for scoped sync access tokens."""
+    secret_key = app.config.get('SECRET_KEY') or os.environ.get('SECRET_KEY')
+    if not secret_key:
+        return None
+    return URLSafeTimedSerializer(secret_key, salt='sync-access-token-v1')
+
+
+def issue_user_scoped_sync_token(user, device_id=None):
+    """Issue a scoped sync token for the authenticated user (feature-flagged)."""
+    if not _env_flag('ENABLE_USER_SCOPED_SYNC_TOKEN', False):
+        return None
+    if not user or not (is_admin_user(user) or user_has_sync_permission(user)):
+        return None
+
+    serializer = _sync_token_serializer()
+    if not serializer:
+        app.logger.warning('[SYNC AUTH] Unable to issue sync token: serializer unavailable')
+        return None
+
+    issued_at = get_timezone_aware_now().isoformat()
+    payload = {
+        'user_id': user.id,
+        'scope': 'sync.data',
+        'device_id': device_id,
+        'issued_at': issued_at,
+        'ver': 1,
+    }
+
+    token = serializer.dumps(payload)
+
+    os.environ['SYNC_ACCESS_TOKEN'] = token
+    AppSetting.set('SYNC_ACCESS_TOKEN', token)
+    AppSetting.set('SYNC_ACCESS_TOKEN_USER_ID', str(user.id))
+    AppSetting.set('SYNC_ACCESS_TOKEN_ISSUED_AT', issued_at)
+    AppSetting.set('SYNC_ACCESS_TOKEN_DEVICE_ID', device_id or '')
+
+    return token
+
+
+def clear_user_scoped_sync_token():
+    """Clear runtime/user-scoped sync token state on logout."""
+    os.environ.pop('SYNC_ACCESS_TOKEN', None)
+    AppSetting.set('SYNC_ACCESS_TOKEN', '')
+    AppSetting.set('SYNC_ACCESS_TOKEN_USER_ID', '')
+    AppSetting.set('SYNC_ACCESS_TOKEN_ISSUED_AT', '')
+    AppSetting.set('SYNC_ACCESS_TOKEN_DEVICE_ID', '')
+
+
+def _validate_user_scoped_sync_token(token):
+    """Validate bearer sync token and return authorized user if valid."""
+    if not token or not _env_flag('ENABLE_USER_SCOPED_SYNC_TOKEN', False):
+        return None
+
+    serializer = _sync_token_serializer()
+    if not serializer:
+        return None
+
+    try:
+        payload = serializer.loads(token, max_age=_sync_token_ttl_seconds())
+    except SignatureExpired:
+        return None
+    except BadSignature:
+        return None
+    except Exception:
+        return None
+
+    user_id = payload.get('user_id')
+    if not user_id:
+        return None
+
+    user = User.query.get(user_id)
+    if not user:
+        return None
+
+    if hasattr(user, 'active') and not getattr(user, 'active', True):
+        return None
+
+    if not (is_admin_user(user) or user_has_sync_permission(user)):
+        return None
+
+    if _env_flag('SYNC_TOKEN_REQUIRE_DEVICE_MATCH', False):
+        expected_device = sanitize_device_id(payload.get('device_id'))
+        request_device = sanitize_device_id(request.headers.get('X-Device-Id') or request.headers.get('X-Device-ID'))
+        if expected_device and expected_device != request_device:
+            return None
+
+    return user
+
 def check_sync_auth():
     """Check authentication specifically for sync endpoints - allows sync service users."""
+    allow_legacy_sync_auth = _env_flag('ALLOW_LEGACY_SYNC_AUTH', True)
+
     # Check session-based authentication first (admin users)
     if current_user.is_authenticated and is_admin_user(current_user):
         print(f"[SYNC AUTH] Session auth successful for admin: {current_user.username}")
         return True
+
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        bearer_token = auth_header.split(' ', 1)[1].strip()
+        token_user = _validate_user_scoped_sync_token(bearer_token)
+        if token_user:
+            print(f"[SYNC AUTH] Bearer token auth successful for user: {token_user.username}")
+            g.sync_auth_user_id = token_user.id
+            return True
+        print("[SYNC AUTH] Bearer token auth failed")
+        if not allow_legacy_sync_auth:
+            return False
+
+    if not allow_legacy_sync_auth:
+        print("[SYNC AUTH] Legacy sync auth disabled by feature flag")
+        return False
     
     # Check basic authentication for sync access
     auth = request.authorization
@@ -8155,6 +8369,16 @@ def sync_data():
                     app.logger.error(f"Error fetching machine_audit_task associations: {e}")
                     machine_audit_task = []
             
+            # Add user_sites associations - CRITICAL for user site permissions sync
+            user_sites = []
+            if inspector.has_table('user_sites'):
+                try:
+                    result = db.session.execute(text('SELECT user_id, site_id FROM user_sites'))
+                    user_sites = [{'user_id': row[0], 'site_id': row[1]} for row in result.fetchall()]
+                except Exception as e:
+                    app.logger.error(f"Error fetching user_sites associations: {e}")
+                    user_sites = []
+            
             # Optionally add audit tasks, completions, etc.
             data = {
                 'users': users,
@@ -8166,6 +8390,7 @@ def sync_data():
                 'audit_tasks': audit_tasks,
                 'audit_task_completions': audit_task_completions,
                 'machine_audit_task': machine_audit_task,
+                'user_sites': user_sites,
             }
             
             # Add sync metadata for debugging
@@ -8183,6 +8408,7 @@ def sync_data():
                     'audit_tasks': len(audit_tasks),
                     'audit_task_completions': len(audit_task_completions),
                     'machine_audit_task': len(machine_audit_task),
+                    'user_sites': len(user_sites),
                 }
             }
             data['_sync_metadata'] = sync_metadata
@@ -8210,6 +8436,16 @@ def sync_data():
                 # Sanitize datetime fields before processing
                 u = sanitize_sync_record(u, ['last_login', 'created_at', 'updated_at', 'reset_token_expiration', 'remember_token_expiration'])
                 
+                # ========== HANDLE DELETE OPERATIONS ==========
+                operation = u.get('__operation__', 'upsert')
+                if operation.lower() == 'delete':
+                    user = User.query.get(u['id'])
+                    if user:
+                        app.logger.info(f"[SYNC] Deleting user {u['id']} via sync delete operation")
+                        db.session.delete(user)
+                    continue  # Skip to next record
+                # ========== END DELETE HANDLING ==========
+                
                 user = User.query.get(u['id'])
                 if user:
                     user.username = u['username']
@@ -8218,6 +8454,9 @@ def sync_data():
                     user.role_id = u['role_id']
                     # user.is_admin = u.get('is_admin', False)  # Removed: is_admin is a read-only property
                     user.active = u.get('active', True)
+                    # Sync password_hash if provided (for password changes)
+                    if 'password_hash' in u and u['password_hash']:
+                        user.password_hash = u['password_hash']
                 else:
                     user = User(
                         id=u['id'], full_name=u.get('full_name'),  # Add full_name sync
@@ -8225,6 +8464,9 @@ def sync_data():
                     )
                     user.username = u['username']
                     user.email = u['email']
+                    # Set password_hash for new users if provided
+                    if 'password_hash' in u and u['password_hash']:
+                        user.password_hash = u['password_hash']
                     db.session.add(user)
             
             # --- Roles ---
@@ -8385,6 +8627,21 @@ def sync_data():
                 db.session.execute(
                     text(query),
                     {'machine_id': mat['machine_id'], 'audit_task_id': mat['audit_task_id']}
+                )
+            
+            # --- User Sites Associations ---
+            for us in data.get('user_sites', []):
+                # No datetime fields to sanitize for this association table
+                # Use PostgreSQL compatible UPSERT (ON CONFLICT DO NOTHING)
+                # SQLite supports INSERT OR IGNORE, but PostgreSQL needs ON CONFLICT
+                if 'sqlite' in str(db.engine.url):
+                    query = "INSERT OR IGNORE INTO user_sites (user_id, site_id) VALUES (:user_id, :site_id)"
+                else:
+                    query = "INSERT INTO user_sites (user_id, site_id) VALUES (:user_id, :site_id) ON CONFLICT (user_id, site_id) DO NOTHING"
+                
+                db.session.execute(
+                    text(query),
+                    {'user_id': us['user_id'], 'site_id': us['site_id']}
                 )
             
             db.session.commit()

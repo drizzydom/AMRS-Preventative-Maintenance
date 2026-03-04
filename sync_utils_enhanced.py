@@ -27,6 +27,53 @@ sync_worker_lock = threading.Lock()
 _last_sync_attempt = None
 _sync_cooldown_seconds = 60  # Minimum time between sync attempts (increased for performance)
 
+
+def _env_flag(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _get_runtime_sync_access_token():
+    """Return scoped sync access token from env or app settings."""
+    token = os.environ.get('SYNC_ACCESS_TOKEN')
+    if token:
+        return token
+
+    try:
+        from app import app
+        from models import AppSetting
+
+        with app.app_context():
+            token = AppSetting.get('SYNC_ACCESS_TOKEN')
+            if token:
+                os.environ['SYNC_ACCESS_TOKEN'] = token
+                return token
+    except Exception:
+        return None
+
+    return None
+
+
+def _build_sync_headers(include_content_type=True):
+    """Build request headers for sync calls, preferring scoped bearer token."""
+    headers = {}
+    if include_content_type:
+        headers['Content-Type'] = 'application/json'
+
+    using_token = False
+    if _env_flag('ENABLE_USER_SCOPED_SYNC_TOKEN', False):
+        token = _get_runtime_sync_access_token()
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+            device_id = os.environ.get('BOOTSTRAP_DEVICE_ID') or os.environ.get('DEVICE_ID')
+            if device_id:
+                headers['X-Device-ID'] = device_id
+            using_token = True
+
+    return headers, using_token
+
 def should_trigger_sync(force_override_cooldown=False):
     """
     Check if sync should be triggered (for offline clients only).
@@ -254,9 +301,10 @@ def download_and_import_server_data():
             online_url = os.environ.get('AMRS_ONLINE_URL')
             admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
             admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+            allow_legacy_sync_auth = _env_flag('ALLOW_LEGACY_SYNC_AUTH', True)
             
-            if not all([online_url, admin_username, admin_password]):
-                print("[SYNC] Missing server credentials for download")
+            if not online_url:
+                print("[SYNC] Missing server URL for download")
                 return {"status": "no_config", "imported": 0}
             
             # Clean URL
@@ -266,21 +314,7 @@ def download_and_import_server_data():
             
             # Create session and authenticate
             session = requests.Session()
-            
-            # Try session-based login
-            try:
-                login_resp = session.post(f"{clean_url}/login", data={
-                    'username': admin_username,
-                    'password': admin_password
-                })
-                
-                if login_resp.status_code != 200 or 'dashboard' not in login_resp.text.lower():
-                    print("[SYNC] Session authentication failed for download")
-                    return {"status": "auth_failed", "imported": 0}
-                    
-            except Exception as e:
-                print(f"[SYNC] Authentication error: {e}")
-                return {"status": "auth_error", "imported": 0}
+            headers, using_token = _build_sync_headers(include_content_type=False)
             
             # Download data from server
             try:
@@ -294,8 +328,36 @@ def download_and_import_server_data():
                     print(f"[SYNC] Requesting incremental sync since: {last_sync_time}")
                 else:
                     print(f"[SYNC] Requesting full sync (no previous sync timestamp)")
-                
-                download_resp = session.get(download_url, timeout=90)  # Increased for Render free tier
+
+                download_resp = None
+
+                if using_token:
+                    download_resp = requests.get(download_url, headers=headers, timeout=90)
+                    if download_resp.status_code in (401, 403):
+                        print(f"[SYNC] Bearer download auth failed: {download_resp.status_code}")
+                        if not allow_legacy_sync_auth:
+                            return {"status": "auth_failed", "imported": 0}
+                        download_resp = None
+
+                if download_resp is None:
+                    if not all([admin_username, admin_password]):
+                        print("[SYNC] Missing legacy credentials for download fallback")
+                        return {"status": "no_config", "imported": 0}
+
+                    try:
+                        login_resp = session.post(f"{clean_url}/login", data={
+                            'username': admin_username,
+                            'password': admin_password
+                        })
+
+                        if login_resp.status_code != 200 or 'dashboard' not in login_resp.text.lower():
+                            print("[SYNC] Session authentication failed for download")
+                            return {"status": "auth_failed", "imported": 0}
+                    except Exception as e:
+                        print(f"[SYNC] Authentication error: {e}")
+                        return {"status": "auth_error", "imported": 0}
+
+                    download_resp = session.get(download_url, timeout=90)
                 
                 if download_resp.status_code != 200:
                     print(f"[SYNC] Download failed: {download_resp.status_code}")
@@ -690,9 +752,10 @@ def upload_to_server(upload_payload):
         online_url = os.environ.get('AMRS_ONLINE_URL')
         admin_username = os.environ.get('AMRS_ADMIN_USERNAME')
         admin_password = os.environ.get('AMRS_ADMIN_PASSWORD')
+        allow_legacy_sync_auth = _env_flag('ALLOW_LEGACY_SYNC_AUTH', True)
         
-        if not online_url or not admin_username or not admin_password:
-            print("[SYNC] Missing required sync credentials; cannot upload changes.")
+        if not online_url:
+            print("[SYNC] Missing required sync server URL; cannot upload changes.")
             return False
         
         clean_url = online_url.strip('"\'').rstrip('/')
@@ -702,6 +765,27 @@ def upload_to_server(upload_payload):
         # Add timestamp for debugging
         upload_payload['__sync_timestamp__'] = get_timezone_aware_now().isoformat()
         upload_payload['__client_timezone__'] = 'America/New_York'
+
+        headers, using_token = _build_sync_headers(include_content_type=True)
+        if using_token:
+            resp = requests.post(
+                f"{clean_url}/api/sync/data",
+                json=upload_payload,
+                headers=headers,
+                timeout=90
+            )
+
+            if resp.status_code == 200:
+                print(f"[SYNC] Upload successful with scoped token: {resp.status_code}")
+                return True
+
+            print(f"[SYNC] Scoped token upload failed: {resp.status_code} {resp.text}")
+            if resp.status_code in (401, 403) and not allow_legacy_sync_auth:
+                return False
+
+        if not all([admin_username, admin_password]):
+            print("[SYNC] Missing legacy sync credentials for upload fallback.")
+            return False
         
         resp = requests.post(
             f"{clean_url}/api/sync/data",
