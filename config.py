@@ -12,7 +12,7 @@ class Config:
     # Database settings - SQLite by default
     # --- Encrypted SQLite (SQLCipher) example ---
     # To use SQLCipher, install pysqlcipher3 and set the URI as below:
-    # SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite+pysqlcipher://:REDACTED_PASSWORD@/maintenance_encrypted.db'
+    # SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite+pysqlcipher://:YOUR_PASSPHRASE_HERE@/maintenance_encrypted.db'
     # If not using SQLCipher, fallback to standard SQLite
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///maintenance.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
