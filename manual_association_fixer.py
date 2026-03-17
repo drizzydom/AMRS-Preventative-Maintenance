@@ -12,7 +12,10 @@ def fix_online_database():
     """Fix associations in the online PostgreSQL database"""
     print("=== Fixing Online Database (PostgreSQL) ===")
     
-    DATABASE_URL = 'postgresql://maintenance_tracking_8sbx_user:REDACTED_DB_PASSWORD_2@dpg-d07sa0hr0fns73du2kfg-a.ohio-postgres.render.com/maintenance_tracking_8sbx'
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    if not DATABASE_URL:
+        print("ERROR: DATABASE_URL environment variable is not set.")
+        return False
     
     try:
         engine = create_engine(DATABASE_URL)

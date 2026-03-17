@@ -1,8 +1,12 @@
 
+import os
 from sqlalchemy import create_engine, text
 import sys
 
-DATABASE_URL = 'postgresql://maintenance_tracking_8sbx_user:REDACTED_DB_PASSWORD_2@dpg-d07sa0hr0fns73du2kfg-a.ohio-postgres.render.com/maintenance_tracking_8sbx'
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL environment variable is not set.")
+    sys.exit(1)
 
 def fix_schema():
     print("Connecting to online database...")
